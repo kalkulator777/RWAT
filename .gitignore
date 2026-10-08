@@ -1,0 +1,60 @@
+### Gradle ###
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/**/build/
+
+### IntelliJ IDEA ###
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+!**/src/**/out/
+
+.run/
+
+### Eclipse ###
+.apt_generated
+.classpath
+.eclipse/
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+!**/src/**/bin/
+
+### VS Code ###
+.vscode/
+
+### Mac OS ###
+.DS_Store
+
+### Minecraft Modding ###
+run/
+!**/src/**/run/
+**/src/generated/**/.cache/
+repo/
+!**/src/**/repo/
+
+### Python ###
+__pycache__/
+*.pyc
+
+### Claude Code ###
+.claude/settings.local.json
+
+### RWAT local files ###
+# Source IR packs for tools/ir2rwat.py: third-party (CC BY-NC-ND 4.0) and too big for git
+/MVP-IR-*.zip
+# Reference models/textures unpacked from those packs
+/DevAssets/
+# Third-party mod jars for local testing
+/disabled-mods/
+# Decompiled Minecraft classes kept for reference
+/net/
+# Debug screenshots and profiler dumps
+/*.png
+*.sparkprofile

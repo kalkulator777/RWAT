@@ -1,0 +1,6 @@
+{
+  "parent": "railswheelsandtrains:block/rail_marker",
+  "textures": {
+    "bar": "minecraft:block/gold_block"
+  }
+}

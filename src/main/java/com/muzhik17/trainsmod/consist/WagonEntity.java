@@ -1,0 +1,852 @@
+package com.muzhik17.trainsmod.consist;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import org.joml.Vector3d;
+
+import com.muzhik17.trainsmod.client.ClientConsists;
+import com.muzhik17.trainsmod.client.ClientWalk;
+import com.muzhik17.trainsmod.kinematics.HullCollision;
+import com.muzhik17.trainsmod.kinematics.PoseMath;
+import com.muzhik17.trainsmod.kinematics.RiderWalk;
+import com.muzhik17.trainsmod.kinematics.WagonPose;
+import com.muzhik17.trainsmod.stock.ConsistComposition;
+import com.muzhik17.trainsmod.stock.WagonType;
+
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.network.syncher.EntityDataSerializers;
+import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
+
+/**
+ * A wagon: the Entity half of the 0.2 split (logical {@link Consist} +
+ * wagon entities, SPEC §2.1). Exists for chunk-based visibility tracking,
+ * riding (Layer 2) and vanilla persistence; all motion state lives in the
+ * consist, which re-attaches wagons by UUID and drives their position every
+ * server tick.
+ *
+ * <p>Client side, vanilla position interpolation is disabled (SPEC §2.1, 0.2):
+ * {@link #lerpTo} is a no-op and the client tick derives the position only
+ * from the interpolated {@code s} of the snapshot buffer — otherwise two
+ * interpolation systems fight and both jitter.
+ *
+ * <p><b>Riding (SPEC v1.5-б):</b> two kinds of passenger. The cab driver
+ * (any {@linkplain WagonType#drivable() cab} wagon — SPEC §6.12) sits at
+ * the vanilla seat offset and steers. A <i>walking
+ * rider</i> boards a {@linkplain WagonType#boardable() boardable} wagon and
+ * moves freely about its interior in the model's <b>local</b> frame: their
+ * local feet position lives in {@link #riderLocal} (server) /
+ * {@link ClientWalk} (client predicted), and {@link #positionRider} places
+ * them at {@code bodyPose × local} every tick, so the body pose carries them
+ * along — no world-coordinate fight with the movement anti-cheat, because a
+ * passenger's position is dictated by its vehicle. Walking riders cannot just
+ * step off: {@link ConsistEvents} cancels their sneak-dismount.
+ *
+ * <p><b>Doors (SPEC v1.5, IR-style):</b> a type that declares doors is entered
+ * and left <i>only</i> through them. Each door is open or closed (a synced
+ * bitmask, right-click on the leaf toggles it). Closed, it is wall from both
+ * sides. Open, the outer hull has a walk-through opening there for players
+ * ({@link #openPortals}) — stepping into it boards you onto the vestibule
+ * floor ({@link #boardThroughDoors}) — and a rider walking into it from inside
+ * steps out ({@link #setWalkInput}). Speed doesn't matter: an open door on a
+ * moving train lets you out, as in IR.
+ */
+public class WagonEntity extends Entity {
+
+    private static final EntityDataAccessor<Integer> DATA_CONSIST_ID =
+            SynchedEntityData.defineId(WagonEntity.class, EntityDataSerializers.INT);
+    /** Position within the consist (0 = front); the client unrolls its pose from this. */
+    private static final EntityDataAccessor<Integer> DATA_WAGON_INDEX =
+            SynchedEntityData.defineId(WagonEntity.class, EntityDataSerializers.INT);
+    /** Open doors: bit {@code i} = door {@code i} of the type's list (SPEC v1.5, doors). */
+    private static final EntityDataAccessor<Integer> DATA_DOORS =
+            SynchedEntityData.defineId(WagonEntity.class, EntityDataSerializers.INT);
+    /** Entity id of the player in the driver's chair (SPEC §9), −1 = empty. */
+    private static final EntityDataAccessor<Integer> DATA_SEATED =
+            SynchedEntityData.defineId(WagonEntity.class, EntityDataSerializers.INT);
+    /**
+     * Control-group positions (SPEC §8–§9): group name → 0..1. The model's
+     * light groups ({@code LCG_<name>}) and switches ({@code CG_<name>}) read
+     * and set these; the server never needs to know which groups a model has.
+     */
+    private static final EntityDataAccessor<CompoundTag> DATA_CONTROLS =
+            SynchedEntityData.defineId(WagonEntity.class, EntityDataSerializers.COMPOUND_TAG);
+
+    /** Reach past the player's block reach for toggling a door (the leaf is big). */
+    private static final double DOOR_REACH_SLACK = 1.5;
+    /** How far past the hull face a player must step into an open doorway to board. */
+    private static final double BOARD_DEPTH = 0.05;
+    /** Gap left between a player stepping out of a door and the hull face. */
+    private static final double EXIT_CLEARANCE = 0.05;
+    /** Client: door swing duration in ticks (the asset's 81-frame animation, ~2 s). */
+    private static final float DOOR_ANIM_TICKS = 40.0F;
+    /**
+     * Seated feet below the top of the chair cushion: the sitting player
+     * model's hips are 0.75 above its feet, its thighs ~0.15 thick. Tuned by
+     * play-test, not gospel.
+     */
+    private static final double SIT_DROP = 0.6;
+    /** How close (feet to chair, horizontally) a walking rider must be to sit down. */
+    private static final double SEAT_REACH = 2.5;
+    /** Control groups a wagon keeps at most, and the longest group name (network sanity). */
+    private static final int MAX_CONTROL_GROUPS = 64;
+    private static final int MAX_CONTROL_NAME = 32;
+
+    /** Server-authoritative local feet of each walking rider (SPEC v1.5-б). */
+    private final Map<UUID, Vector3d> riderLocal = new HashMap<>();
+    /** Set true only while {@link #exitRider} runs, so the dismount guard lets it through. */
+    private boolean dismountAllowed;
+    /** Where the rider leaving through a door lands; read by the dismount, then cleared. */
+    private Vec3 doorExit;
+
+    /** Client: door swing progress per door, this tick and last (0 closed … 1 open). */
+    private float[] doorAnim = new float[0];
+    private float[] doorAnimO = new float[0];
+    /** Client: the first door state seen is adopted as-is, not animated. */
+    private boolean doorAnimSeeded;
+
+    public WagonEntity(EntityType<? extends WagonEntity> type, Level level) {
+        super(type, level);
+        this.noPhysics = true;
+    }
+
+    /**
+     * The consist this wagon belongs to. On the client the newest snapshot's
+     * wagon list wins over the synced value: it switches together with the
+     * composition when consists couple or split, while entity data arrives a
+     * tick later — reading the synced index against the new composition would
+     * pose the wagon in another wagon's place for a tick (SPEC §6.12).
+     */
+    public int getConsistId() {
+        int synced = this.entityData.get(DATA_CONSIST_ID);
+        return level().isClientSide ? ClientConsists.memberConsist(getId(), synced) : synced;
+    }
+
+    public void setConsistId(int consistId) {
+        this.entityData.set(DATA_CONSIST_ID, consistId);
+    }
+
+    /** Position within the consist (0 = front); client: see {@link #getConsistId}. */
+    public int getWagonIndex() {
+        int synced = this.entityData.get(DATA_WAGON_INDEX);
+        return level().isClientSide ? ClientConsists.memberIndex(getId(), synced) : synced;
+    }
+
+    public void setWagonIndex(int index) {
+        this.entityData.set(DATA_WAGON_INDEX, index);
+    }
+
+    @Override
+    protected void defineSynchedData(SynchedEntityData.Builder builder) {
+        builder.define(DATA_CONSIST_ID, -1);
+        builder.define(DATA_WAGON_INDEX, 0);
+        builder.define(DATA_DOORS, 0);
+        builder.define(DATA_SEATED, -1);
+        builder.define(DATA_CONTROLS, new CompoundTag());
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        if (level().isClientSide) {
+            clientTick();
+        } else if (level() instanceof ServerLevel serverLevel
+                && (tickCount % 100 == 0) && getConsistId() >= 0) {
+            // a wagon belongs to the consist that lists it: one that sat in an
+            // unloaded chunk through a coupling carries a stale id (put right
+            // here); one no consist lists is an orphan
+            Consist owner = ConsistManager.get(serverLevel).ownerOf(getUUID());
+            if (owner == null) {
+                discard();
+            } else if (owner.id() != getConsistId()) {
+                setConsistId(owner.id());
+                setWagonIndex(owner.wagonIds().indexOf(getUUID()));
+            }
+        }
+        // server position is driven by ConsistManager, not by the entity itself
+    }
+
+    private void clientTick() {
+        WagonType type = typeNow();
+        if (type != null) {
+            tickDoorAnim(type);
+        }
+        WagonPose pose = ClientConsists.tickPose(getConsistId(), getWagonIndex());
+        if (pose != null) {
+            setPos(pose.body().x, pose.body().y, pose.body().z);
+            setYRot(pose.yaw());
+            setXRot(pose.pitch());
+            // do NOT reposition riders here: vanilla ticks a passenger right
+            // after its vehicle (setOldPosAndRot → rideTick → positionRider),
+            // so it picks this fresh pose up by itself. Doing it inside the
+            // vehicle tick lands BEFORE the rider's old-pos snapshot, so
+            // xo == x and the camera lerp collapses — a 20 Hz rider stutter
+            // while the car itself (renderPose-interpolated) stays smooth.
+        }
+    }
+
+    /** Vanilla position interpolation is disabled: render uses our own {@code s}. */
+    @Override
+    public void lerpTo(double x, double y, double z, float yRot, float xRot, int steps) {
+        // no-op (SPEC §2.1, 0.2)
+    }
+
+    /**
+     * Right-click to board (SPEC §2.3, v1.5-б): a {@linkplain WagonType#boardable()
+     * boardable} wagon takes a walking rider; otherwise any cab wagon with a
+     * free seat takes a driver (SPEC §6.12 — the front-most manned cab is
+     * in control). Right-clicking the wagon you already ride exits. A crowbar
+     * in hand isn't for boarding: the click goes on to the item.
+     */
+    @Override
+    public InteractionResult interact(Player player, InteractionHand hand) {
+        if (player.getItemInHand(hand).getItem() instanceof CrowbarItem) {
+            return InteractionResult.PASS;
+        }
+        if (level().isClientSide) {
+            return InteractionResult.sidedSuccess(true);
+        }
+        if (!(player instanceof ServerPlayer serverPlayer)) {
+            return InteractionResult.PASS;
+        }
+        WagonType type = serverType();
+        if (type != null && type.doorsOnly()) {
+            return InteractionResult.PASS; // in and out through the doors only
+        }
+        if (player.getVehicle() == this) {
+            exitRider(serverPlayer);
+            return InteractionResult.CONSUME;
+        }
+        if (player.isPassenger()) {
+            return InteractionResult.PASS;
+        }
+        if (type != null && type.boardable()) {
+            board(serverPlayer, type);
+            return InteractionResult.CONSUME;
+        }
+        if ((type == null || type.drivable()) && getPassengers().isEmpty()) {
+            player.startRiding(this);
+            player.displayClientMessage(Component.translatable(inControl(serverPlayer)
+                    ? "message.railswheelsandtrains.drive_hint"
+                    : "message.railswheelsandtrains.drive_other_cab"), true);
+            return InteractionResult.CONSUME;
+        }
+        return InteractionResult.PASS;
+    }
+
+    /** True if this player, seated here, is the one driving the consist (no manned cab ahead). */
+    private boolean inControl(ServerPlayer player) {
+        if (!(level() instanceof ServerLevel level)) {
+            return false;
+        }
+        Consist consist = ConsistManager.get(level).byId(getConsistId());
+        ConsistManager.Driver driver = consist == null ? null : ConsistManager.driverOf(level, consist);
+        return driver == null || driver.player() == player;
+    }
+
+    /** The wagon's type from its consist's composition (server side), or null. */
+    private WagonType serverType() {
+        return level().isClientSide ? null : typeNow();
+    }
+
+    /** This wagon's composition slot on either side (server consist / synced client copy), or null. */
+    private ConsistComposition.Slot slotNow() {
+        if (level().isClientSide) {
+            return ClientConsists.slot(getConsistId(), getWagonIndex());
+        }
+        if (!(level() instanceof ServerLevel level)) {
+            return null;
+        }
+        Consist consist = ConsistManager.get(level).byId(getConsistId());
+        if (consist == null) {
+            return null;
+        }
+        ConsistComposition composition = consist.composition();
+        int index = getWagonIndex();
+        return index >= 0 && index < composition.wagonCount() ? composition.slot(index) : null;
+    }
+
+    /** This wagon's type on either side: the server consist, or the synced client slot. */
+    public WagonType typeNow() {
+        ConsistComposition.Slot slot = slotNow();
+        return slot != null ? slot.type() : null;
+    }
+
+    /** True if the wagon runs turned 180° in its consist (SPEC §5.5 step 3). */
+    public boolean isFlipped() {
+        ConsistComposition.Slot slot = slotNow();
+        return slot != null && slot.flipped();
+    }
+
+    /**
+     * Walking riders <b>stand</b>, the cab driver <b>sits</b> (SPEC v1.5-б
+     * cosmetic). Decided per wagon — a boardable interior carries walkers, a cab
+     * the seated driver — and read on the client, where the renderer asks, via
+     * the synced composition. {@code shouldRiderSit} is a per-vehicle answer
+     * (NeoForge), which fits: each stock type is one kind or the other.
+     */
+    @Override
+    public boolean shouldRiderSit() {
+        WagonType type = typeNow();
+        return type == null || !type.boardable();
+    }
+
+    /**
+     * Per passenger (SPEC §9): in a walkable cab the player in the driver's
+     * chair sits while everyone else stands. Vanilla asks the vehicle only
+     * ({@link #shouldRiderSit()}); a client mixin on the living-entity
+     * renderer asks this instead.
+     */
+    public boolean shouldRiderSit(Entity passenger) {
+        return passenger.getId() == seatedId() || shouldRiderSit();
+    }
+
+    // --- the driver's chair (SPEC §9) ---
+
+    /** Entity id of the player in the driver's chair, −1 if empty. */
+    public int seatedId() {
+        return this.entityData.get(DATA_SEATED);
+    }
+
+    /** True if this entity sits in the driver's chair here. */
+    public boolean isSeated(Entity passenger) {
+        return passenger.getId() == seatedId();
+    }
+
+    /** The driver's chair in the pose frame (mirrored for a flipped wagon), or null if none. */
+    public WagonType.Seat seat() {
+        WagonType type = typeNow();
+        if (type == null || type.cab() == null || type.cab().seat() == null
+                || type.interior() == null) {
+            return null;
+        }
+        return type.cab().seat().inFrame(isFlipped());
+    }
+
+    /** Local feet of a driver sitting in {@code seat}. */
+    public static Vector3d seatedFeet(WagonType.Seat seat) {
+        return new Vector3d(seat.x(), seat.y() - SIT_DROP, seat.z());
+    }
+
+    /**
+     * A walking rider sits down in the driver's chair (server, SPEC §9): only
+     * a rider of this wagon, near the chair, and only if it is free. Seated,
+     * the keys drive the train (as in a cab without an interior); sneaking
+     * stands back up.
+     */
+    public void sitDriver(ServerPlayer player) {
+        WagonType.Seat seat = seat();
+        Vector3d local = riderLocal.get(player.getUUID());
+        if (seat == null || local == null || player.getVehicle() != this || seatedId() >= 0
+                || Math.hypot(local.x - seat.x(), local.z - seat.z()) > SEAT_REACH) {
+            return;
+        }
+        this.entityData.set(DATA_SEATED, player.getId());
+        player.displayClientMessage(Component.translatable(inControl(player)
+                ? "message.railswheelsandtrains.seat_hint"
+                : "message.railswheelsandtrains.drive_other_cab_seated"), true);
+    }
+
+    /** The seated driver stands up beside the chair, back to walking (server). */
+    public void standDriver(ServerPlayer player) {
+        if (player.getId() != seatedId()) {
+            return;
+        }
+        this.entityData.set(DATA_SEATED, -1);
+        WagonType type = serverType();
+        WagonType.Seat seat = seat();
+        if (type != null && type.interior() != null && seat != null) {
+            riderLocal.put(player.getUUID(), type.interior().inFrame(isFlipped()).clampFeet(
+                    new Vector3d(seat.x(), seat.y(), seat.z()), RiderWalk.PLAYER_HALF_WIDTH));
+        }
+    }
+
+    /**
+     * True if the player's eyes are within block reach (plus slack) of this
+     * car's hull — near enough to work a switch on it from outside (server
+     * check for {@code ControlGroupPayload}).
+     */
+    public boolean withinReach(ServerPlayer player) {
+        WagonType.Hull hull = collisionHull();
+        if (hull == null) {
+            return false;
+        }
+        Vector3d eye = PoseMath.worldToLocal(new Vector3d(getX(), getY(), getZ()),
+                getYRot(), getXRot(), new Vector3d(player.getEyePosition().x,
+                        player.getEyePosition().y, player.getEyePosition().z));
+        double dx = Math.max(Math.max(hull.minX() - eye.x, eye.x - hull.maxX()), 0.0);
+        double dy = Math.max(Math.max(hull.minY() - eye.y, eye.y - hull.maxY()), 0.0);
+        double dz = Math.max(Math.max(hull.minZ() - eye.z, eye.z - hull.maxZ()), 0.0);
+        double reach = player.blockInteractionRange() + DOOR_REACH_SLACK;
+        return dx * dx + dy * dy + dz * dz <= reach * reach;
+    }
+
+    // --- control groups (SPEC §8–§9) ---
+
+    /** A control group's position, 0..1 (0 if never set — switches start off). */
+    public float controlValue(String group) {
+        return this.entityData.get(DATA_CONTROLS).getFloat(group);
+    }
+
+    /** Every set control group (the synced tag — read only). */
+    public CompoundTag controls() {
+        return this.entityData.get(DATA_CONTROLS);
+    }
+
+    /**
+     * Set a control group (server): a cab switch, a light toggled from the
+     * driver's menu. Names are the model's ({@code CG_<name>}/{@code LCG_<name>});
+     * the server only bounds their number and length.
+     */
+    public void setControl(String group, float value) {
+        CompoundTag current = this.entityData.get(DATA_CONTROLS);
+        if (group.isEmpty() || group.length() > MAX_CONTROL_NAME
+                || (!current.contains(group) && current.size() >= MAX_CONTROL_GROUPS)) {
+            return;
+        }
+        float clamped = Math.clamp(value, 0.0F, 1.0F);
+        if (current.contains(group) && current.getFloat(group) == clamped) {
+            return;
+        }
+        CompoundTag next = current.copy(); // a new instance, or the sync sees no change
+        next.putFloat(group, clamped);
+        this.entityData.set(DATA_CONTROLS, next);
+    }
+
+    /** Seat a walking rider, anchored at the interior point under where they stood. */
+    private void board(ServerPlayer player, WagonType type) {
+        Vector3d body = new Vector3d(getX(), getY(), getZ());
+        Vector3d localFeet = PoseMath.worldToLocal(body, getYRot(), getXRot(),
+                new Vector3d(player.getX(), player.getY(), player.getZ()));
+        Vector3d clamped = type.interior().inFrame(isFlipped())
+                .clampFeet(localFeet, RiderWalk.PLAYER_HALF_WIDTH);
+        riderLocal.put(player.getUUID(), clamped);
+        if (player.startRiding(this, true)) {
+            repositionRiders();
+            player.displayClientMessage(Component.translatable(type.drivable()
+                    ? "message.railswheelsandtrains.board_hint_cab"
+                    : type.doorsOnly()
+                            ? "message.railswheelsandtrains.board_hint_doors"
+                            : "message.railswheelsandtrains.board_hint"), true);
+        } else {
+            riderLocal.remove(player.getUUID());
+        }
+    }
+
+    /** Sanctioned dismount (right-click): the guard in {@link ConsistEvents} lets it through. */
+    private void exitRider(ServerPlayer player) {
+        dismountAllowed = true;
+        player.stopRiding();
+        dismountAllowed = false;
+        riderLocal.remove(player.getUUID());
+    }
+
+    /**
+     * Apply one tick of walk input from a rider (server-authoritative, SPEC
+     * v1.5-б): the exit edge dismounts; otherwise step the rider's local feet
+     * along the floor and clamp inside the interior walls.
+     */
+    public void setWalkInput(ServerPlayer player, float forward, float strafe, float yaw,
+            boolean exit) {
+        if (player.getId() == seatedId()) {
+            return; // seated: the keys drive (DriveInputPayload), sneaking stands up
+        }
+        WagonType type = serverType();
+        if (exit && (type == null || !type.doorsOnly())) {
+            exitRider(player); // door-less types keep the right-click exit
+            return;
+        }
+        if (type == null || type.interior() == null) {
+            return;
+        }
+        WagonType.Interior interior = type.interior().inFrame(isFlipped());
+        Vector3d local = riderLocal.get(player.getUUID());
+        if (local == null) {
+            // ride relationship survived but the anchor was lost — re-seed from world
+            Vector3d body = new Vector3d(getX(), getY(), getZ());
+            local = interior.clampFeet(
+                    PoseMath.worldToLocal(body, getYRot(), getXRot(),
+                            new Vector3d(player.getX(), player.getY(), player.getZ())),
+                    RiderWalk.PLAYER_HALF_WIDTH);
+        }
+        List<WagonType.Door> doors = framedDoors();
+        if (type.doorsOnly()) {
+            int door = RiderWalk.exitDoor(local, forward, strafe, yaw, getYRot(),
+                    interior, doors, doorMask());
+            if (door >= 0) {
+                exitThroughDoor(player, type, doors.get(door), local);
+                return;
+            }
+        }
+        riderLocal.put(player.getUUID(),
+                RiderWalk.step(local, forward, strafe, yaw, getYRot(), interior, doors, doorMask()));
+    }
+
+    /**
+     * Step a rider out through an open door: they land just outside the hull
+     * face in front of it, at the vestibule floor height, and drop to whatever
+     * is below (a platform, or the ground ~1.8 blocks down — no fall damage).
+     */
+    private void exitThroughDoor(ServerPlayer player, WagonType type, WagonType.Door door,
+            Vector3d local) {
+        WagonType.Hull hull = type.collidableHull();
+        int out = door.outward();
+        double face = door.axis() == 0
+                ? (out > 0 ? hull.maxX() : -hull.minX())
+                : (out > 0 ? hull.maxZ() : -hull.minZ());
+        double clear = face + RiderWalk.PLAYER_HALF_WIDTH + EXIT_CLEARANCE;
+        double along = spanClamp(door.axis() == 0 ? local.z : local.x, door);
+        Vector3d outside = door.axis() == 0
+                ? new Vector3d(out * clear, door.minY(), along)
+                : new Vector3d(along, door.minY(), out * clear);
+        Vector3d world = PoseMath.localToWorld(new Vector3d(getX(), getY(), getZ()),
+                getYRot(), getXRot(), outside);
+        doorExit = new Vec3(world.x, world.y, world.z);
+        exitRider(player);
+        doorExit = null;
+    }
+
+    /** A body-width point along a door's span: clamped inside it, or its middle if too narrow. */
+    private static double spanClamp(double value, WagonType.Door door) {
+        double lo = door.spanMin() + RiderWalk.PLAYER_HALF_WIDTH;
+        double hi = door.spanMax() - RiderWalk.PLAYER_HALF_WIDTH;
+        return lo > hi ? (door.spanMin() + door.spanMax()) * 0.5 : Math.clamp(value, lo, hi);
+    }
+
+    // --- doors (SPEC v1.5) ---
+
+    /** Bitmask of open doors (bit {@code i} = door {@code i}), synced to clients. */
+    public int doorMask() {
+        return this.entityData.get(DATA_DOORS);
+    }
+
+    public boolean isDoorOpen(int index) {
+        return (doorMask() >> index & 1) != 0;
+    }
+
+    /** The type's doors in the pose frame — mirrored for a flipped wagon. Empty if none/unknown. */
+    public List<WagonType.Door> framedDoors() {
+        WagonType type = typeNow();
+        if (type == null || type.doors().isEmpty()) {
+            return List.of();
+        }
+        boolean flipped = isFlipped();
+        List<WagonType.Door> doors = new ArrayList<>(type.doors().size());
+        for (WagonType.Door door : type.doors()) {
+            doors.add(door.inFrame(flipped));
+        }
+        return doors;
+    }
+
+    /**
+     * The open doorways the outer hull lets a <b>player</b> through (SPEC
+     * v1.5): one {@link HullCollision.Portal} per open door, read on both
+     * sides — the local player's movement is resolved client-side.
+     */
+    public List<HullCollision.Portal> openPortals() {
+        List<WagonType.Door> doors = framedDoors();
+        if (doors.isEmpty()) {
+            return List.of();
+        }
+        int mask = doorMask();
+        List<HullCollision.Portal> portals = new ArrayList<>();
+        for (int i = 0; i < doors.size() && i < 32; i++) {
+            // a door between floor zones is inside the hull: it cuts nothing (SPEC §9.1)
+            if (!doors.get(i).inner() && doors.get(i).open(mask, i)) {
+                WagonType.Door door = doors.get(i);
+                portals.add(new HullCollision.Portal(door.axis(),
+                        door.spanMin() + RiderWalk.DOOR_SPAN_INSET,
+                        door.spanMax() - RiderWalk.DOOR_SPAN_INSET,
+                        door.maxY()));
+            }
+        }
+        return portals;
+    }
+
+    /**
+     * Open or close a door on a player's right-click (server): only within
+     * reach of the leaf, with the door's sound. Anyone may operate any door —
+     * from the platform or from inside.
+     */
+    public void toggleDoorBy(ServerPlayer player, int index) {
+        List<WagonType.Door> doors = framedDoors();
+        if (index < 0 || index >= doors.size() || index >= 32) {
+            return;
+        }
+        WagonType.Door door = doors.get(index);
+        if (door.fixed()) {
+            return; // an opening without a leaf (SPEC §9.1)
+        }
+        Vector3d centre = PoseMath.localToWorld(new Vector3d(getX(), getY(), getZ()),
+                getYRot(), getXRot(), new Vector3d((door.minX() + door.maxX()) * 0.5,
+                        (door.minY() + door.maxY()) * 0.5, (door.minZ() + door.maxZ()) * 0.5));
+        double reach = player.blockInteractionRange() + DOOR_REACH_SLACK;
+        if (player.getEyePosition().distanceToSqr(centre.x, centre.y, centre.z) > reach * reach) {
+            return;
+        }
+        int mask = doorMask() ^ (1 << index);
+        this.entityData.set(DATA_DOORS, mask);
+        boolean open = (mask >> index & 1) != 0;
+        level().playSound(null, centre.x, centre.y, centre.z,
+                open ? SoundEvents.IRON_DOOR_OPEN : SoundEvents.IRON_DOOR_CLOSE,
+                SoundSource.BLOCKS, 1.0F, 1.0F);
+    }
+
+    /**
+     * Board players who stepped into an open doorway (server, each tick after
+     * the pose is set): the hull let them into the opening ({@link #openPortals}),
+     * and once they are past the hull face they become walking riders on the
+     * vestibule floor. Entering from the ground works — the step well under a
+     * real vestibule door is what you'd climb.
+     */
+    public void boardThroughDoors(ServerLevel level) {
+        WagonType type = serverType();
+        if (type == null || !type.doorsOnly()) {
+            return;
+        }
+        List<HullCollision.Portal> portals = openPortals();
+        if (portals.isEmpty()) {
+            return;
+        }
+        WagonType.Hull hull = type.collidableHull();
+        Vector3d body = new Vector3d(getX(), getY(), getZ());
+        double reach = type.length() / 2.0 + 4.0;
+        for (ServerPlayer player : level.players()) {
+            if (player.isPassenger() || player.isSpectator() || !player.isAlive()
+                    || player.distanceToSqr(getX(), getY(), getZ()) > reach * reach) {
+                continue;
+            }
+            Vec3 c = player.getBoundingBox().getCenter();
+            Vector3d local = PoseMath.worldToLocal(body, getYRot(), getXRot(),
+                    new Vector3d(c.x, c.y, c.z));
+            for (HullCollision.Portal portal : portals) {
+                if (!portal.contains(local.x, local.y, local.z)) {
+                    continue;
+                }
+                double across = portal.axis() == 0 ? local.x : local.z;
+                double face = portal.axis() == 0
+                        ? (across > 0 ? hull.maxX() : -hull.minX())
+                        : (across > 0 ? hull.maxZ() : -hull.minZ());
+                if (Math.abs(across) - RiderWalk.PLAYER_HALF_WIDTH < face - BOARD_DEPTH) {
+                    board(player, type);
+                    break;
+                }
+            }
+        }
+    }
+
+    /**
+     * Whether a point (an entity centre) is in one of this wagon's open
+     * doorways — the server's hull shove leaves a player there be, or it
+     * would push them back out mid-step.
+     */
+    public boolean inOpenDoorway(Vec3 centre) {
+        List<HullCollision.Portal> portals = openPortals();
+        return !portals.isEmpty() && HullCollision.portalAt(portals,
+                new Vector3d(getX(), getY(), getZ()), getYRot(), getXRot(),
+                new Vector3d(centre.x, centre.y, centre.z)) != null;
+    }
+
+    /** Client: advance each door's swing toward its synced state. */
+    private void tickDoorAnim(WagonType type) {
+        int n = Math.min(type.doors().size(), 32);
+        if (doorAnim.length != n) {
+            doorAnim = new float[n];
+            doorAnimO = new float[n];
+            doorAnimSeeded = false;
+        }
+        int mask = doorMask();
+        float step = 1.0F / DOOR_ANIM_TICKS;
+        for (int i = 0; i < n; i++) {
+            float target = (mask >> i & 1) != 0 ? 1.0F : 0.0F;
+            if (!doorAnimSeeded) {
+                doorAnim[i] = target;
+            }
+            doorAnimO[i] = doorAnim[i];
+            doorAnim[i] += Math.clamp(target - doorAnim[i], -step, step);
+        }
+        doorAnimSeeded = true;
+    }
+
+    /** Client: door {@code index}'s swing at {@code partialTick}, 0 closed … 1 open. */
+    public float doorAnim(int index, float partialTick) {
+        if (index < 0 || index >= doorAnim.length) {
+            return 0.0F;
+        }
+        return doorAnimO[index] + (doorAnim[index] - doorAnimO[index]) * partialTick;
+    }
+
+    /**
+     * Place a passenger: a walking rider at {@code bodyPose × localFeet}, anyone
+     * else (the cab driver) at the vanilla seat. Called by vanilla each tick via
+     * the passenger's {@code rideTick}, and again by {@link #repositionRiders}
+     * after the body pose is refreshed.
+     */
+    @Override
+    protected void positionRider(Entity passenger, Entity.MoveFunction move) {
+        if (!hasPassenger(passenger)) {
+            return;
+        }
+        WagonType.Seat seat = passenger.getId() == seatedId() ? seat() : null;
+        Vector3d local = seat != null ? seatedFeet(seat)
+                : level().isClientSide
+                        ? ClientWalk.get(passenger.getId())
+                        : riderLocal.get(passenger.getUUID());
+        if (local == null) {
+            super.positionRider(passenger, move);
+            return;
+        }
+        Vector3d world = PoseMath.localToWorld(new Vector3d(getX(), getY(), getZ()),
+                getYRot(), getXRot(), local);
+        move.accept(passenger, world.x, world.y, world.z);
+    }
+
+    /**
+     * Re-place every passenger from the current body pose. <b>Server only</b>:
+     * there the wagon pose is set after entity ticks (in {@code ConsistManager}),
+     * so riders would otherwise trail one tick behind the body. The client must
+     * NOT call this — vanilla positions a passenger right after its vehicle's
+     * tick, after the rider's old-pos snapshot; calling it from the vehicle tick
+     * collapses the camera's interpolation window (see {@link #clientTick}).
+     */
+    public void repositionRiders() {
+        for (Entity passenger : getPassengers()) {
+            positionRider(passenger, Entity::setPos);
+        }
+    }
+
+    /**
+     * This wagon's solid collision hull in model space (SPEC v1.5-а), or null if
+     * the type is unknown. Read on <b>both sides</b> (via {@link #typeNow}) so
+     * the {@code EntityHullCollisionMixin} can clamp the local player on the
+     * client and mobs on the server against the same envelope.
+     */
+    public WagonType.Hull collisionHull() {
+        WagonType type = typeNow();
+        return type != null ? type.collidableHull() : null;
+    }
+
+    /** True if this player is a free-walking rider (not the seated cab driver). */
+    public boolean isWalkingRider(Player player) {
+        return riderLocal.containsKey(player.getUUID());
+    }
+
+    /**
+     * The wagon now runs turned in its consist (SPEC §6.12: it joined a
+     * consist running the other way along the track, so its {@code flipped}
+     * flag toggled): its pose frame turned 180° about Y while the car itself
+     * stood still. Walking riders' feet live in the pose frame — mirror them,
+     * or they would jump to the opposite spot of the car. Server.
+     */
+    void turnAround() {
+        for (Vector3d local : riderLocal.values()) {
+            local.set(-local.x, local.y, -local.z);
+        }
+    }
+
+    /**
+     * This wagon's walking riders as (passenger entity id → local feet), for the
+     * server→client {@code RiderSyncPayload} (SPEC v1.5-б). Keyed by the network
+     * entity id (the same on every client), not UUID, so observers can match it
+     * to the rider entity. Empty when no one walks here — the common case.
+     */
+    public Map<Integer, Vector3d> walkingRiderLocals() {
+        if (riderLocal.isEmpty()) {
+            return Map.of();
+        }
+        Map<Integer, Vector3d> out = new HashMap<>();
+        for (Entity passenger : getPassengers()) {
+            Vector3d local = riderLocal.get(passenger.getUUID());
+            if (local != null) {
+                out.put(passenger.getId(), local);
+            }
+        }
+        return out;
+    }
+
+    /** True only while a sanctioned {@link #exitRider} is in progress. */
+    public boolean dismountAllowed() {
+        return dismountAllowed;
+    }
+
+    /** Drop a walking rider out the nearer side of the car, by their floor spot. */
+    @Override
+    public Vec3 getDismountLocationForPassenger(LivingEntity passenger) {
+        if (doorExit != null) {
+            return doorExit;
+        }
+        WagonType type = serverType();
+        WagonType.Interior interior = type != null && type.interior() != null
+                ? type.interior().inFrame(isFlipped()) : null;
+        if (interior != null) {
+            Vector3d local = riderLocal.getOrDefault(passenger.getUUID(),
+                    new Vector3d(0.0, interior.floorY(), 0.0));
+            double side = local.x >= 0.0 ? interior.maxX() + 1.0 : interior.minX() - 1.0;
+            Vector3d world = PoseMath.localToWorld(new Vector3d(getX(), getY(), getZ()),
+                    getYRot(), getXRot(), new Vector3d(side, interior.floorY(), local.z));
+            return new Vec3(world.x, world.y, world.z);
+        }
+        return super.getDismountLocationForPassenger(passenger);
+    }
+
+    @Override
+    protected void removePassenger(Entity passenger) {
+        super.removePassenger(passenger);
+        riderLocal.remove(passenger.getUUID());
+        if (!level().isClientSide && passenger.getId() == seatedId()) {
+            this.entityData.set(DATA_SEATED, -1);
+        }
+    }
+
+    /** Selectable by the cursor so the cab can be right-clicked; still no collision (noPhysics). */
+    @Override
+    public boolean isPickable() {
+        return !isRemoved();
+    }
+
+    @Override
+    public boolean isPushable() {
+        return false;
+    }
+
+    /** Long wagons get culled by their tight AABB otherwise (SPEC §2.4, 0.2). */
+    @Override
+    public AABB getBoundingBoxForCulling() {
+        // half the longest stock frame (platzkart ~12.6) plus curve slack
+        return getBoundingBox().inflate(16.0);
+    }
+
+    @Override
+    protected void readAdditionalSaveData(CompoundTag tag) {
+        setConsistId(tag.getInt("ConsistId"));
+        setWagonIndex(tag.getInt("WagonIndex"));
+        this.entityData.set(DATA_DOORS, tag.getInt("Doors"));
+        this.entityData.set(DATA_CONTROLS, tag.getCompound("Controls").copy());
+    }
+
+    @Override
+    protected void addAdditionalSaveData(CompoundTag tag) {
+        tag.putInt("ConsistId", getConsistId());
+        tag.putInt("WagonIndex", getWagonIndex());
+        tag.putInt("Doors", doorMask());
+        tag.put("Controls", controls().copy());
+    }
+}

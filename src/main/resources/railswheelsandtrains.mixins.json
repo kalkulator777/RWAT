@@ -1,0 +1,19 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.muzhik17.trainsmod.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "EntityHullCollisionMixin"
+  ],
+  "client": [
+    "ClientChunkCacheLightMixin",
+    "ClientLevelSectionDirtyMixin",
+    "EntityRendererCabinLightMixin",
+    "LivingEntityRendererSeatMixin",
+    "LivingEntityWalkAnimationMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

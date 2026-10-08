@@ -1,0 +1,35 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "post": "minecraft:block/oak_planks",
+    "bar": "minecraft:block/iron_block",
+    "particle": "#post"
+  },
+  "elements": [
+    {
+      "from": [6, 0, 6],
+      "to": [10, 10, 10],
+      "faces": {
+        "down": { "texture": "#post", "cullface": "down" },
+        "up": { "texture": "#post" },
+        "north": { "texture": "#post" },
+        "south": { "texture": "#post" },
+        "west": { "texture": "#post" },
+        "east": { "texture": "#post" }
+      }
+    },
+    {
+      "from": [7, 10, 1],
+      "to": [9, 12, 15],
+      "rotation": { "origin": [8, 11, 8], "axis": "y", "angle": -45 },
+      "faces": {
+        "down": { "texture": "#bar" },
+        "up": { "texture": "#bar" },
+        "north": { "texture": "#bar" },
+        "south": { "texture": "#bar" },
+        "west": { "texture": "#bar" },
+        "east": { "texture": "#bar" }
+      }
+    }
+  ]
+}

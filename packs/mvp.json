@@ -1,0 +1,80 @@
+{
+  "name": "Matoi Vanilla Pack",
+  "pack_dir": "MatoiVanillaPack",
+  "namespace": "mvp",
+  "description": "§6Matoi Vanilla Pack§r: Russian trains by FrozeRain & co. (RWAT conversion)",
+  "license": "CC BY-NC-ND 4.0, see LICENSE.txt; authors in Credits.txt",
+  "out": "../run/rwat_packs",
+  "id_strip_prefix": "mvp_ir_",
+  "sources": [
+    { "zip": "../MVP-IR-1.8-mc1.12.2-by-FrozeRain.zip", "root": "stock", "label": "MVP 1.8" },
+    { "zip": "../MVP-IR-1.7-bugfix-mc1.12.2-by-FrozeRain.zip", "root": "stock_17", "label": "MVP 1.7 bugfix" }
+  ],
+  "copy_root_files": ["pack.png", "LICENSE.txt", "Credits.txt", "ReadMe.txt"],
+  "exclude": [],
+  "rail_exclude": [
+    "ct_end_rail", "bridge_end", "bridge", "railswitch", "deadend",
+    "elfrail", "elfpole", "oversup", "overtop", "overtop_empty", "sensor", "signal"
+  ],
+  "rail_overrides": {
+    "grunt_c": { "tile_length": 1.625 },
+    "grunt_w": { "tile_length": 1.625 }
+  },
+  "overrides": {
+    "chme3": {
+      "type": {
+        "aliases": ["rwat:chme3"],
+        "length": 18.125,
+        "bogies": [4.4375, -4.4375],
+        "mass_t": 123.0,
+        "max_speed_kmh": 95.0,
+        "resistance": { "a": 2500.0, "b": 100.0, "c": 12.0 },
+        "traction": { "power_kw": 994.0, "max_tractive_effort_kn": 226.0 },
+        "brakes": { "train_kn": 160.0, "independent_kn": 90.0, "parking_kn": 30.0 },
+        "cab": { "seat": [-1.062, 3.092, -4.654], "seat_yaw": 0.0 },
+        "interior": [
+          { "min": [-1.44, 2.311, -5.5], "max": [1.44, 4.37, -4.45] },
+          { "min": [0.6, 2.311, -5.25], "max": [1.44, 4.37, -3.625] },
+          { "min": [0.875, 2.311, -3.44], "max": [1.625, 5.0, 8.312] },
+          { "min": [-1.625, 2.311, -3.44], "max": [-0.875, 5.0, 8.312] },
+          { "min": [-1.625, 2.311, 7.438], "max": [1.625, 5.0, 8.312] },
+          { "min": [0.875, 2.311, -8.312], "max": [1.625, 5.0, -5.69] },
+          { "min": [-1.625, 2.311, -8.312], "max": [-0.875, 5.0, -5.69] },
+          { "min": [-1.625, 2.311, -8.312], "max": [1.625, 5.0, -7.438] }
+        ],
+        "doors": [
+          { "id": "door1", "min": [-1.5, 2.374, -5.688], "max": [-0.937, 4.382, -5.562], "inner": true },
+          { "id": "door2", "min": [0.938, 2.374, -3.562], "max": [1.5, 4.382, -3.438], "inner": true },
+          { "id": "step1", "min": [1.56, 1.0, 7.6], "max": [1.66, 3.0, 8.31], "fixed": true },
+          { "id": "step2", "min": [-1.66, 1.0, 7.6], "max": [-1.56, 3.0, 8.31], "fixed": true },
+          { "id": "step3", "min": [1.56, 1.0, -8.31], "max": [1.66, 3.0, -7.6], "fixed": true },
+          { "id": "step4", "min": [-1.66, 1.0, -8.31], "max": [-1.56, 3.0, -7.6], "fixed": true }
+        ]
+      }
+    },
+    "chme3_booster": {
+      "type": {
+        "cab": null,
+        "brakes": { "independent_kn": null }
+      }
+    },
+    "amendorf": {
+      "type": {
+        "aliases": ["rwat:plazkart"],
+        "length": 25.125,
+        "bogies": [8.5, -8.5],
+        "mass_t": 53.0,
+        "max_speed_kmh": 120.0,
+        "resistance": { "a": 1100.0, "b": 50.0, "c": 9.0 },
+        "brakes": { "train_kn": 110.0, "parking_kn": 25.0 },
+        "interior": { "min": [-1.35, 1.81, -11.75], "max": [1.35, 4.55, 11.75] },
+        "doors": [
+          { "id": "door1", "min": [1.47, 1.81, 10.87], "max": [1.56, 3.81, 11.69] },
+          { "id": "door2", "min": [-1.56, 1.81, 10.87], "max": [-1.47, 3.81, 11.69] },
+          { "id": "door3", "min": [-1.56, 1.81, -11.69], "max": [-1.47, 3.81, -10.87] },
+          { "id": "door4", "min": [1.47, 1.81, -11.69], "max": [1.56, 3.81, -10.87] }
+        ]
+      }
+    }
+  }
+}

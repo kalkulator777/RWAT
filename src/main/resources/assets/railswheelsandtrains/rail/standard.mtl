@@ -1,0 +1,3 @@
+# RWAT standard rail
+newmtl rail_standard
+map_Kd standard.png

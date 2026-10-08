@@ -1,0 +1,20 @@
+# The project uses LF everywhere; keep it that way regardless of core.autocrlf.
+* text=auto eol=lf
+
+# Windows scripts need CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary files: never touch line endings or try to diff them.
+*.png binary
+*.jpg binary
+*.jar binary
+*.zip binary
+# IR animation files are third-party assets copied byte for byte; keep them as-is.
+*.anim -text
+
+# Disable autocrlf on generated files, they always generate with LF
+# Add any extra files or paths here to make git stop saying they
+# are changed when only line endings change.
+src/generated/**/.cache/* text eol=lf
+src/generated/**/*.json text eol=lf
