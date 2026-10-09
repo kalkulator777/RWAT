@@ -103,7 +103,10 @@ public final class WagonTypeParser {
      * {@code "doors": [ { "id": "door1", "min": [x,y,z], "max": [x,y,z] } ]} —
      * each door leaf's box in model space. Order = door index. Optional flags
      * (SPEC §9.1): {@code "inner": true} — a door between floor zones,
-     * {@code "fixed": true} — an always-open opening without a leaf.
+     * {@code "fixed": true} — an always-open opening without a leaf;
+     * {@code "connecting": true} (SPEC §9.5) — an end door onto the gangway
+     * to the coupled neighbour; {@code "group": "<name>"} — doors of one group
+     * open and close together.
      */
     private static List<WagonType.Door> doors(JsonObject json) {
         if (!json.has("doors")) {
@@ -120,7 +123,10 @@ public final class WagonTypeParser {
             doors.add(new WagonType.Door(door.get("id").getAsString(),
                     min[0], min[1], min[2], max[0], max[1], max[2],
                     door.has("inner") && door.get("inner").getAsBoolean(),
-                    door.has("fixed") && door.get("fixed").getAsBoolean()));
+                    door.has("fixed") && door.get("fixed").getAsBoolean(),
+                    door.has("connecting") && door.get("connecting").getAsBoolean(),
+                    door.has("group") && !door.get("group").isJsonNull()
+                            ? door.get("group").getAsString() : null));
         }
         return doors;
     }

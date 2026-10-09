@@ -63,6 +63,8 @@ public final class ClientWalkInput {
     private static boolean prevSeated;
     /** Sneak-key state, to send the stand-up as a single edge. */
     private static boolean sneakWasDown = true;
+    /** Entity id of the wagon the predicted feet belong to, or -1 when not walking one. */
+    private static int walkedWagon = -1;
 
     private ClientWalkInput() {
     }
@@ -76,6 +78,7 @@ public final class ClientWalkInput {
             prevWagonYaw = null;
             prevFlipped = null;
             prevSeated = false;
+            walkedWagon = -1;
             ClientWalk.clearLocalOwner();
             if (player != null) {
                 ClientWalk.remove(player.getId());
@@ -88,9 +91,23 @@ public final class ClientWalkInput {
             useWasDown = true;
             prevWagonYaw = null;
             prevFlipped = null;
+            walkedWagon = -1;
             ClientWalk.clearLocalOwner();
             ClientWalk.remove(player.getId());
             return;
+        }
+        if (wagon.getId() != walkedWagon) {
+            // aboard another wagon (boarded, or a gangway carried us on, SPEC
+            // §9.5): its own frame — drop the last car's feet, yaw and flip, and
+            // start from the server's spot if it gave one, else the world position
+            walkedWagon = wagon.getId();
+            prevWagonYaw = null;
+            prevFlipped = null;
+            ClientWalk.remove(player.getId());
+            Vector3d placed = ClientWalk.takePlacement(wagon.getId());
+            if (placed != null) {
+                ClientWalk.put(player.getId(), placed);
+            }
         }
         // this player's local feet are predicted here — keep the server sync
         // (which lists everyone) from overwriting them with a round-trip-stale value

@@ -273,16 +273,50 @@ public record WagonType(
      * a bridge between them; the hull isn't cut. A {@code fixed} door has no
      * leaf: an always-open opening such as a loco's corner steps.
      *
-     * @param id the door's name, matching the model's animation for it
-     *           (e.g. {@code door1} ↔ the asset's {@code Door1} control group)
+     * <p>A {@code connecting} door (SPEC §9.5, IR's {@code DOOR_n_CONNECTING})
+     * is an end door onto the gangway: open, walking through it carries the
+     * rider into the coupled neighbour on that end, through the neighbour's
+     * own connecting door there; with no such neighbour it is wall. It isn't
+     * a way in from the ground, so the hull isn't cut there either.
+     *
+     * @param id    the door's name, matching the model's animation for it
+     *              (e.g. {@code door1} ↔ the asset's {@code Door1} control group)
+     * @param group doors of one group open and close together, null = on its
+     *              own: IR works all doors of a control group at once (an
+     *              EMU's left side, DR1's {@code DL}), and one IR animation may
+     *              swing the leaves of several doorways
      */
     public record Door(String id, double minX, double minY, double minZ,
-            double maxX, double maxY, double maxZ, boolean inner, boolean fixed) {
+            double maxX, double maxY, double maxZ, boolean inner, boolean fixed,
+            boolean connecting, String group) {
 
         /** An ordinary hull door (every declaration before §9.1). */
         public Door(String id, double minX, double minY, double minZ,
                 double maxX, double maxY, double maxZ) {
-            this(id, minX, minY, minZ, maxX, maxY, maxZ, false, false);
+            this(id, minX, minY, minZ, maxX, maxY, maxZ, false, false, false, null);
+        }
+
+        /** A hull, inner or fixed door (§9.1, before gangways). */
+        public Door(String id, double minX, double minY, double minZ,
+                double maxX, double maxY, double maxZ, boolean inner, boolean fixed) {
+            this(id, minX, minY, minZ, maxX, maxY, maxZ, inner, fixed, false, null);
+        }
+
+        /** A door on its own (§9.5, before door groups). */
+        public Door(String id, double minX, double minY, double minZ,
+                double maxX, double maxY, double maxZ, boolean inner, boolean fixed,
+                boolean connecting) {
+            this(id, minX, minY, minZ, maxX, maxY, maxZ, inner, fixed, connecting, null);
+        }
+
+        /** True if this door opens and closes together with {@code other} (same group). */
+        public boolean groupedWith(Door other) {
+            return group != null && group.equals(other.group);
+        }
+
+        /** True for a way in from outside: neither between zones nor onto a gangway. */
+        public boolean external() {
+            return !inner && !connecting;
         }
 
         /** True if this doorway lets a rider through now, given the open-door bits. */
@@ -326,7 +360,9 @@ public record WagonType(
          * so its doors swap sides and ends.
          */
         public Door inFrame(boolean flipped) {
-            return flipped ? new Door(id, -maxX, minY, -maxZ, -minX, maxY, -minZ, inner, fixed) : this;
+            return flipped
+                    ? new Door(id, -maxX, minY, -maxZ, -minX, maxY, -minZ, inner, fixed, connecting, group)
+                    : this;
         }
     }
 
@@ -339,6 +375,29 @@ public record WagonType(
      */
     public record Hull(double minX, double minY, double minZ,
             double maxX, double maxY, double maxZ) {
+    }
+
+    /** How far outside a door's box a model leaf's centre may lie and still be that door's. */
+    private static final double LEAF_SLACK = 0.1;
+
+    /**
+     * The door a model part centred at ({@code x, y, z}) — model frame —
+     * belongs to: the first door with a leaf whose box, grown by
+     * {@value #LEAF_SLACK}, holds that point; −1 if none. A leaf the asset
+     * moves by {@code ROT_}/{@code TL_} swings with this door's openness
+     * (SPEC §9.5): no names to match, so a hand-declared door box picks up
+     * its leaf as well.
+     */
+    public int doorHolding(double x, double y, double z) {
+        for (int i = 0; i < doors.size(); i++) {
+            Door d = doors.get(i);
+            if (!d.fixed() && x >= d.minX() - LEAF_SLACK && x <= d.maxX() + LEAF_SLACK
+                    && y >= d.minY() - LEAF_SLACK && y <= d.maxY() + LEAF_SLACK
+                    && z >= d.minZ() - LEAF_SLACK && z <= d.maxZ() + LEAF_SLACK) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     /** Half the stock loading gauge, blocks — body half-width of the collision hull. */
@@ -379,14 +438,15 @@ public record WagonType(
      * True if the interior is entered and left only through its doors (SPEC
      * v1.5, doors) — the right-click board/exit is kept just for boardable
      * types declaring no way in, which would otherwise be unreachable. Doors
-     * between zones ({@link Door#inner}) aren't a way in.
+     * between zones ({@link Door#inner}) and onto gangways ({@link
+     * Door#connecting}) aren't a way in.
      */
     public boolean doorsOnly() {
         if (!boardable()) {
             return false;
         }
         for (Door door : doors) {
-            if (!door.inner()) {
+            if (door.external()) {
                 return true;
             }
         }

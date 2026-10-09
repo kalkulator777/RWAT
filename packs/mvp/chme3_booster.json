@@ -1,0 +1,13 @@
+{
+  "name": {"ru_ru": "ЧМЭ3, бустерная секция"},
+  "lights": {
+    "BHL": {"en_us": "Booster headlight", "ru_ru": "Прожектор бустера"},
+    "BBL": {"en_us": "Booster buffer lights", "ru_ru": "Буферные фонари бустера"}
+  },
+  "type": {
+    "cab": null,
+    "brakes": {
+      "independent_kn": null
+    }
+  }
+}

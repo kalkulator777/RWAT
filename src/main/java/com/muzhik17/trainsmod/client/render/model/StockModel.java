@@ -33,6 +33,11 @@ import net.minecraft.resources.ResourceLocation;
  * <p>The {@code controls} are the cab's levers, switches and gauges (SPEC
  * §9.3), each moved by its own value about its own pivot.
  *
+ * <p>The {@code doorLeaves} are doors the asset swings or slides by name
+ * ({@code DOOR_<n>_ROT_<degrees>}, {@code TL_<f>_<axis>}) rather than by an
+ * animation (SPEC §9.5): built like controls, each moved by the openness of
+ * the wagon type's door whose box holds it ({@code WagonType.doorHolding}).
+ *
  * <p>Light (SPEC §8): every quad's {@code tag} says how it is lit —
  * {@link #tag}; {@code lightGroups} are the model's light groups (a tag's group
  * index points here), {@code lamps} the cabin lamps that light the interior,
@@ -49,6 +54,7 @@ public record StockModel(
         Map<ResourceLocation, Mesh> interior,
         List<Door> doors,
         List<Control> controls,
+        List<Control> doorLeaves,
         Bogie frontBogie,
         Bogie rearBogie,
         Map<String, Map<ResourceLocation, ResourceLocation>> liveries,
@@ -156,12 +162,13 @@ public record StockModel(
     /** A model with no geometry — the renderer falls back to the debug box. */
     public static StockModel empty() {
         Bogie none = new Bogie(Map.of(), List.of());
-        return new StockModel(Map.of(), Map.of(), List.of(), List.of(), none, none, Map.of(),
-                List.of(), List.of(), List.of());
+        return new StockModel(Map.of(), Map.of(), List.of(), List.of(), List.of(), none, none,
+                Map.of(), List.of(), List.of(), List.of());
     }
 
     public boolean isEmpty() {
         return body.isEmpty() && interior.isEmpty() && doors.isEmpty() && controls.isEmpty()
+                && doorLeaves.isEmpty()
                 && frontBogie.meshes().isEmpty() && frontBogie.wheels().isEmpty()
                 && rearBogie.meshes().isEmpty() && rearBogie.wheels().isEmpty();
     }

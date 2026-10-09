@@ -24,7 +24,8 @@ import net.minecraft.resources.ResourceLocation;
  * the terrain shader ignores normals, so directional diffuse is baked into the
  * vertex colour at build time.
  *
- * <p>{@link #lightGlow}: the headlights' flares and beams (SPEC §8).
+ * <p>{@link #lightGlow}: the headlights' flares, beams and light on the track
+ * (SPEC §8).
  */
 public final class RwatRenderTypes extends RenderType {
 
@@ -39,7 +40,7 @@ public final class RwatRenderTypes extends RenderType {
                             .createCompositeState(false)));
 
     private static final RenderType LIGHT_GLOW = create("rwat_light_glow",
-            DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS, 4096, false, true,
+            DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS, 8192, false, false,
             CompositeState.builder()
                     .setShaderState(POSITION_COLOR_SHADER)
                     .setTransparencyState(LIGHTNING_TRANSPARENCY)
@@ -49,10 +50,12 @@ public final class RwatRenderTypes extends RenderType {
                     .createCompositeState(false));
 
     /**
-     * Headlight flares and beams (SPEC §8): flat vertex colour, additive
-     * ({@code src·alpha + dst}), depth-tested but not depth-written, both
-     * faces — light that adds to what is behind it. No texture: the soft
-     * falloff is in the vertex alpha.
+     * Headlight flares, beams and track light (SPEC §8): flat vertex colour,
+     * additive ({@code src·alpha + dst}), depth-tested but not depth-written,
+     * both faces — light that adds to what is behind it. No texture, the soft
+     * falloff is in the vertex alpha: a shader pack swaps a textured program
+     * for one that discards alpha under 0.1 (it cut the faint beam away),
+     * the plain-colour one only discards zero.
      */
     public static RenderType lightGlow() {
         return LIGHT_GLOW;

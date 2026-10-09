@@ -70,6 +70,9 @@ final class ModelPreview {
                 draw(piece.meshes(), swaps, pose, buffers);
             }
         }
+        for (StockModel.Control leaf : model.doorLeaves()) {
+            draw(leaf.meshes(), swaps, pose, buffers); // shut: at rest
+        }
         // cab controls at rest (SPEC §9.3): levers shut, the reverser in neutral, switches off
         for (StockModel.Control control : model.controls()) {
             float rest = ControlValue.position(control.role(), Handles.REST, false, 0.0F, STILL);

@@ -16,8 +16,8 @@ import net.minecraft.resources.ResourceLocation;
 /**
  * A {@link StockModel} baked into GPU buffers (SPEC §2.4): one {@link GpuMesh}
  * per texture bucket, with the part split preserved — body, interior, each
- * bogie frame, each wheel, each door piece and cab control — because each
- * part is drawn with its own per-frame transform (articulation, wheel spin,
+ * bogie frame, each wheel, each door piece, door leaf and cab control —
+ * because each part is drawn with its own per-frame transform (articulation, wheel spin,
  * door swing, lever travel) or only within some distance (interior). Light
  * and livery are baked per instance; the renderer keeps a bounded LRU set of
  * instances, one per (livery, packed light, lit light groups) it actually
@@ -62,15 +62,18 @@ public final class BakedStockModel implements AutoCloseable {
     private final List<GpuMesh> interior;
     private final List<BakedDoor> doors;
     private final List<BakedControl> controls;
+    private final List<BakedControl> doorLeaves;
     private final BakedBogie front;
     private final BakedBogie rear;
 
     private BakedStockModel(List<GpuMesh> body, List<GpuMesh> interior, List<BakedDoor> doors,
-            List<BakedControl> controls, BakedBogie front, BakedBogie rear) {
+            List<BakedControl> controls, List<BakedControl> doorLeaves, BakedBogie front,
+            BakedBogie rear) {
         this.body = body;
         this.interior = interior;
         this.doors = doors;
         this.controls = controls;
+        this.doorLeaves = doorLeaves;
         this.front = front;
         this.rear = rear;
     }
@@ -89,6 +92,11 @@ public final class BakedStockModel implements AutoCloseable {
 
     public List<BakedControl> controls() {
         return controls;
+    }
+
+    /** Door leaves moved by name (SPEC §9.5), baked like controls. */
+    public List<BakedControl> doorLeaves() {
+        return doorLeaves;
     }
 
     public BakedBogie front() {
@@ -110,15 +118,12 @@ public final class BakedStockModel implements AutoCloseable {
             long litMask) {
         Map<ResourceLocation, ResourceLocation> swaps = model.livery(livery);
         Mesh.VertexLight light = light(model, packedLight, litMask);
-        List<BakedControl> controls = new ArrayList<>(model.controls().size());
-        for (StockModel.Control control : model.controls()) {
-            controls.add(new BakedControl(control, bakeBuckets(control.meshes(), swaps, light)));
-        }
         return new BakedStockModel(
                 bakeBuckets(model.body(), swaps, light),
                 bakeBuckets(model.interior(), swaps, light),
                 bakeDoors(model.doors(), swaps, light),
-                List.copyOf(controls),
+                bakeControls(model.controls(), swaps, light),
+                bakeControls(model.doorLeaves(), swaps, light),
                 bakeBogie(model.frontBogie(), swaps, light),
                 bakeBogie(model.rearBogie(), swaps, light));
     }
@@ -203,6 +208,15 @@ public final class BakedStockModel implements AutoCloseable {
         return List.copyOf(baked);
     }
 
+    private static List<BakedControl> bakeControls(List<StockModel.Control> controls,
+            Map<ResourceLocation, ResourceLocation> swaps, Mesh.VertexLight light) {
+        List<BakedControl> baked = new ArrayList<>(controls.size());
+        for (StockModel.Control control : controls) {
+            baked.add(new BakedControl(control, bakeBuckets(control.meshes(), swaps, light)));
+        }
+        return List.copyOf(baked);
+    }
+
     private static BakedBogie bakeBogie(StockModel.Bogie bogie,
             Map<ResourceLocation, ResourceLocation> swaps, Mesh.VertexLight light) {
         List<BakedWheel> wheels = new ArrayList<>();
@@ -233,6 +247,9 @@ public final class BakedStockModel implements AutoCloseable {
         }
         for (BakedControl control : controls) {
             control.meshes().forEach(GpuMesh::close);
+        }
+        for (BakedControl leaf : doorLeaves) {
+            leaf.meshes().forEach(GpuMesh::close);
         }
         closeBogie(front);
         closeBogie(rear);

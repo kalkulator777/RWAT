@@ -164,6 +164,57 @@ public final class RiderWalk {
         return -1;
     }
 
+    /** Gap left between a rider arriving through a gangway door and its inner face. */
+    static final double GANGWAY_CLEARANCE = 0.05;
+
+    /**
+     * Where a rider coming through a gangway lands in the next car (SPEC
+     * §9.5): its connecting door in the end wall facing them — the one
+     * nearest their place across the car — and a spot just inside it, at
+     * that place (within the door), on the nearest floor.
+     *
+     * @param doors    the next car's doors <b>in its pose frame</b>
+     * @param interior the next car's floor in its pose frame
+     * @param travel   the way the rider walks along the train: +1 forward
+     *                 (in through the next car's rear end wall), -1 back
+     * @param across   the rider's local X in the car they leave (pose frames
+     *                 of coupled cars point the same way, so X carries over)
+     * @return the door and the feet, or null if no connecting door faces them
+     */
+    public static Arrival gangwayArrival(List<WagonType.Door> doors, WagonType.Interior interior,
+            int travel, double across) {
+        int best = -1;
+        double bestOff = Double.MAX_VALUE;
+        for (int i = 0; i < doors.size() && i < 32; i++) {
+            WagonType.Door door = doors.get(i);
+            if (door.connecting() && door.axis() == 2 && door.outward() == -travel) {
+                double off = Math.abs(along(across, door) - across);
+                if (off < bestOff) {
+                    best = i;
+                    bestOff = off;
+                }
+            }
+        }
+        if (best < 0) {
+            return null;
+        }
+        WagonType.Door door = doors.get(best);
+        Vector3d inside = new Vector3d(along(across, door), 0.0,
+                door.innerFace() + travel * (PLAYER_HALF_WIDTH + GANGWAY_CLEARANCE));
+        return new Arrival(best, interior.clampFeet(inside, PLAYER_HALF_WIDTH));
+    }
+
+    /** A gangway arrival: the door walked in through and the rider's new local feet. */
+    public record Arrival(int door, Vector3d feet) {
+    }
+
+    /** A body-width point along a door's span: clamped inside it, or its middle if too narrow. */
+    public static double along(double value, WagonType.Door door) {
+        double lo = door.spanMin() + PLAYER_HALF_WIDTH;
+        double hi = door.spanMax() - PLAYER_HALF_WIDTH;
+        return lo > hi ? (door.spanMin() + door.spanMax()) * 0.5 : Math.clamp(value, lo, hi);
+    }
+
     /** True if a rider centred at (x, z) stands on the floor: in a zone or an open door's bridge. */
     static boolean onFloor(double x, double z, WagonType.Interior interior,
             List<WagonType.Door> doors, int openMask) {

@@ -101,4 +101,34 @@ class ObjectRoleTest {
         assertNull(interior.control());
         assertEquals("IL", interior.lightGroup());
     }
+
+    @Test
+    void doorLeaves_areReadOnlyAsDoors() {
+        // ER2's gangway door hinge and a sliding side leaf (SPEC §9.5)
+        ObjectRole hinge = ObjectRole.door("DOOR_13_ROT_-105_er2t");
+        assertEquals(ObjectRole.Kind.DOOR, hinge.control().kind());
+        assertEquals("DOOR_13", hinge.control().key());
+        assertTrue(hinge.pivot());
+        assertEquals(-105.0F, hinge.pivotDegrees());
+        ObjectRole slide = ObjectRole.door("DOOR_1_TL_-0.531_X_CG_DrL_EXTERNAL_er2t");
+        assertEquals(-0.531F, slide.control().slideX());
+        assertEquals("DrL", slide.control().group());
+        assertFalse(slide.pivot());
+        // the VL80's prefixed names are doors too; anything else isn't one
+        assertEquals("DOOR_12", ObjectRole.door("Section_DOOR_12_TOGGLE_CG_DoorConn_CONNECTING_mvp_vl80c")
+                .control().key());
+        assertNull(ObjectRole.door("WIDGET_3_TOGGLE_CG_DoorTambur"));
+        assertNull(ObjectRole.door("FRAME_er2t"));
+        // and a cab control is never a door
+        assertEquals(ObjectRole.Kind.WIDGET, ObjectRole.parse("WIDGET_8_TOGGLE_CG_DrL_GLOBAL").control().kind());
+        assertNull(ObjectRole.parse("DOOR_13_ROT_-105_er2t").control());
+    }
+
+    @Test
+    void blenderCopySuffix_isDropped() {
+        // DR1's door leaf lights with the saloon, not with a group "IL.001"
+        assertEquals("IL", ObjectRole.parse("DOOR_3_INTERIOR_LCG_IL.001").lightGroup());
+        assertEquals("Front Light", ObjectRole.parse(
+                "WIDGET_5_TOGGLE_INTERIOR_CG_HLF_LCG_IL_LABEL_Front^Light.001").control().label());
+    }
 }

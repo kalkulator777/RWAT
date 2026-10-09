@@ -1,6 +1,7 @@
 package com.muzhik17.trainsmod.client;
 
 import java.util.List;
+import java.util.Locale;
 
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
@@ -22,7 +23,9 @@ import com.muzhik17.trainsmod.network.SeatPayload;
 import com.muzhik17.trainsmod.stock.ConsistComposition;
 import com.muzhik17.trainsmod.stock.WagonType;
 
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.resources.language.I18n;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
@@ -52,6 +55,15 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * control's box where its value has moved it. A rider picks only on their own
  * wagon; from outside, the nearby wagons' controls within reach. A nearer
  * door, block or entity keeps the click.
+ *
+ * <p>The ray is always taken at the <b>end of the tick</b> (eye and look at
+ * partial tick 1), the moment the wagon's entity pose belongs to: clicks and
+ * drags run in the tick, and an eye interpolated to the frame's partial tick
+ * against the tick's wagon pose put the ray up to a tick's travel off on a
+ * moving train — the dragged lever jumped between notches (play-test).
+ *
+ * <p>The control under the crosshair is <b>hovered</b> (SPEC §9.3): the
+ * renderer outlines it and {@link ClientCabHud} names it with its setting.
  */
 @EventBusSubscriber(modid = RailsWheelsAndTrains.MODID, value = Dist.CLIENT)
 public final class ClientCabInteract {
@@ -64,9 +76,13 @@ public final class ClientCabInteract {
     private static final int SEARCH_STEPS = 64;
     /** A dragged group control sends again only after moving this much. */
     private static final float SEND_STEP = 0.02F;
+    /** The pick ray's time: the end of the tick, when the wagon's entity pose is current. */
+    private static final float RAY_TIME = 1.0F;
 
     /** The control being dragged or held, or null. */
     private static Grab grab;
+    /** The control or chair under the crosshair (this tick), or null. */
+    private static Pick hover;
     /** False after a click until the use button is released (vanilla repeats use while held). */
     private static boolean armed = true;
 
@@ -92,6 +108,48 @@ public final class ClientCabInteract {
                 ? current.position[0] : null;
     }
 
+    /** True if this control is under the crosshair or in the player's hand (the renderer outlines it). */
+    public static boolean highlighted(WagonEntity wagon, StockModel.Control control) {
+        Grab current = grab;
+        if (current != null) {
+            return current.wagon == wagon && current.control == control;
+        }
+        Pick now = hover;
+        return now != null && now.wagon == wagon && now.control == control;
+    }
+
+    /** True if this wagon's driver's chair is under the crosshair. */
+    public static boolean seatHighlighted(WagonEntity wagon) {
+        Pick now = hover;
+        return grab == null && now != null && now.wagon == wagon && now.seat;
+    }
+
+    /**
+     * The crosshair label (SPEC §9.3): what the hovered or held control does
+     * and its setting, or the chair's hint; empty when there's nothing.
+     */
+    public static List<Component> hudLines() {
+        Grab current = grab;
+        if (current != null) {
+            return List.of(Component.literal(controlName(current.wagon, current.control.role())),
+                    Component.literal(setting(current.control.role(), current.position[0]))
+                            .withStyle(ChatFormatting.YELLOW));
+        }
+        Pick now = hover;
+        if (now == null) {
+            return List.of();
+        }
+        if (now.seat) {
+            return List.of(Component.translatable("control.railswheelsandtrains.seat"),
+                    Component.translatable("control.railswheelsandtrains.seat_hint")
+                            .withStyle(ChatFormatting.GRAY));
+        }
+        ObjectRole.Control role = now.control.role();
+        return List.of(Component.literal(controlName(now.wagon, role)),
+                Component.literal(setting(role, position(now.wagon, now.control)))
+                        .withStyle(ChatFormatting.GRAY));
+    }
+
     @SubscribeEvent
     static void onUse(InputEvent.InteractionKeyMappingTriggered event) {
         if (!event.isUseItem() || event.getHand() != InteractionHand.MAIN_HAND) {
@@ -110,7 +168,7 @@ public final class ClientCabInteract {
             return;
         }
         Pick pick = pick(mc, player);
-        if (pick == null || ClientDoorInteract.doorDistance(mc, player) < pick.distance) {
+        if (pick == null) {
             return; // nothing here, or a door in front of it takes the click
         }
         event.setCanceled(true);
@@ -124,9 +182,7 @@ public final class ClientCabInteract {
         ObjectRole.Control role = control.role();
         float now = position(pick.wagon, control);
         if (role.toggle()) {
-            float flipped = now >= 0.5F ? 0.0F : 1.0F;
-            send(pick.wagon, control, flipped);
-            status(player, role, flipped);
+            send(pick.wagon, control, now >= 0.5F ? 0.0F : 1.0F);
             return;
         }
         if (role.press()) {
@@ -136,7 +192,6 @@ public final class ClientCabInteract {
         Vector3f grabPoint = restPoint(control, now, pick.hit);
         grab = new Grab(pick.wagon, control, grabPoint, pick.distance,
                 new float[]{now}, new float[]{now});
-        status(player, role, now);
     }
 
     @SubscribeEvent
@@ -146,11 +201,14 @@ public final class ClientCabInteract {
         if (!held) {
             armed = true;
         }
+        LocalPlayer player = mc.player;
         Grab current = grab;
         if (current == null) {
+            hover = player != null && mc.level != null && mc.screen == null && !player.isSpectator()
+                    ? pick(mc, player) : null;
             return;
         }
-        LocalPlayer player = mc.player;
+        hover = null;
         if (player == null || !held || current.wagon.isRemoved()) {
             if (current.control.role().press()) {
                 send(current.wagon, current.control, 0.0F);
@@ -161,19 +219,15 @@ public final class ClientCabInteract {
         if (current.control.role().press()) {
             return; // a button: just held down
         }
-        drag(mc, player, current);
+        drag(player, current);
     }
 
     /** Follow the look ray: the travel whose grabbed point comes nearest it. */
-    private static void drag(Minecraft mc, LocalPlayer player, Grab current) {
-        float partialTick = mc.getTimer().getGameTimeDeltaPartialTick(true);
-        Vec3 eye = player.getEyePosition(partialTick);
-        Vec3 look = player.getViewVector(partialTick);
+    private static void drag(LocalPlayer player, Grab current) {
+        Vec3 eye = player.getEyePosition(RAY_TIME);
+        Vec3 look = player.getViewVector(RAY_TIME);
         Vec3 target = eye.add(look.scale(current.distance));
         Vector3f t = toModel(current.wagon, target);
-        if (t == null) {
-            return;
-        }
         ObjectRole.Control role = current.control.role();
         Matrix4f m = new Matrix4f();
         Vector3f p = new Vector3f();
@@ -198,7 +252,6 @@ public final class ClientCabInteract {
                 current.sent[0] = snapped;
                 PacketDistributor.sendToServer(new CabLeverPayload(current.wagon.getId(),
                         handle.ordinal(), notch));
-                status(player, role, snapped);
             }
             return;
         }
@@ -223,25 +276,44 @@ public final class ClientCabInteract {
         }
     }
 
-    /** The control's name and setting on the action bar while it is worked. */
-    private static void status(LocalPlayer player, ObjectRole.Control role, float position) {
-        String name = role.label() != null && !role.label().isBlank() ? role.label()
-                : Component.translatable("control.railswheelsandtrains."
-                        + role.kind().name().toLowerCase(java.util.Locale.ROOT)).getString();
+    /**
+     * What a control is called: a light switch by its light group's name
+     * ({@link LightNames}: the pack's for this type, else the mod's), else
+     * the model's {@code _LABEL_}, else its kind.
+     */
+    static String controlName(WagonEntity wagon, ObjectRole.Control role) {
+        ConsistComposition.Slot slot = ClientConsists.slot(wagon.getConsistId(), wagon.getWagonIndex());
+        String light = LightNames.of(slot != null ? slot.type().id() : null, role.group());
+        if (light != null) {
+            return light;
+        }
+        if (role.label() != null && !role.label().isBlank()) {
+            return role.label();
+        }
+        String kind = role.kind().name().toLowerCase(Locale.ROOT);
+        if (role.kind() == ObjectRole.Kind.WIDGET) {
+            kind = role.toggle() ? "widget_toggle" : role.press() ? "widget_press" : "widget";
+        }
+        return I18n.get("control.railswheelsandtrains." + kind);
+    }
+
+    /** A control's setting as shown: reverser direction, notch, on/off, or percent. */
+    static String setting(ObjectRole.Control role, float position) {
         Consist.Handle handle = ControlValue.handle(role.kind());
-        String setting;
         if (handle == Consist.Handle.REVERSER) {
             int r = Handles.fromTravel(handle, position);
-            setting = r > 0 ? "F" : r < 0 ? "R" : "N";
-        } else if (handle != null) {
-            setting = Handles.fromTravel(handle, position) + "/" + Consist.NOTCHES;
-        } else if (role.toggle() || role.press()) {
-            setting = Component.translatable(position >= 0.5F
-                    ? "control.railswheelsandtrains.on" : "control.railswheelsandtrains.off").getString();
-        } else {
-            setting = Math.round(position * 100.0F) + "%";
+            return I18n.get(r > 0 ? "control.railswheelsandtrains.forward"
+                    : r < 0 ? "control.railswheelsandtrains.backward"
+                            : "control.railswheelsandtrains.neutral");
         }
-        player.displayClientMessage(Component.literal(name + ": " + setting), true);
+        if (handle != null) {
+            return Handles.fromTravel(handle, position) + " / " + Consist.NOTCHES;
+        }
+        if (role.toggle() || role.press()) {
+            return I18n.get(position >= 0.5F
+                    ? "control.railswheelsandtrains.on" : "control.railswheelsandtrains.off");
+        }
+        return Math.round(position * 100.0F) + "%";
     }
 
     /** A control's current raw position, as the renderer shows it. */
@@ -259,11 +331,13 @@ public final class ClientCabInteract {
         return m.invert().transformPosition(new Vector3f(hit));
     }
 
-    /** The nearest control or driver's chair under the crosshair, within reach. */
+    /**
+     * The nearest control or driver's chair under the crosshair, within reach
+     * and with no door, block or entity in front of it; null if none.
+     */
     private static Pick pick(Minecraft mc, LocalPlayer player) {
-        float partialTick = mc.getTimer().getGameTimeDeltaPartialTick(true);
-        Vec3 eye = player.getEyePosition(partialTick);
-        Vec3 look = player.getViewVector(partialTick);
+        Vec3 eye = player.getEyePosition(RAY_TIME);
+        Vec3 look = player.getViewVector(RAY_TIME);
         double reach = Math.min(REACH, player.blockInteractionRange());
         List<WagonEntity> wagons = player.getVehicle() instanceof WagonEntity own
                 ? List.of(own)
@@ -276,22 +350,20 @@ public final class ClientCabInteract {
             if (model == null) {
                 continue;
             }
-            Vector3f origin = toModel(wagon, eye);
-            Vector3f far = toModel(wagon, eye.add(look));
-            if (origin == null || far == null) {
-                continue;
-            }
-            Vector3d o = new Vector3d(origin);
-            Vector3d dir = new Vector3d(far).sub(o);
+            Vector3d o = new Vector3d(toModel(wagon, eye));
+            Vector3d dir = new Vector3d(toModel(wagon, eye.add(look))).sub(o);
             // the driver's chair, for a rider of this wagon who isn't in it
             WagonType.Seat seat = slot.type().cab() != null ? slot.type().cab().seat() : null;
             if (seat != null && player.getVehicle() == wagon && !wagon.isSeated(player)) {
-                double t = HullCollision.rayBox(o, dir, seat.x() - 0.35, seat.y() - 0.5, seat.z() - 0.35,
-                        seat.x() + 0.35, seat.y() + 0.7, seat.z() + 0.35);
+                double[] box = seatBox(seat);
+                double t = HullCollision.rayBox(o, dir, box[0], box[1], box[2], box[3], box[4], box[5]);
                 if (t >= 0.0 && t <= reach && (best == null || t < best.distance)) {
                     best = new Pick(wagon, null, null, t, true);
                 }
             }
+            // the chair this player sits in (a WIDGET in the asset, ChME3 WIDGET_4) is under
+            // every look down at the desk: it never takes the pick
+            WagonType.Seat sitting = seat != null && wagon.isSeated(player) ? seat : null;
             Matrix4f m = new Matrix4f();
             for (StockModel.Control control : model.controls()) {
                 ObjectRole.Control role = control.role();
@@ -304,6 +376,16 @@ public final class ClientCabInteract {
                 }
                 control.transform(ControlValue.value(role, position), m);
                 float[] box = movedBox(control, m);
+                if (o.x > box[0] && o.x < box[3] && o.y > box[1] && o.y < box[4]
+                        && o.z > box[2] && o.z < box[5]) {
+                    continue; // the eye is inside it
+                }
+                double cushion = sitting == null ? 0.0 : sitting.y() - 0.05;
+                if (sitting != null && sitting.x() >= box[0] && sitting.x() <= box[3]
+                        && cushion >= box[1] && cushion <= box[4]
+                        && sitting.z() >= box[2] && sitting.z() <= box[5]) {
+                    continue; // the chair under the driver
+                }
                 double t = HullCollision.rayBox(o, dir, box[0] - PAD, box[1] - PAD, box[2] - PAD,
                         box[3] + PAD, box[4] + PAD, box[5] + PAD);
                 if (t < 0.0 || t > reach || (best != null && t >= best.distance)) {
@@ -314,8 +396,8 @@ public final class ClientCabInteract {
                 best = new Pick(wagon, control, hit, t, false);
             }
         }
-        if (best == null) {
-            return null;
+        if (best == null || ClientDoorInteract.doorDistance(mc, player) < best.distance) {
+            return null; // a door in front of it takes the click
         }
         // something else nearer under the crosshair keeps the click (the
         // wagon's own small centre hitbox doesn't count)
@@ -326,6 +408,15 @@ public final class ClientCabInteract {
             return null;
         }
         return best;
+    }
+
+    /**
+     * The driver's chair click box in the model frame, {@code {minX, minY,
+     * minZ, maxX, maxY, maxZ}}: the cushion top ± a chair's size.
+     */
+    public static double[] seatBox(WagonType.Seat seat) {
+        return new double[]{seat.x() - 0.35, seat.y() - 0.5, seat.z() - 0.35,
+                seat.x() + 0.35, seat.y() + 0.7, seat.z() + 0.35};
     }
 
     /** A control's rest box moved by {@code m}: the bounds of its eight moved corners. */

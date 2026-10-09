@@ -261,6 +261,35 @@ public final class RailGraph {
     }
 
     /**
+     * Whether the segment's end at {@code nodeId} is an open track end that
+     * grows the {@link TrackSweep#END_OVERHANG}: no other segment continues
+     * the track past the node (departs within {@link #CONTINUATION_DOT} of the
+     * outward direction). A dead-end node is trivially open; a switch node is
+     * open on the side none of its legs leave from — a Y-toe or the open ends
+     * of a scissors get the overhang, while straight joints and the legs' far
+     * side don't. Co-directional open ends share one overhang (both legs of a
+     * Y end at the toe along the same axis — two would z-fight): only the
+     * lowest segment id draws it. Shared by the rail renderer and the track
+     * bed, which must sweep the same tiles.
+     */
+    public boolean overhangAt(RailSegment segment, int nodeId) {
+        Vector3d outward = departure(segment, nodeId).negate();
+        for (int otherId : node(nodeId).segments()) {
+            if (otherId == segment.id()) {
+                continue;
+            }
+            Vector3d dep = departure(segment(otherId), nodeId);
+            if (dep.dot(outward) > CONTINUATION_DOT) {
+                return false; // the track continues past this node
+            }
+            if (otherId < segment.id() && dep.negate().dot(outward) > CONTINUATION_DOT) {
+                return false; // a co-directional twin with a lower id draws it
+            }
+        }
+        return true;
+    }
+
+    /**
      * The segment a train arriving at {@code nodeId} along {@code from}
      * continues onto, or null at a track end. A single candidate is followed
      * unconditionally (plain joints, the straight partner of a diamond

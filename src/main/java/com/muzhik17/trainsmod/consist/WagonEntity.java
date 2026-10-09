@@ -14,6 +14,7 @@ import com.muzhik17.trainsmod.kinematics.HullCollision;
 import com.muzhik17.trainsmod.kinematics.PoseMath;
 import com.muzhik17.trainsmod.kinematics.RiderWalk;
 import com.muzhik17.trainsmod.kinematics.WagonPose;
+import com.muzhik17.trainsmod.network.RiderPlacePayload;
 import com.muzhik17.trainsmod.stock.ConsistComposition;
 import com.muzhik17.trainsmod.stock.WagonType;
 
@@ -25,6 +26,7 @@ import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
+import net.minecraft.util.Mth;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -35,6 +37,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * A wagon: the Entity half of the 0.2 split (logical {@link Consist} +
@@ -68,6 +71,11 @@ import net.minecraft.world.phys.Vec3;
  * floor ({@link #boardThroughDoors}) — and a rider walking into it from inside
  * steps out ({@link #setWalkInput}). Speed doesn't matter: an open door on a
  * moving train lets you out, as in IR.
+ *
+ * <p><b>Gangways (SPEC §9.5, IR's {@code CONNECTING} doors):</b> a rider
+ * walking out through an open connecting door in an end wall goes on into the
+ * coupled neighbour on that end, through its connecting door there (opened
+ * as they pass), and walks on in its interior ({@link #passGangway}).
  */
 public class WagonEntity extends Entity {
 
@@ -106,6 +114,12 @@ public class WagonEntity extends Entity {
     private static final double SIT_DROP = 0.6;
     /** How close (feet to chair, horizontally) a walking rider must be to sit down. */
     private static final double SEAT_REACH = 2.5;
+    /**
+     * How far the seated driver may look round from the chair's facing,
+     * degrees each way (vanilla's boat: 105) — the body stays to the desk, so
+     * the head no longer spins all the way round (play-test).
+     */
+    public static final float SEAT_LOOK = 105.0F;
     /** Control groups a wagon keeps at most, and the longest group name (network sanity). */
     private static final int MAX_CONTROL_GROUPS = 64;
     private static final int MAX_CONTROL_NAME = 32;
@@ -341,6 +355,37 @@ public class WagonEntity extends Entity {
         return type.cab().seat().inFrame(isFlipped());
     }
 
+    /** World yaw the chair faces (the body of whoever sits in it), or NaN if there's no chair. */
+    public float seatFacing() {
+        WagonType.Seat seat = seat();
+        return seat == null ? Float.NaN : getYRot() + seat.yaw();
+    }
+
+    /**
+     * Keep a seated driver's look within {@link #SEAT_LOOK} of the chair's
+     * facing, body square to the desk (vanilla {@code Boat.clampRotation}):
+     * shifting {@code yRotO} with {@code yRot} keeps the frame lerp smooth.
+     */
+    public static void clampSeatedLook(Entity passenger, float facing) {
+        passenger.setYBodyRot(facing);
+        float off = Mth.wrapDegrees(passenger.getYRot() - facing);
+        float clamped = Mth.clamp(off, -SEAT_LOOK, SEAT_LOOK);
+        passenger.yRotO += clamped - off;
+        passenger.setYRot(passenger.getYRot() + clamped - off);
+        passenger.setYHeadRot(passenger.getYRot());
+    }
+
+    /** The mouse turned a passenger (client): the seated driver's look stays within the chair's. */
+    @Override
+    public void onPassengerTurned(Entity passenger) {
+        if (passenger.getId() == seatedId()) {
+            float facing = seatFacing();
+            if (!Float.isNaN(facing)) {
+                clampSeatedLook(passenger, facing);
+            }
+        }
+    }
+
     /** Local feet of a driver sitting in {@code seat}. */
     public static Vector3d seatedFeet(WagonType.Seat seat) {
         return new Vector3d(seat.x(), seat.y() - SIT_DROP, seat.z());
@@ -488,12 +533,19 @@ public class WagonEntity extends Entity {
                     RiderWalk.PLAYER_HALF_WIDTH);
         }
         List<WagonType.Door> doors = framedDoors();
-        if (type.doorsOnly()) {
+        if (!doors.isEmpty()) {
             int door = RiderWalk.exitDoor(local, forward, strafe, yaw, getYRot(),
                     interior, doors, doorMask());
             if (door >= 0) {
-                exitThroughDoor(player, type, doors.get(door), local);
-                return;
+                WagonType.Door through = doors.get(door);
+                if (!through.connecting()) {
+                    exitThroughDoor(player, type, through, local);
+                    return;
+                }
+                if (passGangway(player, through, local)) {
+                    return;
+                }
+                // no neighbour there to go on into: that door is wall, the step keeps them in
             }
         }
         riderLocal.put(player.getUUID(),
@@ -524,11 +576,84 @@ public class WagonEntity extends Entity {
         doorExit = null;
     }
 
+    /**
+     * Walk a rider through an open connecting door into the coupled neighbour
+     * on that end (SPEC §9.5): the wagon ahead for a door in the front (+Z)
+     * end wall, the one behind for the rear. Both pose frames point the same
+     * way along the train, so the rider keeps their place across the car.
+     * False (the door stays wall) if no wagon is coupled there or it has no
+     * connecting door facing back.
+     */
+    private boolean passGangway(ServerPlayer player, WagonType.Door door, Vector3d local) {
+        if (door.axis() != 2 || !(level() instanceof ServerLevel level)) {
+            return false;
+        }
+        Consist consist = ConsistManager.get(level).byId(getConsistId());
+        if (consist == null) {
+            return false;
+        }
+        int index = consist.wagonIds().indexOf(getUUID());
+        int other = index - door.outward(); // index 0 is the front: +Z faces index - 1
+        if (index < 0 || other < 0 || other >= consist.wagonIds().size()
+                || !(level.getEntity(consist.wagonIds().get(other)) instanceof WagonEntity next)) {
+            return false;
+        }
+        Vector3d arrival = next.gangwayArrival(door.outward(), local.x);
+        if (arrival == null) {
+            return false;
+        }
+        Vector3d world = PoseMath.localToWorld(new Vector3d(next.getX(), next.getY(), next.getZ()),
+                next.getYRot(), next.getXRot(), arrival);
+        doorExit = new Vec3(world.x, world.y, world.z);
+        exitRider(player);
+        doorExit = null;
+        next.boardAt(player, arrival);
+        return true;
+    }
+
+    /**
+     * Where a rider coming through the gangway lands here (SPEC §9.5): just
+     * inside this wagon's connecting door in the end wall facing them, at
+     * their place across the car (within the door), on the floor. Opens that
+     * door: they open it as they go through. Null if there is no such door
+     * or no floor.
+     *
+     * @param travel the way they walk along the train: +1 forward (they enter
+     *               through this wagon's rear end), -1 back
+     * @param across their local X in the wagon they leave
+     */
+    Vector3d gangwayArrival(int travel, double across) {
+        WagonType type = serverType();
+        if (type == null || type.interior() == null) {
+            return null;
+        }
+        RiderWalk.Arrival arrival = RiderWalk.gangwayArrival(framedDoors(),
+                type.interior().inFrame(isFlipped()), travel, across);
+        if (arrival == null) {
+            return null;
+        }
+        setDoorOpen(arrival.door(), true);
+        return arrival.feet();
+    }
+
+    /**
+     * Take a player on as a walking rider at a given local spot (server) and
+     * tell their client where: its prediction would otherwise start from the
+     * world position, which the vanilla dismount from the last wagon moved.
+     */
+    private void boardAt(ServerPlayer player, Vector3d local) {
+        riderLocal.put(player.getUUID(), local);
+        if (player.startRiding(this, true)) {
+            repositionRiders();
+            PacketDistributor.sendToPlayer(player, new RiderPlacePayload(getId(), local.x, local.y, local.z));
+        } else {
+            riderLocal.remove(player.getUUID());
+        }
+    }
+
     /** A body-width point along a door's span: clamped inside it, or its middle if too narrow. */
     private static double spanClamp(double value, WagonType.Door door) {
-        double lo = door.spanMin() + RiderWalk.PLAYER_HALF_WIDTH;
-        double hi = door.spanMax() - RiderWalk.PLAYER_HALF_WIDTH;
-        return lo > hi ? (door.spanMin() + door.spanMax()) * 0.5 : Math.clamp(value, lo, hi);
+        return RiderWalk.along(value, door);
     }
 
     // --- doors (SPEC v1.5) ---
@@ -569,8 +694,9 @@ public class WagonEntity extends Entity {
         int mask = doorMask();
         List<HullCollision.Portal> portals = new ArrayList<>();
         for (int i = 0; i < doors.size() && i < 32; i++) {
-            // a door between floor zones is inside the hull: it cuts nothing (SPEC §9.1)
-            if (!doors.get(i).inner() && doors.get(i).open(mask, i)) {
+            // a door between floor zones is inside the hull and a gangway door
+            // is no way in from the ground: they cut nothing (SPEC §9.1, §9.5)
+            if (doors.get(i).external() && doors.get(i).open(mask, i)) {
                 WagonType.Door door = doors.get(i);
                 portals.add(new HullCollision.Portal(door.axis(),
                         door.spanMin() + RiderWalk.DOOR_SPAN_INSET,
@@ -602,12 +728,35 @@ public class WagonEntity extends Entity {
         if (player.getEyePosition().distanceToSqr(centre.x, centre.y, centre.z) > reach * reach) {
             return;
         }
-        int mask = doorMask() ^ (1 << index);
+        setDoorOpen(index, !isDoorOpen(index));
+    }
+
+    /**
+     * Open or close door {@code index} (server), with its sound — and the
+     * other doors of its group (SPEC §9.5: IR works a control group's doors
+     * together).
+     */
+    private void setDoorOpen(int index, boolean open) {
+        List<WagonType.Door> doors = framedDoors();
+        if (index < 0 || index >= doors.size() || index >= 32 || isDoorOpen(index) == open) {
+            return;
+        }
+        WagonType.Door door = doors.get(index);
+        int mask = doorMask();
+        for (int i = 0; i < doors.size() && i < 32; i++) {
+            if (i != index && !doors.get(i).groupedWith(door)) {
+                continue;
+            }
+            mask = open ? mask | 1 << i : mask & ~(1 << i);
+            WagonType.Door d = doors.get(i);
+            Vector3d centre = PoseMath.localToWorld(new Vector3d(getX(), getY(), getZ()),
+                    getYRot(), getXRot(), new Vector3d((d.minX() + d.maxX()) * 0.5,
+                            (d.minY() + d.maxY()) * 0.5, (d.minZ() + d.maxZ()) * 0.5));
+            level().playSound(null, centre.x, centre.y, centre.z,
+                    open ? SoundEvents.IRON_DOOR_OPEN : SoundEvents.IRON_DOOR_CLOSE,
+                    SoundSource.BLOCKS, 1.0F, 1.0F);
+        }
         this.entityData.set(DATA_DOORS, mask);
-        boolean open = (mask >> index & 1) != 0;
-        level().playSound(null, centre.x, centre.y, centre.z,
-                open ? SoundEvents.IRON_DOOR_OPEN : SoundEvents.IRON_DOOR_CLOSE,
-                SoundSource.BLOCKS, 1.0F, 1.0F);
     }
 
     /**
@@ -717,6 +866,10 @@ public class WagonEntity extends Entity {
         Vector3d world = PoseMath.localToWorld(new Vector3d(getX(), getY(), getZ()),
                 getYRot(), getXRot(), local);
         move.accept(passenger, world.x, world.y, world.z);
+        if (seat != null) {
+            // every side, every tick: the body square to the desk, the look within reach of it
+            clampSeatedLook(passenger, getYRot() + seat.yaw());
+        }
     }
 
     /**

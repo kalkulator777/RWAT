@@ -33,6 +33,14 @@ public final class ClientWalk {
      */
     private static volatile int localOwnedId = -1;
 
+    /**
+     * A server-given start spot on a wagon the local player is about to ride
+     * (a gangway, SPEC §9.5): that wagon's entity id and the local feet, or
+     * -1/null. Kept until {@link ClientWalkInput} sees the player aboard.
+     */
+    private static volatile int placedWagon = -1;
+    private static volatile Vector3d placedLocal;
+
     private ClientWalk() {
     }
 
@@ -78,9 +86,25 @@ public final class ClientWalk {
         }
     }
 
+    /** The server's start spot for the local player on wagon {@code wagonId} ({@code RiderPlacePayload}). */
+    public static void place(int wagonId, Vector3d local) {
+        placedLocal = new Vector3d(local);
+        placedWagon = wagonId;
+    }
+
+    /** Take the start spot given for wagon {@code wagonId}, or null if none; clears it either way. */
+    public static Vector3d takePlacement(int wagonId) {
+        Vector3d local = placedWagon == wagonId ? placedLocal : null;
+        placedWagon = -1;
+        placedLocal = null;
+        return local;
+    }
+
     /** Drop everything (logout / level change). */
     public static void clearAll() {
         LOCAL.clear();
         localOwnedId = -1;
+        placedWagon = -1;
+        placedLocal = null;
     }
 }

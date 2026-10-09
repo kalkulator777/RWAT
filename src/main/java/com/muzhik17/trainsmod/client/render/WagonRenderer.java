@@ -12,6 +12,7 @@ import com.mojang.math.Axis;
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.client.ClientCabInteract;
 import com.muzhik17.trainsmod.client.ClientConsists;
+import com.muzhik17.trainsmod.client.ClientFloorDebug;
 import com.muzhik17.trainsmod.client.render.model.StockModel;
 import com.muzhik17.trainsmod.client.render.model.StockModels;
 import com.muzhik17.trainsmod.client.render.model.WagonModel;
@@ -125,6 +126,13 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
 
     /** Scratch for a control's transform (render thread only). */
     private static final Matrix4f CONTROL_FRAME = new Matrix4f();
+    /** The outline round the cab control under the crosshair (SPEC §9.3): warm white. */
+    private static final float OUTLINE_R = 1.0F;
+    private static final float OUTLINE_G = 0.92F;
+    private static final float OUTLINE_B = 0.7F;
+    private static final float OUTLINE_A = 0.8F;
+    /** Outline gap round a control's box, blocks. */
+    private static final float OUTLINE_PAD = 0.01F;
 
     private record BakeKey(StockModel model, String livery, int packedLight, long litMask) {
         @Override
@@ -205,7 +213,17 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
             draw(baked.interior(), poseStack);
         }
         drawDoors(baked, wagon, slot, partialTick, poseStack);
-        drawControls(baked, wagon, slot, wagonIndex, drawInterior, poseStack);
+        drawControls(baked, wagon, slot, wagonIndex, drawInterior, poseStack, buffers);
+        if (ClientFloorDebug.shown()) {
+            ClientFloorDebug.draw(poseStack, buffers, slot.type()); // SPEC §9.6 debug view
+        }
+        if (ClientCabInteract.seatHighlighted(wagon) && slot.type().cab() != null
+                && slot.type().cab().seat() != null) {
+            double[] box = ClientCabInteract.seatBox(slot.type().cab().seat());
+            LevelRenderer.renderLineBox(poseStack, buffers.getBuffer(RenderType.lines()),
+                    box[0], box[1], box[2], box[3], box[4], box[5],
+                    OUTLINE_R, OUTLINE_G, OUTLINE_B, OUTLINE_A);
+        }
         if (pose == null) {
             // no pose yet — ride the bogies rigidly at their pivots
             double[] pivots = slot.type().bogieOffsets();
@@ -225,13 +243,13 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
         }
         BATCH.flush();
 
-        // headlight flares and beams (SPEC §8), per frame, additive
+        // headlight flares, beams and track light (SPEC §8): queued, drawn after translucents
         if (litMask != 0L && !model.headlights().isEmpty()) {
             float skyDarken = wagon.level() instanceof net.minecraft.client.multiplayer.ClientLevel client
                     ? client.getSkyDarken(partialTick) : 1.0F;
             float dayLight = Math.clamp((skyDarken - 0.2F) / 0.8F, 0.0F, 1.0F);
-            LampEffects.draw(buffers.getBuffer(RwatRenderTypes.lightGlow()), model, litMask,
-                    bodyMatrix, entityRenderDispatcher.cameraOrientation(), packedLight, dayLight);
+            LampEffects.collect(model, litMask, bodyMatrix,
+                    entityRenderDispatcher.cameraOrientation(), packedLight, dayLight);
         }
 
         if (DEBUG_BOGIES && pose != null) {
@@ -328,17 +346,33 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
      * its keyframe for the door's open progress — interpolated between the
      * two nearest frames — on top of the body pose. Progress 0 is frame 0,
      * the rest pose, so a closed door draws exactly where the asset put it.
+     * A leaf the asset moves by name (SPEC §9.5) turns/slides by the progress
+     * of the type's door whose box holds it.
      */
     private static void drawDoors(BakedStockModel baked, WagonEntity wagon,
             ConsistComposition.Slot slot, float partialTick, PoseStack poseStack) {
-        if (baked.doors().isEmpty()) {
+        if (baked.doors().isEmpty() && baked.doorLeaves().isEmpty()) {
             return;
         }
-        List<WagonType.Door> declared = slot.type().doors();
+        WagonType type = slot.type();
+        for (BakedStockModel.BakedControl leaf : baked.doorLeaves()) {
+            StockModel.Control control = leaf.control();
+            int door = type.doorHolding((control.boxMin().x + control.boxMax().x) * 0.5,
+                    (control.boxMin().y + control.boxMax().y) * 0.5,
+                    (control.boxMin().z + control.boxMax().z) * 0.5);
+            control.transform(door < 0 ? 0.0F : wagon.doorAnim(door, partialTick), CONTROL_FRAME);
+            poseStack.pushPose();
+            poseStack.mulPose(CONTROL_FRAME);
+            draw(leaf.meshes(), poseStack);
+            poseStack.popPose();
+        }
+        List<WagonType.Door> declared = type.doors();
         for (BakedStockModel.BakedDoor door : baked.doors()) {
             float progress = 0.0F;
             for (int i = 0; i < declared.size(); i++) {
-                if (declared.get(i).id().equals(door.id())) {
+                // the model's animation group and the type's door id match ignoring case
+                // (SPEC §6.3): DOOR_5_..._CG_Trap1 makes a door "Trap1", its .anim "trap1"
+                if (declared.get(i).id().equalsIgnoreCase(door.id())) {
                     progress = wagon.doorAnim(i, partialTick);
                     break;
                 }
@@ -363,11 +397,12 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
      * a switch by the wagon's control group, a gauge by its reading. A lever
      * the local player is dragging shows where the mouse holds it, ahead of
      * the server's answer. Inside controls are skipped at a distance, like the
-     * interior.
+     * interior. The control under the crosshair gets an outline of its box,
+     * moved with it.
      */
     private static void drawControls(BakedStockModel baked, WagonEntity wagon,
             ConsistComposition.Slot slot, int wagonIndex, boolean drawInterior,
-            PoseStack poseStack) {
+            PoseStack poseStack, MultiBufferSource buffers) {
         if (baked.controls().isEmpty()) {
             return;
         }
@@ -391,6 +426,14 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
             poseStack.pushPose();
             poseStack.mulPose(CONTROL_FRAME);
             draw(bc.meshes(), poseStack);
+            if (ClientCabInteract.highlighted(wagon, control)) {
+                var lo = control.boxMin();
+                var hi = control.boxMax();
+                LevelRenderer.renderLineBox(poseStack, buffers.getBuffer(RenderType.lines()),
+                        lo.x - OUTLINE_PAD, lo.y - OUTLINE_PAD, lo.z - OUTLINE_PAD,
+                        hi.x + OUTLINE_PAD, hi.y + OUTLINE_PAD, hi.z + OUTLINE_PAD,
+                        OUTLINE_R, OUTLINE_G, OUTLINE_B, OUTLINE_A);
+            }
             poseStack.popPose();
         }
     }

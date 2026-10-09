@@ -59,6 +59,18 @@ public final class ClientAutoScene {
             walk(mc);
             return;
         }
+        if (scene.equals("beam")) {
+            beam(mc);
+            return;
+        }
+        if (scene.equals("gangway")) {
+            gangway(mc);
+            return;
+        }
+        if (scene.equals("er2")) {
+            er2(mc);
+            return;
+        }
         if (!scene.equals("cab")) {
             return;
         }
@@ -199,13 +211,352 @@ public final class ClientAutoScene {
                 report(mc, "throttle " + com.muzhik17.trainsmod.client.ClientConsists
                         .handles(wagon(mc).getConsistId()));
             }
-            case 430 -> mc.setScreen(new com.muzhik17.trainsmod.client.gui.TrainLightsScreen(
+            // the crosshair on the throttle, then on a light switch: outline + label (SPEC §9.3)
+            case 426 -> {
+                mc.options.hideGui = false;
+                aimAt(mc, com.muzhik17.trainsmod.convention.ObjectRole.Kind.THROTTLE, null);
+            }
+            case 440 -> shot(mc, "rwat-walk-hover-throttle.png");
+            case 441 -> aimAt(mc, com.muzhik17.trainsmod.convention.ObjectRole.Kind.WIDGET, "FHL");
+            case 455 -> shot(mc, "rwat-walk-hover-switch.png");
+            // look far round: the seated head stops at the chair's limit
+            case 456 -> look(mc, 170.0F, 0.0F);
+            case 466 -> report(mc, String.format(Locale.ROOT, "looked 170 off the desk: yaw %.1f, wagon %.1f",
+                    mc.player.getYRot(), wagon(mc).getYRot()));
+            case 470 -> mc.setScreen(new com.muzhik17.trainsmod.client.gui.TrainLightsScreen(
                     wagon(mc).getConsistId()));
-            case 445 -> shot(mc, "rwat-walk-lights-menu.png");
-            case 455 -> mc.stop();
+            case 485 -> shot(mc, "rwat-walk-lights-menu.png");
+            case 495 -> mc.stop();
             default -> {
             }
         }
+    }
+
+    /**
+     * {@code beam} (SPEC §8): the ChME3's front headlight at midnight, from
+     * low beside the beam (sky behind it — a deferred shader pack used to
+     * paint the sky over it), from far beside it, from the driver's chair
+     * down the hood, and from ahead into the lamp ({@code rwat-beam-*.png}).
+     */
+    private static void beam(Minecraft mc) {
+        switch (ticks) {
+            case 100 -> {
+                origin = mc.player.position().add(4000.0, 0.0, 0.0);
+                command(mc, "gamemode creative");
+                command(mc, String.format(Locale.ROOT, "tp @s %.3f %.3f %.3f 0 0", origin.x, origin.y, origin.z));
+            }
+            case 160 -> command(mc, "rwat spawn with chme3");
+            case 170 -> {
+                command(mc, "gamerule doDaylightCycle false");
+                command(mc, "time set midnight");
+                command(mc, "weather clear");
+                command(mc, "rwat control FHL 1");
+                command(mc, "rwat control FBL 1");
+                command(mc, "rwat handle train_brake 8");
+            }
+            case 190 -> {
+                command(mc, "gamemode spectator");
+                mc.options.hideGui = true;
+                camera(mc, 6.0, 0.6, 14.0, 160.0F, -25.0F);
+            }
+            case 250 -> shot(mc, "rwat-beam-low.png");
+            case 260 -> camera(mc, 22.0, 4.0, 14.0, 90.0F, 6.0F);
+            case 320 -> shot(mc, "rwat-beam-side.png");
+            case 330 -> camera(mc, -1.062, 2.49, -4.654, 0.0F, 12.0F);
+            case 390 -> shot(mc, "rwat-beam-seat.png");
+            case 400 -> camera(mc, 1.0, 2.5, 30.0, 180.0F, 2.0F);
+            case 460 -> shot(mc, "rwat-beam-ahead.png");
+            case 470 -> mc.stop();
+            default -> {
+            }
+        }
+    }
+
+    /**
+     * {@code gangway} (SPEC §9.5): two coupled platzkarts; from the ground in
+     * through the rear car's front-right door, along to its front end, into
+     * the shut gangway door, open it, on into the front car (its rear gangway
+     * door opens as we pass), along it, then back into the rear car. Where
+     * the player rides and stands is logged at each step; shots look back
+     * through the gangway and over the front car with the floor wireframes
+     * on ({@code rwat-gangway-*.png}).
+     */
+    private static void gangway(Minecraft mc) {
+        switch (ticks) {
+            case 100 -> {
+                origin = mc.player.position().add(4000.0, 0.0, 0.0);
+                command(mc, "gamemode creative");
+                command(mc, String.format(Locale.ROOT, "tp @s %.3f %.3f %.3f 0 0", origin.x, origin.y, origin.z));
+            }
+            case 160 -> command(mc, "rwat spawn with amendorf amendorf");
+            case 170 -> {
+                command(mc, "time set noon");
+                command(mc, "rwat handle train_brake 8");
+            }
+            // beside the rear car's front-right door (Door1, index 0), open it, step into the doorway
+            case 180 -> placeOn(mc, carAt(mc, 1), 2.6, 0.0, 11.28, -90.0F, 0.0F);
+            case 185 -> PacketDistributor.sendToServer(new DoorTogglePayload(carAt(mc, 1).getId(), 0));
+            case 195 -> reportNear(mc, carAt(mc, 1), "door opened?");
+            case 200 -> placeOn(mc, carAt(mc, 1), 1.3, 0.0, 11.28, -90.0F, 0.0F);
+            case 203 -> reportNear(mc, carAt(mc, 1), "in the doorway");
+            case 210 -> reportCar(mc, "boarded the rear car");
+            // along the vestibule to the front end wall: the gangway door (Trap1, index 4) is shut
+            case 211 -> {
+                aimAtModel(mc, carAt(mc, 1), 0.0, 3.4, 13.0);
+                mc.options.keyUp.setDown(true);
+            }
+            case 235 -> {
+                mc.options.keyUp.setDown(false);
+                reportCar(mc, "at the shut gangway door");
+            }
+            case 236 -> {
+                PacketDistributor.sendToServer(new DoorTogglePayload(carAt(mc, 1).getId(), 4));
+                aimAtModel(mc, carAt(mc, 1), 0.0, 2.9, 14.0);
+            }
+            // the gangway door swung open (its IR animation), the next car's end beyond
+            case 249 -> mc.options.hideGui = true;
+            case 290 -> shot(mc, "rwat-gangway-door-open.png");
+            case 291 -> mc.options.hideGui = false;
+            case 300 -> {
+                aimAtModel(mc, carAt(mc, 1), 0.0, 3.4, 15.0);
+                mc.options.keyUp.setDown(true);
+            }
+            case 312 -> {
+                mc.options.keyUp.setDown(false);
+                reportCar(mc, "through the gangway");
+            }
+            // walk on along the front car, then back into the rear one
+            case 313 -> {
+                aimAtModel(mc, carAt(mc, 0), 0.0, 3.4, 5.0);
+                mc.options.keyUp.setDown(true);
+            }
+            case 335 -> {
+                mc.options.keyUp.setDown(false);
+                reportCar(mc, "walked on in the front car");
+            }
+            case 336 -> {
+                aimAtModel(mc, carAt(mc, 0), 0.0, 3.4, -16.0);
+                mc.options.keyUp.setDown(true);
+            }
+            case 390 -> {
+                mc.options.keyUp.setDown(false);
+                reportCar(mc, "walked back");
+            }
+            // the floor wireframes over the rear car's front vestibule: zone, side doors, gangway door
+            case 391 -> {
+                mc.options.hideGui = true;
+                com.muzhik17.trainsmod.client.ClientFloorDebug.setShown(true);
+                aimAtModel(mc, carAt(mc, 1), 0.0, 1.9, 12.0);
+            }
+            case 403 -> shot(mc, "rwat-gangway-floors.png");
+            case 410 -> mc.stop();
+            default -> {
+            }
+        }
+    }
+
+    /**
+     * ER2 head + motor car (SPEC §8, §9.5): door leaves the asset moves by name.
+     * By day the motor car's left side shut, then its left doors opened — one
+     * click opens both doorways of the group, each pair of leaves sliding
+     * apart — then from inside the saloon the front vestibule's sliding doors
+     * and the hinged gangway door, shut and open. At night with the saloon,
+     * cab, head and buffer lights on: the saloon inside, the side, the head
+     * car's front ({@code rwat-er2-*.png}).
+     */
+    private static void er2(Minecraft mc) {
+        switch (ticks) {
+            case 100 -> {
+                origin = mc.player.position().add(4000.0, 0.0, 0.0);
+                command(mc, "gamemode creative");
+                command(mc, String.format(Locale.ROOT, "tp @s %.3f %.3f %.3f 0 0", origin.x, origin.y, origin.z));
+            }
+            case 160 -> command(mc, "rwat spawn with er2h er2m");
+            case 170 -> {
+                command(mc, "gamerule doDaylightCycle false");
+                command(mc, "time set noon");
+                command(mc, "weather clear");
+                command(mc, "rwat handle train_brake 8");
+                command(mc, "gamemode spectator");
+            }
+            case 180 -> {
+                mc.options.hideGui = true;
+                placeOn(mc, carAt(mc, 1), 11.0, 1.2, 0.0, 90.0F, 0.0F);
+            }
+            case 190 -> aimAtModel(mc, carAt(mc, 1), 0.0, 2.6, 0.0);
+            case 220 -> shot(mc, "rwat-er2-side-shut.png");
+            // beside the front left doorway: open it (DrL, door 0) — DrL_3 (door 1) comes along
+            case 225 -> placeOn(mc, carAt(mc, 1), 3.0, 1.0, 8.8, -90.0F, 0.0F);
+            case 230 -> PacketDistributor.sendToServer(new DoorTogglePayload(carAt(mc, 1).getId(), 0));
+            case 235 -> placeOn(mc, carAt(mc, 1), 11.0, 1.2, 0.0, 90.0F, 0.0F);
+            case 240 -> {
+                aimAtModel(mc, carAt(mc, 1), 0.0, 2.6, 0.0);
+                reportNear(mc, carAt(mc, 1), "left doors");
+            }
+            case 290 -> shot(mc, "rwat-er2-side-open.png");
+            case 295 -> placeOn(mc, carAt(mc, 1), 4.0, 1.0, 6.5, 90.0F, 0.0F);
+            case 300 -> aimAtModel(mc, carAt(mc, 1), 1.7, 2.6, 8.8);
+            case 330 -> shot(mc, "rwat-er2-doorway-open.png");
+            // in the saloon looking forward: the vestibule's sliding doors (FrontD, 5), the gangway door (6)
+            case 335 -> placeOn(mc, carAt(mc, 1), -0.3, 1.9, 5.2, 0.0F, 5.0F);
+            case 340 -> aimAtModel(mc, carAt(mc, 1), 0.0, 3.2, 9.9);
+            case 360 -> shot(mc, "rwat-er2-inner-shut.png");
+            case 362 -> {
+                PacketDistributor.sendToServer(new DoorTogglePayload(carAt(mc, 1).getId(), 5));
+                PacketDistributor.sendToServer(new DoorTogglePayload(carAt(mc, 1).getId(), 6));
+            }
+            case 410 -> {
+                reportNear(mc, carAt(mc, 1), "vestibule and gangway doors");
+                shot(mc, "rwat-er2-inner-open.png");
+            }
+            // night: saloon (ER2L), cab (ER2H), head (HL) and buffer (BL) lights on
+            case 415 -> {
+                command(mc, "time set midnight");
+                for (String group : new String[]{"ER2L", "ER2H", "HL", "BL"}) {
+                    command(mc, "rwat control " + group + " 1");
+                }
+                placeOn(mc, carAt(mc, 1), 0.3, 1.9, -6.5, 0.0F, 8.0F);
+            }
+            case 420 -> aimAtModel(mc, carAt(mc, 1), 0.0, 3.0, 4.0);
+            case 470 -> shot(mc, "rwat-er2-night-saloon.png");
+            case 475 -> placeOn(mc, carAt(mc, 1), 13.0, 1.2, 10.0, 90.0F, 0.0F);
+            case 480 -> aimAtModel(mc, carAt(mc, 1), 0.0, 2.6, 10.0);
+            case 520 -> shot(mc, "rwat-er2-night-side.png");
+            case 525 -> placeOn(mc, carAt(mc, 0), 3.0, 0.8, 24.0, 180.0F, 0.0F);
+            case 530 -> aimAtModel(mc, carAt(mc, 0), 0.0, 2.4, 9.0);
+            case 570 -> shot(mc, "rwat-er2-night-front.png");
+            case 580 -> mc.stop();
+            default -> {
+            }
+        }
+    }
+
+    /** The car at {@code index} of the consist nearest the scene origin, or null. */
+    private static WagonEntity carAt(Minecraft mc, int index) {
+        WagonEntity near = wagon(mc);
+        if (near == null) {
+            return null;
+        }
+        for (var entity : mc.level.entitiesForRendering()) {
+            if (entity instanceof WagonEntity w && w.getConsistId() == near.getConsistId()
+                    && w.getWagonIndex() == index) {
+                return w;
+            }
+        }
+        return null;
+    }
+
+    /** Teleport the player to a point of a car's model frame, looking {@code yaw} off its forward. */
+    private static void placeOn(Minecraft mc, WagonEntity wagon, double x, double y, double z,
+            float yaw, float pitch) {
+        if (wagon == null) {
+            RailsWheelsAndTrains.LOGGER.warn("[autoscene] no such car");
+            return;
+        }
+        double flip = wagon.isFlipped() ? -1.0 : 1.0;
+        Vector3d world = PoseMath.localToWorld(new Vector3d(wagon.getX(), wagon.getY(), wagon.getZ()),
+                wagon.getYRot(), wagon.getXRot(), new Vector3d(x * flip, y, z * flip));
+        float worldYaw = wagon.getYRot() + yaw + (wagon.isFlipped() ? 180.0F : 0.0F);
+        command(mc, String.format(Locale.ROOT, "tp @s %.3f %.3f %.3f %.1f %.1f",
+                world.x, world.y, world.z, worldYaw, pitch));
+    }
+
+    /** Turn the player to look at a point of a car's model frame. */
+    private static void aimAtModel(Minecraft mc, WagonEntity wagon, double x, double y, double z) {
+        if (wagon == null) {
+            return;
+        }
+        double flip = wagon.isFlipped() ? -1.0 : 1.0;
+        Vector3d world = PoseMath.localToWorld(new Vector3d(wagon.getX(), wagon.getY(), wagon.getZ()),
+                wagon.getYRot(), wagon.getXRot(), new Vector3d(x * flip, y, z * flip));
+        Vec3 eye = mc.player.getEyePosition();
+        double dx = world.x - eye.x;
+        double dy = world.y - eye.y;
+        double dz = world.z - eye.z;
+        float yaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
+        float pitch = (float) -Math.toDegrees(Math.atan2(dy, Math.hypot(dx, dz)));
+        mc.player.setYRot(yaw);
+        mc.player.yRotO = yaw;
+        mc.player.setXRot(pitch);
+        mc.player.xRotO = pitch;
+    }
+
+    /** Log where the player is in a car's model frame, riding or not, and its open doors. */
+    private static void reportNear(Minecraft mc, WagonEntity car, String what) {
+        if (car == null) {
+            RailsWheelsAndTrains.LOGGER.info("[autoscene] {}: no car", what);
+            return;
+        }
+        Vector3d local = PoseMath.worldToLocal(new Vector3d(car.getX(), car.getY(), car.getZ()),
+                car.getYRot(), car.getXRot(),
+                new Vector3d(mc.player.getX(), mc.player.getY(), mc.player.getZ()));
+        if (car.isFlipped()) {
+            local.set(-local.x, local.y, -local.z);
+        }
+        RailsWheelsAndTrains.LOGGER.info("[autoscene] {}: car {} (flipped {}, type {}) local ({}, {}, {})"
+                + " doors={} types doors={} vehicle={}", what, car.getWagonIndex(), car.isFlipped(),
+                car.typeNow() == null ? "?" : car.typeNow().id(),
+                String.format(Locale.ROOT, "%.2f", local.x), String.format(Locale.ROOT, "%.2f", local.y),
+                String.format(Locale.ROOT, "%.2f", local.z), Integer.toBinaryString(car.doorMask()),
+                car.typeNow() == null ? -1 : car.typeNow().doors().size(), mc.player.getVehicle());
+    }
+
+    /** Log which car of the consist the player rides and where in it. */
+    private static void reportCar(Minecraft mc, String what) {
+        String where = "on foot";
+        if (mc.player.getVehicle() instanceof WagonEntity car) {
+            Vector3d local = PoseMath.worldToLocal(new Vector3d(car.getX(), car.getY(), car.getZ()),
+                    car.getYRot(), car.getXRot(),
+                    new Vector3d(mc.player.getX(), mc.player.getY(), mc.player.getZ()));
+            if (car.isFlipped()) {
+                local.set(-local.x, local.y, -local.z);
+            }
+            where = String.format(Locale.ROOT, "car %d local (%.2f, %.2f, %.2f) doors=%s",
+                    car.getWagonIndex(), local.x, local.y, local.z, Integer.toBinaryString(car.doorMask()));
+        }
+        RailsWheelsAndTrains.LOGGER.info("[autoscene] {}: {}", what, where);
+    }
+
+    /**
+     * Turn the player to look at the box centre of the first control of
+     * {@code kind} (of light/switch group {@code group}, if given) on the
+     * nearest wagon's model.
+     */
+    private static void aimAt(Minecraft mc, com.muzhik17.trainsmod.convention.ObjectRole.Kind kind,
+            String group) {
+        WagonEntity wagon = wagon(mc);
+        var slot = wagon == null ? null
+                : com.muzhik17.trainsmod.client.ClientConsists.slot(wagon.getConsistId(), wagon.getWagonIndex());
+        var model = slot == null ? null
+                : com.muzhik17.trainsmod.client.render.model.StockModels.model(slot.type().id());
+        if (model == null) {
+            RailsWheelsAndTrains.LOGGER.warn("[autoscene] no model to aim at");
+            return;
+        }
+        for (var control : model.controls()) {
+            if (control.role().kind() != kind || (group != null && !group.equals(control.role().group()))) {
+                continue;
+            }
+            double flip = wagon.isFlipped() ? -1.0 : 1.0;
+            Vector3d world = PoseMath.localToWorld(new Vector3d(wagon.getX(), wagon.getY(), wagon.getZ()),
+                    wagon.getYRot(), wagon.getXRot(), new Vector3d(
+                            (control.boxMin().x + control.boxMax().x) * 0.5 * flip,
+                            (control.boxMin().y + control.boxMax().y) * 0.5,
+                            (control.boxMin().z + control.boxMax().z) * 0.5 * flip));
+            Vec3 eye = mc.player.getEyePosition();
+            double dx = world.x - eye.x;
+            double dy = world.y - eye.y;
+            double dz = world.z - eye.z;
+            float yaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
+            float pitch = (float) -Math.toDegrees(Math.atan2(dy, Math.hypot(dx, dz)));
+            mc.player.setYRot(yaw);
+            mc.player.yRotO = yaw;
+            mc.player.setXRot(pitch);
+            mc.player.xRotO = pitch;
+            RailsWheelsAndTrains.LOGGER.info("[autoscene] aim at {} ({})", control.role().key(), group);
+            return;
+        }
+        RailsWheelsAndTrains.LOGGER.warn("[autoscene] no {} control ({})", kind, group);
     }
 
     /** Teleport the player to a point of the ChME3's model frame, looking {@code yaw} off its forward. */

@@ -13,6 +13,7 @@ import java.util.Map;
 import com.google.gson.JsonObject;
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.client.render.RailRenderer;
+import com.muzhik17.trainsmod.path.TileFootprint;
 
 import net.minecraft.resources.FileToIdConverter;
 import net.minecraft.resources.ResourceLocation;
@@ -43,7 +44,9 @@ import net.minecraft.util.profiling.ProfilerFiller;
  * thread with the rest of the reload, not lazily.
  *
  * <p>Applying swaps the registry and drops the rail renderer's caches, so
- * F3+T re-sweeps the network with the new tiles.
+ * F3+T re-sweeps the network with the new tiles. The object rules (hidden
+ * objects, which ones are rails, the stretch) are {@link TileFootprint}'s —
+ * the server reads the same OBJ by them for the track bed.
  */
 public final class RailModelReloadListener
         extends SimplePreparableReloadListener<Map<String, RailStyle>> {
@@ -108,16 +111,16 @@ public final class RailModelReloadListener
         }
         Map<String, ResourceLocation> textures =
                 IrStockModel.materialTextures(id.toString(), objLocation, obj, access);
-        float[] railExtent = railExtent(obj);
+        float[] stretch = TileFootprint.railStretch(railExtent(obj), tileLength);
         Map<ResourceLocation, Mesh> full = new LinkedHashMap<>();
         Map<ResourceLocation, Mesh> railsOnly = new LinkedHashMap<>();
         for (ObjLoader.Part part : obj.parts()) {
             ResourceLocation texture = textures.get(part.material());
-            if (texture == null || part.object().contains("HIDE")) {
+            if (texture == null || TileFootprint.isHiddenObject(part.object())) {
                 continue;
             }
-            Mesh mesh = isRail(part.object())
-                    ? stretched(part.mesh(), railExtent, tileLength)
+            Mesh mesh = stretch != null && TileFootprint.isRailObject(part.object())
+                    ? stretched(part.mesh(), stretch)
                     : part.mesh();
             full.computeIfAbsent(texture, t -> new Mesh()).merge(mesh);
             Mesh rails = railsOnly.computeIfAbsent(texture, t -> new Mesh());
@@ -136,18 +139,12 @@ public final class RailModelReloadListener
         return new RailStyle(id.toString(), List.copyOf(parts), tileLength);
     }
 
-    /** A rail object: {@code RAIL_LEFT*}/{@code RAIL_RIGHT*} — not the {@code RAIL_BASE} sleepers. */
-    private static boolean isRail(String object) {
-        String name = object.toUpperCase(Locale.ROOT);
-        return name.startsWith("RAIL_") && !name.contains("BASE");
-    }
-
     /** Along-track (X) extent {min, max} of all rail objects; null if the model has none. */
     private static float[] railExtent(ObjLoader.Model obj) {
         float min = Float.POSITIVE_INFINITY;
         float max = Float.NEGATIVE_INFINITY;
         for (ObjLoader.Part part : obj.parts()) {
-            if (!isRail(part.object())) {
+            if (!TileFootprint.isRailObject(part.object())) {
                 continue;
             }
             for (Mesh.Quad q : part.mesh().quads()) {
@@ -160,27 +157,22 @@ public final class RailModelReloadListener
         return max > min ? new float[] {min, max} : null;
     }
 
-    /** Rail faces stretched along X so the rails span the tile {@code [-len/2, len/2]} exactly. */
-    private static Mesh stretched(Mesh mesh, float[] extent, double tileLength) {
-        if (extent == null || Math.abs((extent[1] - extent[0]) - tileLength) < 1.0e-4
-                && Math.abs(extent[0] + tileLength / 2.0) < 1.0e-4) {
-            return mesh; // already one tile long and centred (the IR norm)
-        }
-        float scale = (float) (tileLength / (extent[1] - extent[0]));
-        float shift = (float) (-tileLength / 2.0);
+    /**
+     * Rail faces stretched along X so the rails span the tile {@code [-len/2, len/2]}
+     * exactly ({@link TileFootprint#railStretch}).
+     */
+    private static Mesh stretched(Mesh mesh, float[] stretch) {
         Mesh out = new Mesh();
         for (Mesh.Quad q : mesh.quads()) {
-            out.add(new Mesh.Quad(stretch(q.v0(), extent[0], scale, shift),
-                    stretch(q.v1(), extent[0], scale, shift),
-                    stretch(q.v2(), extent[0], scale, shift),
-                    stretch(q.v3(), extent[0], scale, shift),
+            out.add(new Mesh.Quad(stretched(q.v0(), stretch), stretched(q.v1(), stretch),
+                    stretched(q.v2(), stretch), stretched(q.v3(), stretch),
                     q.r(), q.g(), q.b(), q.a()));
         }
         return out;
     }
 
-    private static Mesh.Vertex stretch(Mesh.Vertex v, float min, float scale, float shift) {
-        return new Mesh.Vertex((v.x() - min) * scale + shift, v.y(), v.z(), v.u(), v.v(),
+    private static Mesh.Vertex stretched(Mesh.Vertex v, float[] stretch) {
+        return new Mesh.Vertex(TileFootprint.stretchX(v.x(), stretch), v.y(), v.z(), v.u(), v.v(),
                 v.nx(), v.ny(), v.nz());
     }
 }

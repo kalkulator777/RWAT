@@ -1,22 +1,29 @@
 package com.muzhik17.trainsmod.rail;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.joml.Vector3d;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.network.RailGraphSyncPayload;
+import com.muzhik17.trainsmod.path.BedRaster;
 import com.muzhik17.trainsmod.path.HermiteSegment;
 import com.muzhik17.trainsmod.path.HermiteSegmentPath;
 import com.muzhik17.trainsmod.path.RailGraph;
 import com.muzhik17.trainsmod.path.RailNode;
 import com.muzhik17.trainsmod.path.RailSegment;
+import com.muzhik17.trainsmod.path.TileFootprint;
+import com.muzhik17.trainsmod.path.TrackSweep;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
@@ -36,33 +43,20 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * sync and world side effects (track bed collision blocks, SPEC §2.2/0.3).
  * The graph in here is the source of truth; bed blocks are dumb.
  *
+ * <p>The bed under a segment is exactly the blocks its drawn rails touch
+ * ({@link BedRaster} over the segment's style tile, {@link RailFootprints}).
+ * That depends on more than the segment: an open end carries the rails half
+ * a block further, and the ends' state sets how the tiles fall along the
+ * whole segment — so every edit re-lays the beds it can change (the edited
+ * segments and their neighbours at the shared nodes), taking out what is no
+ * longer under any rail and laying what now is.
+ *
  * <p>{@code revision} increments on every edit — consists and clients use it
  * to know when to rebuild their materialized paths.
  */
 public final class RailNetwork extends SavedData {
 
     private static final String DATA_NAME = RailsWheelsAndTrains.MODID + "_rails";
-    /**
-     * Half-width of the strip the bed must fully cover (SPEC 0.3): the rail
-     * model's widest part — the sleeper ends — reaches ±1.3125 from the path
-     * axis (measured from rail.obj). The excess (0.1625 ≈ 2.6px) is the
-     * guaranteed gravel shoulder beyond the sleeper end: wherever the sleeper
-     * lands closer than that to a cell border, the neighbouring cell joins the
-     * bed. Kept under 1.5 so an axis-aligned straight (its spline runs through
-     * cell centres) still lays exactly 3 cells wide.
-     */
-    private static final double BED_HALF_WIDTH = 1.49;
-    /**
-     * Step along the path when rasterizing the bed strip. Must be small: a cell
-     * whose corner the strip edge clips <em>between</em> two consecutive steps
-     * is never filled, and a missed clip of chord {@code c} can eat up to
-     * {@code ~c/2} of the shoulder — at 0.25 that zeroed the margin in spots
-     * on curves (sleeper flush with the bed edge). At 0.05 the worst residual
-     * loss is ~0.025. Placement-time only, so the cost is irrelevant.
-     */
-    private static final double BED_SAMPLE_STEP = 0.05;
-    /** Across-the-path sample count per side; spacing stays well under a cell. */
-    private static final int BED_ACROSS_SAMPLES = 6;
 
     private final RailGraph graph = new RailGraph();
     /** Placed rail markers awaiting connection: position → {@link RailMarkerBlock#ROTATION}. */
@@ -108,10 +102,15 @@ public final class RailNetwork extends SavedData {
      */
     public RailSegment createSegment(ServerLevel level, Vector3d a, Vector3d dirA, boolean forceA,
             Vector3d b, Vector3d dirB, boolean forceB, String style) {
+        // the segments at the nodes the new one will snap to: their ends there stop being open
+        List<RailSegment> neighbours = segmentsAt(graph.nodeNear(a), graph.nodeNear(b));
+        Set<BlockPos> stale = laidBefore(neighbours);
         RailSegment created = graph.createSegment(a, dirA, forceA, b, dirB, forceB);
         graph.setSegmentStyle(created.id(), style);
         RailSegment segment = graph.segment(created.id());
-        placeBed(level, segment);
+        List<RailSegment> relaid = current(neighbours);
+        relaid.add(segment);
+        layBed(level, stale, relaid);
         markChanged(level);
         return segment;
     }
@@ -119,32 +118,48 @@ public final class RailNetwork extends SavedData {
     /**
      * Redraw the structure whose bed occupies {@code cell} in rail
      * {@code style} (the whole click-built structure, like demolition);
-     * returns the structure's segment count, 0 if the cell is no track.
+     * returns the structure's segment count, 0 if the cell is no track. The
+     * bed is re-laid under the new style's tile.
      */
     public int restyleStructureAt(ServerLevel level, BlockPos cell, String style) {
-        for (RailSegment segment : graph.segments()) {
-            if (bedCells(segment).containsKey(cell)) {
-                List<RailSegment> structure = graph.structureOf(segment);
-                for (RailSegment member : structure) {
-                    graph.setSegmentStyle(member.id(), style);
-                }
-                markChanged(level);
-                return structure.size();
-            }
+        RailSegment hit = segmentContaining(cell);
+        if (hit == null) {
+            return 0;
         }
-        return 0;
+        List<RailSegment> structure = graph.structureOf(hit);
+        restyle(level, structure, style);
+        return structure.size();
     }
 
     /** Redraw every segment of this dimension in rail {@code style}; returns the count. */
     public int restyleAll(ServerLevel level, String style) {
-        List<Integer> ids = graph.segments().stream().map(RailSegment::id).toList();
-        for (int id : ids) {
-            graph.setSegmentStyle(id, style);
+        List<RailSegment> all = List.copyOf(graph.segments());
+        if (!all.isEmpty()) {
+            restyle(level, all, style);
         }
-        if (!ids.isEmpty()) {
-            markChanged(level);
+        return all.size();
+    }
+
+    private void restyle(ServerLevel level, List<RailSegment> segments, String style) {
+        Set<BlockPos> stale = laidBefore(segments);
+        for (RailSegment segment : segments) {
+            graph.setSegmentStyle(segment.id(), style);
         }
-        return ids.size();
+        layBed(level, stale, current(segments));
+        markChanged(level);
+    }
+
+    /**
+     * Re-lay the bed of every segment of this dimension: blocks no rail
+     * touches come out, missing ones go in — for worlds whose bed was laid
+     * before it followed the rails (2026-10-09), or after a pack changed a
+     * style's tile. Returns the segment count. Loads every chunk the network
+     * crosses.
+     */
+    public int rebed(ServerLevel level) {
+        List<RailSegment> all = List.copyOf(graph.segments());
+        layBed(level, laidBefore(all), all);
+        return all.size();
     }
 
     /**
@@ -180,35 +195,43 @@ public final class RailNetwork extends SavedData {
      * joint cell the first matching segment wins.
      */
     public RailSegment removeSegmentContaining(ServerLevel level, BlockPos cell) {
-        for (RailSegment segment : graph.segments()) {
-            if (bedCells(segment).containsKey(cell)) {
-                removeStructure(level, segment);
-                return segment;
-            }
+        RailSegment segment = segmentContaining(cell);
+        if (segment != null) {
+            removeStructure(level, segment);
         }
-        return null;
+        return segment;
     }
 
     /**
      * Remove a segment's whole structure (SPEC §2.2: segments built by one
      * click are one element) and its bed — except the cells still under the
      * surviving segments, so demolishing one track at a joint or a flat
-     * crossing no longer bites holes into the neighbour's bed.
+     * crossing doesn't bite holes into the neighbour's bed. The neighbours'
+     * beds are re-laid: an end left open grows its overhang.
      */
     private void removeStructure(ServerLevel level, RailSegment segment) {
-        LinkedHashSet<BlockPos> cells = new LinkedHashSet<>();
-        for (RailSegment doomed : graph.structureOf(segment)) {
-            cells.addAll(bedCells(doomed).keySet());
-            graph.removeSegment(doomed.id());
+        List<RailSegment> doomed = graph.structureOf(segment);
+        Set<Integer> doomedIds = new HashSet<>();
+        Set<Integer> doomedNodes = new HashSet<>();
+        for (RailSegment member : doomed) {
+            doomedIds.add(member.id());
+            doomedNodes.add(member.nodeA());
+            doomedNodes.add(member.nodeB());
         }
-        for (RailSegment survivor : graph.segments()) {
-            cells.removeAll(bedCells(survivor).keySet());
-        }
-        for (BlockPos cell : cells) {
-            if (level.getBlockState(cell).is(RailsWheelsAndTrains.TRACK_BED.get())) {
-                level.removeBlock(cell, false);
+        List<RailSegment> neighbours = new ArrayList<>();
+        for (int nodeId : doomedNodes) {
+            for (RailSegment other : segmentsAt(graph.node(nodeId))) {
+                if (!doomedIds.contains(other.id()) && !neighbours.contains(other)) {
+                    neighbours.add(other);
+                }
             }
         }
+        Set<BlockPos> stale = laidBefore(doomed);
+        stale.addAll(laidBefore(neighbours));
+        for (RailSegment member : doomed) {
+            graph.removeSegment(member.id());
+        }
+        layBed(level, stale, current(neighbours));
         markChanged(level);
     }
 
@@ -323,60 +346,175 @@ public final class RailNetwork extends SavedData {
 
     /**
      * Cells the segment's bed occupies, with the bed height (in 2px
-     * {@link TrackBedBlock#LAYERS}) per cell. The bed strip is
-     * <em>rasterized</em>: marching along the curve (step {@link #BED_SAMPLE_STEP})
-     * and, at each step, across it from {@code −BED_HALF_WIDTH} to
-     * {@code +BED_HALF_WIDTH} inclusive ({@link #BED_ACROSS_SAMPLES} per side —
-     * symmetric, so both strip edges are always sampled exactly), every sampled
-     * point's cell is filled. Marking the cells the strip actually passes
-     * through — rather than testing cell centres against a distance — is what
-     * guarantees 100 % coverage on diagonals and curves, where the sleeper
-     * ends overhang cells whose centres are outside the strip.
-     *
-     * <p>Height per cell follows the spline: {@code round((y − cellBase)·8)}
-     * layers (clamped ≥1), so the bed top sits at the rail's foot — a thin
-     * 2px frame on flat ground, stepping up on slopes without burying the
-     * rail (the earlier {@code +1} base layer is what pushed it half-way up the
-     * sleeper). Max over the samples touching a cell.
+     * {@link TrackBedBlock#LAYERS}) per cell: every block its drawn rails
+     * touch — the segment's style tile swept the way the renderer sweeps it,
+     * open-end overhangs included ({@link TrackSweep}, {@link BedRaster}).
+     * {@code area} (null for all) limits the work to the tiles reaching into
+     * it; only the cells in its columns are then complete.
      */
-    private Map<BlockPos, Integer> bedCells(RailSegment segment) {
+    private Map<BlockPos, Integer> bedCells(RailSegment segment, BedRaster.Area area) {
         Map<BlockPos, Integer> cells = new LinkedHashMap<>();
-        HermiteSegment curve = graph.hermite(segment);
-        HermiteSegmentPath path = new HermiteSegmentPath(curve);
-        double length = path.length();
-        for (double s = 0.0; s <= length; s += BED_SAMPLE_STEP) {
-            Vector3d pos = path.samplePosition(s);
-            Vector3d tangent = path.sampleTangent(s);
-            // horizontal forward; for a vertical tangent fall back to +X
-            Vector3d fwd = new Vector3d(tangent.x, 0.0, tangent.z);
-            if (fwd.lengthSquared() < 1.0e-6) {
-                fwd.set(1, 0, 0);
-            } else {
-                fwd.normalize();
-            }
-            Vector3d right = new Vector3d(fwd.z, 0.0, -fwd.x); // horizontal unit perpendicular
-            int cy = (int) Math.floor(pos.y);
-            int layers = Math.clamp((int) Math.round((pos.y - cy) * 8.0), 1, 8);
-            for (int i = -BED_ACROSS_SAMPLES; i <= BED_ACROSS_SAMPLES; i++) {
-                double a = BED_HALF_WIDTH * i / BED_ACROSS_SAMPLES;
-                int cx = (int) Math.floor(pos.x + right.x * a);
-                int cz = (int) Math.floor(pos.z + right.z * a);
-                cells.merge(new BlockPos(cx, cy, cz), layers, Math::max);
+        BedRaster.cells(TrackSweep.path(graph, segment), RailFootprints.forStyle(segment.style()), area)
+                .forEach((cell, layers) -> cells.put(new BlockPos(cell.x(), cell.y(), cell.z()), layers));
+        return cells;
+    }
+
+    /** The bed under a segment, in full. */
+    private Map<BlockPos, Integer> bedCells(RailSegment segment) {
+        return bedCells(segment, null);
+    }
+
+    /**
+     * Every block the segments may hold bed in right now, before an edit: their
+     * current bed plus the strip older versions laid ({@link BedRaster#legacyStrip}),
+     * so re-laying them also clears what a world built back then left.
+     */
+    private Set<BlockPos> laidBefore(Collection<RailSegment> segments) {
+        Set<BlockPos> cells = new LinkedHashSet<>();
+        for (RailSegment segment : segments) {
+            cells.addAll(bedCells(segment).keySet());
+            for (BedRaster.Cell cell : BedRaster.legacyStrip(new HermiteSegmentPath(graph.hermite(segment)))) {
+                cells.add(new BlockPos(cell.x(), cell.y(), cell.z()));
             }
         }
         return cells;
     }
 
-    private void placeBed(ServerLevel level, RailSegment segment) {
+    /**
+     * Bring the bed in line with the graph after an edit: {@code segments} are
+     * those whose bed may have changed (as they are now), {@code stale} every
+     * block they — or the segments the edit removed — held bed in before. A
+     * cell gets the most layers any segment under it needs (other segments
+     * sharing the cells count too, so a joint or a crossing keeps what the
+     * neighbour needs); stale cells no segment wants any more lose their bed.
+     */
+    private void layBed(ServerLevel level, Set<BlockPos> stale, Collection<RailSegment> segments) {
+        Map<BlockPos, Integer> wanted = new LinkedHashMap<>();
+        Set<Integer> ids = new HashSet<>();
+        for (RailSegment segment : segments) {
+            ids.add(segment.id());
+            bedCells(segment).forEach((cell, layers) -> wanted.merge(cell, layers, Math::max));
+        }
+        Set<BlockPos> affected = new HashSet<>(stale);
+        affected.addAll(wanted.keySet());
+        claims(affected, ids).forEach((cell, layers) -> wanted.merge(cell, layers, Math::max));
         BlockState bed = RailsWheelsAndTrains.TRACK_BED.get().defaultBlockState();
-        for (Map.Entry<BlockPos, Integer> cell : bedCells(segment).entrySet()) {
-            BlockState existing = level.getBlockState(cell.getKey());
-            if (existing.isAir() || existing.canBeReplaced()
-                    || existing.is(RailsWheelsAndTrains.TRACK_BED.get())) {
-                level.setBlock(cell.getKey(),
-                        bed.setValue(TrackBedBlock.LAYERS, cell.getValue()), Block.UPDATE_ALL);
+        for (BlockPos cell : stale) {
+            if (!wanted.containsKey(cell) && level.getBlockState(cell).is(RailsWheelsAndTrains.TRACK_BED.get())) {
+                level.removeBlock(cell, false);
             }
         }
+        for (Map.Entry<BlockPos, Integer> cell : wanted.entrySet()) {
+            BlockState existing = level.getBlockState(cell.getKey());
+            BlockState laid = bed.setValue(TrackBedBlock.LAYERS, cell.getValue());
+            if (existing != laid && (existing.isAir() || existing.canBeReplaced()
+                    || existing.is(RailsWheelsAndTrains.TRACK_BED.get()))) {
+                level.setBlock(cell.getKey(), laid, Block.UPDATE_ALL);
+            }
+        }
+    }
+
+    /**
+     * The bed the segments other than {@code excluded} want among
+     * {@code cells}, with their layers. Only segments whose
+     * {@linkplain #bounds bounds} overlap the cells are rasterized, and of
+     * those only the tiles reaching the cells' columns.
+     */
+    private Map<BlockPos, Integer> claims(Set<BlockPos> cells, Set<Integer> excluded) {
+        Map<BlockPos, Integer> claimed = new HashMap<>();
+        if (cells.isEmpty()) {
+            return claimed;
+        }
+        Set<Long> columns = new HashSet<>();
+        double[] box = {Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY,
+                Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY};
+        for (BlockPos cell : cells) {
+            columns.add(BedRaster.column(cell.getX(), cell.getZ()));
+            box[0] = Math.min(box[0], cell.getX());
+            box[1] = Math.min(box[1], cell.getZ());
+            box[2] = Math.max(box[2], cell.getX() + 1.0);
+            box[3] = Math.max(box[3], cell.getZ() + 1.0);
+        }
+        BedRaster.Area area = BedRaster.Area.columns(columns);
+        for (RailSegment segment : graph.segments()) {
+            if (excluded.contains(segment.id()) || !overlaps(bounds(segment), box)) {
+                continue;
+            }
+            bedCells(segment, area).forEach((cell, layers) -> {
+                if (cells.contains(cell)) {
+                    claimed.merge(cell, layers, Math::max);
+                }
+            });
+        }
+        return claimed;
+    }
+
+    /** The segment whose bed holds {@code cell}, or null; the first in graph order, like the old scan. */
+    private RailSegment segmentContaining(BlockPos cell) {
+        double[] box = {cell.getX(), cell.getZ(), cell.getX() + 1.0, cell.getZ() + 1.0};
+        BedRaster.Area area = BedRaster.Area.box(cell.getX(), cell.getZ(), cell.getX(), cell.getZ());
+        for (RailSegment segment : graph.segments()) {
+            if (overlaps(bounds(segment), box) && bedCells(segment, area).containsKey(cell)) {
+                return segment;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * An XZ box {@code {minX, minZ, maxX, maxZ}} no block of the segment's bed —
+     * current or {@linkplain BedRaster#legacyStrip legacy} — lies outside of:
+     * the curve keeps to the hull of its Bézier control points, widened by
+     * how far the tile reaches across and along it, the end overhang and a
+     * block of rounding.
+     */
+    private double[] bounds(RailSegment segment) {
+        HermiteSegment curve = graph.hermite(segment);
+        Vector3d p0 = curve.start();
+        Vector3d p1 = curve.end();
+        Vector3d c0 = curve.startTangent().div(3.0).add(p0);
+        Vector3d c1 = new Vector3d(p1).sub(curve.endTangent().div(3.0));
+        TileFootprint tile = RailFootprints.forStyle(segment.style());
+        double margin = Math.max(tile.reach(), BedRaster.LEGACY_HALF_WIDTH)
+                + 1.5 * tile.extent() + TrackSweep.END_OVERHANG + 1.0;
+        return new double[] {
+                Math.min(Math.min(p0.x, c0.x), Math.min(c1.x, p1.x)) - margin,
+                Math.min(Math.min(p0.z, c0.z), Math.min(c1.z, p1.z)) - margin,
+                Math.max(Math.max(p0.x, c0.x), Math.max(c1.x, p1.x)) + margin,
+                Math.max(Math.max(p0.z, c0.z), Math.max(c1.z, p1.z)) + margin};
+    }
+
+    private static boolean overlaps(double[] a, double[] b) {
+        return a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] && b[1] <= a[3];
+    }
+
+    /** The segments at the given nodes (null nodes skipped), each once. */
+    private List<RailSegment> segmentsAt(RailNode... nodes) {
+        List<RailSegment> found = new ArrayList<>();
+        for (RailNode node : nodes) {
+            if (node == null) {
+                continue;
+            }
+            for (int id : node.segments()) {
+                RailSegment segment = graph.segment(id);
+                if (segment != null && !found.contains(segment)) {
+                    found.add(segment);
+                }
+            }
+        }
+        return found;
+    }
+
+    /** The segments as the graph holds them now (styles may have changed), dropping removed ones. */
+    private List<RailSegment> current(Collection<RailSegment> segments) {
+        List<RailSegment> now = new ArrayList<>();
+        for (RailSegment segment : segments) {
+            RailSegment live = graph.segment(segment.id());
+            if (live != null) {
+                now.add(live);
+            }
+        }
+        return now;
     }
 
     // --- SavedData ---

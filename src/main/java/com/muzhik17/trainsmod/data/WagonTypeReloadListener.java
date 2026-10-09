@@ -8,6 +8,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
+import com.muzhik17.trainsmod.kinematics.FloorCheck;
 import com.muzhik17.trainsmod.network.WagonTypesPayload;
 import com.muzhik17.trainsmod.stock.WagonTypeParser;
 import com.muzhik17.trainsmod.stock.WagonType;
@@ -57,8 +58,13 @@ public final class WagonTypeReloadListener extends SimpleJsonResourceReloadListe
             String id = entry.getKey().toString();
             try {
                 JsonObject json = entry.getValue().getAsJsonObject();
-                types.put(id, WagonTypeParser.parse(id, json));
+                WagonType type = WagonTypeParser.parse(id, json);
+                types.put(id, type);
                 declaredAliases.put(id, WagonTypeParser.aliases(json));
+                // a floor nobody can walk is a pack bug, not a crash: say so (SPEC §9.6)
+                for (String problem : FloorCheck.problems(type)) {
+                    RailsWheelsAndTrains.LOGGER.warn("Wagon type {}: {}", id, problem);
+                }
             } catch (RuntimeException exception) {
                 RailsWheelsAndTrains.LOGGER.error("Skipping bad wagon type {}: {}",
                         id, exception.getMessage());

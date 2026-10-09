@@ -62,8 +62,9 @@ import net.minecraft.resources.ResourceLocation;
  * {@link #DEFAULT_SKIP_PREFIXES} plus the declaration's own {@code skip}, and
  * materials without a diffuse map. Groups listed under the declaration's
  * {@code animations} are animated from their IR {@code .anim} ({@link IrAnim});
- * levers/gauges are not animated yet even though the assets mark them
- * ({@code GAUGE_*}, {@code THROTTLE_*}…).
+ * cab controls ({@code THROTTLE_*}, {@code WIDGET_*}, {@code GAUGE_*}…) and
+ * door leaves moved by name ({@code DOOR_<n>} with {@code ROT_}/{@code TL_})
+ * are split out to move by their values (SPEC §9.3, §9.5).
  */
 public final class IrStockModel {
 
@@ -291,6 +292,8 @@ public final class IrStockModel {
         Map<String, AnimTrack> animated = loadAnimations(name, decl, access);
         Map<String, DoorBuilder> doors = new LinkedHashMap<>();
         Map<String, ControlBuilder> controls = new LinkedHashMap<>();
+        Map<String, ControlBuilder> leaves = new LinkedHashMap<>();
+        Set<String> movingDoors = movingDoors(obj.parts(), skipPrefixes, animated);
         List<String> lightGroups = new ArrayList<>();
         Set<Integer> interiorGroups = new HashSet<>();
         List<StockModel.Lamp> lampCandidates = new ArrayList<>();
@@ -316,11 +319,19 @@ public final class IrStockModel {
                 continue;
             }
             AnimTrack track = bogie == null ? animated.get(object) : null;
-            ControlBuilder control = bogie == null && track == null && role.control() != null
-                    ? controls.computeIfAbsent(role.control().key(), k -> new ControlBuilder())
-                    : null;
+            // a door leaf moved by name is built like a control (SPEC §9.5)
+            ObjectRole leafRole = bogie == null && track == null ? ObjectRole.door(object) : null;
+            if (leafRole != null && !movingDoors.contains(leafRole.control().key())) {
+                leafRole = null; // a door the asset doesn't move: part of the body
+            }
+            ControlBuilder control = leafRole != null
+                    ? leaves.computeIfAbsent(leafRole.control().key(), k -> new ControlBuilder())
+                    : bogie == null && track == null && role.control() != null
+                            ? controls.computeIfAbsent(role.control().key(), k -> new ControlBuilder())
+                            : null;
             if (control != null) {
-                control.add(role, object, part); // a pivot marker counts even without a texture
+                // a pivot marker counts even without a texture
+                control.add(leafRole != null ? leafRole : role, object, part);
             }
             ResourceLocation tex = textures.get(part.material());
             if (tex == null) {
@@ -382,6 +393,13 @@ public final class IrStockModel {
                 builtControls.add(built);
             }
         });
+        List<StockModel.Control> builtLeaves = new ArrayList<>();
+        leaves.forEach((key, leaf) -> {
+            StockModel.Control built = leaf.build();
+            if (built != null) {
+                builtLeaves.add(built);
+            }
+        });
         // cabin lamps light the inside only if their group lights something inside
         // (ChME3/platzkart IL); buffer and bogie lamps (FBL, BgL) stay outdoors
         List<StockModel.Lamp> lamps = new ArrayList<>();
@@ -391,16 +409,16 @@ public final class IrStockModel {
             }
         }
         StockModel built = new StockModel(body, interior, builtDoors, List.copyOf(builtControls),
-                front.build(textures), rear.build(textures),
+                List.copyOf(builtLeaves), front.build(textures), rear.build(textures),
                 liveries(name, decl, objLocation, textures, access),
                 List.copyOf(lightGroups), List.copyOf(lamps), List.copyOf(headlights));
         RailsWheelsAndTrains.LOGGER.info(
                 "Loaded {}: {} parts ({} skipped) — {} textures, interior {} quads,"
-                        + " {} animated doors, {} controls, light groups {}, {} cabin lamps,"
-                        + " {} headlights, bogies with {}+{} wheelsets, {} liveries",
+                        + " {} animated doors, {} door leaves, {} controls, light groups {},"
+                        + " {} cabin lamps, {} headlights, bogies with {}+{} wheelsets, {} liveries",
                 name, obj.parts().size(), skipped, textures.size(),
                 interior.values().stream().mapToInt(m -> m.quads().size()).sum(),
-                builtDoors.size(), builtControls.size(), lightGroups, lamps.size(),
+                builtDoors.size(), builtLeaves.size(), builtControls.size(), lightGroups, lamps.size(),
                 headlights.size(),
                 built.frontBogie().wheels().size(), built.rearBogie().wheels().size(),
                 built.liveries().size());
@@ -569,6 +587,30 @@ public final class IrStockModel {
             }
         }
         return tracks;
+    }
+
+    /**
+     * The {@code DOOR_<n>} keys the asset moves by name: any object of the
+     * door, drawn and not animated by an {@code .anim}, is its hinge
+     * ({@code DOOR_<n>_ROT…}) or slides ({@code TL_<f>_<axis>}). IR reads a
+     * door's flags from any of its objects, so the whole door moves.
+     */
+    private static Set<String> movingDoors(List<ObjLoader.Part> parts, List<String> skipPrefixes,
+            Map<String, AnimTrack> animated) {
+        Set<String> moving = new HashSet<>();
+        for (ObjLoader.Part part : parts) {
+            String object = part.object();
+            if (object.contains("HIDE") || startsWithAny(object, skipPrefixes)
+                    || object.startsWith("BOGEY_") || animated.containsKey(object)) {
+                continue;
+            }
+            ObjectRole leaf = ObjectRole.door(object);
+            if (leaf != null && (leaf.pivot() || leaf.control().slideX() != 0.0F
+                    || leaf.control().slideY() != 0.0F || leaf.control().slideZ() != 0.0F)) {
+                moving.add(leaf.control().key());
+            }
+        }
+        return moving;
     }
 
     private static boolean startsWithAny(String name, List<String> prefixes) {

@@ -27,6 +27,7 @@ import com.muzhik17.trainsmod.path.HermiteSegmentPath;
 import com.muzhik17.trainsmod.path.RailGraph;
 import com.muzhik17.trainsmod.path.RailSegment;
 import com.muzhik17.trainsmod.path.TrackPath;
+import com.muzhik17.trainsmod.path.TrackSweep;
 
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
@@ -81,31 +82,12 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 public final class RailRenderer {
 
     /**
-     * Vertical seat of the rail base relative to the spline point, applied along
-     * the path's up. The spline point is at ground level (the clicked block's top
-     * face), so 0.0 seats the rail base on the ground; the thin track bed frames
-     * it rather than lifting it. Kept as a named constant for easy tuning.
-     */
-    private static final double RAIL_Y_OFFSET = 0.0;
-
-    /**
      * Tiles re-sampled per frame from light-changed sections. A torch dirties
      * a few sections; a burst of streaming chunks can dirty hundreds at once,
      * and those spill over to the next frames (each sample is a block-state
      * and two light-engine lookups).
      */
     private static final int LIGHT_TILE_BUDGET = 2048;
-
-    /**
-     * How far the rails extend past an open track end (half a block — the node
-     * sits at its marker's cell centre, so this carries the rails to the cell
-     * edge instead of stopping chopped-off mid-cell). Only open ends get it
-     * ({@link #overhangAt}): where another segment continues the track past
-     * the node, its rails take over and an overhang would z-fight them. A
-     * joint that loses its neighbour becomes an open end and grows the
-     * overhang on the next rebuild — ends always look finished.
-     */
-    private static final double END_OVERHANG = 0.5;
 
     /**
      * Switch point-blade rendering master switch (SPEC §2.2 v1). Off for now
@@ -748,8 +730,8 @@ public final class RailRenderer {
             StyleTemplates templates = templatesFor(segment.style());
             SegmentKey key = new SegmentKey(
                     curve.start(), curve.startTangent(), curve.end(), curve.endTangent(),
-                    overhangAt(graph, segment, segment.nodeA()),
-                    overhangAt(graph, segment, segment.nodeB()),
+                    graph.overhangAt(segment, segment.nodeA()),
+                    graph.overhangAt(segment, segment.nodeB()),
                     clusterA != null, clusterB != null, templates.styleId());
             SegmentEntry cached = segmentCache.get(segment.id());
             if (cached != null && cached.key().equals(key)) {
@@ -774,11 +756,8 @@ public final class RailRenderer {
             List<TileTemplate> templates) {
         HermiteSegmentPath base = new HermiteSegmentPath(curve);
         double length = base.length();
-        double startOver = key.overhangA() ? END_OVERHANG : 0.0;
-        double endOver = key.overhangB() ? END_OVERHANG : 0.0;
-        TrackPath path = startOver > 0.0 || endOver > 0.0
-                ? new OverhangPath(base, startOver, endOver)
-                : base;
+        double startOver = key.overhangA() ? TrackSweep.END_OVERHANG : 0.0;
+        TrackPath path = TrackSweep.path(base, key.overhangA(), key.overhangB());
         double zoneA = key.bladeA() ? Math.min(BLADE_LENGTH, length / 2.0) : 0.0;
         double zoneB = key.bladeB() ? Math.min(BLADE_LENGTH, length / 2.0) : 0.0;
         // the blade zones (and the overhang on a blade end — the tip carries
@@ -872,34 +851,6 @@ public final class RailRenderer {
     }
 
     /**
-     * Whether the segment's end at {@code nodeId} is an open track end that
-     * should grow the {@link #END_OVERHANG}: no other segment continues the
-     * track past the node (departs within {@link RailGraph#CONTINUATION_DOT}
-     * of the outward direction). A dead-end node is trivially open; a switch
-     * node is open on the side none of its legs leave from — a Y-toe or the
-     * open ends of a scissors get the overhang, while straight joints and the
-     * legs' far side don't. Co-directional open ends share one overhang (both
-     * legs of a Y end at the toe along the same axis — two would z-fight):
-     * only the lowest segment id draws it.
-     */
-    private static boolean overhangAt(RailGraph graph, RailSegment segment, int nodeId) {
-        Vector3d outward = graph.departure(segment, nodeId).negate();
-        for (int otherId : graph.node(nodeId).segments()) {
-            if (otherId == segment.id()) {
-                continue;
-            }
-            Vector3d dep = graph.departure(graph.segment(otherId), nodeId);
-            if (dep.dot(outward) > RailGraph.CONTINUATION_DOT) {
-                return false; // the track continues past this node
-            }
-            if (otherId < segment.id() && dep.negate().dot(outward) > RailGraph.CONTINUATION_DOT) {
-                return false; // a co-directional twin with a lower id draws it
-            }
-        }
-        return true;
-    }
-
-    /**
      * Rebuild the blade tiles against the current switch states: every blade
      * stretch is swept with a lateral tip deflection — 0 on the selected leg
      * (closed, the route runs over it), {@link #BLADE_TIP_OFFSET} toward the
@@ -954,11 +905,9 @@ public final class RailRenderer {
                 offset = new Vector3d(right).mul(BLADE_TIP_OFFSET * amount * (side >= 0.0 ? 1.0 : -1.0));
             }
 
-            double startOver = overhangAt(graph, segment, segment.nodeA()) ? END_OVERHANG : 0.0;
-            double endOver = overhangAt(graph, segment, segment.nodeB()) ? END_OVERHANG : 0.0;
-            TrackPath path = startOver > 0.0 || endOver > 0.0
-                    ? new OverhangPath(base, startOver, endOver)
-                    : base;
+            boolean overhangA = graph.overhangAt(segment, segment.nodeA());
+            double startOver = overhangA ? TrackSweep.END_OVERHANG : 0.0;
+            TrackPath path = TrackSweep.path(base, overhangA, graph.overhangAt(segment, segment.nodeB()));
             double from0 = tipAtStart ? 0.0 : startOver + length - zone;
             double to0 = tipAtStart ? startOver + zone : path.length();
             // the blade pressed against the stock rail (amount→0) carries the
@@ -971,38 +920,6 @@ public final class RailRenderer {
         }
         for (Tile tile : bladeTiles) {
             bladeSections.add(tile.lightSection);
-        }
-    }
-
-    /**
-     * A path extended past its ends by extrapolating along the end tangents —
-     * lets the sweep carry the rail model {@link #END_OVERHANG} beyond dead-end
-     * nodes without touching the graph geometry.
-     */
-    private record OverhangPath(TrackPath inner, double startOver, double endOver) implements TrackPath {
-
-        @Override
-        public double length() {
-            return inner.length() + startOver + endOver;
-        }
-
-        @Override
-        public Vector3d samplePosition(double s) {
-            double t = s - startOver;
-            double innerLength = inner.length();
-            if (t < 0.0) {
-                return inner.samplePosition(0.0).add(inner.sampleTangent(0.0).mul(t));
-            }
-            if (t > innerLength) {
-                return inner.samplePosition(innerLength)
-                        .add(inner.sampleTangent(innerLength).mul(t - innerLength));
-            }
-            return inner.samplePosition(t);
-        }
-
-        @Override
-        public Vector3d sampleTangent(double s) {
-            return inner.sampleTangent(s - startOver); // inner clamps to [0, length]
         }
     }
 
@@ -1137,13 +1054,16 @@ public final class RailRenderer {
         return true;
     }
 
-    /** Repeat the tile along the path, bending each copy to the spline. */
+    /**
+     * Repeat the tile along the path, bending each copy to the spline — laid
+     * by the {@link TrackSweep} rules the track bed rasterizes with.
+     */
     private static void sweep(TileTemplate template, TrackPath path, List<Tile> out) {
         double length = path.length();
         if (length < 1.0e-6) {
             return;
         }
-        int n = Math.max(1, (int) Math.round(length / template.tileLength));
+        int n = TrackSweep.tileCount(length, template.tileLength);
         double tileLen = length / n;
         for (int i = 0; i < n; i++) {
             Vector3d centre = path.samplePosition((i + 0.5) * tileLen);
@@ -1181,38 +1101,18 @@ public final class RailRenderer {
     private static Tile bendTile(TileTemplate t, int tileIndex, double tileLen, TrackPath path,
             Vector3d centre) {
         int stations = t.stations.length;
-        double[] frame = new double[stations * 12]; // pos, fwd, right, up
+        double[] frame = new double[stations * TrackSweep.FRAME_STRIDE]; // pos, fwd, right, up
         for (int k = 0; k < stations; k++) {
-            double s = (tileIndex + t.stations[k]) * tileLen;
-            Vector3d pos = path.samplePosition(s);
-            Vector3d fwd = path.sampleTangent(s); // unit
-            Vector3d right = new Vector3d(0, 1, 0).cross(fwd);
-            if (right.lengthSquared() < 1.0e-9) {
-                right.set(1, 0, 0);
-            }
-            right.normalize();
-            Vector3d up = new Vector3d(fwd).cross(right).normalize();
-            int o = k * 12;
-            frame[o] = pos.x;
-            frame[o + 1] = pos.y;
-            frame[o + 2] = pos.z;
-            frame[o + 3] = fwd.x;
-            frame[o + 4] = fwd.y;
-            frame[o + 5] = fwd.z;
-            frame[o + 6] = right.x;
-            frame[o + 7] = right.y;
-            frame[o + 8] = right.z;
-            frame[o + 9] = up.x;
-            frame[o + 10] = up.y;
-            frame[o + 11] = up.z;
+            TrackSweep.frame(path, (tileIndex + t.stations[k]) * tileLen, frame,
+                    k * TrackSweep.FRAME_STRIDE);
         }
         int n = t.vertexCount;
         float[] xyz = new float[n * 3];
         float[] normals = new float[n * 3];
         for (int i = 0; i < n; i++) {
-            int o = t.station[i] * 12;
+            int o = t.station[i] * TrackSweep.FRAME_STRIDE;
             double across = t.z[i]; // local Z is the cross-track (gauge) axis
-            double height = t.y[i] + RAIL_Y_OFFSET;
+            double height = t.y[i] + TrackSweep.RAIL_Y_OFFSET;
             xyz[i * 3] = (float) (frame[o] + frame[o + 6] * across + frame[o + 9] * height);
             xyz[i * 3 + 1] = (float) (frame[o + 1] + frame[o + 7] * across + frame[o + 10] * height);
             xyz[i * 3 + 2] = (float) (frame[o + 2] + frame[o + 8] * across + frame[o + 11] * height);

@@ -106,6 +106,8 @@ public final class RwatCommands {
                 .then(Commands.literal("rail")
                         .then(Commands.literal("remove")
                                 .executes(RwatCommands::railRemove))
+                        .then(Commands.literal("rebed")
+                                .executes(RwatCommands::railRebed))
                         .then(Commands.literal("style")
                                 .then(Commands.argument("style", StringArgumentType.greedyString())
                                         .executes(ctx -> railStyle(ctx,
@@ -438,6 +440,20 @@ public final class RwatCommands {
         ctx.getSource().sendSuccess(() -> Component.literal(
                 "Rail segment #" + removed.id() + " removed."), false);
         return 1;
+    }
+
+    /**
+     * Re-lay the track bed of every segment of this dimension (SPEC §2.2): the
+     * bed follows the drawn rails, blocks no rail touches come out — for
+     * worlds whose bed was laid before that (2026-10-09), or after a pack
+     * changed a rail style's tile.
+     */
+    private static int railRebed(CommandContext<CommandSourceStack> ctx) {
+        ServerLevel level = ctx.getSource().getLevel();
+        int count = RailNetwork.get(level).rebed(level);
+        ctx.getSource().sendSuccess(() -> Component.literal(
+                "Track bed re-laid under " + count + " rail segment(s)."), false);
+        return count;
     }
 
     /**

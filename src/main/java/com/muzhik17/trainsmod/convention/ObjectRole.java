@@ -28,7 +28,12 @@ import java.util.regex.Pattern;
  *       ({@code LINVERT} inverts), {@code FULLBRIGHT} glows when lit,
  *       {@code HEADLIGHT_<n>} is a lamp with a flare, {@code _0X<RRGGBB>} its
  *       colour.</li>
+ *   <li>a <b>door leaf</b> is {@code DOOR_<n>}, read by {@link #door} only:
+ *       doors open by the wagon type's door boxes, they are no cab controls.</li>
  * </ul>
+ *
+ * <p>A Blender copy suffix ({@code .001}) at the end of a name is dropped
+ * first: {@code DOOR_3_INTERIOR_LCG_IL.001} lights with {@code IL}.
  *
  * @param control      the control this object belongs to, or null
  * @param pivotDegrees if this object is its control's pivot marker: the swing
@@ -63,7 +68,9 @@ public record ObjectRole(Control control, float pivotDegrees, String lightGroup,
         HORN("HORN_CONTROL", false),
         ENGINE_START("ENGINE_START", false),
         WIDGET("WIDGET", false),
-        WINDOW("WINDOW", false);
+        WINDOW("WINDOW", false),
+        /** A door leaf the asset moves by {@code ROT_}/{@code TL_} (SPEC §9.5); only {@link #door} reads it. */
+        DOOR("DOOR", false);
 
         private final Pattern pattern;
         private final boolean gauge;
@@ -103,6 +110,8 @@ public record ObjectRole(Control control, float pivotDegrees, String lightGroup,
     private static final Pattern LCG = Pattern.compile("_LCG_([^_]+)");
     private static final Pattern RGB = Pattern.compile("_0[xX]([0-9A-Fa-f]{6})(?=_|$)");
     private static final Pattern HEADLIGHT = Pattern.compile("(?:^|_)HEADLIGHT_\\d+(?=_|$)");
+    /** Blender's suffix on a duplicated object, {@code .001}. */
+    private static final Pattern COPY_SUFFIX = Pattern.compile("\\.\\d{3}$");
 
     /** An object with no role in the convention. */
     public static final ObjectRole NONE = new ObjectRole(null, Float.NaN, null, false, false, false,
@@ -120,8 +129,25 @@ public record ObjectRole(Control control, float pivotDegrees, String lightGroup,
 
     /** Read one object name. */
     public static ObjectRole parse(String objectName) {
-        String name = objectName; // case matters, as in IR (group names like BgL, Door1)
-        Control control = control(name);
+        return parse(objectName, false);
+    }
+
+    /**
+     * Read an object name as a door leaf (SPEC §9.5): its {@code DOOR_<n>}
+     * key, flags, hinge ({@code DOOR_<n>_ROT_<degrees>}) and slide
+     * ({@code TL_<f>_<axis>}), the way {@link #parse} reads a cab control;
+     * null if the name isn't a door's. {@link #parse} never returns a door —
+     * a leaf is worked through its wagon type's door, not as a control.
+     */
+    public static ObjectRole door(String objectName) {
+        ObjectRole role = parse(objectName, true);
+        return role.control() != null ? role : null;
+    }
+
+    private static ObjectRole parse(String objectName, boolean door) {
+        // case matters, as in IR (group names like BgL, Door1)
+        String name = COPY_SUFFIX.matcher(objectName).replaceFirst("");
+        Control control = control(name, door);
         float pivot = Float.NaN;
         if (control != null && name.contains(control.key() + "_ROT")) {
             pivot = degreesAfterRot(name);
@@ -139,8 +165,11 @@ public record ObjectRole(Control control, float pivotDegrees, String lightGroup,
                 fullbright, headlight, colour);
     }
 
-    private static Control control(String name) {
+    private static Control control(String name, boolean door) {
         for (Kind kind : Kind.values()) {
+            if ((kind == Kind.DOOR) != door) {
+                continue;
+            }
             Matcher m = kind.pattern.matcher(name);
             if (!m.find()) {
                 continue;

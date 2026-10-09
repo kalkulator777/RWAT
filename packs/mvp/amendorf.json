@@ -1,0 +1,28 @@
+{
+  "name": {"ru_ru": "Плацкартный вагон (Аммендорф)"},
+  "lights": {
+    "IL": {"en_us": "Car light", "ru_ru": "Свет в вагоне"},
+    "FBL": {"en_us": "Front buffer lights", "ru_ru": "Буферные фонари (перед)"},
+    "BBL": {"en_us": "Rear buffer lights", "ru_ru": "Буферные фонари (зад)"}
+  },
+  "type": {
+    "aliases": ["rwat:plazkart"],
+    "length": 25.125,
+    "bogies": [8.5, -8.5],
+    "mass_t": 53.0,
+    "max_speed_kmh": 120.0,
+    "resistance": {
+      "a": 1100.0,
+      "b": 50.0,
+      "c": 9.0
+    },
+    "brakes": {
+      "train_kn": 110.0,
+      "parking_kn": 25.0
+    },
+    "interior": {
+      "min": [-1.35, 1.81, -11.75],
+      "max": [1.35, 4.55, 11.75]
+    }
+  }
+}

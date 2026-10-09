@@ -100,7 +100,13 @@ public record WagonTypesPayload(Map<String, WagonType> types) implements CustomP
             buf.writeDouble(door.maxZ());
             buf.writeBoolean(door.inner());
             buf.writeBoolean(door.fixed());
+            buf.writeBoolean(door.connecting());
+            buf.writeUtf(door.group() != null ? door.group() : "");
         }
+    }
+
+    private static String group(String written) {
+        return written.isEmpty() ? null : written;
     }
 
     private static WagonType readType(FriendlyByteBuf buf, String id) {
@@ -138,7 +144,7 @@ public record WagonTypesPayload(Map<String, WagonType> types) implements CustomP
         for (int i = 0; i < doorCount; i++) {
             doors.add(new WagonType.Door(buf.readUtf(), buf.readDouble(), buf.readDouble(),
                     buf.readDouble(), buf.readDouble(), buf.readDouble(), buf.readDouble(),
-                    buf.readBoolean(), buf.readBoolean()));
+                    buf.readBoolean(), buf.readBoolean(), buf.readBoolean(), group(buf.readUtf())));
         }
         return new WagonType(id, length, bogies, massT, maxSpeedKmh,
                 resistance, traction, cab, brakes, interior, doors);

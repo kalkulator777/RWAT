@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.muzhik17.trainsmod.client.ClientConsists;
+import com.muzhik17.trainsmod.client.LightNames;
 import com.muzhik17.trainsmod.client.render.model.Mesh;
 import com.muzhik17.trainsmod.client.render.model.StockModel;
 import com.muzhik17.trainsmod.client.render.model.StockModels;
@@ -16,7 +17,6 @@ import com.muzhik17.trainsmod.stock.ConsistComposition;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.resources.language.I18n;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.CommonComponents;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -125,7 +125,8 @@ public final class TrainLightsScreen extends Screen {
     /**
      * The train's light groups: each model's {@code LCG} groups plus the
      * groups of glowing switch-driven parts (the ChME3's tail lamps), labelled
-     * from the translations, else the model's own switch label, else the name.
+     * from the translations ({@link LightNames}: the pack's for the type, else
+     * the mod's), else the model's own switch label, else the name.
      */
     private void collectGroups() {
         for (int index = 0; ; index++) {
@@ -137,12 +138,13 @@ public final class TrainLightsScreen extends Screen {
             if (model == null) {
                 continue;
             }
+            String type = slot.type().id();
             for (String group : model.lightGroups()) {
-                groups.putIfAbsent(group, label(model, group));
+                groups.putIfAbsent(group, label(model, type, group));
             }
             for (StockModel.Control control : model.controls()) {
                 if (control.role().hide() && glows(control)) {
-                    groups.putIfAbsent(control.role().group(), label(model, control.role().group()));
+                    groups.putIfAbsent(control.role().group(), label(model, type, control.role().group()));
                 }
             }
         }
@@ -159,10 +161,10 @@ public final class TrainLightsScreen extends Screen {
         return false;
     }
 
-    private static String label(StockModel model, String group) {
-        String key = "light.railswheelsandtrains." + group;
-        if (I18n.exists(key)) {
-            return I18n.get(key);
+    private static String label(StockModel model, String type, String group) {
+        String name = LightNames.of(type, group);
+        if (name != null) {
+            return name;
         }
         for (StockModel.Control control : model.controls()) {
             String label = control.role().label();
