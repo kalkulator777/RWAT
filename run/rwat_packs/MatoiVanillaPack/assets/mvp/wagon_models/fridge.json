@@ -1,0 +1,7 @@
+{
+  "obj": "stock/rolling_stock/freight/mvp_ir_fridge/mvp_ir_fridge.obj",
+  "liveries": {
+    "mvp_yellow": "l_mvp_yellow",
+    "mvp_blue": "l_mvp_blue"
+  }
+}

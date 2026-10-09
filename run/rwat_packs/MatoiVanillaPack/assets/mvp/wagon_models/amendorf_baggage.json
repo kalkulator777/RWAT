@@ -1,0 +1,19 @@
+{
+  "obj": "stock/rolling_stock/passenger/mvp_ir_amendorf/mvp_ir_amendorf_baggage.obj",
+  "animations": {
+    "door1": "stock/rolling_stock/passenger/mvp_ir_amendorf/anim/mvp_ir_amendorf_door1.anim",
+    "door2": "stock/rolling_stock/passenger/mvp_ir_amendorf/anim/mvp_ir_amendorf_door2.anim",
+    "door3": "stock/rolling_stock/passenger/mvp_ir_amendorf/anim/mvp_ir_amendorf_door3.anim",
+    "door4": "stock/rolling_stock/passenger/mvp_ir_amendorf/anim/mvp_ir_amendorf_door4.anim",
+    "trap1": "stock/rolling_stock/passenger/mvp_ir_amendorf/anim/mvp_ir_amendorf_trap1.anim",
+    "trap2": "stock/rolling_stock/passenger/mvp_ir_amendorf/anim/mvp_ir_amendorf_trap2.anim",
+    "lbd": "stock/rolling_stock/passenger/mvp_ir_amendorf/anim/mvp_ir_amendorf_lbd.anim",
+    "rbd": "stock/rolling_stock/passenger/mvp_ir_amendorf/anim/mvp_ir_amendorf_rbd.anim"
+  },
+  "liveries": {
+    "mvp_1": "l_mvp_2",
+    "mvp_rzd": "l_mvp_rzd",
+    "koshmar004_rzd": "l_koshmar004_rzd",
+    "koshmar004_krim": "l_koshmar004_krim"
+  }
+}

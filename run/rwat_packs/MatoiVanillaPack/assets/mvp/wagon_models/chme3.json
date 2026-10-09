@@ -1,0 +1,29 @@
+{
+  "obj": "stock/rolling_stock/locomotives/mvp_ir_chme3/mvp_ir_chme3.obj",
+  "animations": {
+    "door1": "stock/rolling_stock/locomotives/mvp_ir_chme3/anim/mvp_ir_chme3_door_1.anim",
+    "door2": "stock/rolling_stock/locomotives/mvp_ir_chme3/anim/mvp_ir_chme3_door_2.anim"
+  },
+  "liveries": {
+    "koshmar004_4844": "l_koshmar004_4844",
+    "evgenygp_4434": "l_evgenygp_4434",
+    "leader_770": "l_leader_770",
+    "leader_770_541": "l_leader_770_541",
+    "leader_chme3_1327": "l_leader_chme3_1327",
+    "leader_chme3_5194": "l_leader_chme3_5194",
+    "leader_chme3_5371": "l_leader_chme3_5371",
+    "leader_s200_232": "l_leader_s200_232",
+    "leader_s200_245": "l_leader_s200_245",
+    "leader_s200_249": "l_leader_s200_249",
+    "leader_s200_269": "l_leader_s200_269",
+    "leader_s200_278": "l_leader_s200_278",
+    "leader_t669": "l_leader_t669",
+    "leader_t669_1046": "l_leader_t669_1046",
+    "leader_rzd_1": "l_leader_rzd_1",
+    "leader_rzd_2": "l_leader_rzd_2",
+    "teslov_uz": "l_teslov_uz",
+    "ilyxa_796": "l_ilyxa_796",
+    "ilyxa_3232": "l_ilyxa_3232",
+    "owen_001": "l_owen_001"
+  }
+}

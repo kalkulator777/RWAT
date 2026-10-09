@@ -1,0 +1,68 @@
+Matoi Vanilla Pack — converted for Rails, Wheels & Trains (RWAT)
+
+Converted by tools/ir2rwat.py from the Immersive Railroading pack(s):
+  - MVP-IR-1.8-mc1.12.2-by-FrozeRain.zip (MVP 1.8) → assets/mvp/stock/
+  - MVP-IR-1.7-bugfix-mc1.12.2-by-FrozeRain.zip (MVP 1.7 bugfix) → assets/mvp/stock_17/
+
+The models, textures, liveries and animations are the original files, copied
+unchanged; only the RWAT declarations (wagon_types/, wagon_models/,
+rail_models/), the lang file and pack.mcmeta were generated. The original
+license, credits and readme are included as they were. All rights to the
+content stay with its authors.
+
+Rolling stock (45):
+  mvp:2te116                       locomotives 2TE116   [MVP 1.8, 11 liveries]
+  mvp:amendorf                     passenger   Amendorf (Second Class)   [MVP 1.8, 12 liveries]
+  mvp:amendorf_baggage             passenger   Amendorf (Baggage Car)   [MVP 1.8, 4 liveries]
+  mvp:bmz_16-3000                  freight     BMZ Fridge (16-3000)   [MVP 1.8, 0 liveries]
+  mvp:bmz_diesel                   passenger   BMZ Diesel (16-3001)   [MVP 1.8, 0 liveries]
+  mvp:boardflat                    freight     MVP Cargoflat with boards   [MVP 1.8, 2 liveries]
+  mvp:bunker                       freight     MVP Bunker   [MVP 1.8, 1 liveries]
+  mvp:cargoflat                    freight     MVP Flatcart   [MVP 1.8, 0 liveries]
+  mvp:cargopolu                    freight     Cargo Polu   [MVP 1.7 bugfix, 2 liveries]
+  mvp:chme3                        locomotives ChME3   [MVP 1.8, 20 liveries]
+  mvp:chme3_booster                locomotives ChME3 Booster   [MVP 1.8, 1 liveries]
+  mvp:chs4t                        locomotives CHS4t   [MVP 1.8, 6 liveries]
+  mvp:dgku                         locomotives MVP DGKU   [MVP 1.8, 5 liveries]
+  mvp:dr1a_motorhead               locomotives DR1a (Motor Head)   [MVP 1.8, 4 liveries]
+  mvp:dr1a_motorhead_reversed      locomotives DR1a (Motor Tail)   [MVP 1.8, 4 liveries]
+  mvp:dr1a_trailed                 passenger   DR1a (Middle Car)   [MVP 1.8, 4 liveries]
+  mvp:er2h                         locomotives ER-2 Head   [MVP 1.8, 0 liveries]
+  mvp:er2h_reversed                locomotives ER-2 Head (Reversed)   [MVP 1.8, 0 liveries]
+  mvp:er2m                         passenger   ER-2 Motor   [MVP 1.8, 0 liveries]
+  mvp:er2m_reversed                passenger   ER-2 Motor (Reversed)   [MVP 1.8, 0 liveries]
+  mvp:er2t                         passenger   ER-2 Trailer   [MVP 1.8, 0 liveries]
+  mvp:fitflat                      freight     MVP Fiting flat   [MVP 1.8, 8 liveries]
+  mvp:freight                      freight     MVP Freight   [MVP 1.8, 2 liveries]
+  mvp:freight_break                freight     MVP Freight (Breaking)   [MVP 1.8, 3 liveries]
+  mvp:fridge                       freight     Fridge (ARW)   [MVP 1.8, 2 liveries]
+  mvp:hopper                       freight     MVP Hopper   [MVP 1.8, 1 liveries]
+  mvp:m62                          locomotives M62   [MVP 1.8, 5 liveries]
+  mvp:poluwagon_12-132             freight     Poluwagon 12-132   [MVP 1.8, 2 liveries]
+  mvp:r200c                        passenger   ER-200 Middle   [MVP 1.7 bugfix, 0 liveries]
+  mvp:r200h                        locomotives ER-200 Head   [MVP 1.7 bugfix, 0 liveries]
+  mvp:r200m                        passenger   ER-200 Motor   [MVP 1.7 bugfix, 0 liveries]
+  mvp:sr3h                         locomotives SR-3 Head   [MVP 1.7 bugfix, 0 liveries]
+  mvp:sr3m                         passenger   SR-3 Motor   [MVP 1.7 bugfix, 0 liveries]
+  mvp:steelflat                    freight     MVP Flatcart for rolled metal   [MVP 1.8, 0 liveries]
+  mvp:tank_15-1443                 tank        MVP Tank 15-1443   [MVP 1.8, 19 liveries]
+  mvp:tank_15-865                  tank        MVP Tank 15-C865   [MVP 1.8, 0 liveries]
+  mvp:tem2                         locomotives TEM2   [MVP 1.8, 3 liveries]
+  mvp:tem2y                        locomotives TEM2y   [MVP 1.8, 4 liveries]
+  mvp:tep70                        locomotives TEP-70   [MVP 1.7 bugfix, 0 liveries]
+  mvp:tgm23                        locomotives TGM-23d   [MVP 1.8, 2 liveries]
+  mvp:tgm4                         locomotives TGM-4   [MVP 1.7 bugfix, 0 liveries]
+  mvp:thermos                      freight     MVP Thermos   [MVP 1.7 bugfix, 1 liveries]
+  mvp:timber                       freight     MVP Timber   [MVP 1.8, 3 liveries]
+  mvp:up4                          freight     MVP UP-4   [MVP 1.8, 0 liveries]
+  mvp:vl80c                        locomotives VL80c   [MVP 1.8, 15 liveries]
+
+Rail styles (8):
+  mvp:cncrt_ct_rail                MVP Rail (Concrete, Conter rail)   [MVP 1.8]
+  mvp:cncrtrail                    MVP Rail (Concrete)   [MVP 1.8]
+  mvp:crossbridge                  MVP Crossing cover   [MVP 1.8]
+  mvp:ct_rail                      MVP Rail (Conter rail)   [MVP 1.8]
+  mvp:grunt_c                      MVP Rail (Concrete with embankment)   [MVP 1.8]
+  mvp:grunt_w                      MVP Rail (with embankment)   [MVP 1.8]
+  mvp:rail                         MVP Rail   [MVP 1.8]
+  mvp:rail_bridge                  MVP Bridge rail   [MVP 1.8]

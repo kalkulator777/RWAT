@@ -1,0 +1,10 @@
+{
+  "obj": "stock/rolling_stock/locomotives/mvp_ir_m62/mvp_ir_m62.obj",
+  "liveries": {
+    "mvp_1": "l_mvp_1",
+    "mvp_2": "l_mvp_2",
+    "koshmar004_m62": "l_koshmar004_m62",
+    "teslov_uz": "l_teslov_uz",
+    "ilyxa_rzd": "l_ilyxa_rzd"
+  }
+}

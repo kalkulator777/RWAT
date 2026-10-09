@@ -1,0 +1,13 @@
+{
+  "pack": {
+    "pack_format": 34,
+    "supported_formats": [34, 48],
+    "description": "§6Matoi Vanilla Pack§r: Russian trains by FrozeRain & co. (RWAT conversion)"
+  },
+  "rwat": {
+    "name": "Matoi Vanilla Pack",
+    "namespace": "mvp",
+    "converted_from": ["MVP-IR-1.8-mc1.12.2-by-FrozeRain.zip", "MVP-IR-1.7-bugfix-mc1.12.2-by-FrozeRain.zip"],
+    "license": "CC BY-NC-ND 4.0, see LICENSE.txt; authors in Credits.txt"
+  }
+}

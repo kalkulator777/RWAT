@@ -1,0 +1,16 @@
+{
+  "obj": "stock/rolling_stock/locomotives/mvp_ir_2te116/mvp_ir_2te116.obj",
+  "liveries": {
+    "evgenygp_364": "l_evgenygp_364",
+    "evgenygp_529": "l_evgenygp_529",
+    "evgenygp_536": "l_evgenygp_536",
+    "evgenygp_700": "l_evgenygp_700",
+    "evgenygp_707": "l_evgenygp_707",
+    "evgenygp_708": "l_evgenygp_708",
+    "evgenygp_823": "l_evgenygp_823",
+    "evgenygp_1346": "l_evgenygp_1346",
+    "evgenygp_1702": "l_evgenygp_1702",
+    "evgenygp_708_low_buffers": "l_evgenygp_708_lb",
+    "evgenygp_823_low_buffers": "l_evgenygp_823_lb"
+  }
+}

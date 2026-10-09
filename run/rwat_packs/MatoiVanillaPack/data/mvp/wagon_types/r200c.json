@@ -1,0 +1,19 @@
+{
+  "length": 25.475,
+  "bogies": [8.97, -8.97],
+  "mass_t": 30.0,
+  "max_speed_kmh": 120.0,
+  "resistance": {
+    "a": 600.0,
+    "b": 27.0,
+    "c": 9.0
+  },
+  "brakes": {
+    "train_kn": 60.0,
+    "parking_kn": 12.0
+  },
+  "interior": {
+    "min": [-1.25, 1.8, -12.0],
+    "max": [1.25, 4.3, 12.0]
+  }
+}

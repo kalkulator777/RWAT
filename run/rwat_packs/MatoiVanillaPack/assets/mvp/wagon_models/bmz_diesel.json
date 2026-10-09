@@ -1,0 +1,12 @@
+{
+  "obj": "stock/rolling_stock/passenger/mvp_ir_bmz_diesel/mvp_ir_bmz_diesel_16-3001.obj",
+  "animations": {
+    "door1": "stock/rolling_stock/passenger/mvp_ir_bmz_diesel/anim/mvp_diesel_d1.anim",
+    "door2": "stock/rolling_stock/passenger/mvp_ir_bmz_diesel/anim/mvp_diesel_d2.anim",
+    "door3": "stock/rolling_stock/passenger/mvp_ir_bmz_diesel/anim/mvp_diesel_d3.anim",
+    "door4": "stock/rolling_stock/passenger/mvp_ir_bmz_diesel/anim/mvp_diesel_d4.anim",
+    "door5": "stock/rolling_stock/passenger/mvp_ir_bmz_diesel/anim/mvp_diesel_d5.anim",
+    "door6": "stock/rolling_stock/passenger/mvp_ir_bmz_diesel/anim/mvp_diesel_d6.anim",
+    "door7": "stock/rolling_stock/passenger/mvp_ir_bmz_diesel/anim/mvp_diesel_d7.anim"
+  }
+}

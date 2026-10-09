@@ -1,0 +1,8 @@
+{
+  "obj": "stock/rolling_stock/locomotives/mvp_ir_tem2/mvp_ir_tem2.obj",
+  "liveries": {
+    "mvp_1": "l_mvp_1",
+    "mvp_2": "l_mvp_2",
+    "mvp_3": "l_mvp_3"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "obj": "stock/rolling_stock/motorcab/mvp_ir_dr1a/mvp_ir_dr1a_trailed.obj",
+  "animations": {
+    "dl": "stock/rolling_stock/motorcab/mvp_ir_dr1a/anim/mvp_ir_dr1a_trailed_d_left_int.anim",
+    "dr": "stock/rolling_stock/motorcab/mvp_ir_dr1a/anim/mvp_ir_dr1a_trailed_d_right_int.anim",
+    "id1": "stock/rolling_stock/motorcab/mvp_ir_dr1a/anim/mvp_ir_dr1a_trailed_d_front_middle_int.anim",
+    "id2": "stock/rolling_stock/motorcab/mvp_ir_dr1a/anim/mvp_ir_dr1a_trailed_d_rear_middle_int.anim",
+    "cdf": "stock/rolling_stock/motorcab/mvp_ir_dr1a/anim/mvp_ir_dr1a_trailed_d_front_connecting.anim",
+    "cdr": "stock/rolling_stock/motorcab/mvp_ir_dr1a/anim/mvp_ir_dr1a_trailed_d_rear_connecting.anim"
+  },
+  "liveries": {
+    "etrod_173": "l_etrod_173",
+    "rinary_198": "l_rinary_198",
+    "teslov_236": "l_teslov_236",
+    "wilsa_315": "l_wilsa_315"
+  }
+}

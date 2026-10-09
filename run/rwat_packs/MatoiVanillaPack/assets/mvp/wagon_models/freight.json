@@ -1,0 +1,7 @@
+{
+  "obj": "stock/rolling_stock/freight/mvp_ir_freight/mvp_ir_freight.obj",
+  "liveries": {
+    "mvp_green": "l_mvp_green",
+    "mvp_blue": "l_mvp_blue"
+  }
+}

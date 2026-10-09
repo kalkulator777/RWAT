@@ -1,0 +1,11 @@
+{
+  "obj": "stock/rolling_stock/locomotives/mvp_ir_chs4t/mvp_ir_chs4t.obj",
+  "liveries": {
+    "mvp_1": "l_mvp_1",
+    "mvp_2": "l_mvp_2",
+    "ilyxa_pid": "l_ilyxa_pid",
+    "ilyxa_rzd": "l_ilyxa_rzd",
+    "nirens_550": "l_nirens_550",
+    "nirens_650": "l_nirens_650"
+  }
+}

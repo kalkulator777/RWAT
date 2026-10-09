@@ -18,3 +18,8 @@
 # are changed when only line endings change.
 src/generated/**/.cache/* text eol=lf
 src/generated/**/*.json text eol=lf
+
+# The generated MVP pack (in the repository for now): third-party assets copied byte
+# for byte from the IR packs — never touch their line endings; don't diff the meshes.
+run/rwat_packs/** -text
+run/rwat_packs/**/*.obj -diff

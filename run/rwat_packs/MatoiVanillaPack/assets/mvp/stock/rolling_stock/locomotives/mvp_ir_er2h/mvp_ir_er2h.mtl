@@ -1,0 +1,46 @@
+# Blender MTL File: 'MVP_ER2.blend'
+# Material Count: 4
+
+newmtl bogue_map
+Ns 10.000000
+Ka 1.000000 1.000000 1.000000
+Kd 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+map_Kd ../../common/mvp_amendorf_bogue_map.png
+
+newmtl controls
+Ns 10.000000
+Ka 1.000000 1.000000 1.000000
+Kd 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+map_Kd ../../common/mvp_controls_map.png
+
+newmtl mat1
+Ns 10.000000
+Ka 1.000000 1.000000 1.000000
+Kd 0.750000 0.750000 0.750000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+map_Kd mvp_er2h_map.png
+
+newmtl mat4
+Ns 10.000000
+Ka 1.000000 1.000000 1.000000
+Kd 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+map_Kd ../../common/mvp_cargobogue_map.png

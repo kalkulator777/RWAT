@@ -33,7 +33,9 @@ bin/
 .DS_Store
 
 ### Minecraft Modding ###
-run/
+/run/*
+# the generated MVP pack is in the repository for now (see below)
+!/run/rwat_packs/
 !**/src/**/run/
 **/src/generated/**/.cache/
 repo/
@@ -47,8 +49,10 @@ __pycache__/
 .claude/settings.local.json
 
 ### RWAT local files ###
-# Source IR packs for tools/ir2rwat.py: third-party (CC BY-NC-ND 4.0) and too big for git
-/MVP-IR-*.zip
+# Source IR packs for tools/ir2rwat.py (MVP-IR-*.zip) and the pack generated from them
+# (run/rwat_packs/): third-party, CC BY-NC-ND 4.0. In the repository FOR NOW, so cloud
+# agents can measure and regenerate the stock (docs/agents/walkable-stock.md); to be
+# taken out again — then ignore /MVP-IR-*.zip and all of /run/ here again.
 # Reference models/textures unpacked from those packs
 /DevAssets/
 # Third-party mod jars for local testing

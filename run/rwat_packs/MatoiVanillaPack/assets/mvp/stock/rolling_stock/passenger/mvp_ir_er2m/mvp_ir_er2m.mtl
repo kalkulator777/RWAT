@@ -1,0 +1,35 @@
+# Blender MTL File: 'MVP_ER2_motor.blend'
+# Material Count: 3
+
+newmtl bogue_map
+Ns 10.000000
+Ka 1.000000 1.000000 1.000000
+Kd 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+map_Kd ../../common/mvp_amendorf_bogue_map.png
+
+newmtl mat1
+Ns 10.000000
+Ka 1.000000 1.000000 1.000000
+Kd 0.750000 0.750000 0.750000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+map_Kd mvp_er2m_map.png
+
+newmtl mat4
+Ns 10.000000
+Ka 1.000000 1.000000 1.000000
+Kd 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+map_Kd ../../common/mvp_cargobogue_map.png

@@ -1,0 +1,7 @@
+{
+  "obj": "stock/rolling_stock/freight/mvp_ir_boardflat/mvp_ir_boardflat.obj",
+  "liveries": {
+    "mvp_1": "l_mvp_1",
+    "mvp_2": "l_mvp_2"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "obj": "stock/rolling_stock/freight/mvp_ir_fitflat/mvp_ir_fitflat.obj",
+  "liveries": {
+    "mvp_black_1": "l_mvp_black_1",
+    "mvp_black_2": "l_mvp_black_2",
+    "mvp_blue_1": "l_mvp_blue_1",
+    "mvp_blue_2": "l_mvp_blue_2",
+    "mvp_blue_3": "l_mvp_blue_3",
+    "mvp_green_1": "l_mvp_green_1",
+    "mvp_green_2": "l_mvp_green_2",
+    "mvp_green_3": "l_mvp_green_3"
+  }
+}

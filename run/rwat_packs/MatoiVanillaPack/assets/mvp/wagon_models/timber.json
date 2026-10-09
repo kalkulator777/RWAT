@@ -1,0 +1,8 @@
+{
+  "obj": "stock/rolling_stock/freight/mvp_ir_timber/mvp_ir_timber.obj",
+  "liveries": {
+    "mvp_birch": "l_mvp_birch",
+    "mvp_pine": "l_mvp_pine",
+    "mvp_acacia": "l_mvp_acacia"
+  }
+}

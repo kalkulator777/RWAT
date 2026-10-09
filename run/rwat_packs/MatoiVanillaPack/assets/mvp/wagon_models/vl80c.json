@@ -1,0 +1,20 @@
+{
+  "obj": "stock/rolling_stock/locomotives/mvp_ir_vl80c/mvp_ir_vl80c.obj",
+  "liveries": {
+    "mvp_extra": "l_mvp_extra",
+    "mvp_sme_3": "l_mvp_sme_3",
+    "evgenygp_1114_extra": "l_evgenygp_1114_extra",
+    "evgenygp_1114_sme_3": "l_evgenygp_1114_sme_3",
+    "koshmar004_gzd": "l_koshmar004_gzd",
+    "koshmar004_1474": "l_koshmar004_1474",
+    "teslov_uz": "l_teslov_uz",
+    "owen_uz": "l_owen_uz",
+    "owen_1500": "l_owen_1500",
+    "owen_1824": "l_owen_1824",
+    "owen_1422": "l_owen_1422",
+    "owen_1262": "l_owen_1262",
+    "koshmar004_1823": "l_koshmar004_1823",
+    "nirens_1663": "l_nirens_1663",
+    "nirens_1663_sme_3": "l_nirens_1663_sme_3"
+  }
+}

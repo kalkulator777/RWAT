@@ -1,0 +1,10 @@
+{
+  "obj": "stock/rolling_stock/locomotives/mvp_ir_dgku/mvp_ir_dgku.obj",
+  "liveries": {
+    "mvp_red": "l_mvp_red",
+    "andrpv_red": "l_andrpv_red",
+    "koshmar004_blue": "l_koshmar004_blue",
+    "koshmar004_green": "l_koshmar004_green",
+    "rinary_red": "l_rinary_red"
+  }
+}

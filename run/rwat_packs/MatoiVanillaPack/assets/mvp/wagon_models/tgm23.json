@@ -1,0 +1,7 @@
+{
+  "obj": "stock/rolling_stock/locomotives/mvp_ir_tgm23/mvp_ir_tgm23.obj",
+  "liveries": {
+    "mvp_minaz": "l_mvp_minaz",
+    "mvp_dimzip": "l_mvp_dimzip"
+  }
+}

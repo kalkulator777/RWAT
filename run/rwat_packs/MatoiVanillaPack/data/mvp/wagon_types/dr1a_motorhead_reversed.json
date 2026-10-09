@@ -1,0 +1,21 @@
+{
+  "length": 26.249,
+  "bogies": [8.652, -9.285],
+  "mass_t": 53.5,
+  "max_speed_kmh": 120,
+  "resistance": {
+    "a": 1070.0,
+    "b": 48.15,
+    "c": 12.0
+  },
+  "traction": {
+    "power_kw": 736.0,
+    "max_tractive_effort_kn": 421.7
+  },
+  "cab": {},
+  "brakes": {
+    "train_kn": 69.5,
+    "parking_kn": 13.9,
+    "independent_kn": 38.9
+  }
+}

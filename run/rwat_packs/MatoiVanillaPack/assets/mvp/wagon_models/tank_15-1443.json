@@ -1,0 +1,24 @@
+{
+  "obj": "stock/rolling_stock/tank/mvp_ir_tank_15-1443/mvp_ir_tank_15-1443.obj",
+  "liveries": {
+    "mvp_1": "l_mvp_1",
+    "ilyxa_15-1443_a": "l_ilyxa_15-1443_a",
+    "ilyxa_15-1443_b": "l_ilyxa_15-1443_b",
+    "ilyxa_15-1443_c": "l_ilyxa_15-1443_c",
+    "ilyxa_15-1443_d": "l_ilyxa_15-1443_d",
+    "ilyxa_bensin": "l_ilyxa_bensin",
+    "ilyxa_bh": "l_ilyxa_bh",
+    "ilyxa_gray": "l_ilyxa_gray",
+    "ilyxa_natgidro": "l_ilyxa_natgidro",
+    "ilyxa_nth": "l_ilyxa_nth",
+    "ilyxa_red": "l_ilyxa_red",
+    "ilyxa_rzd": "l_ilyxa_rzd",
+    "ilyxa_sovfraht": "l_ilyxa_sovfraht",
+    "ilyxa_transoil": "l_ilyxa_transoil",
+    "ilyxa_transvagon": "l_ilyxa_transvagon",
+    "ilyxa_vtb": "l_ilyxa_vtb",
+    "ilyxa_white": "l_ilyxa_white",
+    "ilyxa_ywg": "l_ilyxa_ywg",
+    "owen_uz": "l_owen_uz"
+  }
+}
