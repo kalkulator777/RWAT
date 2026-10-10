@@ -163,12 +163,9 @@ public final class ConsistManager extends SavedData {
             } else {
                 consist.takeControl(driver.cab().getUUID(), driver.facing());
             }
+            // the handles reach the driver's panel with the snapshot (SPEC §9.7)
             if (consist.advance(path)) {
                 dirty = true;
-            }
-            // handle moved → actionbar feedback (the v0 stand-in for a cab HUD)
-            if (consist.consumeControlsChanged() && driver != null) {
-                driver.player().displayClientMessage(controlsStatus(consist), true);
             }
 
             List<WagonEntity> wagons = new ArrayList<>();
@@ -578,12 +575,13 @@ public final class ConsistManager extends SavedData {
 
     /**
      * The consist's driver (SPEC §6.12: any cab, not just the head wagon):
-     * a player in the first {@linkplain WagonType#drivable() cab} wagon, by
-     * index, that has one — with several occupied cabs the front-most is in
-     * control. In a walkable cab (SPEC §9) everyone aboard is at the controls
-     * (the levers take the mouse); the one in the driver's chair is reported
-     * first. Walking riders of a passenger car never drive. Null if no cab is
-     * manned.
+     * the player at the controls of the first {@linkplain WagonType#drivable()
+     * cab} wagon, by index, that has one — with several manned cabs the
+     * front-most is in control. At the controls (SPEC §9.7) means in the
+     * driver's chair of a walkable cab, or riding a cab without a walkable
+     * interior: someone walking about a cab — or the saloon of an EMU's head
+     * car — never drives, the chair decides, not the kind of wagon. Null if
+     * no cab is manned.
      */
     public static Driver driverOf(ServerLevel level, Consist consist) {
         List<UUID> ids = consist.wagonIds();
@@ -593,32 +591,22 @@ public final class ConsistManager extends SavedData {
             if (!slot.type().drivable() || !(level.getEntity(ids.get(i)) instanceof WagonEntity wagon)) {
                 continue;
             }
-            ServerPlayer walker = null;
             for (Entity passenger : wagon.getPassengers()) {
-                if (passenger instanceof ServerPlayer player) {
-                    if (wagon.isSeated(player) || !wagon.isWalkingRider(player)) {
-                        return new Driver(player, wagon, slot.flipped() ? -1 : 1);
-                    }
-                    if (walker == null) {
-                        walker = player;
-                    }
+                if (passenger instanceof ServerPlayer player && atControls(wagon, player)) {
+                    return new Driver(player, wagon, slot.flipped() ? -1 : 1);
                 }
-            }
-            if (walker != null) {
-                return new Driver(walker, wagon, slot.flipped() ? -1 : 1);
             }
         }
         return null;
     }
 
-    /** Actionbar line shown when a handle moves — the v0 stand-in for a cab HUD. */
-    private static Component controlsStatus(Consist consist) {
-        double kmh = Math.abs(consist.speed()) * 20.0 * 3.6;
-        return Component.translatable("message.railswheelsandtrains.controls_status",
-                consist.reverser() > 0 ? "F" : consist.reverser() < 0 ? "R" : "N",
-                consist.throttleNotch(), Consist.NOTCHES,
-                consist.brakeNotch(), Consist.NOTCHES,
-                String.format("%.0f", kmh));
+    /**
+     * True if {@code player} riding {@code cab} is at its controls: in the
+     * driver's chair, or on the vehicle's own seat of a cab without a
+     * walkable interior (SPEC §9.7; the client's {@code ClientDriveInput.atControls}).
+     */
+    public static boolean atControls(WagonEntity cab, ServerPlayer player) {
+        return cab.isSeated(player) || !cab.isWalkingRider(player);
     }
 
     // --- SavedData ---

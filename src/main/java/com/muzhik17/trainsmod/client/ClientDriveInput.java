@@ -7,6 +7,7 @@ import com.muzhik17.trainsmod.stock.ConsistComposition;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.world.entity.player.Player;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -38,7 +39,7 @@ public final class ClientDriveInput {
         LocalPlayer player = mc.player;
         if (player == null
                 || !(player.getVehicle() instanceof WagonEntity wagon)
-                || !isCab(wagon, player)) {
+                || !atControls(wagon, player)) {
             // a walkable interior is driven by ClientWalkInput, not the throttle
             jumpWasDown = false;
             return;
@@ -55,12 +56,15 @@ public final class ClientDriveInput {
     }
 
     /**
-     * True if the keys drive here: a cab without a walkable interior, or a
-     * walkable cab's driver's chair this player sits in (SPEC §9). Walking
-     * about a cab, the keys walk (ClientWalkInput) and the levers take the
-     * mouse (ClientCabInteract).
+     * True if the player is at the controls of {@code wagon}, so the keys
+     * drive: a cab without a walkable interior, or a walkable cab's driver's
+     * chair this player sits in (SPEC §9). Walking about a cab, the keys walk
+     * (ClientWalkInput) and the levers take the mouse (ClientCabInteract).
+     * Decided by the chair, not by the kind of wagon: an EMU's head car is a
+     * cab and a saloon at once, and only its chair is at the controls — the
+     * driver's panel shows by the same rule (SPEC §9.7).
      */
-    private static boolean isCab(WagonEntity wagon, LocalPlayer player) {
+    public static boolean atControls(WagonEntity wagon, Player player) {
         ConsistComposition.Slot slot =
                 ClientConsists.slot(wagon.getConsistId(), wagon.getWagonIndex());
         return slot != null && slot.type().drivable()

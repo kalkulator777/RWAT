@@ -48,7 +48,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * distance it was grabbed at, so the lever follows the view. A handle lever
  * snaps to its notches and sends the notch when it changes
  * ({@link CabLeverPayload}); other controls send their group value
- * ({@link ControlGroupPayload}). Right-clicking the driver's chair sits down.
+ * ({@link ControlGroupPayload}). Handle levers move only for the player at
+ * the controls (SPEC §9.7: in the driver's chair); walking about the cab they
+ * are named with a hint to sit down. Right-clicking the driver's chair sits down.
  *
  * <p>Controls are picked like doors: the look ray goes into the wagon's local
  * frame (and the model's, for a turned wagon) and is tested against each
@@ -145,9 +147,29 @@ public final class ClientCabInteract {
                             .withStyle(ChatFormatting.GRAY));
         }
         ObjectRole.Control role = now.control.role();
-        return List.of(Component.literal(controlName(now.wagon, role)),
-                Component.literal(setting(role, position(now.wagon, now.control)))
-                        .withStyle(ChatFormatting.GRAY));
+        Component name = Component.literal(controlName(now.wagon, role));
+        Component value = Component.literal(setting(role, position(now.wagon, now.control)))
+                .withStyle(ChatFormatting.GRAY);
+        if (!mayWork(now.wagon, now.control)) {
+            return List.of(name, value, Component.translatable("control.railswheelsandtrains.from_seat")
+                    .withStyle(ChatFormatting.GRAY));
+        }
+        return List.of(name, value);
+    }
+
+    /**
+     * True if the local player may work this control: a handle lever only at
+     * the controls of its own wagon — in the driver's chair, or in a cab
+     * without a walkable interior (SPEC §9.7: the server takes handles from
+     * the driver only); switches, windows and the rest from anywhere in reach.
+     */
+    private static boolean mayWork(WagonEntity wagon, StockModel.Control control) {
+        if (ControlValue.handle(control.role().kind()) == null) {
+            return true;
+        }
+        LocalPlayer player = Minecraft.getInstance().player;
+        return player != null && player.getVehicle() == wagon
+                && ClientDriveInput.atControls(wagon, player);
     }
 
     @SubscribeEvent
@@ -179,6 +201,9 @@ public final class ClientCabInteract {
             return;
         }
         StockModel.Control control = pick.control;
+        if (!mayWork(pick.wagon, control)) {
+            return; // a handle lever, not from here: the label says to sit down
+        }
         ObjectRole.Control role = control.role();
         float now = position(pick.wagon, control);
         if (role.toggle()) {

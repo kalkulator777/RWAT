@@ -53,8 +53,11 @@ public final class Consist {
     public static final int NOTCHES = 8;
     /** Held notch keys repeat at this period, ticks (first press applies instantly). */
     private static final int NOTCH_REPEAT_TICKS = 5;
-    /** The reverser can only be thrown at a standstill (|v| below this, blocks/tick). */
-    private static final double REVERSER_STOP_EPS = 1.0e-3;
+    /**
+     * The reverser can only be thrown at a standstill (|v| below this,
+     * blocks/tick) — the driver's panel shows the train standing by the same rule.
+     */
+    public static final double REVERSER_STOP_EPS = 1.0e-3;
     /** Type id given to wagons of a save from before compositions were stored. */
     private static final String LEGACY_TYPE_ID = "rwat:legacy";
 
@@ -441,13 +444,6 @@ public final class Consist {
         this.reverserToggle |= reverserToggle;
     }
 
-    /** True if the driver moved a handle this tick; reading clears the flag (actionbar feedback). */
-    public boolean consumeControlsChanged() {
-        boolean changed = controlsChanged;
-        controlsChanged = false;
-        return changed;
-    }
-
     public List<UUID> wagonIds() {
         return wagonIds;
     }
@@ -499,7 +495,9 @@ public final class Consist {
                 }
             }
         }
-        return v != prevV || v != 0.0 || controlsChanged;
+        boolean handlesMoved = controlsChanged;
+        controlsChanged = false;
+        return v != prevV || v != 0.0 || handlesMoved;
     }
 
     /** Turn held key directions into notch movements: instant on press, then key repeat. */

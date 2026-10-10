@@ -20,6 +20,7 @@ import com.muzhik17.trainsmod.consist.Handles;
 import com.muzhik17.trainsmod.consist.WagonEntity;
 import com.muzhik17.trainsmod.convention.ControlValue;
 import com.muzhik17.trainsmod.kinematics.WagonPose;
+import com.muzhik17.trainsmod.physics.TrainPhysics;
 import com.muzhik17.trainsmod.stock.ConsistComposition;
 import com.muzhik17.trainsmod.stock.WagonType;
 
@@ -409,7 +410,7 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
         Handles handles = ClientConsists.handles(wagon.getConsistId());
         boolean activeCab = handles.activeCab() == wagonIndex;
         ControlValue.Readings readings = new ControlValue.Readings(
-                Math.abs(ClientConsists.speed(wagon.getConsistId())) * 72.0,
+                Math.abs(TrainPhysics.kmh(ClientConsists.speed(wagon.getConsistId()))),
                 slot.type().maxSpeedKmh());
         for (BakedStockModel.BakedControl bc : baked.controls()) {
             StockModel.Control control = bc.control();
