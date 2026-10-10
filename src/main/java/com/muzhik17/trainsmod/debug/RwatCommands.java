@@ -10,6 +10,7 @@ import java.util.concurrent.CompletableFuture;
 
 import org.joml.Vector3d;
 
+import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -105,6 +106,12 @@ public final class RwatCommands {
                                         .executes(ctx -> uncouple(ctx,
                                                 IntegerArgumentType.getInteger(ctx, "id"),
                                                 IntegerArgumentType.getInteger(ctx, "index"))))))
+                .then(Commands.literal("handbrake")
+                        .then(Commands.argument("id", IntegerArgumentType.integer(1))
+                                .then(Commands.argument("set", BoolArgumentType.bool())
+                                        .executes(ctx -> handbrake(ctx,
+                                                IntegerArgumentType.getInteger(ctx, "id"),
+                                                BoolArgumentType.getBool(ctx, "set"))))))
                 .then(Commands.literal("rail")
                         .then(Commands.literal("remove")
                                 .executes(RwatCommands::railRemove))
@@ -583,6 +590,27 @@ public final class RwatCommands {
                 consist.composition().wagonCount(), rear.id(), rear.composition().wagonCount())),
                 false);
         return rear.id();
+    }
+
+    /**
+     * Set or release every handbrake of consist {@code id} (SPEC §5.3, the
+     * crowbar wagon by wagon). Under a profile with auto handbrakes they
+     * follow the throttle again on the next tick.
+     */
+    private static int handbrake(CommandContext<CommandSourceStack> ctx, int id, boolean set) {
+        ServerLevel level = ctx.getSource().getLevel();
+        ConsistManager manager = ConsistManager.get(level);
+        Consist consist = manager.byId(id);
+        if (consist == null) {
+            ctx.getSource().sendFailure(Component.literal("No consist #" + id));
+            return 0;
+        }
+        consist.setAllHandbrakes(set);
+        manager.setDirty();
+        ctx.getSource().sendSuccess(() -> Component.literal(String.format(
+                "Consist #%d: handbrakes %s on %d of %d wagons.", id, set ? "set" : "released",
+                consist.handbrakesSet(), consist.wagonIds().size())), false);
+        return consist.handbrakesSet();
     }
 
     private static int teleport(CommandContext<CommandSourceStack> ctx, int id) throws CommandSyntaxException {

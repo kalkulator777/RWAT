@@ -71,9 +71,9 @@ public final class WagonTypes {
      */
     public static WagonType missing(String id) {
         return new WagonType(id, MISSING_LENGTH, MISSING_BOGIES.clone(), MISSING_MASS_T, 100.0,
-                new WagonType.Resistance(20.0 * MISSING_MASS_T, 0.9 * MISSING_MASS_T, 9.0),
+                StockDefaults.resistance(MISSING_MASS_T),
                 null, null,
-                new WagonType.Brakes(2.0 * MISSING_MASS_T, 0.0, 0.0, 0.0, 0.4 * MISSING_MASS_T),
+                StockDefaults.brakes(StockDefaults.DEFAULT_BRAKE_SYSTEM, MISSING_MASS_T, false),
                 null);
     }
 

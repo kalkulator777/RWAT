@@ -1,0 +1,13 @@
+{
+  "type": {
+    "max_speed_kmh": 130,
+    "traction": {
+      "power_kw": 800.0,
+      "max_tractive_effort_kn": 110.0,
+      "ramp_s": 2.0
+    },
+    "brakes": {
+      "system": "ep"
+    }
+  }
+}

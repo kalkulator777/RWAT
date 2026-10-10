@@ -5,9 +5,6 @@
     "BBL": {"en_us": "Booster buffer lights", "ru_ru": "Буферные фонари бустера"}
   },
   "type": {
-    "cab": null,
-    "brakes": {
-      "independent_kn": null
-    }
+    "cab": null
   }
 }

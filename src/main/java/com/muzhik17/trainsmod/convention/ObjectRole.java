@@ -63,6 +63,13 @@ public record ObjectRole(Control control, float pivotDegrees, String lightGroup,
         REVERSER("REVERSER", false),
         TRAIN_BRAKE("TRAIN_BRAKE", false),
         INDEPENDENT_BRAKE("(?:INDEPENDENT|IND)_BRAKE", false),
+        /**
+         * The wagon's handbrake wheel (SPEC §5.3) — RWAT's own kind, IR has
+         * none: {@code HANDBRAKE_<n>} in a pack's model, or any control a
+         * model declaration names in {@code "handbrake"} (MVP's widgets
+         * labelled "Hand Brake").
+         */
+        HANDBRAKE("HAND_?BRAKE", false),
         BELL("BELL_CONTROL", false),
         WHISTLE("WHISTLE_CONTROL", false),
         HORN("HORN_CONTROL", false),
@@ -100,6 +107,12 @@ public record ObjectRole(Control control, float pivotDegrees, String lightGroup,
             boolean toggle, boolean press, boolean invert, boolean hide, boolean noTouch,
             float offset, float rangeMin, float rangeMax,
             float slideX, float slideY, float slideZ) {
+
+        /** This control doing another kind's job (a widget declared the handbrake wheel). */
+        public Control withKind(Kind newKind) {
+            return new Control(newKind, id, key, group, label, toggle, press, invert, hide, noTouch,
+                    offset, rangeMin, rangeMax, slideX, slideY, slideZ);
+        }
     }
 
     private static final Pattern CG = Pattern.compile("_CG_([^_]+)");

@@ -72,4 +72,28 @@ class ControlValueTest {
                 new ControlValue.Readings(-47.5, 95.0));
         assertEquals(0.5F, pos, 1.0e-6F);
     }
+    /** Brake gauges read the pressure in effect, not the handle (SPEC §5.3): the brake lags behind. */
+    @Test
+    void brakeGauges_readThePressureNotTheHandle() {
+        ObjectRole.Control train = control("GAUGE_TRAIN_BRAKE_1_ROT_-270_LABEL_Brake^Pipe");
+        ObjectRole.Control ind = control("GAUGE_INDEPENDENT_BRAKE_1_ROT_-270_LABEL_Brake^Cylinders");
+        ObjectRole.Control cylinders = control("BRAKE_PRESSURE_1_ROT_270");
+        Handles fullBrake = new Handles(1, 0, 8, 0, 0); // handle thrown to full …
+        ControlValue.Readings building = new ControlValue.Readings(0.0, 95.0, 0.25F, 0.5F, 0.0F);
+        assertEquals(0.25F, ControlValue.position(train, fullBrake, true, 0.0F, building),
+                "… the pipe shows a quarter: still filling");
+        assertEquals(0.5F, ControlValue.position(ind, fullBrake, true, 0.0F, building));
+        assertEquals(0.5F, ControlValue.position(cylinders, fullBrake, true, 0.0F, building),
+                "the cylinders: the higher of the two");
+    }
+
+    /** The handbrake wheel turns with the wagon's handbrake, wherever the handles are. */
+    @Test
+    void handbrakeWheel_readsTheHandbrake() {
+        ObjectRole.Control wheel = control("WIDGET_13_LABEL_Hand^Brake").withKind(ObjectRole.Kind.HANDBRAKE);
+        assertEquals(0.0F, ControlValue.position(wheel, Handles.REST, false, 1.0F, STILL),
+                "the widget's group value is not the handbrake");
+        assertEquals(0.6F, ControlValue.position(wheel, Handles.REST, false, 0.0F,
+                new ControlValue.Readings(0.0, 95.0, 0.0F, 0.0F, 0.6F)), 1.0e-6F);
+    }
 }

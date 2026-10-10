@@ -16,8 +16,20 @@ import com.muzhik17.trainsmod.consist.Handles;
  */
 public final class ControlValue {
 
-    /** What the gauges read (SPEC §9.3). */
-    public record Readings(double speedKmh, double maxSpeedKmh) {
+    /**
+     * What the gauges read (SPEC §9.3): the speed, and the brake cylinders'
+     * pressure as the fraction of full braking in effect — it builds up after
+     * the handle with the brake's timing (SPEC §5.3), so the gauges show the
+     * brake filling, not the handle; {@code handbrake} — the wheel's turn,
+     * 0 released … 1 set.
+     */
+    public record Readings(double speedKmh, double maxSpeedKmh,
+            float trainBrakePressure, float indBrakePressure, float handbrake) {
+
+        /** Speed only: brakes released, handbrake off. */
+        public Readings(double speedKmh, double maxSpeedKmh) {
+            this(speedKmh, maxSpeedKmh, 0.0F, 0.0F, 0.0F);
+        }
     }
 
     private ControlValue() {
@@ -57,6 +69,9 @@ public final class ControlValue {
         if (control.kind() == ObjectRole.Kind.THROTTLE_BRAKE) {
             return 0.5F; // combined handle: not on any MVP loco, drawn in neutral
         }
+        if (control.kind() == ObjectRole.Kind.HANDBRAKE) {
+            return Math.clamp(readings.handbrake(), 0.0F, 1.0F);
+        }
         return Math.clamp(groupValue, 0.0F, 1.0F);
     }
 
@@ -81,9 +96,10 @@ public final class ControlValue {
                     / (readings.maxSpeedKmh() > 0.0 ? readings.maxSpeedKmh() : 200.0));
             case GAUGE_THROTTLE -> handles.throttle() / notches;
             case GAUGE_REVERSER -> (handles.reverser() + 1) * 0.5F;
-            case GAUGE_TRAIN_BRAKE -> handles.trainBrake() / notches;
-            case GAUGE_INDEPENDENT_BRAKE -> handles.indBrake() / notches;
-            case BRAKE_PRESSURE -> Math.max(handles.trainBrake(), handles.indBrake()) / notches;
+            // pressure gauges: the brake in effect, not the handle (SPEC §5.3)
+            case GAUGE_TRAIN_BRAKE -> readings.trainBrakePressure();
+            case GAUGE_INDEPENDENT_BRAKE -> readings.indBrakePressure();
+            case BRAKE_PRESSURE -> Math.max(readings.trainBrakePressure(), readings.indBrakePressure());
             default -> 0.0F;
         };
     }

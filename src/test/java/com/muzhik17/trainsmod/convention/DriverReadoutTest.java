@@ -105,4 +105,18 @@ class DriverReadoutTest {
         assertTrue(DriverReadout.of(new Handles(1, 0, 0, 0, 0), 0.0,
                 train(new ConsistComposition.Slot(LOCO, false)), 0).canMove(Consist.Handle.INDEPENDENT_BRAKE));
     }
+    /** The panel's pressure bars: the brake in effect; without one, the handle's own fraction. */
+    @Test
+    void brakePressure_inEffectOrTheHandle() {
+        ConsistComposition c = new ConsistComposition(java.util.List.of(
+                new ConsistComposition.Slot(type("test:loco", 95.0, new WagonType.Cab(), 80.0), false)));
+        Handles handles = new Handles(1, 0, 4, 8, 0);
+        DriverReadout lagging = DriverReadout.of(handles, 0.0, c, 0, 0, 0.1F, 0.9F);
+        assertEquals(0.1F, lagging.pressure(Consist.Handle.TRAIN_BRAKE));
+        assertEquals(0.9F, lagging.pressure(Consist.Handle.INDEPENDENT_BRAKE));
+        assertEquals(0.0F, lagging.pressure(Consist.Handle.THROTTLE));
+        DriverReadout handleOnly = DriverReadout.of(handles, 0.0, c, 0);
+        assertEquals(0.5F, handleOnly.pressure(Consist.Handle.TRAIN_BRAKE));
+        assertEquals(1.0F, handleOnly.pressure(Consist.Handle.INDEPENDENT_BRAKE));
+    }
 }

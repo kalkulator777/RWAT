@@ -35,6 +35,8 @@ public final class DriverPanel {
     private static final int ROW = 12;
     private static final int LAMP_H = 7;
     private static final int LAMP_GAP = 1;
+    /** The brake pressure bar under a brake row's lamps, px (fits the gap to the next row). */
+    private static final int PRESSURE_H = 2;
     private static final int CELL_W = 12;
     private static final int CELL_H = 11;
     private static final int CELL_GAP = 1;
@@ -75,14 +77,16 @@ public final class DriverPanel {
         if (composition == null) {
             return null;
         }
-        return DriverReadout.of(ClientConsists.handles(wagon.getConsistId()),
-                ClientConsists.speed(wagon.getConsistId()), composition, wagon.getWagonIndex());
+        int consistId = wagon.getConsistId();
+        return DriverReadout.of(ClientConsists.handles(consistId), ClientConsists.speed(consistId),
+                composition, wagon.getWagonIndex(), ClientConsists.handbrakesSet(consistId),
+                ClientConsists.trainBrakePressure(consistId), ClientConsists.indBrakePressure(consistId));
     }
 
     /** The panel's height for this readout. */
     public static int height(DriverReadout readout) {
         int rows = rows(readout).size();
-        int footer = readout.inControl() ? 0 : ROW;
+        int footer = (readout.inControl() ? 0 : ROW) + (readout.handbrakesSet() > 0 ? ROW : 0);
         return PAD + SPEED_ROW + BAR_H + TICK_H + 4 + (rows - 1) * ROW + LAMP_H + footer + PAD;
     }
 
@@ -108,9 +112,16 @@ public final class DriverPanel {
         for (int i = 0; i < rows.size(); i++) {
             drawHandle(graphics, font, x, rowTop(y, i), columns, rows.get(i), readout, hovered);
         }
+        int footerRow = rows.size();
         if (!readout.inControl()) {
             graphics.drawString(font, Component.translatable("hud.railswheelsandtrains.other_cab"),
-                    x + PAD, rowTop(y, rows.size()) + 1, DIM, false);
+                    x + PAD, rowTop(y, footerRow++) + 1, DIM, false);
+        }
+        if (readout.handbrakesSet() > 0) {
+            // a train that won't move: the handbrakes are on (SPEC §5.3)
+            graphics.drawString(font, Component.translatable("hud.railswheelsandtrains.handbrakes",
+                    readout.handbrakesSet(), readout.wagons()),
+                    x + PAD, rowTop(y, footerRow) + 1, BAR_NEAR, false);
         }
     }
 
@@ -252,6 +263,14 @@ public final class DriverPanel {
         for (int n = 1; n <= Consist.NOTCHES; n++) {
             int left = columns.lampLeft(x, n);
             graphics.fill(left, top, left + columns.lampW(), top + LAMP_H, n <= notch ? lit : OFF);
+        }
+        if (handle == Consist.Handle.TRAIN_BRAKE || handle == Consist.Handle.INDEPENDENT_BRAKE) {
+            // the cylinders' pressure under the lamps: the brake catching up with the handle (SPEC §5.3)
+            int from = columns.lampLeft(x, 1);
+            int to = columns.lampLeft(x, Consist.NOTCHES) + columns.lampW();
+            int fill = Math.round(readout.pressure(handle) * (to - from));
+            graphics.fill(from, top + LAMP_H + 1, to, top + LAMP_H + 1 + PRESSURE_H, OFF);
+            graphics.fill(from, top + LAMP_H + 1, from + fill, top + LAMP_H + 1 + PRESSURE_H, lit);
         }
         String value = Integer.toString(notch);
         graphics.drawString(font, value, x + WIDTH - PAD - font.width(value), top,

@@ -19,6 +19,7 @@ import com.muzhik17.trainsmod.kinematics.HullCollision;
 import com.muzhik17.trainsmod.kinematics.PoseMath;
 import com.muzhik17.trainsmod.network.CabLeverPayload;
 import com.muzhik17.trainsmod.network.ControlGroupPayload;
+import com.muzhik17.trainsmod.network.HandbrakePayload;
 import com.muzhik17.trainsmod.network.SeatPayload;
 import com.muzhik17.trainsmod.stock.ConsistComposition;
 import com.muzhik17.trainsmod.stock.WagonType;
@@ -148,8 +149,11 @@ public final class ClientCabInteract {
         }
         ObjectRole.Control role = now.control.role();
         Component name = Component.literal(controlName(now.wagon, role));
-        Component value = Component.literal(setting(role, position(now.wagon, now.control)))
-                .withStyle(ChatFormatting.GRAY);
+        // the handbrake wheel is labelled by the handbrake itself, not by how far it has wound
+        float shown = role.kind() == ObjectRole.Kind.HANDBRAKE
+                ? (ClientConsists.handbrake(now.wagon.getConsistId(), now.wagon.getWagonIndex()) ? 1.0F : 0.0F)
+                : position(now.wagon, now.control);
+        Component value = Component.literal(setting(role, shown)).withStyle(ChatFormatting.GRAY);
         if (!mayWork(now.wagon, now.control)) {
             return List.of(name, value, Component.translatable("control.railswheelsandtrains.from_seat")
                     .withStyle(ChatFormatting.GRAY));
@@ -205,6 +209,11 @@ public final class ClientCabInteract {
             return; // a handle lever, not from here: the label says to sit down
         }
         ObjectRole.Control role = control.role();
+        if (role.kind() == ObjectRole.Kind.HANDBRAKE) {
+            // the wheel turns the wagon's handbrake (SPEC §5.3); it shows the state the server keeps
+            PacketDistributor.sendToServer(new HandbrakePayload(pick.wagon.getId()));
+            return;
+        }
         float now = position(pick.wagon, control);
         if (role.toggle()) {
             send(pick.wagon, control, now >= 0.5F ? 0.0F : 1.0F);
@@ -302,11 +311,15 @@ public final class ClientCabInteract {
     }
 
     /**
-     * What a control is called: a light switch by its light group's name
-     * ({@link LightNames}: the pack's for this type, else the mod's), else
-     * the model's {@code _LABEL_}, else its kind.
+     * What a control is called: the handbrake wheel by the mod's name, a light
+     * switch by its light group's name ({@link LightNames}: the pack's for
+     * this type, else the mod's), else the model's {@code _LABEL_}, else its
+     * kind.
      */
     static String controlName(WagonEntity wagon, ObjectRole.Control role) {
+        if (role.kind() == ObjectRole.Kind.HANDBRAKE) {
+            return I18n.get("control.railswheelsandtrains.handbrake"); // the mod's word, not the model's
+        }
         ConsistComposition.Slot slot = ClientConsists.slot(wagon.getConsistId(), wagon.getWagonIndex());
         String light = LightNames.of(slot != null ? slot.type().id() : null, role.group());
         if (light != null) {
@@ -324,6 +337,10 @@ public final class ClientCabInteract {
 
     /** A control's setting as shown: reverser direction, notch, on/off, or percent. */
     static String setting(ObjectRole.Control role, float position) {
+        if (role.kind() == ObjectRole.Kind.HANDBRAKE) {
+            return I18n.get(position >= 0.5F ? "control.railswheelsandtrains.handbrake_set"
+                    : "control.railswheelsandtrains.handbrake_released");
+        }
         Consist.Handle handle = ControlValue.handle(role.kind());
         if (handle == Consist.Handle.REVERSER) {
             int r = Handles.fromTravel(handle, position);
@@ -347,7 +364,7 @@ public final class ClientCabInteract {
         return ControlValue.position(control.role(), handles,
                 handles.activeCab() == wagon.getWagonIndex(),
                 wagon.controlValue(control.role().group()),
-                new ControlValue.Readings(0.0, 0.0));
+                new ControlValue.Readings(0.0, 0.0, 0.0F, 0.0F, wagon.handbrakeAnim(RAY_TIME)));
     }
 
     /** The hit point taken back to the control's rest pose (the point that moves with it). */

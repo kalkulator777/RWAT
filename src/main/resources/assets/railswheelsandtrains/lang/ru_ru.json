@@ -51,7 +51,7 @@
   "message.railswheelsandtrains.drive_other_cab": "Поездом управляют из другой кабины · Shift — выйти",
   "message.railswheelsandtrains.coupled": "Сцеплено · вагонов: %s",
   "message.railswheelsandtrains.uncoupled": "Расцеплено · %s + %s ваг.",
-  "message.railswheelsandtrains.crowbar_hint": "Монтировка: ПКМ по сцепке между двумя вагонами — расцепить",
+  "message.railswheelsandtrains.crowbar_hint": "Монтировка: ПКМ по сцепке между вагонами — расцепить, по кузову вагона — ручник",
   "message.railswheelsandtrains.board_hint_cab": "Ходьба — WASD · ПКМ по двери — открыть · ПКМ по тумблеру — переключить · ПКМ по креслу — сесть за пульт",
   "message.railswheelsandtrains.seat_hint": "Тяга: W / S · Тормоз: D / A · Реверс: пробел · Рычаги: ПКМ и тянуть · L — пульт и свет · Shift — встать",
   "message.railswheelsandtrains.drive_other_cab_seated": "Поездом управляют из другой кабины · Shift — встать",
@@ -105,5 +105,13 @@
   "hud.railswheelsandtrains.independent_brake": "Вспом.",
   "hud.railswheelsandtrains.other_cab": "Управляют из другой кабины",
   "hud.railswheelsandtrains.reverser_locked": "Только на стоянке при нулевой тяге",
-  "control.railswheelsandtrains.from_seat": "Только из кресла машиниста"
+  "control.railswheelsandtrains.from_seat": "Только из кресла машиниста",
+  "message.railswheelsandtrains.bump": "Удар! Слишком быстро для сцепки · сцепляйте плавно, до %s км/ч",
+  "message.railswheelsandtrains.handbrake_set": "Ручник затянут · на ручнике %s из %s ваг.",
+  "message.railswheelsandtrains.handbrake_released": "Ручник отпущен · на ручнике %s из %s ваг.",
+  "message.railswheelsandtrains.handbrake_auto": "На этом сервере ручники ставятся сами: отпускаются, когда машинист набирает тягу",
+  "hud.railswheelsandtrains.handbrakes": "Ручники %s/%s",
+  "control.railswheelsandtrains.handbrake": "Ручной тормоз",
+  "control.railswheelsandtrains.handbrake_set": "затянут",
+  "control.railswheelsandtrains.handbrake_released": "отпущен"
 }

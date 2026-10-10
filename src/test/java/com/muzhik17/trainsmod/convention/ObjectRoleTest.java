@@ -131,4 +131,20 @@ class ObjectRoleTest {
         assertEquals("Front Light", ObjectRole.parse(
                 "WIDGET_5_TOGGLE_INTERIOR_CG_HLF_LCG_IL_LABEL_Front^Light.001").control().label());
     }
+    /** RWAT's own handbrake wheel kind (SPEC §5.3) — IR has none; it mustn't steal the IR brakes. */
+    @Test
+    void handbrakeWheel_ownKind() {
+        assertEquals(ObjectRole.Kind.HANDBRAKE,
+                ObjectRole.parse("HANDBRAKE_1_ROT_720_INTERIOR").control().kind());
+        assertEquals(ObjectRole.Kind.HANDBRAKE, ObjectRole.parse("HAND_BRAKE_2").control().kind());
+        assertEquals(ObjectRole.Kind.TRAIN_BRAKE, ObjectRole.parse("TRAIN_BRAKE_1").control().kind());
+        assertEquals(ObjectRole.Kind.INDEPENDENT_BRAKE, ObjectRole.parse("IND_BRAKE_1").control().kind());
+        // MVP's wheel is a widget: the model declaration re-roles it, the label stays
+        ObjectRole.Control widget = ObjectRole.parse("WIDGET_13_INTERIOR_LCG_IL1_LABEL_Hand^Brake").control();
+        assertEquals(ObjectRole.Kind.WIDGET, widget.kind());
+        ObjectRole.Control wheel = widget.withKind(ObjectRole.Kind.HANDBRAKE);
+        assertEquals(ObjectRole.Kind.HANDBRAKE, wheel.kind());
+        assertEquals("WIDGET_13", wheel.key());
+        assertEquals("Hand Brake", wheel.label());
+    }
 }

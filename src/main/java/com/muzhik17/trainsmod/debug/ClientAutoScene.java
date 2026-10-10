@@ -102,6 +102,10 @@ public final class ClientAutoScene {
             walkGenerated(mc, scene.equals("walkgen") ? ER2 : DR1);
             return;
         }
+        if (scene.equals("handbrake")) {
+            handbrake(mc);
+            return;
+        }
         if (!scene.equals("cab")) {
             return;
         }
@@ -311,13 +315,25 @@ public final class ClientAutoScene {
             }
             // the loco is the far end of the train from where it was spawned
             case 180 -> command(mc, "ride @s mount @e[type=railswheelsandtrains:wagon,sort=furthest,limit=1]");
+            // freshly placed stock stands on its handbrakes (SPEC §5.3): the panel says so
+            case 186 -> {
+                report(mc, "handbrakes before the throttle: " + handbrakes(mc));
+                shot(mc, "rwat-panel-handbrakes.png");
+            }
             case 190 -> {
                 command(mc, "rwat handle reverser 1");
                 command(mc, "rwat handle train_brake 0");
                 command(mc, "rwat handle throttle 5");
                 report(mc, "riding " + mc.player.getVehicle());
             }
-            case 290 -> shot(mc, "rwat-panel-hud.png");
+            case 290 -> {
+                // the throttle released them (standard profile: auto handbrakes)
+                report(mc, "handbrakes on the move: " + handbrakes(mc) + ", speed "
+                        + String.format(Locale.ROOT, "%.1f km/h", Math.abs(
+                                com.muzhik17.trainsmod.physics.TrainPhysics.kmh(
+                                        com.muzhik17.trainsmod.client.ClientConsists.speed(consistOf(mc))))));
+                shot(mc, "rwat-panel-hud.png");
+            }
             case 295 -> {
                 mc.options.guiScale().set(2);
                 mc.resizeDisplay();
@@ -371,6 +387,171 @@ public final class ClientAutoScene {
             default -> {
             }
         }
+    }
+
+    /**
+     * The handbrake wheel and the brake gauges (SPEC §5.3), on the M62 — its
+     * cab wheel is MVP's {@code WIDGET} labelled "Hand Brake". Meant for the
+     * realistic profile (no auto handbrakes): the new loco stands braked, the
+     * wheel shows it; a click on it (its payload) releases the handbrake and
+     * the wheel winds off; a full train brake fills the gauge over seconds.
+     */
+    private static void handbrake(Minecraft mc) {
+        if (ticks >= 180 && ticks < 240) {
+            // hang in the cab where put (it has no declared floor): fly, don't drift
+            mc.player.getAbilities().flying = true;
+            mc.player.setDeltaMovement(Vec3.ZERO);
+        }
+        switch (ticks) {
+            case 100 -> {
+                mc.getWindow().setWindowed(1920, 1080);
+                mc.options.guiScale().set(0);
+                mc.resizeDisplay();
+                origin = mc.player.position().add(4000.0, 0.0, 0.0);
+                command(mc, "gamemode creative");
+                command(mc, String.format(Locale.ROOT, "tp @s %.3f %.3f %.3f 0 0", origin.x, origin.y, origin.z));
+            }
+            case 160 -> command(mc, "rwat spawn with m62");
+            case 170 -> {
+                command(mc, "gamerule doDaylightCycle false");
+                command(mc, "time set noon");
+                command(mc, "weather clear");
+            }
+            case 180 -> {
+                // stand in the cab facing the wheel (it hangs on the cab's back wall, facing the
+                // loco's end), eyes at its height, flying (no cab floor declared)
+                mc.player.onUpdateAbilities();
+                var wheel = handbrakeWheel(mc);
+                if (wheel != null) {
+                    float cx = (wheel.boxMin().x + wheel.boxMax().x) * 0.5F;
+                    float cy = (wheel.boxMin().y + wheel.boxMax().y) * 0.5F;
+                    float cz = (wheel.boxMin().z + wheel.boxMax().z) * 0.5F;
+                    camera(mc, cx, cy - 1.62, cz > 0 ? cz + 1.1 : cz - 1.1, 0.0F, 0.0F);
+                }
+            }
+            case 186 -> aimAt(mc, com.muzhik17.trainsmod.convention.ObjectRole.Kind.HANDBRAKE, null);
+            // step along the look line to two blocks off the wheel: within a hand's reach
+            case 187 -> approachWheel(mc, 2.0);
+            case 189 -> aimAt(mc, com.muzhik17.trainsmod.convention.ObjectRole.Kind.HANDBRAKE, null);
+            case 192 -> {
+                reportWheel(mc, "placed");
+                shot(mc, "rwat-handbrake-set.png");
+            }
+            // what a click on the wheel sends
+            case 195 -> {
+                WagonEntity wagon = wagon(mc);
+                if (wagon != null) {
+                    net.neoforged.neoforge.network.PacketDistributor.sendToServer(
+                            new com.muzhik17.trainsmod.network.HandbrakePayload(wagon.getId()));
+                }
+            }
+            case 205 -> reportWheel(mc, "winding off");
+            case 235 -> {
+                reportWheel(mc, "released");
+                shot(mc, "rwat-handbrake-released.png");
+                command(mc, "rwat handle train_brake 8");
+            }
+            case 237 -> command(mc, "ride @s mount @e[type=railswheelsandtrains:wagon,sort=nearest,limit=1]");
+            case 240, 260, 280, 320 -> reportGauge(mc);
+            // the panel's pressure bar under the brake lamps, still filling behind the handle
+            case 250 -> {
+                reportGauge(mc);
+                shot(mc, "rwat-handbrake-pressure-hud.png");
+            }
+            case 325 -> mc.stop();
+            default -> {
+            }
+        }
+    }
+
+    /** Put the eye {@code distance} blocks short of the handbrake wheel, along the current look. */
+    private static void approachWheel(Minecraft mc, double distance) {
+        WagonEntity wagon = wagon(mc);
+        var wheel = handbrakeWheel(mc);
+        if (wagon == null || wheel == null) {
+            return;
+        }
+        double flip = wagon.isFlipped() ? -1.0 : 1.0;
+        Vector3d centre = PoseMath.localToWorld(new Vector3d(wagon.getX(), wagon.getY(), wagon.getZ()),
+                wagon.getYRot(), wagon.getXRot(), new Vector3d(
+                        (wheel.boxMin().x + wheel.boxMax().x) * 0.5 * flip,
+                        (wheel.boxMin().y + wheel.boxMax().y) * 0.5,
+                        (wheel.boxMin().z + wheel.boxMax().z) * 0.5 * flip));
+        Vec3 look = mc.player.getViewVector(1.0F);
+        double eyeX = centre.x - look.x * distance;
+        double eyeY = centre.y - look.y * distance;
+        double eyeZ = centre.z - look.z * distance;
+        command(mc, String.format(Locale.ROOT, "tp @s %.3f %.3f %.3f %.1f %.1f", eyeX,
+                eyeY - mc.player.getEyeHeight(), eyeZ, mc.player.getYRot(), mc.player.getXRot()));
+    }
+
+    /** The handbrake wheel control of the nearest wagon's model, or null. */
+    private static com.muzhik17.trainsmod.client.render.model.StockModel.Control handbrakeWheel(Minecraft mc) {
+        WagonEntity wagon = wagon(mc);
+        var slot = wagon == null ? null
+                : com.muzhik17.trainsmod.client.ClientConsists.slot(wagon.getConsistId(), wagon.getWagonIndex());
+        var model = slot == null ? null
+                : com.muzhik17.trainsmod.client.render.model.StockModels.model(slot.type().id());
+        if (model != null) {
+            for (var control : model.controls()) {
+                if (control.role().kind() == com.muzhik17.trainsmod.convention.ObjectRole.Kind.HANDBRAKE) {
+                    return control;
+                }
+            }
+        }
+        RailsWheelsAndTrains.LOGGER.warn("[autoscene] no handbrake wheel in the model");
+        return null;
+    }
+
+    /** The handbrake as the client sees it: the synced state, the wheel's turn, the crosshair label. */
+    private static void reportWheel(Minecraft mc, String when) {
+        WagonEntity wagon = wagon(mc);
+        if (wagon == null) {
+            return;
+        }
+        var wheel = handbrakeWheel(mc);
+        if (wheel != null) {
+            double flip = wagon.isFlipped() ? -1.0 : 1.0;
+            Vector3d centre = PoseMath.localToWorld(new Vector3d(wagon.getX(), wagon.getY(), wagon.getZ()),
+                    wagon.getYRot(), wagon.getXRot(), new Vector3d(
+                            (wheel.boxMin().x + wheel.boxMax().x) * 0.5 * flip,
+                            (wheel.boxMin().y + wheel.boxMax().y) * 0.5,
+                            (wheel.boxMin().z + wheel.boxMax().z) * 0.5 * flip));
+            Vec3 eye = mc.player.getEyePosition(1.0F);
+            RailsWheelsAndTrains.LOGGER.info("[autoscene] wheel {} m from the eye; crosshair on {} at {} m",
+                    String.format(Locale.ROOT, "%.2f", eye.distanceTo(new Vec3(centre.x, centre.y, centre.z))),
+                    mc.hitResult == null ? "nothing" : mc.hitResult.getType(),
+                    mc.hitResult == null ? "-" : String.format(Locale.ROOT, "%.2f",
+                            mc.hitResult.getLocation().distanceTo(eye)));
+        }
+        RailsWheelsAndTrains.LOGGER.info("[autoscene] handbrake {}: set={} wheel={} label={}", when,
+                com.muzhik17.trainsmod.client.ClientConsists.handbrake(wagon.getConsistId(), wagon.getWagonIndex()),
+                String.format(Locale.ROOT, "%.2f", wagon.handbrakeAnim(1.0F)),
+                com.muzhik17.trainsmod.client.ClientCabInteract.hudLines().stream()
+                        .map(net.minecraft.network.chat.Component::getString).toList());
+    }
+
+    /** The train brake handle against the pressure the gauge reads. */
+    private static void reportGauge(Minecraft mc) {
+        WagonEntity wagon = wagon(mc);
+        if (wagon == null) {
+            return;
+        }
+        int consistId = wagon.getConsistId();
+        RailsWheelsAndTrains.LOGGER.info("[autoscene] t={} train brake handle {} → pressure {}", ticks,
+                com.muzhik17.trainsmod.client.ClientConsists.handles(consistId).trainBrake(),
+                String.format(Locale.ROOT, "%.2f",
+                        com.muzhik17.trainsmod.client.ClientConsists.trainBrakePressure(consistId)));
+    }
+
+    /** The consist the player rides, or −1. */
+    private static int consistOf(Minecraft mc) {
+        return mc.player.getVehicle() instanceof WagonEntity wagon ? wagon.getConsistId() : -1;
+    }
+
+    /** How many wagons of the ridden consist have their handbrake set (per the snapshot). */
+    private static int handbrakes(Minecraft mc) {
+        return com.muzhik17.trainsmod.client.ClientConsists.handbrakesSet(consistOf(mc));
     }
 
     /**

@@ -2,15 +2,8 @@
   "length": 13.688,
   "bogies": [4.34, -4.34],
   "mass_t": 23.3,
-  "max_speed_kmh": 100.0,
-  "resistance": {
-    "a": 466.0,
-    "b": 20.97,
-    "c": 9.0
-  },
   "brakes": {
-    "train_kn": 46.6,
-    "parking_kn": 9.3
+    "system": "freight"
   },
   "couplers": {
     "front": -0.14,

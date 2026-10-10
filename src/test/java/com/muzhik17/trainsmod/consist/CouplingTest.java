@@ -2,6 +2,7 @@ package com.muzhik17.trainsmod.consist;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -469,5 +470,75 @@ class CouplingTest {
         Coupling.Train car = train(graph, legs, carC, headForRear(carC, 80.0), 0.0);
 
         assertNull(Coupling.tryCouple(loco, car));
+    }
+    // --- bumps (SPEC §6.12: the profile's coupling speed) ---
+
+    @Test
+    void fastRunIn_bumpsWithMomentumAndSeparates() {
+        RailGraph graph = line();
+        List<RailGraph.RouteLeg> legs = routeOf(graph, 1);
+        ConsistComposition locoC = comp(slot(LOCO, false));
+        ConsistComposition carC = comp(slot(CAR, false));
+        // the loco (80 t) at 0.5 b/t (36 km/h) ran 0.3 into a standing car (20 t)
+        Coupling.Train loco = train(graph, legs, locoC, headForFront(locoC, 90.0), 0.5);
+        Coupling.Train car = train(graph, legs, carC, headForRear(carC, 90.0 + GAP - 0.3), 0.0);
+
+        Coupling.Contact contact = Coupling.contact(loco, car, 0.2);
+
+        Coupling.Bump bump = assertInstanceOf(Coupling.Bump.class, contact, "too fast to couple");
+        assertEquals(0.5, bump.closing(), EPS);
+        assertEquals(80.0 * 0.5, 80.0 * bump.keptV() + 20.0 * bump.absorbedV(), EPS, "momentum kept");
+        assertTrue(bump.absorbedV() > bump.keptV(), "they spring apart");
+        assertEquals(Coupling.RESTITUTION * 0.5, bump.absorbedV() - bump.keptV(), EPS,
+                "parting at the restitution of the closing speed");
+        // the overlap undone, the light car moving most
+        assertEquals(-0.3 * 0.2, bump.keptShift(), EPS);
+        assertEquals(0.3 * 0.8, bump.absorbedShift(), EPS);
+    }
+
+    @Test
+    void gentleRunIn_underTheLimit_couples() {
+        RailGraph graph = line();
+        List<RailGraph.RouteLeg> legs = routeOf(graph, 1);
+        ConsistComposition locoC = comp(slot(LOCO, false));
+        ConsistComposition carC = comp(slot(CAR, false));
+        Coupling.Train loco = train(graph, legs, locoC, headForFront(locoC, 90.0), 0.1);
+        Coupling.Train car = train(graph, legs, carC, headForRear(carC, 90.0 + GAP - 0.05), 0.0);
+
+        assertInstanceOf(Coupling.Merge.class, Coupling.contact(loco, car, 0.2));
+    }
+
+    @Test
+    void bump_inTheOtherConsistsOwnFrame() {
+        RailGraph graph = line();
+        List<RailGraph.RouteLeg> legs = routeOf(graph, 1);
+        List<RailGraph.RouteLeg> back = Coupling.inverted(legs);
+        double length = graph.buildRoutePath(legs).length();
+        ConsistComposition locoC = comp(slot(LOCO, false));
+        ConsistComposition carC = comp(slot(CAR, false));
+        // the car runs its own (reversed) route into the standing loco at 0.5
+        Coupling.Train loco = train(graph, legs, locoC, headForFront(locoC, 90.0), 0.0);
+        Coupling.Train car = train(graph, back, carC,
+                headForFront(carC, length - (90.0 + GAP - 0.2)), 0.5);
+
+        Coupling.Bump bump = assertInstanceOf(Coupling.Bump.class, Coupling.contact(loco, car, 0.2));
+        // forward frame: the car came at −0.5; momentum 20·(−0.5)
+        assertEquals(20.0 * -0.5, 80.0 * bump.keptV() + 20.0 * -bump.absorbedV(), EPS);
+        assertTrue(bump.keptV() < 0.0, "the loco is shoved back");
+        assertTrue(bump.absorbedV() < 0.5 && bump.absorbedV() < 0.0, "the car bounces off, backwards in its frame");
+        assertTrue(bump.absorbedShift() < 0.0, "pushed back along its own route");
+    }
+
+    @Test
+    void veryFastRunIn_deeperThanTheStaticOverlap_isStillCaught() {
+        RailGraph graph = line();
+        List<RailGraph.RouteLeg> legs = routeOf(graph, 1);
+        ConsistComposition locoC = comp(slot(LOCO, false));
+        ConsistComposition carC = comp(slot(CAR, false));
+        // 6 b/t closing (a head-on of two 216 km/h trains) ran 5 blocks in within one tick
+        Coupling.Train loco = train(graph, legs, locoC, headForFront(locoC, 90.0), 6.0);
+        Coupling.Train car = train(graph, legs, carC, headForRear(carC, 90.0 + GAP - 5.0), 0.0);
+
+        assertNotNull(Coupling.contact(loco, car, 0.2), "no tunnelling at speed");
     }
 }
