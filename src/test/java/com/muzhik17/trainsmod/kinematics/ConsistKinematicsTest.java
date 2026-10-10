@@ -65,6 +65,30 @@ class ConsistKinematicsTest {
     }
 
     @Test
+    void wagonSpacing_couplerPointToCouplerPoint() {
+        TrackPath path = straight(new Vector3d(0, 0, 0), new Vector3d(0, 0, 100));
+        // couplers engage 0.1 inside the front end and 0.3 inside the rear end
+        WagonType car = new WagonType("test:car", 20.0, new double[]{7.0, -7.0}, 10.0, 100.0,
+                WagonType.Resistance.NONE, null, null, WagonType.Brakes.NONE, null, List.of(),
+                new WagonType.Couplers(-0.1, -0.3));
+        ConsistComposition asBuilt = new ConsistComposition(List.of(
+                new ConsistComposition.Slot(car, false),
+                new ConsistComposition.Slot(car, false)));
+        ConsistComposition turned = new ConsistComposition(List.of(
+                new ConsistComposition.Slot(car, false),
+                new ConsistComposition.Slot(car, true)));
+
+        // wagon 0's rear coupler (10 − 0.3) meets wagon 1's front one (10 − 0.1) …
+        assertEquals(9.7 + ConsistComposition.COUPLER_GAP + 9.9,
+                asBuilt.bodyCenterS(60.0, 0) - asBuilt.bodyCenterS(60.0, 1), 1.0e-9);
+        // … or, wagon 1 turned, its rear coupler leads (10 − 0.3)
+        assertEquals(9.7 + ConsistComposition.COUPLER_GAP + 9.7,
+                turned.bodyCenterS(60.0, 0) - turned.bodyCenterS(60.0, 1), 1.0e-9);
+        assertEquals(9.9, turned.slot(0).frontCouplerReach(), 1.0e-9);
+        assertEquals(9.9, turned.slot(1).rearCouplerReach(), 1.0e-9);
+    }
+
+    @Test
     void flippedWagon_negatesAsymmetricBogieOffsets() {
         // asymmetric bogies: +3 forward, −5 back from the body centre
         WagonType odd = new WagonType("test:odd", 12.0, new double[]{3.0, -5.0},

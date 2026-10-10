@@ -31,6 +31,8 @@ import java.util.List;
  * @param doors        doorways in the hull (SPEC v1.5, doors); empty = none.
  *                     The list order is the door index the per-wagon open
  *                     state is keyed by.
+ * @param couplers     where the couplers engage, relative to the frame ends
+ *                     (SPEC §6.12); never null (use {@link Couplers#AT_ENDS})
  */
 public record WagonType(
         String id,
@@ -43,7 +45,16 @@ public record WagonType(
         Cab cab,
         Brakes brakes,
         Interior interior,
-        List<Door> doors) {
+        List<Door> doors,
+        Couplers couplers) {
+
+    /** A type coupling at its frame ends (every declaration before coupler offsets existed). */
+    public WagonType(String id, double length, double[] bogieOffsets, double massT,
+            double maxSpeedKmh, Resistance resistance, Traction traction, Cab cab,
+            Brakes brakes, Interior interior, List<Door> doors) {
+        this(id, length, bogieOffsets, massT, maxSpeedKmh, resistance, traction, cab, brakes,
+                interior, doors, Couplers.AT_ENDS);
+    }
 
     /** A type without doors (every declaration before doors existed). */
     public WagonType(String id, double length, double[] bogieOffsets, double massT,
@@ -55,6 +66,28 @@ public record WagonType(
 
     public WagonType {
         doors = List.copyOf(doors);
+        couplers = couplers == null ? Couplers.AT_ENDS : couplers;
+    }
+
+    /**
+     * Where the couplers engage (SPEC §6.12): each end's offset from the
+     * frame end ({@code ±length/2}), blocks, + outward. Coupled wagons stand
+     * coupler point to coupler point; a negative offset lets the coupler
+     * heads (and the gangway bellows) of two wagons meet inside the frames,
+     * the way IR's {@code couplers.front_offset/rear_offset} do.
+     */
+    public record Couplers(double front, double rear) {
+
+        /** Couplers engaging right at the frame ends. */
+        public static final Couplers AT_ENDS = new Couplers(0.0, 0.0);
+    }
+
+    /**
+     * Distance from the body centre to the coupler point of the type's front
+     * ({@code front}) or rear end, blocks.
+     */
+    public double couplerReach(boolean front) {
+        return length / 2.0 + (front ? couplers.front() : couplers.rear());
     }
 
     /**

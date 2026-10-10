@@ -21,6 +21,10 @@
     "parking_kn": 30.0,
     "independent_kn": 90.0
   },
+  "couplers": {
+    "front": -0.14,
+    "rear": -0.14
+  },
   "aliases": ["rwat:chme3"],
   "interior": [
     {

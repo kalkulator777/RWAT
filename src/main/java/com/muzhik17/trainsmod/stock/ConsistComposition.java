@@ -11,16 +11,17 @@ import java.util.List;
  * {@code s}.
  *
  * <p>{@code headS} keeps its meaning: the path distance of the <b>front bogie
- * of wagon 0</b>. Bodies are placed nose-to-tail, {@link #COUPLER_GAP} apart
- * (frame to frame); each wagon's bogies sit at its body centre ± its type's
- * bogie offsets ({@code flipped} negates them).
+ * of wagon 0</b>. Bodies are placed nose-to-tail, coupler point to coupler
+ * point ({@link WagonType#couplerReach}), {@link #COUPLER_GAP} apart; each
+ * wagon's bogies sit at its body centre ± its type's bogie offsets
+ * ({@code flipped} negates them).
  */
 public record ConsistComposition(List<Slot> slots) {
 
     /**
-     * Air between consecutive wagon frames, blocks: none — a type's length is
-     * over couplers, so coupled wagons meet coupler to coupler (SPEC §6.12).
-     * Was 1.0 until 2026-10-10: a block of daylight between every pair.
+     * Air between the coupler points of consecutive wagons, blocks: none —
+     * coupled wagons meet coupler to coupler (SPEC §6.12). Was 1.0 between the
+     * frame ends until 2026-10-10: a block of daylight between every pair.
      */
     public static final double COUPLER_GAP = 0.0;
 
@@ -56,6 +57,16 @@ public record ConsistComposition(List<Slot> slots) {
             double[] offsets = type.bogieOffsets();
             return flipped ? -offsets[0] : offsets[offsets.length - 1];
         }
+
+        /** Distance from the body centre to the path-front coupler point. */
+        public double frontCouplerReach() {
+            return type.couplerReach(!flipped);
+        }
+
+        /** Distance from the body centre to the path-rear coupler point. */
+        public double rearCouplerReach() {
+            return type.couplerReach(flipped);
+        }
     }
 
     public int wagonCount() {
@@ -71,9 +82,9 @@ public record ConsistComposition(List<Slot> slots) {
         Slot first = slots.get(0);
         double center = headS - first.frontBogieOffset();
         for (int i = 1; i <= wagonIndex; i++) {
-            center -= slots.get(i - 1).type().length() * 0.5
+            center -= slots.get(i - 1).rearCouplerReach()
                     + COUPLER_GAP
-                    + slots.get(i).type().length() * 0.5;
+                    + slots.get(i).frontCouplerReach();
         }
         return center;
     }

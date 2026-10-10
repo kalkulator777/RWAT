@@ -103,6 +103,8 @@ public record WagonTypesPayload(Map<String, WagonType> types) implements CustomP
             buf.writeBoolean(door.connecting());
             buf.writeUtf(door.group() != null ? door.group() : "");
         }
+        buf.writeDouble(type.couplers().front());
+        buf.writeDouble(type.couplers().rear());
     }
 
     private static String group(String written) {
@@ -146,8 +148,9 @@ public record WagonTypesPayload(Map<String, WagonType> types) implements CustomP
                     buf.readDouble(), buf.readDouble(), buf.readDouble(), buf.readDouble(),
                     buf.readBoolean(), buf.readBoolean(), buf.readBoolean(), group(buf.readUtf())));
         }
+        WagonType.Couplers couplers = new WagonType.Couplers(buf.readDouble(), buf.readDouble());
         return new WagonType(id, length, bogies, massT, maxSpeedKmh,
-                resistance, traction, cab, brakes, interior, doors);
+                resistance, traction, cab, brakes, interior, doors, couplers);
     }
 
     @Override

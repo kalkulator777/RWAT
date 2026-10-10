@@ -50,6 +50,29 @@ class WagonTypeParserTest {
         assertEquals(new WagonType.Brakes(160.0, 90.0, 0.0, 0.0, 30.0), type.brakes());
     }
 
+    /** Coupler offsets (SPEC §6.12): optional, each end defaults to the frame end. */
+    @Test
+    void parsesCouplerOffsets() {
+        String base = """
+                  "length": 25.125,
+                  "bogies": [8.0, -8.0],
+                  "mass_t": 50.0,
+                  "max_speed_kmh": 120.0""";
+        WagonType declared = WagonTypeParser.parse("test:car", json(
+                "{" + base + ", \"couplers\": { \"front\": -0.12, \"rear\": -0.337 } }"));
+        assertEquals(new WagonType.Couplers(-0.12, -0.337), declared.couplers());
+        assertEquals(12.4425, declared.couplerReach(true), 1.0e-9);
+        assertEquals(12.2255, declared.couplerReach(false), 1.0e-9);
+
+        WagonType oneEnd = WagonTypeParser.parse("test:car", json(
+                "{" + base + ", \"couplers\": { \"rear\": -0.2 } }"));
+        assertEquals(new WagonType.Couplers(0.0, -0.2), oneEnd.couplers());
+
+        WagonType none = WagonTypeParser.parse("test:car", json("{" + base + "}"));
+        assertEquals(WagonType.Couplers.AT_ENDS, none.couplers());
+        assertEquals(12.5625, none.couplerReach(true), 1.0e-9);
+    }
+
     /** Capabilities are section presence: a freight car declares neither. */
     @Test
     void minimalDeclarationIsUnpoweredUndrivable() {

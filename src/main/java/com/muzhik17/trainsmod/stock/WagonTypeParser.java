@@ -23,9 +23,13 @@ import com.google.gson.JsonSyntaxException;
  *   "resistance": { "a": 2500.0, "b": 100.0, "c": 12.0 },
  *   "traction": { "power_kw": 994.0, "max_tractive_effort_kn": 226.0 },
  *   "cab": {},
- *   "brakes": { "train_kn": 160.0, "independent_kn": 90.0, "parking_kn": 30.0 }
+ *   "brakes": { "train_kn": 160.0, "independent_kn": 90.0, "parking_kn": 30.0 },
+ *   "couplers": { "front": -0.14, "rear": -0.14 }
  * }
  * }</pre>
+ *
+ * <p>{@code couplers} (optional, default 0): where each coupler engages
+ * relative to its frame end, + outward (SPEC §6.12).
  *
  * <p>Uses GSON only (ships with the game, not an MC class) so the stock
  * package stays engine-free and the parser unit-testable.
@@ -78,8 +82,14 @@ public final class WagonTypeParser {
         WagonType.Interior interior = interior(json);
         List<WagonType.Door> doors = doors(json);
 
+        WagonType.Couplers couplers = WagonType.Couplers.AT_ENDS;
+        if (json.has("couplers")) {
+            JsonObject c = json.getAsJsonObject("couplers");
+            couplers = new WagonType.Couplers(optionalDouble(c, "front"), optionalDouble(c, "rear"));
+        }
+
         return new WagonType(id, length, bogies, massT, maxSpeedKmh,
-                resistance, traction, cab, brakes, interior, doors);
+                resistance, traction, cab, brakes, interior, doors, couplers);
     }
 
     /**

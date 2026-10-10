@@ -250,15 +250,33 @@ def r(value, digits=1):
     return round(value, digits)
 
 
-def derive_type(category, ir, extent):
+def derive_couplers(ir, length, boxes):
+    """Where the couplers engage (SPEC §6.12), relative to the RWAT frame ends
+    (±length/2), + outward — or None if the IR definition doesn't say. IR
+    measures its couplers.front_offset/rear_offset from the bounds of the whole
+    model, hidden objects included (a hose hanging off the VL80's rear end);
+    the RWAT length is the visible extent, so the coupler point is found in
+    IR's terms and re-expressed against the RWAT frame end."""
+    couplers = ir.get("couplers")
+    if not isinstance(couplers, dict) or not boxes:
+        return None
+    front_bound = max(box[5] for box in boxes.values())
+    rear_bound = -min(box[2] for box in boxes.values())
+    half = length / 2.0
+    return {"front": r(front_bound + couplers.get("front_offset", 0.0) - half, 3),
+            "rear": r(rear_bound + couplers.get("rear_offset", 0.0) - half, 3)}
+
+
+def derive_type(category, ir, extent, boxes):
     """RWAT physics declaration (SPEC §5.1) from an IR stock definition."""
     props = ir.get("properties", {})
     trucks = ir.get("trucks", {})
     mass_t = props.get("weight_kg", 20000) / 1000.0
     powered = category == "locomotives" and "horsepower" in props
     passenger = category == "passenger"
+    length = r(extent[1] - extent[0], 3)
     declaration = {
-        "length": r(extent[1] - extent[0], 3),
+        "length": length,
         "bogies": [trucks.get("front", 0.0), trucks.get("rear", 0.0)],
         "mass_t": r(mass_t, 2),
         "max_speed_kmh": props.get("max_speed_kmh", 120.0 if passenger else 100.0),
@@ -275,6 +293,9 @@ def derive_type(category, ir, extent):
         declaration["cab"] = {}
         brakes["independent_kn"] = r(0.56 * train_kn)
     declaration["brakes"] = brakes
+    couplers = derive_couplers(ir, length, boxes)
+    if couplers is not None:
+        declaration["couplers"] = couplers
     return declaration
 
 
@@ -623,7 +644,7 @@ class Converter:
         obj_folder = posixpath.dirname(obj_zip)
 
         overrides = self.overrides.get(type_id, {})
-        type_json = deep_merge(derive_type(category, ir, extent), overrides.get("type", {}))
+        type_json = deep_merge(derive_type(category, ir, extent, boxes), overrides.get("type", {}))
         # walkable cars from the IR conventions (SPEC §9.6), unless the recipe says otherwise
         if "interior" not in type_json:
             interior = derive_interior(category, ir)

@@ -17,5 +17,9 @@
     "train_kn": 175.5,
     "parking_kn": 35.1,
     "independent_kn": 98.3
+  },
+  "couplers": {
+    "front": -0.14,
+    "rear": -0.14
   }
 }

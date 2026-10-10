@@ -435,6 +435,30 @@ class CouplingTest {
     }
 
     @Test
+    void negativeCouplerOffsets_coupleWithTheFramesOverlapping() {
+        RailGraph graph = line();
+        List<RailGraph.RouteLeg> legs = routeOf(graph, 1);
+        // couplers 0.15 inside each frame end, as in the MVP pack
+        WagonType inset = new WagonType("test:inset", 14.0, new double[] {5.0, -5.0}, 20.0, 100.0,
+                WagonType.Resistance.NONE, null, null, WagonType.Brakes.NONE, null, List.of(),
+                new WagonType.Couplers(-0.15, -0.15));
+        ConsistComposition c = comp(slot(inset, false));
+        double frontFrame = 90.0;
+        Coupling.Train pusher = train(graph, legs, c, headForFront(c, frontFrame - 0.15), 0.1);
+        // the other car's frame starts 0.2 short of the pusher's frame end: no contact yet …
+        Coupling.Train apart = train(graph, legs, c, headForRear(c, frontFrame + 0.2 + 0.15), 0.0);
+        assertNull(Coupling.tryCouple(pusher, apart));
+        // … frames overlapping by 0.35 put the couplers 0.05 into each other: coupled
+        Coupling.Train touching = train(graph, legs, c, headForRear(c, frontFrame - 0.35 + 0.15), 0.0);
+        Coupling.Merge merge = Coupling.tryCouple(pusher, touching);
+        assertNotNull(merge);
+        // snapped coupler to coupler: the frames overlap by both offsets
+        double pusherFrontFrame = merge.composition().bodyCenterS(merge.headS(), 1) + 7.0;
+        double otherRearFrame = merge.composition().bodyCenterS(merge.headS(), 0) - 7.0;
+        assertEquals(0.3, pusherFrontFrame - otherRearFrame, EPS);
+    }
+
+    @Test
     void tooDeepAnOverlap_isNoContact() {
         RailGraph graph = line();
         List<RailGraph.RouteLeg> legs = routeOf(graph, 1);
