@@ -41,11 +41,19 @@ public final class Coupling {
     /** Below this closing speed (blocks/tick, ≈0.07 km/h) touching consists don't couple. */
     public static final double MIN_CLOSING_SPEED = 1.0e-3;
     /**
-     * Facing ends overlapping deeper than this aren't a contact — a head-on
-     * run covers at most ~3.3 blocks a tick at top speed; deeper means the two
-     * were put on top of each other, and they stay ghosts to each other.
+     * Facing ends overlapping deeper than this <i>plus the closing speed</i>
+     * aren't a contact: one tick of closing overlaps them by at most the
+     * closing speed (contact is checked every tick), so a run-in is caught at
+     * any speed; deeper means the two were put on top of each other, and
+     * they stay ghosts to each other.
      */
     public static final double MAX_OVERLAP = 4.0;
+    /**
+     * Coefficient of restitution of a bump (buffers and draft gear spring
+     * back): 0 would leave the two rolling together, 1 bounce them apart
+     * losslessly.
+     */
+    public static final double RESTITUTION = 0.3;
     /** Placements of different legs must agree to this (summed arc lengths). */
     private static final double PLACE_EPS = 1.0e-4;
 
@@ -91,7 +99,25 @@ public final class Coupling {
      * them on the merged route (for the clank).
      */
     public record Merge(List<RailGraph.RouteLeg> legs, ConsistComposition composition,
-            double headS, double v, List<Member> members, double frameShift, double contactS) {
+            double headS, double v, List<Member> members, double frameShift, double contactS)
+            implements Contact {
+    }
+
+    /**
+     * Two consists that ran together too fast to couple (SPEC §6.12, the
+     * profile's coupling speed): they bump — momentum is kept, the buffers
+     * give back {@link #RESTITUTION} of the closing speed — and are pushed
+     * apart to touching, each by the other's share of the mass. Speeds and
+     * shifts are in each consist's own frame; {@code keptContactS} is the
+     * point of contact in the kept consist's frame (for the bang),
+     * {@code closing} how fast they ran together, blocks/tick.
+     */
+    public record Bump(double keptV, double absorbedV, double keptShift, double absorbedShift,
+            double keptContactS, double closing) implements Contact {
+    }
+
+    /** What two consists that touch and close do: {@link Merge} or {@link Bump}. */
+    public sealed interface Contact permits Merge, Bump {
     }
 
     /**
@@ -218,15 +244,25 @@ public final class Coupling {
      * {@link ConsistComposition#totalMassT()}) is conserved.
      */
     public static Merge tryCouple(Train kept, Train absorbed) {
-        Merge merge = coupleOn(kept.legs(), kept.path(), kept, absorbed);
-        if (merge == null && !absorbed.legs().equals(kept.legs())) {
-            merge = coupleOn(absorbed.legs(), absorbed.path(), kept, absorbed);
-        }
-        return merge;
+        return (Merge) contact(kept, absorbed, Double.POSITIVE_INFINITY);
     }
 
-    private static Merge coupleOn(List<RailGraph.RouteLeg> legs, RoutePath path,
-            Train kept, Train absorbed) {
+    /**
+     * What happens when {@code kept} and {@code absorbed} touch (see
+     * {@link #tryCouple}): they couple if they close no faster than
+     * {@code maxCouplingClosing} (blocks/tick), else they {@link Bump}. Null
+     * if they don't touch and close.
+     */
+    public static Contact contact(Train kept, Train absorbed, double maxCouplingClosing) {
+        Contact contact = contactOn(kept.legs(), kept.path(), kept, absorbed, maxCouplingClosing);
+        if (contact == null && !absorbed.legs().equals(kept.legs())) {
+            contact = contactOn(absorbed.legs(), absorbed.path(), kept, absorbed, maxCouplingClosing);
+        }
+        return contact;
+    }
+
+    private static Contact contactOn(List<RailGraph.RouteLeg> legs, RoutePath path,
+            Train kept, Train absorbed, double maxCouplingClosing) {
         Placement pk = place(kept, legs, path);
         Placement pa = pk == null ? null : place(absorbed, legs, path);
         if (pa == null) {
@@ -255,15 +291,23 @@ public final class Coupling {
             }
         }
         double gap = Math.abs(dc) - halfK - halfA;
-        if (gap > ConsistComposition.COUPLER_GAP + CONTACT_SLACK || gap < -MAX_OVERLAP) {
-            return null;
-        }
         boolean absorbedAhead = dc > 0.0;
         double vk = kept.v(); // pk.dir() == +1 now
         double va = pa.dir() * absorbed.v();
         double closing = absorbedAhead ? vk - va : va - vk;
-        if (closing <= MIN_CLOSING_SPEED) {
+        if (gap > ConsistComposition.COUPLER_GAP + CONTACT_SLACK
+                || gap < -(MAX_OVERLAP + Math.max(closing, 0.0))
+                || closing <= MIN_CLOSING_SPEED) {
             return null;
+        }
+        double massK = kept.composition().totalMassT();
+        double massA = absorbed.composition().totalMassT();
+        double contactSigma = absorbedAhead
+                ? k[1] + ConsistComposition.COUPLER_GAP * 0.5
+                : k[0] - ConsistComposition.COUPLER_GAP * 0.5;
+        if (closing > maxCouplingClosing) {
+            return bump(vk, va, massK, massA, absorbedAhead, Math.max(0.0, -gap), pa.dir(),
+                    contactSigma - pk.offset(), closing);
         }
 
         // merged order: front (higher σ) first; a consist running −s joins turned
@@ -283,17 +327,33 @@ public final class Coupling {
         double keptCentre = pk.map(kept.composition().bodyCenterS(kept.headS(), 0));
         double headS = keptCentre - composition.bodyCenterS(0.0, keptFirst);
 
-        double massK = kept.composition().totalMassT();
-        double massA = absorbed.composition().totalMassT();
         double v = massK + massA > 0.0
                 ? (massK * vk + massA * va) / (massK + massA)
                 : (vk + va) * 0.5;
 
-        double contactS = absorbedAhead
-                ? k[1] + ConsistComposition.COUPLER_GAP * 0.5
-                : k[0] - ConsistComposition.COUPLER_GAP * 0.5;
         return new Merge(mergedLegs, composition, headS, v, List.copyOf(members),
-                headS - kept.headS(), contactS);
+                headS - kept.headS(), contactSigma);
+    }
+
+    /**
+     * The bump of two consists on a shared route where the kept one runs
+     * +σ: speeds {@code vk}/{@code va} along σ, {@code overlap} to undo.
+     */
+    private static Bump bump(double vk, double va, double massK, double massA,
+            boolean absorbedAhead, double overlap, int absorbedDir, double keptContactS,
+            double closing) {
+        double total = massK + massA;
+        double shareK = total > 0.0 ? massA / total : 0.5; // the lighter one moves more
+        double shareA = 1.0 - shareK;
+        double momentum = total > 0.0 ? massK * vk + massA * va : (vk + va) * 0.5;
+        double mean = total > 0.0 ? momentum / total : momentum;
+        // each leaves with the common speed plus the restitution of its own approach
+        double uk = mean - RESTITUTION * shareK * (vk - va);
+        double ua = mean + RESTITUTION * shareA * (vk - va);
+        double away = absorbedAhead ? 1.0 : -1.0; // the absorbed side's direction from the kept one
+        return new Bump(uk, absorbedDir * ua,
+                -away * overlap * shareK, absorbedDir * away * overlap * shareA, keptContactS,
+                closing);
     }
 
     /** {@code [lo, hi]} of a train's coupler span on a route, unwrapped. */

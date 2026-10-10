@@ -1,0 +1,10 @@
+{
+  "type": {
+    "max_speed_kmh": 85,
+    "traction": {
+      "power_kw": 600.0,
+      "max_tractive_effort_kn": 55.0,
+      "ramp_s": 2.0
+    }
+  }
+}

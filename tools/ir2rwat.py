@@ -14,8 +14,10 @@ only the declarations are generated:
                                         light.<ns>.<id>.<group>)
 
 IR carries none of RWAT's physics figures beyond mass, power, tractive effort
-and speed, so the rest is derived by heuristics (see derive_type); a recipe's
-"overrides" deep-merge over the generated declarations ("null" removes a field).
+and speed, and the converter writes only those (see derive_type): the rest is
+the engine's defaults, the same a hand-written pack gets (SPEC §6.4). A
+recipe's "overrides" deep-merge over the generated declarations ("null"
+removes a field).
 Overrides may also live one file per type in the recipe's "overrides_dir"
 (packs/mvp/<id>.json), merged over the inline ones — so several people (or
 agents) can tune different types without touching the same file.
@@ -70,6 +72,7 @@ VALID_PATH = re.compile(r"^[a-z0-9_.\-/]+$")
 
 HP_TO_KW = 0.745699872
 LBF_TO_KN = 0.00444822162
+G_KN_PER_TONNE = 9.81  # weight of a tonne, kN
 
 # IR model space -> RWAT model space (IrStockModel.toModelSpace): x = IR z,
 # y = IR y + lift onto the railhead, z = -IR x (IR's front is -X, RWAT's +Z)
@@ -268,31 +271,35 @@ def derive_couplers(ir, length, boxes):
 
 
 def derive_type(category, ir, extent, boxes):
-    """RWAT physics declaration (SPEC §5.1) from an IR stock definition."""
+    """RWAT physics declaration (SPEC §5.1) from an IR stock definition — only
+    what IR actually knows: mass, design speed, power, tractive effort, and
+    from its category the brake system. Everything else (running resistance,
+    brake forces and timing, handbrake, adhesion) is left to the engine's
+    defaults (SPEC §6.4, stock.StockDefaults), so a converted pack plays on
+    the same physics as one written by hand. A recipe override can still set
+    any field."""
     props = ir.get("properties", {})
     trucks = ir.get("trucks", {})
     mass_t = props.get("weight_kg", 20000) / 1000.0
     powered = category == "locomotives" and "horsepower" in props
-    passenger = category == "passenger"
     length = r(extent[1] - extent[0], 3)
     declaration = {
         "length": length,
         "bogies": [trucks.get("front", 0.0), trucks.get("rear", 0.0)],
         "mass_t": r(mass_t, 2),
-        "max_speed_kmh": props.get("max_speed_kmh", 120.0 if passenger else 100.0),
-        # Davis a + b·v + c·v²: rolling terms per tonne, aero per car (heads see more air)
-        "resistance": {"a": r(20.0 * mass_t), "b": r(0.9 * mass_t, 2), "c": 12.0 if powered else 9.0},
     }
-    train_kn = mass_t * (1.3 if powered else 2.0)
-    brakes = {"train_kn": r(train_kn), "parking_kn": r(0.2 * train_kn)}
+    if "max_speed_kmh" in props:  # no design speed: the wagon limits nothing
+        declaration["max_speed_kmh"] = props["max_speed_kmh"]
     if powered:
+        mass_kn = mass_t * G_KN_PER_TONNE
         declaration["traction"] = {
             "power_kw": r(props["horsepower"] * HP_TO_KW),
-            "max_tractive_effort_kn": r(props.get("tractive_effort_lbf", 0.0) * LBF_TO_KN),
+            # IR without a starting effort: what the wheels can grip at a standstill
+            "max_tractive_effort_kn": r(props["tractive_effort_lbf"] * LBF_TO_KN
+                                        if "tractive_effort_lbf" in props else 0.33 * mass_kn),
         }
         declaration["cab"] = {}
-        brakes["independent_kn"] = r(0.56 * train_kn)
-    declaration["brakes"] = brakes
+    declaration["brakes"] = {"system": "freight" if category in ("freight", "tank") else "passenger"}
     couplers = derive_couplers(ir, length, boxes)
     if couplers is not None:
         declaration["couplers"] = couplers

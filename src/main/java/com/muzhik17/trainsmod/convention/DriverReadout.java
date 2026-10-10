@@ -13,13 +13,16 @@ import com.muzhik17.trainsmod.stock.ConsistComposition;
  * @param handles           the consist's handles (those of its active cab)
  * @param speedKmh          speed, km/h, never negative
  * @param motion            +1 rolling the way the driver's cab looks, −1 backwards, 0 standing
- * @param limitKmh          the train's top speed (its slowest wagon's), km/h; 0 = none declared
+ * @param limitKmh          the train's permitted speed (its slowest wagon's design
+ *                          speed), km/h; 0 = none declared
  * @param scaleKmh          the speedometer's full scale, km/h
  * @param independentBrake  true if a cab of the train has an independent brake
  * @param inControl         true if the driver's cab is the one these handles are set from
+ * @param handbrakesSet     how many wagons have their handbrake set (SPEC §5.3)
+ * @param wagons            how many wagons the train has
  */
 public record DriverReadout(Handles handles, double speedKmh, int motion, double limitKmh,
-        int scaleKmh, boolean independentBrake, boolean inControl) {
+        int scaleKmh, boolean independentBrake, boolean inControl, int handbrakesSet, int wagons) {
 
     /** Speedometer scale of a train that declares no top speed, km/h. */
     static final int DEFAULT_SCALE_KMH = 100;
@@ -33,6 +36,12 @@ public record DriverReadout(Handles handles, double speedKmh, int motion, double
      */
     public static DriverReadout of(Handles handles, double v, ConsistComposition composition,
             int cabIndex) {
+        return of(handles, v, composition, cabIndex, 0);
+    }
+
+    /** As {@link #of(Handles, double, ConsistComposition, int)}, with {@code handbrakesSet} wagons on the handbrake. */
+    public static DriverReadout of(Handles handles, double v, ConsistComposition composition,
+            int cabIndex, int handbrakesSet) {
         boolean known = cabIndex >= 0 && cabIndex < composition.wagonCount();
         int facing = known && composition.slot(cabIndex).flipped() ? -1 : 1;
         int motion = Math.abs(v) < Consist.REVERSER_STOP_EPS ? 0 : (v > 0.0 ? facing : -facing);
@@ -42,10 +51,15 @@ public record DriverReadout(Handles handles, double speedKmh, int motion, double
             independent |= slot.type().drivable() && slot.type().brakes().independentKn() > 0.0;
         }
         return new DriverReadout(handles, Math.abs(TrainPhysics.kmh(v)), motion, limit,
-                scaleKmh(limit), independent, known && handles.activeCab() == cabIndex);
+                scaleKmh(limit), independent, known && handles.activeCab() == cabIndex,
+                handbrakesSet, composition.wagonCount());
     }
 
-    /** The train's top speed: its slowest wagon's (as the physics caps it), 0 if none declares one. */
+    /**
+     * The train's permitted speed: its slowest wagon's design speed (a hard
+     * cap only under a profile with {@code hardSpeedLimit}), 0 if none
+     * declares one.
+     */
     static double limitKmh(ConsistComposition composition) {
         double limit = Double.MAX_VALUE;
         for (ConsistComposition.Slot slot : composition.slots()) {

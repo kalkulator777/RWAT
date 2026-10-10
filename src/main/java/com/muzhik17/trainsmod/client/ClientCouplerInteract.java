@@ -8,6 +8,7 @@ import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.consist.WagonEntity;
 import com.muzhik17.trainsmod.kinematics.HullCollision;
 import com.muzhik17.trainsmod.kinematics.PoseMath;
+import com.muzhik17.trainsmod.network.HandbrakePayload;
 import com.muzhik17.trainsmod.network.UncouplePayload;
 import com.muzhik17.trainsmod.stock.ConsistComposition;
 import com.muzhik17.trainsmod.stock.WagonType;
@@ -27,7 +28,9 @@ import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
- * Right-click a coupler with the crowbar to uncouple there (SPEC §6.12).
+ * Right-click a coupler with the crowbar to uncouple there (SPEC §6.12), or a
+ * wagon's body away from its coupled ends to turn its handbrake wheel
+ * (SPEC §5.3).
  * The wagon entity's own hitbox is a small box at the body centre, so — like
  * {@link ClientDoorInteract} — the coupler is picked here: the look ray is
  * taken into each nearby wagon's local frame and tested against
@@ -40,7 +43,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       {@link #END_ZONE}) means its coupler, the natural aim from the side.
  * </ul>
  * The nearest hit wins; a hull in front of it (aiming through a car) or a
- * nearer block keeps the click. Runs before the door pick: with the crowbar
+ * nearer block keeps the click. A hull hit anywhere else on the car is its
+ * handbrake. Runs before the door pick: with the crowbar
  * in hand a coupler beats a door next to it, and a miss falls through to the
  * doors and the item (which hints what it is for).
  */
@@ -80,11 +84,13 @@ public final class ClientCouplerInteract {
         if (pick == null) {
             return; // no coupler under the crosshair: doors / the item's hint
         }
-        event.setCanceled(true); // the click belongs to the coupler
+        event.setCanceled(true); // the click belongs to the coupler / the handbrake
         event.setSwingHand(armed);
         if (armed) {
             armed = false;
-            PacketDistributor.sendToServer(new UncouplePayload(pick.wagon().getId(), pick.front()));
+            PacketDistributor.sendToServer(pick.handbrake()
+                    ? new HandbrakePayload(pick.wagon().getId())
+                    : new UncouplePayload(pick.wagon().getId(), pick.front()));
         }
     }
 
@@ -95,11 +101,14 @@ public final class ClientCouplerInteract {
         }
     }
 
-    /** A coupler: the {@code front} (towards index − 1) or rear end of {@code wagon}. */
-    private record Pick(WagonEntity wagon, boolean front, double distance) {
+    /**
+     * A coupler — the {@code front} (towards index − 1) or rear end of
+     * {@code wagon} — or, if {@code handbrake}, the wagon's handbrake.
+     */
+    private record Pick(WagonEntity wagon, boolean front, boolean handbrake, double distance) {
     }
 
-    /** The nearest coupler under the crosshair within reach, or null. */
+    /** The nearest coupler (or handbrake) under the crosshair within reach, or null. */
     private static Pick pick(Minecraft mc, LocalPlayer player) {
         float partialTick = mc.getTimer().getGameTimeDeltaPartialTick(true);
         Vec3 eye = player.getEyePosition(partialTick);
@@ -157,6 +166,8 @@ public final class ClientCouplerInteract {
                 best = nearer(best, wagon, false, reach, t);
             } else if (hasFront && z > hull.maxZ() - END_ZONE) {
                 best = nearer(best, wagon, true, reach, t);
+            } else {
+                best = nearer(best, new Pick(wagon, false, true, t), reach);
             }
         }
         if (best == null || best.distance() > nearestHull + OCCLUSION_SLACK) {
@@ -175,9 +186,15 @@ public final class ClientCouplerInteract {
 
     /** {@code best}, or the coupler hit at {@code t} if it is a nearer one within reach. */
     private static Pick nearer(Pick best, WagonEntity wagon, boolean front, double reach, double t) {
+        return nearer(best, new Pick(wagon, front, false, t), reach);
+    }
+
+    /** {@code best}, or {@code hit} if it is a nearer one within reach. */
+    private static Pick nearer(Pick best, Pick hit, double reach) {
+        double t = hit.distance();
         if (t < 0.0 || t > reach || (best != null && t >= best.distance())) {
             return best;
         }
-        return new Pick(wagon, front, t);
+        return hit;
     }
 }

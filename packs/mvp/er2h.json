@@ -1,0 +1,8 @@
+{
+  "type": {
+    "traction": null,
+    "brakes": {
+      "system": "ep"
+    }
+  }
+}

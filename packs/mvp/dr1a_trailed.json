@@ -1,0 +1,8 @@
+{
+  "type": {
+    "max_speed_kmh": 120,
+    "brakes": {
+      "system": "ep"
+    }
+  }
+}

@@ -1,6 +1,7 @@
 package com.muzhik17.trainsmod.network;
 
 import java.util.ArrayList;
+import java.util.BitSet;
 import java.util.List;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
@@ -32,11 +33,14 @@ import net.minecraft.resources.ResourceLocation;
  * the same packet as the composition.
  *
  * <p>Cab levers (SPEC §9) add the driver's {@link Handles} and which cab
- * drives, so every client moves the same levers in step with the train.
+ * drives, so every client moves the same levers in step with the train; the
+ * handbrakes (SPEC §5.3) — which wagons have theirs set, by index — reach
+ * the driver's panel the same way.
  */
 public record ConsistSnapshotPayload(int consistId, double s, double v, long gameTime,
         TrackPathSpec pathSpec, ConsistComposition composition,
-        int frame, int frameFrom, double frameShift, int[] wagonEntityIds, Handles handles)
+        int frame, int frameFrom, double frameShift, int[] wagonEntityIds, Handles handles,
+        BitSet handbrakes)
         implements CustomPacketPayload {
 
     public static final CustomPacketPayload.Type<ConsistSnapshotPayload> TYPE =
@@ -54,7 +58,18 @@ public record ConsistSnapshotPayload(int consistId, double s, double v, long gam
                         consist.handle(Consist.Handle.THROTTLE),
                         consist.handle(Consist.Handle.TRAIN_BRAKE),
                         consist.handle(Consist.Handle.INDEPENDENT_BRAKE),
-                        activeCabIndex(consist)));
+                        activeCabIndex(consist)),
+                handbrakes(consist));
+    }
+
+    /** The wagons with their handbrake set, by index. */
+    private static BitSet handbrakes(Consist consist) {
+        boolean[] mask = consist.handbrakeMask();
+        BitSet set = new BitSet(mask.length);
+        for (int i = 0; i < mask.length; i++) {
+            set.set(i, mask[i]);
+        }
+        return set;
     }
 
     /**
@@ -97,6 +112,7 @@ public record ConsistSnapshotPayload(int consistId, double s, double v, long gam
         }
         buf.writeVarInt(payload.handles.pack());
         buf.writeVarInt(payload.handles.activeCab() + 1); // -1 (none) → 0
+        buf.writeBitSet(payload.handbrakes);
     }
 
     private static ConsistSnapshotPayload read(FriendlyByteBuf buf) {
@@ -124,9 +140,10 @@ public record ConsistSnapshotPayload(int consistId, double s, double v, long gam
         }
         int packedHandles = buf.readVarInt();
         Handles handles = Handles.unpack(packedHandles, buf.readVarInt() - 1);
+        BitSet handbrakes = buf.readBitSet();
         return new ConsistSnapshotPayload(consistId, s, v, gameTime, spec,
                 new ConsistComposition(slots), frame, frameFrom, frameShift, wagonEntityIds,
-                handles);
+                handles, handbrakes);
     }
 
     @Override

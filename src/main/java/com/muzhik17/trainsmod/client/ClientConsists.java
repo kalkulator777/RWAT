@@ -93,6 +93,8 @@ public final class ClientConsists {
         int frame;
         /** The driver's handles per the newest snapshot (SPEC §9: cab levers). */
         Handles handles = Handles.REST;
+        /** How many wagons have their handbrake set, per the newest snapshot (SPEC §5.3). */
+        int handbrakesSet;
 
         /** (Re)materialize the path when the spec or the client graph changed. */
         TrackPath path() {
@@ -140,6 +142,7 @@ public final class ClientConsists {
         }
         state.composition = payload.composition();
         state.handles = payload.handles();
+        state.handbrakesSet = payload.handbrakes().cardinality();
         int[] wagonIds = payload.wagonEntityIds();
         for (int i = 0; i < wagonIds.length; i++) {
             if (wagonIds[i] >= 0) {
@@ -295,6 +298,12 @@ public final class ClientConsists {
     public static ConsistComposition composition(int consistId) {
         State state = STATES.get(consistId);
         return state == null ? null : state.composition;
+    }
+
+    /** How many of a consist's wagons have their handbrake set (SPEC §5.3); 0 if unknown. */
+    public static int handbrakesSet(int consistId) {
+        State state = STATES.get(consistId);
+        return state == null ? 0 : state.handbrakesSet;
     }
 
     /** The driver's handles of a consist (SPEC §9), or {@link Handles#REST} if unknown. */

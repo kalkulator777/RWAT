@@ -1,13 +1,18 @@
 package com.muzhik17.trainsmod.consist;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import com.muzhik17.trainsmod.network.TrackPathSpec;
 import com.muzhik17.trainsmod.path.HermiteSegmentPath;
 import com.muzhik17.trainsmod.path.RailGraph;
 import com.muzhik17.trainsmod.path.RoutePath;
+import com.muzhik17.trainsmod.physics.AutoHandbrake;
+import com.muzhik17.trainsmod.physics.ControlResponse;
+import com.muzhik17.trainsmod.physics.PhysicsTuning;
 import com.muzhik17.trainsmod.physics.TrainPhysics;
 import com.muzhik17.trainsmod.path.TrackPath;
 import com.muzhik17.trainsmod.stock.ConsistComposition;
@@ -82,6 +87,22 @@ public final class Consist {
      * the other cabs' rest. Transient — after a restart the next driver sets it.
      */
     private transient UUID activeCab;
+    /**
+     * Wagons whose handbrake is set (SPEC §5.3), by UUID — the state follows
+     * the wagon through couplings and cuts. Persisted.
+     */
+    private final Set<UUID> handbrakes = new HashSet<>();
+
+    // the efforts in effect (SPEC §5.3: a handle sets a target the brakes and
+    // engines follow with a lag), 0..1; NaN = take the handle at once (a
+    // fresh or reloaded consist). Transient — a restart applies the handles.
+    private transient double throttleEffort = Double.NaN;
+    private transient double brakeEffort = Double.NaN;
+    private transient double indBrakeEffort = Double.NaN;
+    /** The pull direction the throttle effort was building for (reverser × cab facing). */
+    private transient int effortPull;
+    /** Speed the consist ran into a track end with this tick, km/h; 0 = didn't. */
+    private transient double endImpactKmh;
 
     // client frame bookkeeping (SPEC §6.12): transient — clients drop their
     // consist state on disconnect, and a server restart is one
@@ -268,6 +289,18 @@ public final class Consist {
         this.cachedRevision = -1;
     }
 
+    /**
+     * A bump (SPEC §6.12): pushed {@code shift} along the path, leaving at
+     * {@code newV}; an open route keeps the whole train on it.
+     */
+    void bump(double shift, double newV, TrackPath path) {
+        s += shift;
+        v = newV;
+        if (path != null && !path.loop()) {
+            s = Math.clamp(s, minHeadS(path.length()), path.length());
+        }
+    }
+
     /** New make-up on the same route and head (the front part of a split). */
     void setComposition(ConsistComposition composition) {
         this.composition = composition;
@@ -285,6 +318,12 @@ public final class Consist {
         indBrakeNotch = other.indBrakeNotch;
         throttleNotch = withThrottle ? other.throttleNotch : 0;
         activeCab = other.activeCab; // a cab not in this part simply shows nowhere
+        // the brakes stay as applied; the engines of a part without the
+        // driver wind down from where they were
+        brakeEffort = other.brakeEffort;
+        indBrakeEffort = other.indBrakeEffort;
+        throttleEffort = other.throttleEffort;
+        effortPull = other.effortPull;
     }
 
     /** Shut the throttle (the part of a split the driver isn't in). */
@@ -460,44 +499,139 @@ public final class Consist {
 
     /**
      * Per-tick drive (SPEC §2.1, §5.4): apply the driver's handle input
-     * (notched, with key repeat), run one step of longitudinal physics
+     * (notched, with key repeat), let the auto handbrakes follow the throttle
+     * if the profile has them, let the efforts follow the handles with the
+     * train's timing (SPEC §5.3), run one step of longitudinal physics
      * (traction / brakes / Davis resistance / per-wagon grade), then
      * {@code s += v} while keeping the whole rigid train on the path — the
      * head is held in {@code [minHeadS, length]} so neither end runs off and
      * piles the wagons against a clamped path end. Hitting an end zeroes the
-     * speed (the handles stay where the driver left them). On a closed loop
-     * there are no ends: {@code s} grows (or shrinks) freely and the path
-     * wraps it during sampling, so the consist circulates.
+     * speed (the handles stay where the driver left them;
+     * {@link #endImpactKmh} tells how hard). On a closed loop there are no
+     * ends: {@code s} grows (or shrinks) freely and the path wraps it during
+     * sampling, so the consist circulates.
      *
      * @return true if state changed (needs saving)
      */
-    public boolean advance(TrackPath path) {
+    public boolean advance(TrackPath path, PhysicsTuning tuning) {
         double prevV = v;
         applyDriveInput();
+        boolean handbrakesMoved = tuning.autoHandbrake() && autoHandbrakes();
 
         // the handle is cab-relative: a cab facing −s drives the train backwards
-        v = TrainPhysics.step(path, s, v, composition, new TrainPhysics.Controls(
-                reverser * cabFacing,
-                throttleNotch / (double) NOTCHES,
-                brakeNotch / (double) NOTCHES,
-                indBrakeNotch / (double) NOTCHES));
+        int pull = reverser * cabFacing;
+        if (pull != effortPull) {
+            throttleEffort = 0.0; // a thrown reverser starts the engines from idle
+            effortPull = pull;
+        }
+        ControlResponse response = ControlResponse.of(composition, tuning.responseScale());
+        throttleEffort = ControlResponse.approach(throttleEffort,
+                pull != 0 ? throttleNotch / (double) NOTCHES : 0.0,
+                response.tractionUpS(), response.tractionDownS());
+        brakeEffort = ControlResponse.approach(brakeEffort, brakeNotch / (double) NOTCHES,
+                response.brakeApplyS(), response.brakeReleaseS());
+        indBrakeEffort = ControlResponse.approach(indBrakeEffort, indBrakeNotch / (double) NOTCHES,
+                response.independentApplyS(), response.independentReleaseS());
 
+        v = TrainPhysics.step(path, s, v, composition,
+                new TrainPhysics.Controls(pull, throttleEffort, brakeEffort, indBrakeEffort),
+                handbrakeMask(), tuning);
+
+        endImpactKmh = 0.0;
         if (v != 0.0) {
             s += v;
             if (!path.loop()) {
                 double min = minHeadS(path.length());
-                if (s <= min) {
-                    s = min;
-                    v = 0.0;
-                } else if (s >= path.length()) {
-                    s = path.length();
+                if (s <= min || s >= path.length()) {
+                    endImpactKmh = Math.abs(TrainPhysics.kmh(v));
+                    s = s <= min ? min : path.length();
                     v = 0.0;
                 }
             }
         }
         boolean handlesMoved = controlsChanged;
         controlsChanged = false;
-        return v != prevV || v != 0.0 || handlesMoved;
+        return v != prevV || v != 0.0 || handlesMoved || handbrakesMoved;
+    }
+
+    /** Speed the consist ran into a track end with on its last advance, km/h; 0 = didn't. */
+    public double endImpactKmh() {
+        return endImpactKmh;
+    }
+
+    /**
+     * Auto handbrakes (SPEC §5.3, profiles with {@code autoHandbrake}): off
+     * once the throttle opens, on when standing with it shut ({@link AutoHandbrake}).
+     *
+     * @return true if any handbrake moved
+     */
+    private boolean autoHandbrakes() {
+        Boolean set = AutoHandbrake.target(throttleNotch, reverser, v);
+        return set != null && setAllHandbrakes(set);
+    }
+
+    // --- handbrakes (SPEC §5.3) ---
+
+    /** True if {@code wagon}'s handbrake is set. */
+    public boolean handbrake(UUID wagon) {
+        return handbrakes.contains(wagon);
+    }
+
+    /**
+     * Set or release one wagon's handbrake.
+     *
+     * @return true if it moved (false: already so, or not a wagon of this consist)
+     */
+    public boolean setHandbrake(UUID wagon, boolean set) {
+        if (!wagonIds.contains(wagon)) {
+            return false;
+        }
+        return set ? handbrakes.add(wagon) : handbrakes.remove(wagon);
+    }
+
+    /**
+     * Set or release every wagon's handbrake.
+     *
+     * @return true if any moved
+     */
+    public boolean setAllHandbrakes(boolean set) {
+        boolean moved = false;
+        for (UUID wagon : wagonIds) {
+            moved |= set ? handbrakes.add(wagon) : handbrakes.remove(wagon);
+        }
+        return moved;
+    }
+
+    /** How many of this consist's wagons have their handbrake set. */
+    public int handbrakesSet() {
+        int count = 0;
+        for (UUID wagon : wagonIds) {
+            if (handbrakes.contains(wagon)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /** Per wagon index, true = its handbrake is set (the physics' and the snapshot's view). */
+    public boolean[] handbrakeMask() {
+        boolean[] mask = new boolean[wagonIds.size()];
+        for (int i = 0; i < mask.length; i++) {
+            mask[i] = handbrakes.contains(wagonIds.get(i));
+        }
+        return mask;
+    }
+
+    /**
+     * Wagons that moved here from {@code other} (a coupling, a cut) bring
+     * their handbrake state along.
+     */
+    void takeHandbrakes(Consist other) {
+        for (UUID wagon : wagonIds) {
+            if (other.handbrakes.remove(wagon)) {
+                handbrakes.add(wagon);
+            }
+        }
     }
 
     /** Turn held key directions into notch movements: instant on press, then key repeat. */
@@ -543,6 +677,13 @@ public final class Consist {
             wagons.add(NbtUtils.createUUID(uuid));
         }
         tag.put("Wagons", wagons);
+        ListTag handbrakeList = new ListTag();
+        for (UUID uuid : wagonIds) {
+            if (handbrakes.contains(uuid)) {
+                handbrakeList.add(NbtUtils.createUUID(uuid));
+            }
+        }
+        tag.put("Handbrakes", handbrakeList);
         ListTag slots = new ListTag();
         for (ConsistComposition.Slot slot : composition.slots()) {
             CompoundTag slotTag = new CompoundTag();
@@ -567,6 +708,9 @@ public final class Consist {
         consist.brakeNotch = Math.clamp(tag.getInt("Brake"), 0, NOTCHES);
         for (Tag entry : tag.getList("Wagons", Tag.TAG_INT_ARRAY)) {
             consist.wagonIds.add(NbtUtils.loadUUID(entry));
+        }
+        for (Tag entry : tag.getList("Handbrakes", Tag.TAG_INT_ARRAY)) {
+            consist.handbrakes.add(NbtUtils.loadUUID(entry));
         }
         return consist;
     }

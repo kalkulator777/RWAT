@@ -189,6 +189,7 @@ public class RailsWheelsAndTrains {
         ENTITY_TYPES.register(modEventBus);
         CREATIVE_MODE_TABS.register(modEventBus);
         DATA_COMPONENTS.register(modEventBus);
+        ServerConfig.register(modContainer);
 
         modEventBus.addListener(this::commonSetup);
         modEventBus.addListener(RwatNetwork::register);

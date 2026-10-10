@@ -295,13 +295,25 @@ public final class ClientAutoScene {
             }
             // the loco is the far end of the train from where it was spawned
             case 180 -> command(mc, "ride @s mount @e[type=railswheelsandtrains:wagon,sort=furthest,limit=1]");
+            // freshly placed stock stands on its handbrakes (SPEC §5.3): the panel says so
+            case 186 -> {
+                report(mc, "handbrakes before the throttle: " + handbrakes(mc));
+                shot(mc, "rwat-panel-handbrakes.png");
+            }
             case 190 -> {
                 command(mc, "rwat handle reverser 1");
                 command(mc, "rwat handle train_brake 0");
                 command(mc, "rwat handle throttle 5");
                 report(mc, "riding " + mc.player.getVehicle());
             }
-            case 290 -> shot(mc, "rwat-panel-hud.png");
+            case 290 -> {
+                // the throttle released them (standard profile: auto handbrakes)
+                report(mc, "handbrakes on the move: " + handbrakes(mc) + ", speed "
+                        + String.format(Locale.ROOT, "%.1f km/h", Math.abs(
+                                com.muzhik17.trainsmod.physics.TrainPhysics.kmh(
+                                        com.muzhik17.trainsmod.client.ClientConsists.speed(consistOf(mc))))));
+                shot(mc, "rwat-panel-hud.png");
+            }
             case 295 -> {
                 mc.options.guiScale().set(2);
                 mc.resizeDisplay();
@@ -355,6 +367,16 @@ public final class ClientAutoScene {
             default -> {
             }
         }
+    }
+
+    /** The consist the player rides, or −1. */
+    private static int consistOf(Minecraft mc) {
+        return mc.player.getVehicle() instanceof WagonEntity wagon ? wagon.getConsistId() : -1;
+    }
+
+    /** How many wagons of the ridden consist have their handbrake set (per the snapshot). */
+    private static int handbrakes(Minecraft mc) {
+        return com.muzhik17.trainsmod.client.ClientConsists.handbrakesSet(consistOf(mc));
     }
 
     /**

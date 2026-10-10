@@ -76,13 +76,14 @@ public final class DriverPanel {
             return null;
         }
         return DriverReadout.of(ClientConsists.handles(wagon.getConsistId()),
-                ClientConsists.speed(wagon.getConsistId()), composition, wagon.getWagonIndex());
+                ClientConsists.speed(wagon.getConsistId()), composition, wagon.getWagonIndex(),
+                ClientConsists.handbrakesSet(wagon.getConsistId()));
     }
 
     /** The panel's height for this readout. */
     public static int height(DriverReadout readout) {
         int rows = rows(readout).size();
-        int footer = readout.inControl() ? 0 : ROW;
+        int footer = (readout.inControl() ? 0 : ROW) + (readout.handbrakesSet() > 0 ? ROW : 0);
         return PAD + SPEED_ROW + BAR_H + TICK_H + 4 + (rows - 1) * ROW + LAMP_H + footer + PAD;
     }
 
@@ -108,9 +109,16 @@ public final class DriverPanel {
         for (int i = 0; i < rows.size(); i++) {
             drawHandle(graphics, font, x, rowTop(y, i), columns, rows.get(i), readout, hovered);
         }
+        int footerRow = rows.size();
         if (!readout.inControl()) {
             graphics.drawString(font, Component.translatable("hud.railswheelsandtrains.other_cab"),
-                    x + PAD, rowTop(y, rows.size()) + 1, DIM, false);
+                    x + PAD, rowTop(y, footerRow++) + 1, DIM, false);
+        }
+        if (readout.handbrakesSet() > 0) {
+            // a train that won't move: the handbrakes are on (SPEC §5.3)
+            graphics.drawString(font, Component.translatable("hud.railswheelsandtrains.handbrakes",
+                    readout.handbrakesSet(), readout.wagons()),
+                    x + PAD, rowTop(y, footerRow) + 1, BAR_NEAR, false);
         }
     }
 

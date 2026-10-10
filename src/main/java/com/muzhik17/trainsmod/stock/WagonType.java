@@ -20,12 +20,16 @@ import java.util.List;
  *                     centre, +forward, front first — a list, not a pair
  *                     (SPEC §5.1: two bogies are the common case, not the model)
  * @param massT        empty mass, tonnes (cargo is a future per-instance field)
- * @param maxSpeedKmh  design speed, km/h
+ * @param maxSpeedKmh  design (permitted) speed, km/h; 0 = not declared — the
+ *                     wagon doesn't limit the train (SPEC §5.4)
  * @param resistance   Davis running-resistance coefficients; never null
- *                     (use {@link Resistance#NONE})
+ *                     (use {@link Resistance#NONE}; a pack that omits them
+ *                     gets {@link StockDefaults#resistance})
  * @param traction     null = unpowered
  * @param cab          null = no driver's seat, cannot be driven from
- * @param brakes       brake circuit forces; never null (use {@link Brakes#NONE})
+ * @param brakes       brake circuit forces and timing; never null (use
+ *                     {@link Brakes#NONE}; omitted in a pack =
+ *                     {@link StockDefaults#brakes})
  * @param interior     boardable interior volume (SPEC v1.5-б); null = not
  *                     boardable for walking (a freight wagon, a bare loco)
  * @param doors        doorways in the hull (SPEC v1.5, doors); empty = none.
@@ -92,22 +96,53 @@ public record WagonType(
 
     /**
      * Davis running resistance of this wagon (SPEC §5.4):
-     * {@code R = a + b·v + c·v²} in Newtons with {@code v} in m/s. The
-     * {@code a} term doubles as the static (starting) resistance.
+     * {@code R = a + b·v + c·v²} in Newtons with {@code v} in m/s — rolling
+     * and the wagon's own skin drag. The {@code a} term doubles as the static
+     * (starting) resistance. {@code cFront} is the nose's air drag
+     * ({@code cFront·v²}), paid only by the wagon that leads the train in the
+     * direction of travel — a locomotive in the middle of a train doesn't push
+     * the air, the tail car of a train backing up does.
      */
-    public record Resistance(double a, double b, double c) {
+    public record Resistance(double a, double b, double c, double cFront) {
 
-        public static final Resistance NONE = new Resistance(0.0, 0.0, 0.0);
+        public static final Resistance NONE = new Resistance(0.0, 0.0, 0.0, 0.0);
 
-        /** Resistance magnitude in Newtons at speed {@code vMs} (m/s, sign-free). */
+        /** Rolling and skin terms only, no nose drag (every declaration before {@code c_front}). */
+        public Resistance(double a, double b, double c) {
+            this(a, b, c, 0.0);
+        }
+
+        /** Rolling and skin resistance in Newtons at speed {@code vMs} (m/s, sign-free). */
         public double newtons(double vMs) {
             double v = Math.abs(vMs);
             return a + b * v + c * v * v;
         }
+
+        /** The nose's air drag in Newtons at {@code vMs}, when this wagon leads. */
+        public double frontalNewtons(double vMs) {
+            return cFront * vMs * vMs;
+        }
     }
 
-    /** Presence = the wagon produces tractive effort (SPEC §5.1). */
-    public record Traction(double powerKw, double maxTractiveEffortKn) {
+    /**
+     * Presence = the wagon produces tractive effort (SPEC §5.1).
+     *
+     * @param powerKw             power at the rail, kW (the hyperbola {@code TE = P/v})
+     * @param maxTractiveEffortKn starting tractive effort, kN
+     * @param adhesion            multiplier on the dry-rail adhesion limit
+     *                            {@code μ(v)·m·g} (SPEC §5.4): 1 = all axles
+     *                            powered, plain wheel slip control; above 1 —
+     *                            a modern slip control, below — unpowered axles
+     * @param rampS               seconds for the tractive effort to follow the
+     *                            throttle (to ~95%, SPEC §5.3) — a diesel
+     *                            spools up, an electric is quicker
+     */
+    public record Traction(double powerKw, double maxTractiveEffortKn, double adhesion, double rampS) {
+
+        /** Default adhesion and ramp (every declaration before them). */
+        public Traction(double powerKw, double maxTractiveEffortKn) {
+            this(powerKw, maxTractiveEffortKn, StockDefaults.ADHESION, StockDefaults.TRACTION_RAMP_S);
+        }
     }
 
     /**
@@ -142,21 +177,36 @@ public record WagonType(
     }
 
     /**
-     * Per-circuit brake forces, kN (SPEC §5.3). Circuits differ in who commands
-     * them and which wagons they act on; v-first the force is notch-proportional
-     * and instant — no air-pipe simulation, the data shape doesn't depend on it.
+     * Per-circuit brake forces, kN, and how fast the train brake acts
+     * (SPEC §5.3). Circuits differ in who commands them and which wagons they
+     * act on. The force is notch-proportional; it builds up and releases
+     * over {@code applyS}/{@code releaseS} — the brake cylinders filling and
+     * venting, without simulating the air pipe itself.
      *
      * @param trainKn       automatic (train) brake — driver's brake valve, acts
      *                      on every wagon of the consist; 0 = unbraked wagon
      * @param independentKn loco/independent brake — cab-fitted sections only
-     * @param dynamicKn     dynamic brake peak force — traction units only
+     * @param dynamicKn     dynamic brake peak force — traction units only (no
+     *                      control for it yet)
      * @param dynamicFadeKmh speed below which the dynamic brake fades to zero
-     * @param parkingKn     handbrake, holds a parked consist on grade
+     * @param parkingKn     handbrake, holds a parked wagon on grade
+     * @param applyS        seconds for the train/independent brake to build up
+     *                      (to ~95%) after the handle moves
+     * @param releaseS      seconds for it to release
      */
     public record Brakes(double trainKn, double independentKn,
-            double dynamicKn, double dynamicFadeKmh, double parkingKn) {
+            double dynamicKn, double dynamicFadeKmh, double parkingKn,
+            double applyS, double releaseS) {
 
-        public static final Brakes NONE = new Brakes(0.0, 0.0, 0.0, 0.0, 0.0);
+        public static final Brakes NONE = new Brakes(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+
+        /** Forces only, with a passenger brake's timing (every declaration before timing). */
+        public Brakes(double trainKn, double independentKn,
+                double dynamicKn, double dynamicFadeKmh, double parkingKn) {
+            this(trainKn, independentKn, dynamicKn, dynamicFadeKmh, parkingKn,
+                    StockDefaults.BrakeSystem.PASSENGER.applyS(),
+                    StockDefaults.BrakeSystem.PASSENGER.releaseS());
+        }
     }
 
     /**

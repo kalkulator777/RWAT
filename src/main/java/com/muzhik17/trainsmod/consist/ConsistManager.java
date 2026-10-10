@@ -12,6 +12,7 @@ import java.util.UUID;
 import org.joml.Vector3d;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
+import com.muzhik17.trainsmod.ServerConfig;
 import com.muzhik17.trainsmod.kinematics.ConsistKinematics;
 import com.muzhik17.trainsmod.kinematics.HullCollision;
 import com.muzhik17.trainsmod.kinematics.WagonPose;
@@ -21,6 +22,8 @@ import com.muzhik17.trainsmod.network.RiderSyncPayload;
 import com.muzhik17.trainsmod.network.TrackPathSpec;
 import com.muzhik17.trainsmod.path.RoutePath;
 import com.muzhik17.trainsmod.path.TrackPath;
+import com.muzhik17.trainsmod.physics.PhysicsTuning;
+import com.muzhik17.trainsmod.physics.TrainPhysics;
 import com.muzhik17.trainsmod.rail.RailNetwork;
 import com.muzhik17.trainsmod.stock.ConsistComposition;
 import com.muzhik17.trainsmod.stock.WagonType;
@@ -99,6 +102,9 @@ public final class ConsistManager extends SavedData {
             level.addFreshEntity(wagon);
             consist.wagonIds().add(wagon.getUUID());
         }
+        // new stock is delivered parked: it holds on a grade until released
+        // (by hand, or by the auto handbrakes when a driver opens the throttle)
+        consist.setAllHandbrakes(true);
         setDirty();
         return consist;
     }
@@ -133,7 +139,8 @@ public final class ConsistManager extends SavedData {
 
     public void tick(ServerLevel level) {
         RailNetwork network = RailNetwork.get(level);
-        boolean dirty = coupleTouching(level, network);
+        PhysicsTuning tuning = ServerConfig.tuning();
+        boolean dirty = coupleTouching(level, network, tuning);
         // "last rider left" clears go out after every consist's rider list of
         // this tick: a rider whose wagon just changed consists (coupling,
         // uncoupling) is claimed by the new consist before the old one lets go
@@ -164,8 +171,16 @@ public final class ConsistManager extends SavedData {
                 consist.takeControl(driver.cab().getUUID(), driver.facing());
             }
             // the handles reach the driver's panel with the snapshot (SPEC §9.7)
-            if (consist.advance(path)) {
+            if (consist.advance(path, tuning)) {
                 dirty = true;
+            }
+            if (consist.endImpactKmh() > IMPACT_SOUND_KMH) {
+                // ran into the end of the track: the rail ends, the train stops dead
+                boolean front = consist.s() >= path.length() - 1.0e-6;
+                ConsistComposition composition = consist.composition();
+                impactSound(level, path.samplePosition(front
+                        ? Coupling.frontEndS(composition, consist.s())
+                        : Coupling.rearEndS(composition, consist.s())), consist.endImpactKmh());
             }
 
             List<WagonEntity> wagons = new ArrayList<>();
@@ -271,7 +286,7 @@ public final class ConsistManager extends SavedData {
      *
      * @return true if anything changed (needs saving)
      */
-    private boolean coupleTouching(ServerLevel level, RailNetwork network) {
+    private boolean coupleTouching(ServerLevel level, RailNetwork network, PhysicsTuning tuning) {
         boolean dirty = false;
         List<Candidate> candidates = new ArrayList<>();
         for (Consist consist : consists.values()) {
@@ -297,26 +312,78 @@ public final class ConsistManager extends SavedData {
                     boolean keepA = keepFirst(a.consist(), driverA, b.consist(), driverB);
                     Candidate kept = keepA ? a : b;
                     Candidate absorbed = keepA ? b : a;
-                    Coupling.Merge plan = Coupling.tryCouple(kept.train(), absorbed.train());
-                    if (plan == null) {
+                    Coupling.Contact contact = Coupling.contact(kept.train(), absorbed.train(),
+                            tuning.couplingMaxClosing());
+                    if (contact == null) {
                         continue;
                     }
-                    merge(level, network, kept.consist(), absorbed.consist(), plan);
                     couplings++;
                     dirty = true;
-                    candidates.remove(absorbed);
-                    Candidate refreshed = candidate(level, network, kept.consist());
-                    if (refreshed == null) {
-                        candidates.remove(kept);
-                    } else {
-                        candidates.set(candidates.indexOf(kept), refreshed);
+                    if (contact instanceof Coupling.Bump bump) {
+                        bump(level, network, kept, absorbed, bump, tuning);
+                        refresh(level, network, candidates, kept);
+                        refresh(level, network, candidates, absorbed);
+                        continue search;
                     }
+                    merge(level, network, kept.consist(), absorbed.consist(), (Coupling.Merge) contact);
+                    candidates.remove(absorbed);
+                    refresh(level, network, candidates, kept);
                     continue search; // the grown consist may touch a third one
                 }
             }
             break;
         }
         return dirty;
+    }
+
+    /** Re-read a candidate after its consist changed (or drop it if it can't couple now). */
+    private static void refresh(ServerLevel level, RailNetwork network, List<Candidate> candidates,
+            Candidate stale) {
+        int at = candidates.indexOf(stale);
+        if (at < 0) {
+            return;
+        }
+        Candidate fresh = candidate(level, network, stale.consist());
+        if (fresh == null) {
+            candidates.remove(at);
+        } else {
+            candidates.set(at, fresh);
+        }
+    }
+
+    /**
+     * Apply a bump (SPEC §6.12): two consists ran together faster than the
+     * profile couples — they spring apart, the drivers hear and are told why
+     * they didn't couple.
+     */
+    private void bump(ServerLevel level, RailNetwork network, Candidate kept, Candidate absorbed,
+            Coupling.Bump bump, PhysicsTuning tuning) {
+        TrackPath keptPath = kept.consist().resolvePath(network.graph(), network.revision());
+        TrackPath absorbedPath = absorbed.consist().resolvePath(network.graph(), network.revision());
+        kept.consist().bump(bump.keptShift(), bump.keptV(), keptPath);
+        absorbed.consist().bump(bump.absorbedShift(), bump.absorbedV(), absorbedPath);
+        if (keptPath != null) {
+            impactSound(level, keptPath.samplePosition(bump.keptContactS()),
+                    TrainPhysics.kmh(bump.closing()));
+        }
+        Component message = Component.translatable("message.railswheelsandtrains.bump",
+                String.format("%.0f", tuning.couplingMaxSpeedKmh()));
+        for (Consist consist : new Consist[] {kept.consist(), absorbed.consist()}) {
+            Driver driver = driverOf(level, consist);
+            if (driver != null) {
+                driver.player().displayClientMessage(message, true);
+            }
+        }
+    }
+
+    /** Below this (km/h) running into something makes no bang. */
+    private static final double IMPACT_SOUND_KMH = 2.0;
+
+    /** The bang of a bump or of running into a track end, louder the harder. */
+    private static void impactSound(ServerLevel level, Vector3d at, double kmh) {
+        float volume = (float) Math.clamp(kmh / 20.0, 0.3, 2.0);
+        level.playSound(null, at.x, at.y + 1.0, at.z, SoundEvents.ANVIL_LAND,
+                SoundSource.NEUTRAL, volume, 0.6F);
     }
 
     /** The consist as a coupling candidate, or null if it can't couple now. */
@@ -341,9 +408,13 @@ public final class ConsistManager extends SavedData {
                 path.samplePosition(Coupling.rearEndS(composition, consist.s())));
     }
 
-    /** Cheap world-space prefilter: some end of one is near some end of the other. */
+    /**
+     * Cheap world-space prefilter: some end of one is near some end of the
+     * other — within the overlap a tick of their closing can make.
+     */
     private static boolean endsNear(Candidate a, Candidate b) {
-        double max = CONTACT_PREFILTER * CONTACT_PREFILTER;
+        double reach = CONTACT_PREFILTER + Math.abs(a.train().v()) + Math.abs(b.train().v());
+        double max = reach * reach;
         return a.front().distanceSquared(b.front()) <= max
                 || a.front().distanceSquared(b.rear()) <= max
                 || a.rear().distanceSquared(b.front()) <= max
@@ -387,6 +458,7 @@ public final class ConsistManager extends SavedData {
         kept.shiftFrame(plan.frameShift());
         kept.wagonIds().clear();
         kept.wagonIds().addAll(ids);
+        kept.takeHandbrakes(absorbed);
         remove(absorbed.id());
         for (int i = 0; i < ids.size(); i++) {
             if (level.getEntity(ids.get(i)) instanceof WagonEntity wagon) {
@@ -451,6 +523,7 @@ public final class ConsistManager extends SavedData {
         List<UUID> tail = consist.wagonIds().subList(cut, count);
         rear.wagonIds().addAll(tail);
         tail.clear();
+        rear.takeHandbrakes(consist);
         consist.setComposition(plan.front());
         // clients seed the new consist's interpolation from this one's
         rear.inheritFrame(consist.id(), plan.rearHeadS() - consist.s());
@@ -504,6 +577,42 @@ public final class ConsistManager extends SavedData {
         }
         player.displayClientMessage(Component.translatable("message.railswheelsandtrains.uncoupled",
                 consist.composition().wagonCount(), rear.composition().wagonCount()), true);
+        return true;
+    }
+
+    /**
+     * A player turned a wagon's handbrake wheel with the crowbar (SPEC §5.3):
+     * set it if released, release it if set — if the wagon is within reach.
+     * Under a profile whose handbrakes set themselves the wheel isn't the
+     * player's: they are told so, nothing turns.
+     *
+     * @return true if the handbrake moved
+     */
+    public boolean toggleHandbrakeBy(ServerPlayer player, WagonEntity wagon) {
+        Consist consist = byId(wagon.getConsistId());
+        int index = consist == null ? -1 : consist.wagonIds().indexOf(wagon.getUUID());
+        if (index < 0 || index >= consist.composition().wagonCount()) {
+            return false;
+        }
+        double reach = player.blockInteractionRange()
+                + consist.composition().slot(index).type().length() * 0.5 + 1.0;
+        if (player.getEyePosition().distanceToSqr(wagon.position()) > reach * reach) {
+            return false;
+        }
+        if (ServerConfig.tuning().autoHandbrake()) {
+            player.displayClientMessage(Component.translatable(
+                    "message.railswheelsandtrains.handbrake_auto"), true);
+            return false;
+        }
+        boolean set = !consist.handbrake(wagon.getUUID());
+        consist.setHandbrake(wagon.getUUID(), set);
+        wagon.level().playSound(null, wagon.getX(), wagon.getY() + 1.0, wagon.getZ(),
+                SoundEvents.CHAIN_PLACE, SoundSource.NEUTRAL, 0.8F, set ? 0.8F : 1.2F);
+        player.displayClientMessage(Component.translatable(set
+                        ? "message.railswheelsandtrains.handbrake_set"
+                        : "message.railswheelsandtrains.handbrake_released",
+                consist.handbrakesSet(), consist.wagonIds().size()), true);
+        setDirty();
         return true;
     }
 

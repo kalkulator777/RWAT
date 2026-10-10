@@ -3,20 +3,13 @@
   "bogies": [3.51, -3.51],
   "mass_t": 80.0,
   "max_speed_kmh": 55,
-  "resistance": {
-    "a": 1600.0,
-    "b": 72.0,
-    "c": 12.0
-  },
   "traction": {
     "power_kw": 559.3,
     "max_tractive_effort_kn": 259.0
   },
   "cab": {},
   "brakes": {
-    "train_kn": 104.0,
-    "parking_kn": 20.8,
-    "independent_kn": 58.2
+    "system": "passenger"
   },
   "couplers": {
     "front": -0.14,

@@ -58,10 +58,13 @@ public record WagonTypesPayload(Map<String, WagonType> types) implements CustomP
         buf.writeDouble(type.resistance().a());
         buf.writeDouble(type.resistance().b());
         buf.writeDouble(type.resistance().c());
+        buf.writeDouble(type.resistance().cFront());
         buf.writeBoolean(type.traction() != null);
         if (type.traction() != null) {
             buf.writeDouble(type.traction().powerKw());
             buf.writeDouble(type.traction().maxTractiveEffortKn());
+            buf.writeDouble(type.traction().adhesion());
+            buf.writeDouble(type.traction().rampS());
         }
         buf.writeBoolean(type.cab() != null);
         if (type.cab() != null) {
@@ -79,6 +82,8 @@ public record WagonTypesPayload(Map<String, WagonType> types) implements CustomP
         buf.writeDouble(type.brakes().dynamicKn());
         buf.writeDouble(type.brakes().dynamicFadeKmh());
         buf.writeDouble(type.brakes().parkingKn());
+        buf.writeDouble(type.brakes().applyS());
+        buf.writeDouble(type.brakes().releaseS());
         buf.writeVarInt(type.interior() == null ? 0 : type.interior().zones().size());
         for (WagonType.Interior.Zone in : type.interior() == null
                 ? List.<WagonType.Interior.Zone>of() : type.interior().zones()) {
@@ -120,9 +125,10 @@ public record WagonTypesPayload(Map<String, WagonType> types) implements CustomP
         double massT = buf.readDouble();
         double maxSpeedKmh = buf.readDouble();
         WagonType.Resistance resistance = new WagonType.Resistance(
-                buf.readDouble(), buf.readDouble(), buf.readDouble());
+                buf.readDouble(), buf.readDouble(), buf.readDouble(), buf.readDouble());
         WagonType.Traction traction = buf.readBoolean()
-                ? new WagonType.Traction(buf.readDouble(), buf.readDouble())
+                ? new WagonType.Traction(buf.readDouble(), buf.readDouble(),
+                        buf.readDouble(), buf.readDouble())
                 : null;
         WagonType.Cab cab = null;
         if (buf.readBoolean()) {
@@ -133,7 +139,7 @@ public record WagonTypesPayload(Map<String, WagonType> types) implements CustomP
         }
         WagonType.Brakes brakes = new WagonType.Brakes(
                 buf.readDouble(), buf.readDouble(), buf.readDouble(),
-                buf.readDouble(), buf.readDouble());
+                buf.readDouble(), buf.readDouble(), buf.readDouble(), buf.readDouble());
         int zoneCount = buf.readVarInt();
         List<WagonType.Interior.Zone> zones = new ArrayList<>(zoneCount);
         for (int i = 0; i < zoneCount; i++) {

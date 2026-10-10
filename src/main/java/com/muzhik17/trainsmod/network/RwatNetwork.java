@@ -55,6 +55,8 @@ public final class RwatNetwork {
                 (payload, context) -> context.enqueueWork(() -> handleSelectStock(payload, context)));
         registrar.playToServer(UncouplePayload.TYPE, UncouplePayload.STREAM_CODEC,
                 (payload, context) -> context.enqueueWork(() -> handleUncouple(payload, context)));
+        registrar.playToServer(HandbrakePayload.TYPE, HandbrakePayload.STREAM_CODEC,
+                (payload, context) -> context.enqueueWork(() -> handleHandbrake(payload, context)));
         registrar.playToServer(CabLeverPayload.TYPE, CabLeverPayload.STREAM_CODEC,
                 (payload, context) -> context.enqueueWork(() -> handleCabLever(payload, context)));
         registrar.playToServer(ControlGroupPayload.TYPE, ControlGroupPayload.STREAM_CODEC,
@@ -178,6 +180,19 @@ public final class RwatNetwork {
                 && player.getMainHandItem().is(RailsWheelsAndTrains.CROWBAR.get())
                 && level.getEntity(payload.wagonId()) instanceof WagonEntity wagon) {
             ConsistManager.get(level).uncoupleBy(level, player, wagon, payload.front());
+        }
+    }
+
+    /**
+     * Set or release a wagon's handbrake with the crowbar (SPEC §5.3); the
+     * manager checks the reach.
+     */
+    private static void handleHandbrake(HandbrakePayload payload, IPayloadContext context) {
+        if (context.player() instanceof ServerPlayer player
+                && player.level() instanceof ServerLevel level
+                && player.getMainHandItem().is(RailsWheelsAndTrains.CROWBAR.get())
+                && level.getEntity(payload.wagonId()) instanceof WagonEntity wagon) {
+            ConsistManager.get(level).toggleHandbrakeBy(player, wagon);
         }
     }
 
