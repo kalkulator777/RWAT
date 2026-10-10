@@ -7,8 +7,9 @@ import net.neoforged.fml.config.ModConfig;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 /**
- * The mod's server settings — per world, {@code serverconfig/railswheelsandtrains-server.toml}
- * (SPEC §5.6): how the physics plays. One profile — realistic, standard,
+ * The mod's server settings — {@code config/railswheelsandtrains-server.toml},
+ * overridden per world by a copy in {@code <world>/serverconfig/} (SPEC §5.6):
+ * how the physics plays. One profile — realistic, standard,
  * arcade — or {@code custom}, the only one that reads the values of the
  * {@code [physics.custom]} section. The loader's config API stays in this one
  * adapter (SPEC §7.3); the physics only ever sees a {@link PhysicsTuning}.
