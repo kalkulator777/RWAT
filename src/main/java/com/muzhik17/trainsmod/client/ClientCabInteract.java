@@ -358,7 +358,8 @@ public final class ClientCabInteract {
 
     /**
      * The nearest control or driver's chair under the crosshair, within reach
-     * and with no door, block or entity in front of it; null if none.
+     * and with no door, wall of the model ({@link ClientWagonRay}), block or
+     * entity in front of it; null if none.
      */
     private static Pick pick(Minecraft mc, LocalPlayer player) {
         Vec3 eye = player.getEyePosition(RAY_TIME);
@@ -377,12 +378,14 @@ public final class ClientCabInteract {
             }
             Vector3d o = new Vector3d(toModel(wagon, eye));
             Vector3d dir = new Vector3d(toModel(wagon, eye.add(look))).sub(o);
+            // nothing behind a wall of the model is reached (the desk, a partition, the hull)
+            double wall = ClientWagonRay.wall(slot.type().id(), model, o, dir, reach) + ClientWagonRay.WALL_SLACK;
             // the driver's chair, for a rider of this wagon who isn't in it
             WagonType.Seat seat = slot.type().cab() != null ? slot.type().cab().seat() : null;
             if (seat != null && player.getVehicle() == wagon && !wagon.isSeated(player)) {
                 double[] box = seatBox(seat);
                 double t = HullCollision.rayBox(o, dir, box[0], box[1], box[2], box[3], box[4], box[5]);
-                if (t >= 0.0 && t <= reach && (best == null || t < best.distance)) {
+                if (t >= 0.0 && t <= reach && t <= wall && (best == null || t < best.distance)) {
                     best = new Pick(wagon, null, null, t, true);
                 }
             }
@@ -413,7 +416,7 @@ public final class ClientCabInteract {
                 }
                 double t = HullCollision.rayBox(o, dir, box[0] - PAD, box[1] - PAD, box[2] - PAD,
                         box[3] + PAD, box[4] + PAD, box[5] + PAD);
-                if (t < 0.0 || t > reach || (best != null && t >= best.distance)) {
+                if (t < 0.0 || t > reach || t > wall || (best != null && t >= best.distance)) {
                     continue;
                 }
                 Vector3f hit = new Vector3f((float) (o.x + dir.x * t), (float) (o.y + dir.y * t),

@@ -46,6 +46,8 @@ public final class ClientAutoScene {
     private static boolean pressL;
     /** Click the use (right) button at the start of the next tick: a real click, picked by the mod's handlers. */
     private static boolean pressUse;
+    /** Ticks a scene has held its clock waiting for the client to know the stock. */
+    private static int waited;
     private static Vec3 origin;
 
     private ClientAutoScene() {
@@ -90,6 +92,10 @@ public final class ClientAutoScene {
         }
         if (scene.equals("panel")) {
             panel(mc);
+            return;
+        }
+        if (scene.equals("doorclick")) {
+            doorClick(mc);
             return;
         }
         if (!scene.equals("cab")) {
@@ -544,6 +550,100 @@ public final class ClientAutoScene {
             default -> {
             }
         }
+    }
+
+    /** The index of a car's door by id (the order isn't fixed: saves keep doors by id, SPEC §9.8), −1. */
+    private static int doorIndex(WagonEntity car, String id) {
+        if (car == null || car.typeNow() == null) {
+            return -1;
+        }
+        java.util.List<com.muzhik17.trainsmod.stock.WagonType.Door> doors = car.typeNow().doors();
+        for (int i = 0; i < doors.size(); i++) {
+            if (doors.get(i).id().equalsIgnoreCase(id)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * {@code doorclick} (SPEC §9.5): door clicks picked like a player's —
+     * real right-clicks on a platzkart: from the ground on the rear right door
+     * (opens), then from the rear vestibule on the toilet door behind the
+     * tambour partition (a wall in front: nothing), the tambour door (opens),
+     * the place its shut leaf was (the leaf has swung away: nothing), and its
+     * leaf where it is drawn now (closes). The open doors are logged after
+     * each click; a shot of the open tambour door ({@code rwat-doorclick-*.png}).
+     */
+    private static void doorClick(Minecraft mc) {
+        WagonEntity car = ticks >= 175 ? carAt(mc, 0) : null; // spawned at 160
+        if (ticks == 179 && (car == null || car.typeNow() == null) && waited++ < 600) {
+            ticks--; // hold the scene until the car and its type have reached this client
+            return;
+        }
+        if (ticks > 200 && ticks < 240 && ticks % 10 == 0 && mc.player.getVehicle() == null) {
+            placeOn(mc, car, 1.3, 0.0, -11.28, 90.0F, 0.0F); // stay in the doorway till boarded
+        }
+        switch (ticks) {
+            case 100 -> {
+                origin = mc.player.position().add(4000.0, 0.0, 0.0);
+                command(mc, "gamemode creative");
+                command(mc, String.format(Locale.ROOT, "tp @s %.3f %.3f %.3f 0 0", origin.x, origin.y, origin.z));
+            }
+            case 160 -> command(mc, "rwat spawn with amendorf");
+            case 170 -> {
+                command(mc, "time set noon");
+                command(mc, "rwat handle train_brake 8");
+            }
+            // from the ground beside Door4 (+X side, rear end): click its leaf
+            case 180 -> placeOn(mc, car, 2.6, 0.0, -11.28, 90.0F, 0.0F);
+            case 185 -> aimAtModel(mc, car, 1.5, 2.8, -11.28);
+            case 187 -> pressUse = true;
+            case 197 -> reportNear(mc, car, "Door4 clicked from the ground");
+            case 200 -> placeOn(mc, car, 1.3, 0.0, -11.28, 90.0F, 0.0F);
+            case 240 -> reportCar(mc, "boarded");
+            // into the middle of the rear vestibule
+            case 241 -> {
+                aimAtModel(mc, car, -0.3, 3.4, -11.3);
+                mc.options.keyUp.setDown(true);
+            }
+            case 250 -> {
+                mc.options.keyUp.setDown(false);
+                reportCar(mc, "in the vestibule");
+            }
+            // the toilet door is behind the tambour partition from here
+            case 251 -> aimAtModel(mc, car, 0.156, 2.9, -10.31);
+            case 253 -> pressUse = true;
+            case 263 -> reportDoor(mc, car, doorIndex(car, "DoorToilet"), "the toilet door through the partition (stays shut)");
+            case 264 -> aimAtModel(mc, car, 0.69, 2.9, -10.81);
+            case 266 -> pressUse = true;
+            case 276 -> reportDoor(mc, car, doorIndex(car, "DoorTambur"), "the tambour door clicked (opens)");
+            // swung open on its hinge at +X: the shut leaf's place by the far jamb is empty now
+            case 320 -> aimAtModel(mc, car, 0.40, 2.9, -10.81);
+            case 322 -> pressUse = true;
+            case 332 -> reportDoor(mc, car, doorIndex(car, "DoorTambur"), "where its shut leaf was (stays open)");
+            case 333 -> {
+                var model = com.muzhik17.trainsmod.client.render.model.StockModels.model(car.typeNow().id());
+                Vector3d leaf = model == null ? null : com.muzhik17.trainsmod.client.ClientWagonRay
+                        .leafCentre(car, model, car.typeNow(), doorIndex(car, "DoorTambur"), 1.0F);
+                RailsWheelsAndTrains.LOGGER.info("[autoscene] the open leaf at {}", leaf);
+                if (leaf != null) {
+                    aimAtModel(mc, car, leaf.x, leaf.y, leaf.z);
+                }
+            }
+            case 336 -> shot(mc, "rwat-doorclick-open-leaf.png");
+            case 338 -> pressUse = true;
+            case 348 -> reportDoor(mc, car, doorIndex(car, "DoorTambur"), "its leaf where it is drawn (closes)");
+            case 352 -> mc.stop();
+            default -> {
+            }
+        }
+    }
+
+    private static void reportDoor(Minecraft mc, WagonEntity car, int door, String what) {
+        RailsWheelsAndTrains.LOGGER.info("[autoscene] {}: door {} {} (doors {})", what, door,
+                car != null && car.isDoorOpen(door) ? "OPEN" : "shut",
+                car == null ? "?" : Integer.toBinaryString(car.doorMask()));
     }
 
     /**

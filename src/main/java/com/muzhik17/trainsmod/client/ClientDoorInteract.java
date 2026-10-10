@@ -5,9 +5,10 @@ import java.util.List;
 import org.joml.Vector3d;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
+import com.muzhik17.trainsmod.client.render.model.StockModel;
+import com.muzhik17.trainsmod.client.render.model.StockModels;
 import com.muzhik17.trainsmod.consist.WagonEntity;
 import com.muzhik17.trainsmod.kinematics.HullCollision;
-import com.muzhik17.trainsmod.kinematics.PoseMath;
 import com.muzhik17.trainsmod.network.DoorTogglePayload;
 import com.muzhik17.trainsmod.stock.WagonType;
 
@@ -29,11 +30,14 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * Right-click a wagon door to open or close it (SPEC v1.5, doors, IR-style).
  * The wagon entity's own hitbox is a small box at the body centre, so the door
  * leaves are picked here instead: the look ray is taken into each nearby
- * wagon's local frame and tested against its door boxes. From outside, a leaf
- * only counts if it is on the near face of the hull (not seen through the
- * car); a rider picks among their own wagon's doors from inside, and the
- * next car's gangway door across the gangway. A nearer block or entity
- * under the crosshair keeps the click.
+ * wagon's model frame and tested against its doors' leaves <b>where they are
+ * drawn now</b> — an open door is closed by clicking its leaf — or, for a
+ * leaf the model doesn't move, the door's box ({@link ClientWagonRay}). A
+ * wall of the car's model in front of the leaf keeps the click from it (no
+ * opening doors through partitions); without the model, from outside only a
+ * leaf on the near face of the hull counts. A rider picks among their own
+ * wagon's doors from inside, and the next car's gangway door across the
+ * gangway. A nearer block or entity under the crosshair keeps the click.
  *
  * <p>Holding the button doesn't flap the door: vanilla repeats the use action
  * every few ticks while held, so a door click is armed again only after the
@@ -88,7 +92,20 @@ public final class ClientDoorInteract {
         }
     }
 
-    private record Pick(WagonEntity wagon, int door, double distance) {
+    /** A door under the crosshair; {@code byBox}: by the door's box, as its leaf isn't moved by the model. */
+    private record Pick(WagonEntity wagon, int door, double distance, boolean byBox) {
+    }
+
+    /** How far along the look the rider's own car has a wall (its model's body and interior), or +∞. */
+    private static double wallAhead(WagonEntity wagon, Vec3 eye, Vec3 look, double reach) {
+        WagonType type = wagon.typeNow();
+        StockModel model = type == null ? null : StockModels.model(type.id());
+        if (model == null) {
+            return Double.POSITIVE_INFINITY;
+        }
+        Vector3d origin = ClientWagonRay.toModel(wagon, eye);
+        Vector3d dir = ClientWagonRay.toModel(wagon, eye.add(look)).sub(origin);
+        return ClientWagonRay.wall(type.id(), model, origin, dir, reach);
     }
 
     /** Distance to the door leaf under the crosshair, or +∞ — a cab control behind it yields. */
@@ -110,22 +127,21 @@ public final class ClientDoorInteract {
         Vec3 look = player.getViewVector(partialTick);
         double reach = player.blockInteractionRange();
         WagonEntity own = player.getVehicle() instanceof WagonEntity w ? w : null;
+        double ownWall = own == null ? Double.POSITIVE_INFINITY : wallAhead(own, eye, look, reach);
         List<WagonEntity> wagons = mc.level.getEntitiesOfClass(WagonEntity.class,
                 player.getBoundingBox().inflate(reach + 16.0));
 
         Pick best = null;
         Pick shutBeyond = null; // the nearest shut connecting door of another car, for a rider
         for (WagonEntity wagon : wagons) {
-            List<WagonType.Door> doors = wagon.framedDoors();
-            if (doors.isEmpty()) {
+            WagonType type = wagon.typeNow();
+            if (type == null || type.doors().isEmpty()) {
                 continue;
             }
-            Vector3d body = new Vector3d(wagon.getX(), wagon.getY(), wagon.getZ());
-            Vector3d origin = PoseMath.worldToLocal(body, wagon.getYRot(), wagon.getXRot(),
-                    new Vector3d(eye.x, eye.y, eye.z));
-            Vector3d dir = PoseMath.worldToLocal(body, wagon.getYRot(), wagon.getXRot(),
-                    new Vector3d(eye.x + look.x, eye.y + look.y, eye.z + look.z)).sub(origin);
-            boolean inside = player.getVehicle() == wagon;
+            // the model frame: the doors' boxes, the leaves and the walls are all in it
+            Vector3d origin = ClientWagonRay.toModel(wagon, eye);
+            Vector3d dir = ClientWagonRay.toModel(wagon, eye.add(look)).sub(origin);
+            boolean inside = own == wagon;
             double hullT = 0.0;
             if (!inside) {
                 WagonType.Hull hull = wagon.collisionHull();
@@ -138,34 +154,50 @@ public final class ClientDoorInteract {
                     continue; // the ray misses the car; its doors are inside the hull box
                 }
             }
-            for (int i = 0; i < doors.size(); i++) {
-                WagonType.Door d = doors.get(i);
+            // a door behind a wall of its car — or of the car the rider is in — isn't reached
+            StockModel model = StockModels.model(type.id());
+            double wall = model == null ? Double.POSITIVE_INFINITY
+                    : ClientWagonRay.wall(type.id(), model, origin, dir, reach);
+            double limit = Math.min(wall, inside ? Double.POSITIVE_INFINITY : ownWall) + ClientWagonRay.WALL_SLACK;
+            for (int i = 0; i < type.doors().size() && i < 32; i++) {
+                WagonType.Door d = type.doors().get(i);
                 if (d.fixed() || (own != null && !inside && !d.connecting())) {
                     continue; // no leaf to click (SPEC §9.1); a rider reaches only the next car's gangway door
                 }
-                double padX = d.axis() == 0 ? PAD_ACROSS : PAD_EDGE;
-                double padZ = d.axis() == 0 ? PAD_EDGE : PAD_ACROSS;
-                double t = HullCollision.rayBox(origin, dir,
-                        d.minX() - padX, d.minY() - PAD_EDGE, d.minZ() - padZ,
-                        d.maxX() + padX, d.maxY() + PAD_EDGE, d.maxZ() + padZ);
-                if (t < 0.0 || t > reach || (!inside && t > hullT + NEAR_FACE_SLACK)) {
+                // the leaves where they are drawn now; a door whose leaf the model doesn't move: its box
+                double t = model == null ? Double.NaN
+                        : ClientWagonRay.leaves(wagon, type.id(), model, type, i, origin, dir, partialTick);
+                boolean byBox = Double.isNaN(t);
+                if (byBox) {
+                    double padX = d.axis() == 0 ? PAD_ACROSS : PAD_EDGE;
+                    double padZ = d.axis() == 0 ? PAD_EDGE : PAD_ACROSS;
+                    t = HullCollision.rayBox(origin, dir,
+                            d.minX() - padX, d.minY() - PAD_EDGE, d.minZ() - padZ,
+                            d.maxX() + padX, d.maxY() + PAD_EDGE, d.maxZ() + padZ);
+                    if (model == null && !inside && t > hullT + NEAR_FACE_SLACK) {
+                        continue; // no walls to see by: from outside, only a leaf on the near face
+                    }
+                }
+                if (t < 0.0 || t > reach || t > limit) {
                     continue;
                 }
                 if (best == null || t < best.distance()) {
-                    best = new Pick(wagon, i, t);
+                    best = new Pick(wagon, i, t, byBox);
                 }
                 if (own != null && !inside && !wagon.isDoorOpen(i)
                         && (shutBeyond == null || t < shutBeyond.distance())) {
-                    shutBeyond = new Pick(wagon, i, t);
+                    shutBeyond = new Pick(wagon, i, t, byBox);
                 }
             }
         }
         if (best == null) {
             return null;
         }
-        if (shutBeyond != null && best.wagon() == own && best.distance() < shutBeyond.distance()
-                && own.framedDoors().get(best.door()).connecting() && own.isDoorOpen(best.door())) {
-            best = shutBeyond; // through our open gangway door, the next car's shut one
+        if (shutBeyond != null && best.wagon() == own && best.byBox() && best.distance() < shutBeyond.distance()
+                && own.typeNow().doors().get(best.door()).connecting() && own.isDoorOpen(best.door())) {
+            // our open gangway door picked by its box (its leaf drawn shut in place) fills the
+            // doorway we look through: the click is the next car's shut door beyond it
+            best = shutBeyond;
         }
         // something else nearer under the crosshair keeps the click (the
         // wagon's own small centre hitbox doesn't count — the door is its part)
