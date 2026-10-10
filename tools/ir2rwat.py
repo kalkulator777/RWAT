@@ -60,6 +60,9 @@ import sys
 import zipfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # python -I leaves the script's folder out
+import floorgen  # noqa: E402
+
 IR_ROOT = "assets/immersiverailroading/"
 IR_MODELS = IR_ROOT + "models/"
 IR_STOCK = IR_ROOT + "rolling_stock/"
@@ -86,6 +89,7 @@ LIGHT_GROUP = re.compile(r"_LCG_([^_]+)")
 SWITCH_KEY = re.compile(r"(?:^|_)((?:WIDGET|WINDOW)_\d+)(?=_|$)")
 HEADLIGHT = re.compile(r"(?:^|_)HEADLIGHT_\d+(?=_|$)")
 LABEL = re.compile(r"_LABEL_([^_]+)")
+WIDGET_KEY = re.compile(r"(?:^|_)WIDGET_(\d+)(?=_|$)")
 # Blender's suffix on a duplicated object: DOOR_3_INTERIOR_LCG_IL.001 lights with IL
 COPY_SUFFIX = re.compile(r"\.\d{3}$")
 # IR flags a careless name puts where a control group goes (DOOR_7_EXTERNAL_CG_NOINTERACT)
@@ -94,6 +98,8 @@ FLAG_WORDS = {"NOINTERACT", "NOTOUCH", "TOGGLE", "PRESS", "INVERT", "HIDE", "GLO
 # a DOOR_<n> smaller than this is a marker or a handle, no doorway (2TE116's DOOR_2_CONNECTING)
 MIN_DOOR_HEIGHT = 1.2
 MIN_DOOR_SPAN = 0.3
+# a WIDGET_<n> door leaf is thin like a door: its thinner horizontal side is at most this
+MAX_WIDGET_THICKNESS = 0.35
 # the leaves of one doorway touch along the wall (ER2: two sliding leaves meet in the middle)
 LEAF_GAP = 0.05
 
@@ -425,6 +431,53 @@ def derive_doors(boxes):
     return doors
 
 
+def widget_doors(boxes, animated):
+    """Inner doors that are control widgets (SPEC §9.8): a WIDGET_<n> of door
+    size and thin like a leaf, flagged TOGGLE, whose control group CG_<name>
+    has an IR animation (`animated`, lower-case group names) — the platzkart's
+    DoorTambur, DoorToilet and DoorKupe. The door is the box of everything
+    named WIDGET_<n> (handles included, as DOOR_<n>'s is), id = the group,
+    "inner": true. In WIDGET_<n> order. A leaf that is HIDE-flagged or on a
+    group with no animation (the ChME3's cable, a light switch) is no door."""
+    groups = {}
+    for name, box in boxes.items():
+        key = WIDGET_KEY.search(name)
+        if key is None:
+            continue
+        group = groups.setdefault(int(key.group(1)), {"box": list(box), "names": []})
+        group["names"].append(name)
+        for i in range(3):
+            group["box"][i] = min(group["box"][i], box[i])
+            group["box"][i + 3] = max(group["box"][i + 3], box[i + 3])
+    doors = []
+    for number in sorted(groups):
+        names = [object_name(n) for n in groups[number]["names"]]
+        leaf = [n for n in names if "TOGGLE" in n.split("_") and "HIDE" not in n.split("_")]
+        group = control_group(leaf)
+        if group is None or group.lower() not in animated:
+            continue
+        box = groups[number]["box"]
+        thin = min(box[3] - box[0], box[5] - box[2])
+        span = max(box[3] - box[0], box[5] - box[2])
+        if box[4] - box[1] < MIN_DOOR_HEIGHT or thin > MAX_WIDGET_THICKNESS or span < MIN_DOOR_SPAN:
+            continue
+        doors.append({"id": group, "min": [r(v, 3) for v in box[:3]], "max": [r(v, 3) for v in box[3:]],
+                      "inner": True})
+    return doors
+
+
+def model_doors(boxes, animated):
+    """Every door the model carries: its DOOR_<n> doorways, then its WIDGET
+    doors (an id the DOOR_<n> doors already use is left to them)."""
+    doors = derive_doors(boxes)
+    taken = {d["id"].lower() for d in doors}
+    for door in widget_doors(boxes, animated):
+        if door["id"].lower() not in taken:
+            doors.append(door)
+            taken.add(door["id"].lower())
+    return doors
+
+
 def edit_doors(doors, edits, warn):
     """A per-type "doors" object over the derived doors (SPEC §9.8): each key
     is a door id (any case) — an object edits that door (deep-merged, so
@@ -659,24 +712,83 @@ class Converter:
         self.rails.append((rail_id, source.label, name))
         print(f"  rail {self.namespace}:{rail_id:23} tile {model_json.get('tile_length', 1.0):5.3f}  {name}")
 
+    def find_stock(self, type_id):
+        """(source, category, zip entry) of a stock type, by the id it converts to."""
+        for source in self.sources:
+            for entry in sorted(source.names):
+                if not (entry.startswith(IR_STOCK) and entry.endswith(".json")):
+                    continue
+                rest = entry[len(IR_STOCK):]
+                if "/" not in rest:
+                    continue
+                category, file_name = rest.split("/", 1)
+                stem = file_name[:-len(".json")]
+                if sanitize_id(stem[len(self.strip):] if stem.startswith(self.strip) else stem) == type_id:
+                    return source, category, entry
+        raise ValueError(f"no stock type '{type_id}' in the recipe's packs")
+
+    def plan(self, type_id, force_floor=False, floor_override=None):
+        """What the converter would write for a type, without copying anything
+        (tools/floorgen.py looks at it): see prepare."""
+        source, category, entry = self.find_stock(type_id)
+        return self.prepare(source, category, entry, type_id, force_floor, floor_override)
+
+    def prepare(self, source, category, entry, type_id, force_floor=False, floor_override=None, parsed=None):
+        """The type declaration with its walkable floor and doors (SPEC §9.6,
+        §9.8): physics from IR, then the per-type file's "type" over it; the
+        floor generated by tools/floorgen.py for a passenger car (and a
+        locomotive whose per-type file has a "floor" key) unless the file's
+        own "type.interior" replaces it; the doors the model carries (DOOR_<n>
+        and WIDGET doors) edited by the file's "doors" — a list replaces them.
+        Returns a dict (type_json, doors = the doors the floor was made for,
+        floor = floorgen.Floor or None, hand_interior = the file's own, ...)."""
+        ir = lenient_json(source.read(entry))
+        obj_zip = ir_location_to_zip(ir["model"])
+        if parsed is None:
+            _, _, extent, boxes = parse_obj(source.read(obj_zip))
+        else:
+            extent, boxes = parsed
+        overrides = self.overrides.get(type_id, {})
+        type_json = deep_merge(derive_type(category, ir, extent, boxes), overrides.get("type", {}))
+        animated = {a.get("control_group", "").lower() for a in ir.get("animations", [])
+                    if source.exists(ir_location_to_zip(a["animatrix"]))}
+        in_model = model_doors(boxes, animated)
+        edits = type_json.pop("doors") if isinstance(type_json.get("doors"), dict) else None
+        if isinstance(type_json.get("doors"), list):
+            doors = type_json["doors"]
+        else:
+            doors = edit_doors(in_model, edits or {}, lambda m: self.warn(f"{type_id}: {m}"))
+        hand_interior = type_json.get("interior")
+
+        floor_options = overrides.get("floor")
+        generated = None
+        if floor_options is not False and (force_floor or floor_options is not None or category == "passenger"):
+            options = dict(floor_options or {})
+            options.update(floor_override or {})
+            area = ir.get("passenger")
+            ir_floor = area.get("center_y", 0.0) + IR_FLOOR_OFFSET if isinstance(area, dict) and category == "passenger" else None
+            try:
+                generated = floorgen.generate(source.read(obj_zip), floorgen.FloorConfig(options), doors, ir_floor, Y_LIFT)
+            except ValueError as problem:
+                self.warn(f"{type_id}: no generated floor — {problem}")
+        # walkable cars from the IR conventions (SPEC §9.6, §9.8), unless the file's own says otherwise
+        derived = generated.interior if generated is not None else derive_interior(category, ir)
+        if "interior" not in type_json and derived is not None:
+            type_json["interior"] = derived
+        if "doors" not in type_json and "interior" in type_json and doors:
+            type_json["doors"] = doors
+        return {"ir": ir, "obj_zip": obj_zip, "extent": extent, "boxes": boxes, "overrides": overrides,
+                "type_json": type_json, "doors": doors, "doors_in_model": in_model, "floor": generated,
+                "derived_interior": derived, "hand_interior": hand_interior}
+
     def convert_stock(self, source, category, entry, type_id):
         ir = lenient_json(source.read(entry))
         obj_zip = ir_location_to_zip(ir["model"])
         obj_destination, objects, extent, boxes = self.copy_model(source, obj_zip, type_id)
         obj_folder = posixpath.dirname(obj_zip)
 
-        overrides = self.overrides.get(type_id, {})
-        type_json = deep_merge(derive_type(category, ir, extent, boxes), overrides.get("type", {}))
-        # walkable cars from the IR conventions (SPEC §9.6), unless the recipe says otherwise
-        if "interior" not in type_json:
-            interior = derive_interior(category, ir)
-            if interior is not None:
-                type_json["interior"] = interior
-        edits = type_json.pop("doors") if isinstance(type_json.get("doors"), dict) else None
-        if "doors" not in type_json and "interior" in type_json:
-            doors = edit_doors(derive_doors(boxes), edits or {}, lambda m: self.warn(f"{type_id}: {m}"))
-            if doors:
-                type_json["doors"] = doors
+        plan = self.prepare(source, category, entry, type_id, parsed=(extent, boxes))
+        overrides, type_json = plan["overrides"], plan["type_json"]
         door_ids = {door["id"].lower() for door in type_json.get("doors", [])}
 
         liveries = {}
@@ -711,7 +823,7 @@ class Converter:
         model_json = deep_merge(model_json, overrides.get("model", {}))
 
         if self.geometry is not None:
-            self.write_geometry(source, obj_zip, type_id, category, ir, extent, boxes, ir_animations)
+            self.write_geometry(source, plan, type_id, category, ir_animations)
         self.generated[f"data/{self.namespace}/wagon_types/{type_id}.json"] = dump(type_json)
         self.generated[f"assets/{self.namespace}/wagon_models/{type_id}.json"] = dump(model_json)
         name = ir.get("name", type_id)
@@ -721,7 +833,8 @@ class Converter:
         walk = ""
         if "interior" in type_json:
             doors = type_json.get("doors", [])
-            walk = (f"  walk: {len(doors)} door(s)"
+            zones = type_json["interior"]
+            walk = (f"  walk: {len(zones) if isinstance(zones, list) else 1} zone(s), {len(doors)} door(s)"
                     f" ({sum(1 for d in doors if d.get('connecting'))} gangway)")
         print(f"  {self.namespace}:{type_id:28} {category:11} {type_json['length']:7.3f} m "
               f"{type_json['mass_t']:7.1f} t  liveries={len(liveries):2}  {name}{walk}")
@@ -738,9 +851,11 @@ class Converter:
             for lang, text in names.items():
                 self.langs.setdefault(lang, {})[f"light.{self.namespace}.{type_id}.{group}"] = text
 
-    def write_geometry(self, source, obj_zip, type_id, category, ir, extent, boxes, ir_animations):
+    def write_geometry(self, source, plan, type_id, category, ir_animations):
         """<geometry>/<id>.json: the numbers a floor is measured from (see --geometry)."""
-        interior = derive_interior(category, ir)
+        ir, obj_zip, extent, boxes = plan["ir"], plan["obj_zip"], plan["extent"], plan["boxes"]
+        interior = plan["derived_interior"]
+        floor = plan["floor"]
         digest = {
             "_about": "RWAT model space (+Z forward, Y up, X across; railhead y 0.406). Generated by "
                       "tools/ir2rwat.py --geometry from the IR pack; numbers only. SPEC 9.6.",
@@ -748,8 +863,8 @@ class Converter:
             "category": category,
             "length": r(extent[1] - extent[0], 3),
             "ir_passenger": ir.get("passenger"),
-            "derived": {"interior": interior, "doors": derive_doors(boxes) if interior else []},
-            "doors_in_model": derive_doors(boxes),
+            "derived": {"interior": interior, "doors": plan["doors_in_model"] if interior else []},
+            "doors_in_model": plan["doors_in_model"],
             "door_motion": door_motion(boxes, {g.lower() for g in ir_animations}),
             "animations": dict(sorted(ir_animations.items())),
             "lights": light_groups(boxes),
@@ -758,6 +873,9 @@ class Converter:
                              for y, a, box, objects in floor_levels(source.read(obj_zip))],
             "objects": {name: [r(v, 3) for v in box] for name, box in sorted(boxes.items())},
         }
+        if floor is not None:
+            digest["derived"]["floor"] = {"levels": floor.levels, "zones": len(floor.interior),
+                                          "centre_area": r(floor.region.area(), 2)}
         write_file(self.geometry / f"{type_id}.json", dump(digest))
 
     def write(self, out_dir, as_zip):
