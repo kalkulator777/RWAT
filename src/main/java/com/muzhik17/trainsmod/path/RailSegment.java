@@ -23,38 +23,66 @@ import org.joml.Vector3d;
  * mod's own rail. Purely visual — the server stores it without knowing which
  * styles exist; a client without that style draws the default.
  *
+ * <p>{@code bed} is the material of the track bed laid under the segment
+ * (SPEC §2.2): a bed material id ({@code gravel}, {@code stone},
+ * {@code invisible}…), {@link #DEFAULT_BED} ({@code ""}) for the default
+ * gravel. The world side maps it to a bed block; an id it doesn't know lays
+ * the default.
+ *
  * <p>Pure data, no MC imports. The override vectors are treated as immutable —
  * not copied on access.
  */
 public record RailSegment(int id, int nodeA, int signA, int nodeB, int signB,
-        Vector3d dirA, Vector3d dirB, int group, String style) {
+        Vector3d dirA, Vector3d dirB, int group, String style, String bed) {
 
     /** The mod's own rail (also what segments from before rail styles carry). */
     public static final String DEFAULT_STYLE = "";
+    /** The default gravel bed (also what segments from before bed materials carry). */
+    public static final String DEFAULT_BED = "";
 
     public RailSegment {
         style = style == null ? DEFAULT_STYLE : style;
+        bed = bed == null ? DEFAULT_BED : bed;
     }
 
     /** A segment using the node tangents at both ends (the normal case). */
     public RailSegment(int id, int nodeA, int signA, int nodeB, int signB) {
-        this(id, nodeA, signA, nodeB, signB, null, null, 0, DEFAULT_STYLE);
+        this(id, nodeA, signA, nodeB, signB, null, null, 0, DEFAULT_STYLE, DEFAULT_BED);
     }
 
-    /** A segment with optional per-end tangent overrides, ungrouped, default style. */
+    /** A segment with optional per-end tangent overrides, ungrouped, default look. */
     public RailSegment(int id, int nodeA, int signA, int nodeB, int signB,
             Vector3d dirA, Vector3d dirB) {
-        this(id, nodeA, signA, nodeB, signB, dirA, dirB, 0, DEFAULT_STYLE);
+        this(id, nodeA, signA, nodeB, signB, dirA, dirB, 0, DEFAULT_STYLE, DEFAULT_BED);
+    }
+
+    /**
+     * How a segment looks: its rail style and bed material — what the rails
+     * item builds with and a repaint applies.
+     */
+    public record Look(String style, String bed) {
+
+        /** The mod's own rail on gravel. */
+        public static final Look DEFAULT = new Look(DEFAULT_STYLE, DEFAULT_BED);
+
+        public Look {
+            style = style == null ? DEFAULT_STYLE : style;
+            bed = bed == null ? DEFAULT_BED : bed;
+        }
+    }
+
+    public Look look() {
+        return new Look(style, bed);
     }
 
     /** The same segment with another group. */
     public RailSegment withGroup(int newGroup) {
-        return new RailSegment(id, nodeA, signA, nodeB, signB, dirA, dirB, newGroup, style);
+        return new RailSegment(id, nodeA, signA, nodeB, signB, dirA, dirB, newGroup, style, bed);
     }
 
-    /** The same segment drawn with another rail style. */
-    public RailSegment withStyle(String newStyle) {
-        return new RailSegment(id, nodeA, signA, nodeB, signB, dirA, dirB, group, newStyle);
+    /** The same segment with another rail style and bed. */
+    public RailSegment withLook(Look look) {
+        return new RailSegment(id, nodeA, signA, nodeB, signB, dirA, dirB, group, look.style(), look.bed());
     }
 
     /** The node at the other end, or −1 if {@code nodeId} is not an end. */

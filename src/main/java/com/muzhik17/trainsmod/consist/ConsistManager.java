@@ -253,7 +253,7 @@ public final class ConsistManager extends SavedData {
     /** At most this many couplings per tick (a pile-up resolves over a few ticks). */
     private static final int MAX_COUPLINGS_PER_TICK = 8;
     /**
-     * World-space prefilter between facing frame ends: chord ≤ arc, so ends
+     * World-space prefilter between facing consist ends: chord ≤ arc, so ends
      * that touch along the track (up to the allowed overlap) are at least
      * this close in the world.
      */
@@ -262,7 +262,7 @@ public final class ConsistManager extends SavedData {
     /** Reach past the player's block reach for a coupler (the client pick box is generous). */
     private static final double COUPLER_REACH_SLACK = 3.0;
 
-    /** A consist that may couple this tick, as the coupling math sees it, plus its frame ends in the world. */
+    /** A consist that may couple this tick, as the coupling math sees it, plus its outer couplers in the world. */
     private record Candidate(Consist consist, Coupling.Train train, Vector3d front, Vector3d rear) {
     }
 
@@ -344,7 +344,7 @@ public final class ConsistManager extends SavedData {
                 path.samplePosition(Coupling.rearEndS(composition, consist.s())));
     }
 
-    /** Cheap world-space prefilter: some frame end of one is near some frame end of the other. */
+    /** Cheap world-space prefilter: some end of one is near some end of the other. */
     private static boolean endsNear(Candidate a, Candidate b) {
         double max = CONTACT_PREFILTER * CONTACT_PREFILTER;
         return a.front().distanceSquared(b.front()) <= max

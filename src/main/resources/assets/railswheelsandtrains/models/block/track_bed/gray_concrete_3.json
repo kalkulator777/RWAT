@@ -1,0 +1,6 @@
+{
+  "parent": "railswheelsandtrains:block/track_bed/base_3",
+  "textures": {
+    "all": "minecraft:block/gray_concrete"
+  }
+}

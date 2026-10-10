@@ -11,5 +11,9 @@
   "brakes": {
     "train_kn": 72.0,
     "parking_kn": 14.4
+  },
+  "couplers": {
+    "front": -0.14,
+    "rear": -0.14
   }
 }

@@ -32,9 +32,10 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * {@link ClientDoorInteract} — the coupler is picked here: the look ray is
  * taken into each nearby wagon's local frame and tested against
  * <ul>
- *   <li>the <b>coupler gap</b> at each coupled end — a box across the track
- *       spanning the {@link ConsistComposition#COUPLER_GAP} plus a bit of
- *       either frame end, from the rail up to buffer height; and
+ *   <li>the <b>coupler</b> at each coupled end — a box across the track
+ *       around the coupler point, spanning the
+ *       {@link ConsistComposition#COUPLER_GAP} plus a bit of either frame,
+ *       from the rail up to buffer height; and
  *   <li>the <b>hull near a coupled end</b> — clicking a car's end (within
  *       {@link #END_ZONE}) means its coupler, the natural aim from the side.
  * </ul>
@@ -127,16 +128,17 @@ public final class ClientCouplerInteract {
 
             // the pose frame's +Z is the path-forward end (towards index − 1),
             // whichever way the model is turned; the frame is centred on the body
-            double half = slot.type().length() * 0.5;
             if (hasRear) {
+                double rear = slot.rearCouplerReach();
                 best = nearer(best, wagon, false, reach, HullCollision.rayBox(origin, dir,
-                        -HALF_WIDTH, MIN_Y, -half - ConsistComposition.COUPLER_GAP - INTO_FRAME,
-                        HALF_WIDTH, MAX_Y, -half + INTO_FRAME));
+                        -HALF_WIDTH, MIN_Y, -rear - ConsistComposition.COUPLER_GAP - INTO_FRAME,
+                        HALF_WIDTH, MAX_Y, -rear + INTO_FRAME));
             }
             if (hasFront) {
+                double front = slot.frontCouplerReach();
                 best = nearer(best, wagon, true, reach, HullCollision.rayBox(origin, dir,
-                        -HALF_WIDTH, MIN_Y, half - INTO_FRAME,
-                        HALF_WIDTH, MAX_Y, half + ConsistComposition.COUPLER_GAP + INTO_FRAME));
+                        -HALF_WIDTH, MIN_Y, front - INTO_FRAME,
+                        HALF_WIDTH, MAX_Y, front + ConsistComposition.COUPLER_GAP + INTO_FRAME));
             }
 
             // the hull: an end-zone hit means that end's coupler, any hit occludes

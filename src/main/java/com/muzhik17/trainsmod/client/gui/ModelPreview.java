@@ -13,16 +13,22 @@ import com.muzhik17.trainsmod.convention.ControlValue;
 import com.muzhik17.trainsmod.stock.WagonType;
 
 import net.minecraft.Util;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.block.BlockRenderDispatcher;
+import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.block.state.BlockState;
+import net.neoforged.neoforge.client.model.data.ModelData;
 
 /**
  * Turntable 3D previews for the item pickers (SPEC §6.11): the chosen wagon
  * (body, bogies, wheels, doors at rest, in the chosen livery) or a straight
- * run of the chosen rail style, slowly spinning inside a panel. Drawn the way
+ * run of the chosen rail style on the chosen bed, slowly spinning inside a
+ * panel. Drawn the way
  * the inventory draws the player: entity render types through the GUI's
  * buffer source, inventory lighting, full brightness. The meshes are emitted
  * from the CPU every frame — a few milliseconds for the biggest MVP models,
@@ -90,8 +96,9 @@ final class ModelPreview {
         end(graphics);
     }
 
-    /** A straight run of rail in the given style. */
-    static void rail(GuiGraphics graphics, int x0, int y0, int x1, int y1, RailStyle style) {
+    /** A straight run of rail in the given style, on a strip of the given bed block. */
+    static void rail(GuiGraphics graphics, int x0, int y0, int x1, int y1, RailStyle style,
+            BlockState bed) {
         float length = (float) (style.tileLength() * RAIL_TILES);
         float scale = Math.min((x1 - x0) * 0.8F / length, (y1 - y0) * 0.5F / 3.0F);
         begin(graphics, x0, y0, x1, y1, scale, 0.2F);
@@ -99,6 +106,7 @@ final class ModelPreview {
         MultiBufferSource buffers = graphics.bufferSource();
         // the tile runs along X; turn it so the track lies along the turntable's Z like a wagon
         pose.mulPose(Axis.YP.rotationDegrees(90.0F));
+        bedStrip(pose, buffers, bed, length);
         for (int i = 0; i < RAIL_TILES; i++) {
             pose.pushPose();
             pose.translate((i - (RAIL_TILES - 1) / 2.0) * style.tileLength(), 0.0, 0.0);
@@ -109,6 +117,25 @@ final class ModelPreview {
             pose.popPose();
         }
         end(graphics);
+    }
+
+    /**
+     * The bed under a straight run: three blocks across, as laid under track
+     * through block centres (SPEC §2.2), long enough that no rail overhangs
+     * it. The block draws itself — the invisible bed draws nothing.
+     */
+    private static void bedStrip(PoseStack pose, MultiBufferSource buffers, BlockState bed, float length) {
+        BlockRenderDispatcher blocks = Minecraft.getInstance().getBlockRenderer();
+        int count = (int) Math.ceil(length - 1.0e-3);
+        for (int i = 0; i < count; i++) {
+            for (int across = -1; across <= 1; across++) {
+                pose.pushPose();
+                pose.translate(i - count / 2.0, 0.0, across - 0.5);
+                blocks.renderSingleBlock(bed, pose, buffers, LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY,
+                        ModelData.EMPTY, null);
+                pose.popPose();
+            }
+        }
     }
 
     /** Clip to the panel, centre, scale, tilt and spin; {@code centreY} is the model height put at the middle. */

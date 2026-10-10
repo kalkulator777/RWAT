@@ -3,6 +3,7 @@ package com.muzhik17.trainsmod.client;
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.client.gui.RailStyleScreen;
 import com.muzhik17.trainsmod.client.gui.StockPickerScreen;
+import com.muzhik17.trainsmod.rail.BedMaterial;
 import com.muzhik17.trainsmod.rail.RailItem;
 
 import net.minecraft.client.Minecraft;
@@ -24,7 +25,8 @@ public final class ClientItemScreens {
         Player player = Minecraft.getInstance().player;
         if (player != null) {
             ItemStack stack = player.getItemInHand(hand);
-            Minecraft.getInstance().setScreen(new RailStyleScreen(hand, RailItem.style(stack)));
+            Minecraft.getInstance().setScreen(new RailStyleScreen(hand, RailItem.style(stack),
+                    BedMaterial.of(RailItem.bed(stack))));
         }
     }
 

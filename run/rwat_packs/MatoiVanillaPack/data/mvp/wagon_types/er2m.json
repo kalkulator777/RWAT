@@ -12,6 +12,10 @@
     "train_kn": 80.0,
     "parking_kn": 16.0
   },
+  "couplers": {
+    "front": -0.14,
+    "rear": -0.14
+  },
   "interior": {
     "min": [-1.5, 1.9, -9.6],
     "max": [1.5, 4.4, 9.6]

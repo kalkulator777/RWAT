@@ -1,0 +1,6 @@
+{
+  "parent": "railswheelsandtrains:block/track_bed/base_8",
+  "textures": {
+    "all": "minecraft:block/andesite"
+  }
+}

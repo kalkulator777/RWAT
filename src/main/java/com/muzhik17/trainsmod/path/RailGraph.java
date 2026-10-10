@@ -115,11 +115,11 @@ public final class RailGraph {
         }
     }
 
-    /** Set the rail style a segment is drawn with (replaces the stored record). */
-    public void setSegmentStyle(int segmentId, String style) {
+    /** Set the rail style and bed material of a segment (replaces the stored record). */
+    public void setSegmentLook(int segmentId, RailSegment.Look look) {
         RailSegment s = segments.get(segmentId);
         if (s != null) {
-            segments.put(segmentId, s.withStyle(style));
+            segments.put(segmentId, s.withLook(look));
         }
     }
 

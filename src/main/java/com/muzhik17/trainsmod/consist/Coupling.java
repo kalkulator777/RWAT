@@ -25,8 +25,9 @@ import com.muzhik17.trainsmod.stock.ConsistComposition;
  * and a route through a switch set against the other consist doesn't contain
  * its legs.
  *
- * <p><b>Contact.</b> On the shared route each consist occupies a frame span
- * (front face of wagon 0 … rear face of the last wagon). The facing ends touch
+ * <p><b>Contact.</b> On the shared route each consist spans from the front
+ * coupler of wagon 0 to the rear coupler of the last wagon (coupler points:
+ * the frame ends moved by the type's coupler offsets). The facing ends touch
  * when the gap between them is at most {@link ConsistComposition#COUPLER_GAP}
  * (+ float slack) — the spacing of coupled wagons — and the two are closing
  * faster than {@link #MIN_CLOSING_SPEED}. The speed condition is the
@@ -35,7 +36,7 @@ import com.muzhik17.trainsmod.stock.ConsistComposition;
  */
 public final class Coupling {
 
-    /** Facing frame ends this far past the coupler gap still touch (float noise). */
+    /** Facing coupler points this far past the coupler gap still touch (float noise). */
     public static final double CONTACT_SLACK = 0.05;
     /** Below this closing speed (blocks/tick, ≈0.07 km/h) touching consists don't couple. */
     public static final double MIN_CLOSING_SPEED = 1.0e-3;
@@ -100,26 +101,26 @@ public final class Coupling {
     public record Split(ConsistComposition front, ConsistComposition rear, double rearHeadS) {
     }
 
-    // --- frame ends ---
+    // --- consist ends: the outermost coupler points ---
 
-    /** Path distance of the front face of wagon 0's frame. */
+    /** Path distance of wagon 0's front coupler point. */
     public static double frontEndS(ConsistComposition composition, double headS) {
-        return composition.bodyCenterS(headS, 0) + composition.slot(0).type().length() * 0.5;
+        return composition.bodyCenterS(headS, 0) + composition.slot(0).frontCouplerReach();
     }
 
-    /** Path distance of the rear face of the last wagon's frame. */
+    /** Path distance of the last wagon's rear coupler point. */
     public static double rearEndS(ConsistComposition composition, double headS) {
         int last = composition.wagonCount() - 1;
-        return composition.bodyCenterS(headS, last) - composition.slot(last).type().length() * 0.5;
+        return composition.bodyCenterS(headS, last) - composition.slot(last).rearCouplerReach();
     }
 
     /**
      * Path distance of the coupler behind wagon {@code index} — the middle of
-     * the gap between its rear face and the next wagon's front face.
+     * the gap between its rear coupler point and the next wagon's front one.
      */
     public static double couplerS(ConsistComposition composition, double headS, int index) {
         return composition.bodyCenterS(headS, index)
-                - composition.slot(index).type().length() * 0.5
+                - composition.slot(index).rearCouplerReach()
                 - ConsistComposition.COUPLER_GAP * 0.5;
     }
 
@@ -295,7 +296,7 @@ public final class Coupling {
                 headS - kept.headS(), contactS);
     }
 
-    /** {@code [lo, hi]} of a train's frames on a route, unwrapped. */
+    /** {@code [lo, hi]} of a train's coupler span on a route, unwrapped. */
     private static double[] span(Train train, Placement placement) {
         double front = placement.map(frontEndS(train.composition(), train.headS()));
         double rear = placement.map(rearEndS(train.composition(), train.headS()));

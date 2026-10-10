@@ -1,0 +1,28 @@
+{
+  "variants": {
+    "layers=1": {
+      "model": "railswheelsandtrains:block/track_bed/invisible"
+    },
+    "layers=2": {
+      "model": "railswheelsandtrains:block/track_bed/invisible"
+    },
+    "layers=3": {
+      "model": "railswheelsandtrains:block/track_bed/invisible"
+    },
+    "layers=4": {
+      "model": "railswheelsandtrains:block/track_bed/invisible"
+    },
+    "layers=5": {
+      "model": "railswheelsandtrains:block/track_bed/invisible"
+    },
+    "layers=6": {
+      "model": "railswheelsandtrains:block/track_bed/invisible"
+    },
+    "layers=7": {
+      "model": "railswheelsandtrains:block/track_bed/invisible"
+    },
+    "layers=8": {
+      "model": "railswheelsandtrains:block/track_bed/invisible"
+    }
+  }
+}

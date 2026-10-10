@@ -4,6 +4,7 @@ import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.client.gui.RailStyleScreen;
 import com.muzhik17.trainsmod.client.gui.StockPickerScreen;
 import com.muzhik17.trainsmod.consist.RollingStockItem;
+import com.muzhik17.trainsmod.rail.BedMaterial;
 import com.muzhik17.trainsmod.stock.ConsistComposition;
 
 import net.minecraft.client.Minecraft;
@@ -22,8 +23,9 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
  * runClient -PquickPlay=<world> -Pautoshot=<what>}), once in a world the
  * client opens the picker and saves {@code screenshots/rwat-autoshot-1.png}
  * and {@code -2.png} a moment apart (the turntable has turned between them).
- * {@code <what>}: {@code stock:<type>[@<livery>]} or {@code rail:<style>}
- * ({@code rail:} alone = the mod's own rail). Off unless the property is set.
+ * {@code <what>}: {@code stock:<type>[@<livery>]} or {@code rail:<style>[@<bed>]}
+ * ({@code rail:} alone = the mod's own rail on gravel). Off unless the
+ * property is set.
  */
 @EventBusSubscriber(modid = RailsWheelsAndTrains.MODID, value = Dist.CLIENT)
 public final class ClientAutoShot {
@@ -61,7 +63,11 @@ public final class ClientAutoShot {
 
     private static Screen screenFor(String what) {
         if (what.startsWith("rail:")) {
-            return new RailStyleScreen(InteractionHand.MAIN_HAND, what.substring("rail:".length()));
+            String spec = what.substring("rail:".length());
+            int at = spec.indexOf('@');
+            String style = at >= 0 ? spec.substring(0, at) : spec;
+            BedMaterial bed = at >= 0 ? BedMaterial.of(spec.substring(at + 1)) : BedMaterial.GRAVEL;
+            return new RailStyleScreen(InteractionHand.MAIN_HAND, style, bed);
         }
         String spec = what.startsWith("stock:") ? what.substring("stock:".length()) : what;
         int at = spec.indexOf('@');

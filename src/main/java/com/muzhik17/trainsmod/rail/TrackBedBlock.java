@@ -9,6 +9,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
@@ -16,12 +17,13 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
- * Track bed: the rails' collision (SPEC §2.2, 0.3) — a real, visible block laid
- * along the spline by {@link RailNetwork}. Its <em>material</em> (what it looks
- * like — air, gravel, dirt…) is a future rail-editor choice; for now it is a
- * fixed gravel-textured block. Height is {@link #LAYERS} eighths of a block
- * (2px each): 1 on flat ground (a thin frame at the foot of the sleeper),
- * more on slopes so the bed top tracks the rising rail.
+ * Track bed: the rails' collision (SPEC §2.2, 0.3) — a real block laid along
+ * the spline by {@link RailNetwork}. Its {@link BedMaterial} (what it looks
+ * like — gravel, stone, planks… or nothing at all) is picked with the rail
+ * style; every material is a block of this class of its own. Height is
+ * {@link #LAYERS} eighths of a block (2px each): 1 on flat ground (a thin
+ * frame at the foot of the sleeper), more on slopes so the bed top tracks the
+ * rising rail.
  *
  * <p>Dumb block: stores nothing about the graph; the graph in SavedData is
  * the source of truth. A segment's bed is one unit though — breaking any bed
@@ -40,9 +42,33 @@ public class TrackBedBlock extends Block {
         }
     }
 
-    public TrackBedBlock(Properties properties) {
+    private final BedMaterial material;
+
+    public TrackBedBlock(Properties properties, BedMaterial material) {
         super(properties);
+        this.material = material;
         registerDefaultState(stateDefinition.any().setValue(LAYERS, 1));
+    }
+
+    public BedMaterial material() {
+        return material;
+    }
+
+    /** The invisible bed draws nothing; it still has its shape, so it is walked on and can be broken. */
+    @Override
+    protected RenderShape getRenderShape(BlockState state) {
+        return material.invisible() ? RenderShape.INVISIBLE : RenderShape.MODEL;
+    }
+
+    /** Nor does it shade: a full-height invisible bed (steep slopes) would cast AO and sky shadow. */
+    @Override
+    protected float getShadeBrightness(BlockState state, BlockGetter level, BlockPos pos) {
+        return material.invisible() ? 1.0F : super.getShadeBrightness(state, level, pos);
+    }
+
+    @Override
+    protected boolean propagatesSkylightDown(BlockState state, BlockGetter level, BlockPos pos) {
+        return material.invisible() || super.propagatesSkylightDown(state, level, pos);
     }
 
     @Override

@@ -11,6 +11,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 import org.joml.Vector3d;
 
@@ -89,11 +90,12 @@ public final class RailNetwork extends SavedData {
 
     /**
      * Create a segment between two marker points, tangents from the markers'
-     * directions, drawn in rail {@code style} (SPEC §6.10).
+     * directions, drawn in {@code look}'s rail style (SPEC §6.10) on its bed
+     * material (SPEC §2.2).
      */
     public RailSegment createSegment(ServerLevel level, Vector3d a, Vector3d dirA,
-            Vector3d b, Vector3d dirB, String style) {
-        return createSegment(level, a, dirA, false, b, dirB, false, style);
+            Vector3d b, Vector3d dirB, RailSegment.Look look) {
+        return createSegment(level, a, dirA, false, b, dirB, false, look);
     }
 
     /**
@@ -101,12 +103,12 @@ public final class RailNetwork extends SavedData {
      * {@link RailGraph#createSegment(Vector3d, Vector3d, boolean, Vector3d, Vector3d, boolean)}).
      */
     public RailSegment createSegment(ServerLevel level, Vector3d a, Vector3d dirA, boolean forceA,
-            Vector3d b, Vector3d dirB, boolean forceB, String style) {
+            Vector3d b, Vector3d dirB, boolean forceB, RailSegment.Look look) {
         // the segments at the nodes the new one will snap to: their ends there stop being open
         List<RailSegment> neighbours = segmentsAt(graph.nodeNear(a), graph.nodeNear(b));
         Set<BlockPos> stale = laidBefore(neighbours);
         RailSegment created = graph.createSegment(a, dirA, forceA, b, dirB, forceB);
-        graph.setSegmentStyle(created.id(), style);
+        graph.setSegmentLook(created.id(), look);
         RailSegment segment = graph.segment(created.id());
         List<RailSegment> relaid = current(neighbours);
         relaid.add(segment);
@@ -116,34 +118,44 @@ public final class RailNetwork extends SavedData {
     }
 
     /**
-     * Redraw the structure whose bed occupies {@code cell} in rail
-     * {@code style} (the whole click-built structure, like demolition);
-     * returns the structure's segment count, 0 if the cell is no track. The
-     * bed is re-laid under the new style's tile.
+     * Redraw the structure whose bed occupies {@code cell} in {@code look}'s
+     * rail style and bed material (the whole click-built structure, like
+     * demolition); returns the structure's segment count, 0 if the cell is no
+     * track. The bed is re-laid under the new style's tile, in the new material.
      */
-    public int restyleStructureAt(ServerLevel level, BlockPos cell, String style) {
+    public int restyleStructureAt(ServerLevel level, BlockPos cell, RailSegment.Look look) {
         RailSegment hit = segmentContaining(cell);
         if (hit == null) {
             return 0;
         }
         List<RailSegment> structure = graph.structureOf(hit);
-        restyle(level, structure, style);
+        relook(level, structure, segment -> look);
         return structure.size();
     }
 
-    /** Redraw every segment of this dimension in rail {@code style}; returns the count. */
+    /** Redraw every segment of this dimension in rail {@code style}, beds kept; returns the count. */
     public int restyleAll(ServerLevel level, String style) {
+        return relookAll(level, segment -> new RailSegment.Look(style, segment.bed()));
+    }
+
+    /** Re-lay the bed of every segment of this dimension in {@code material}, styles kept; returns the count. */
+    public int rebedAll(ServerLevel level, BedMaterial material) {
+        return relookAll(level, segment -> new RailSegment.Look(segment.style(), material.key()));
+    }
+
+    private int relookAll(ServerLevel level, Function<RailSegment, RailSegment.Look> look) {
         List<RailSegment> all = List.copyOf(graph.segments());
         if (!all.isEmpty()) {
-            restyle(level, all, style);
+            relook(level, all, look);
         }
         return all.size();
     }
 
-    private void restyle(ServerLevel level, List<RailSegment> segments, String style) {
+    private void relook(ServerLevel level, List<RailSegment> segments,
+            Function<RailSegment, RailSegment.Look> look) {
         Set<BlockPos> stale = laidBefore(segments);
         for (RailSegment segment : segments) {
-            graph.setSegmentStyle(segment.id(), style);
+            graph.setSegmentLook(segment.id(), look.apply(segment));
         }
         layBed(level, stale, current(segments));
         markChanged(level);
@@ -381,47 +393,86 @@ public final class RailNetwork extends SavedData {
     }
 
     /**
+     * One cell of bed as a segment wants it: how high, in what material, and
+     * which segment wants it.
+     */
+    private record Bed(int layers, BedMaterial material, int segment) {
+
+        /**
+         * The bed a cell two segments want gets: the taller one; at equal
+         * height the older segment's — a track built onto an existing one
+         * doesn't repaint the joint, and the outcome doesn't depend on order.
+         */
+        static Bed stronger(Bed a, Bed b) {
+            if (a.layers != b.layers) {
+                return a.layers > b.layers ? a : b;
+            }
+            return a.segment <= b.segment ? a : b;
+        }
+
+        BlockState state() {
+            return RailsWheelsAndTrains.trackBed(material).defaultBlockState()
+                    .setValue(TrackBedBlock.LAYERS, layers);
+        }
+    }
+
+    /** Merge a segment's bed cells into {@code into}, the stronger bed winning each cell. */
+    private void want(Map<BlockPos, Bed> into, RailSegment segment, BedRaster.Area area,
+            Set<BlockPos> only) {
+        BedMaterial material = BedMaterial.of(segment.bed());
+        bedCells(segment, area).forEach((cell, layers) -> {
+            if (only == null || only.contains(cell)) {
+                into.merge(cell, new Bed(layers, material, segment.id()), Bed::stronger);
+            }
+        });
+    }
+
+    /**
      * Bring the bed in line with the graph after an edit: {@code segments} are
      * those whose bed may have changed (as they are now), {@code stale} every
      * block they — or the segments the edit removed — held bed in before. A
      * cell gets the most layers any segment under it needs (other segments
      * sharing the cells count too, so a joint or a crossing keeps what the
-     * neighbour needs); stale cells no segment wants any more lose their bed.
+     * neighbour needs), in the material of the segment that needs them
+     * ({@link Bed#stronger}); stale cells no segment wants any more lose
+     * their bed.
      */
     private void layBed(ServerLevel level, Set<BlockPos> stale, Collection<RailSegment> segments) {
-        Map<BlockPos, Integer> wanted = new LinkedHashMap<>();
+        Map<BlockPos, Bed> wanted = new LinkedHashMap<>();
         Set<Integer> ids = new HashSet<>();
         for (RailSegment segment : segments) {
             ids.add(segment.id());
-            bedCells(segment).forEach((cell, layers) -> wanted.merge(cell, layers, Math::max));
+            want(wanted, segment, null, null);
         }
         Set<BlockPos> affected = new HashSet<>(stale);
         affected.addAll(wanted.keySet());
-        claims(affected, ids).forEach((cell, layers) -> wanted.merge(cell, layers, Math::max));
-        BlockState bed = RailsWheelsAndTrains.TRACK_BED.get().defaultBlockState();
+        claims(affected, ids).forEach((cell, bed) -> wanted.merge(cell, bed, Bed::stronger));
         for (BlockPos cell : stale) {
-            if (!wanted.containsKey(cell) && level.getBlockState(cell).is(RailsWheelsAndTrains.TRACK_BED.get())) {
+            if (!wanted.containsKey(cell) && isBed(level.getBlockState(cell))) {
                 level.removeBlock(cell, false);
             }
         }
-        for (Map.Entry<BlockPos, Integer> cell : wanted.entrySet()) {
+        for (Map.Entry<BlockPos, Bed> cell : wanted.entrySet()) {
             BlockState existing = level.getBlockState(cell.getKey());
-            BlockState laid = bed.setValue(TrackBedBlock.LAYERS, cell.getValue());
-            if (existing != laid && (existing.isAir() || existing.canBeReplaced()
-                    || existing.is(RailsWheelsAndTrains.TRACK_BED.get()))) {
+            BlockState laid = cell.getValue().state();
+            if (existing != laid && (existing.isAir() || existing.canBeReplaced() || isBed(existing))) {
                 level.setBlock(cell.getKey(), laid, Block.UPDATE_ALL);
             }
         }
     }
 
+    private static boolean isBed(BlockState state) {
+        return state.getBlock() instanceof TrackBedBlock;
+    }
+
     /**
      * The bed the segments other than {@code excluded} want among
-     * {@code cells}, with their layers. Only segments whose
-     * {@linkplain #bounds bounds} overlap the cells are rasterized, and of
-     * those only the tiles reaching the cells' columns.
+     * {@code cells}. Only segments whose {@linkplain #bounds bounds} overlap
+     * the cells are rasterized, and of those only the tiles reaching the
+     * cells' columns.
      */
-    private Map<BlockPos, Integer> claims(Set<BlockPos> cells, Set<Integer> excluded) {
-        Map<BlockPos, Integer> claimed = new HashMap<>();
+    private Map<BlockPos, Bed> claims(Set<BlockPos> cells, Set<Integer> excluded) {
+        Map<BlockPos, Bed> claimed = new HashMap<>();
         if (cells.isEmpty()) {
             return claimed;
         }
@@ -440,11 +491,7 @@ public final class RailNetwork extends SavedData {
             if (excluded.contains(segment.id()) || !overlaps(bounds(segment), box)) {
                 continue;
             }
-            bedCells(segment, area).forEach((cell, layers) -> {
-                if (cells.contains(cell)) {
-                    claimed.merge(cell, layers, Math::max);
-                }
-            });
+            want(claimed, segment, area, cells);
         }
         return claimed;
     }
@@ -561,6 +608,9 @@ public final class RailNetwork extends SavedData {
             if (!segment.style().isEmpty()) {
                 segmentTag.putString("Style", segment.style());
             }
+            if (!segment.bed().isEmpty()) {
+                segmentTag.putString("Bed", segment.bed());
+            }
             segments.add(segmentTag);
         }
         tag.put("Segments", segments);
@@ -620,7 +670,8 @@ public final class RailNetwork extends SavedData {
             network.graph.putSegment(new RailSegment(segmentTag.getInt("Id"),
                     segmentTag.getInt("A"), segmentTag.getInt("SA"),
                     segmentTag.getInt("B"), segmentTag.getInt("SB"), dirA, dirB,
-                    segmentTag.getInt("Group"), segmentTag.getString("Style")));
+                    segmentTag.getInt("Group"), segmentTag.getString("Style"),
+                    segmentTag.getString("Bed")));
         }
         for (Tag entry : tag.getList("Markers", Tag.TAG_COMPOUND)) {
             CompoundTag markerTag = (CompoundTag) entry;

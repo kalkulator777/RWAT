@@ -1,0 +1,6 @@
+{
+  "parent": "railswheelsandtrains:block/track_bed/base_1",
+  "textures": {
+    "all": "minecraft:block/cobblestone"
+  }
+}

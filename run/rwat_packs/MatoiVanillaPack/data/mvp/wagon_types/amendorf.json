@@ -12,6 +12,10 @@
     "train_kn": 110.0,
     "parking_kn": 25.0
   },
+  "couplers": {
+    "front": -0.12,
+    "rear": -0.12
+  },
   "aliases": ["rwat:plazkart"],
   "interior": {
     "min": [-1.35, 1.81, -11.75],
