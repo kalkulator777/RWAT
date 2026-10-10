@@ -28,10 +28,12 @@ import com.muzhik17.trainsmod.stock.WagonTypes;
 import com.muzhik17.trainsmod.network.TrackPathSpec;
 import com.muzhik17.trainsmod.path.RailSegment;
 import com.muzhik17.trainsmod.path.TrackPath;
+import com.muzhik17.trainsmod.rail.BedMaterial;
 import com.muzhik17.trainsmod.rail.RailNetwork;
 
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ChunkMap;
@@ -111,7 +113,13 @@ public final class RwatCommands {
                         .then(Commands.literal("style")
                                 .then(Commands.argument("style", StringArgumentType.greedyString())
                                         .executes(ctx -> railStyle(ctx,
-                                                StringArgumentType.getString(ctx, "style"))))))
+                                                StringArgumentType.getString(ctx, "style")))))
+                        .then(Commands.literal("bed")
+                                .then(Commands.argument("material", StringArgumentType.word())
+                                        .suggests((ctx, builder) ->
+                                                SharedSuggestionProvider.suggest(BedMaterial.ids(), builder))
+                                        .executes(ctx -> railBed(ctx,
+                                                StringArgumentType.getString(ctx, "material"))))))
                 .then(Commands.literal("track")
                         .executes(RwatCommands::trackDump))
                 .then(Commands.literal("control")
@@ -472,6 +480,24 @@ public final class RwatCommands {
         int count = RailNetwork.get(level).restyleAll(level, id);
         ctx.getSource().sendSuccess(() -> Component.literal(
                 count + " rail segment(s) now drawn as " + (id.isEmpty() ? "standard" : id) + "."), false);
+        return count;
+    }
+
+    /**
+     * Re-lay the bed of every segment of this dimension in a bed material
+     * (SPEC §2.2), rail styles kept.
+     */
+    private static int railBed(CommandContext<CommandSourceStack> ctx, String id) {
+        BedMaterial material = BedMaterial.byId(id);
+        if (material == null) {
+            ctx.getSource().sendFailure(Component.literal(
+                    "Not a bed material: " + id + " (one of " + String.join(", ", BedMaterial.ids()) + ")"));
+            return 0;
+        }
+        ServerLevel level = ctx.getSource().getLevel();
+        int count = RailNetwork.get(level).rebedAll(level, material);
+        ctx.getSource().sendSuccess(() -> Component.literal(
+                count + " rail segment(s) now on a " + material.id() + " bed."), false);
         return count;
     }
 

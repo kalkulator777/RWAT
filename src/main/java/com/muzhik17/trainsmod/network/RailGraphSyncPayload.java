@@ -30,10 +30,11 @@ public record RailGraphSyncPayload(int revision, List<SyncNode> nodes, List<Sync
 
     /**
      * {@code dirA}/{@code dirB} — nullable per-end tangent overrides (crossings);
-     * {@code group} — structure group (one click built it), 0 = standalone.
+     * {@code group} — structure group (one click built it), 0 = standalone;
+     * {@code style}/{@code bed} — rail style and bed material.
      */
     public record SyncSegment(int id, int nodeA, int signA, int nodeB, int signB,
-            Vector3d dirA, Vector3d dirB, int group, String style) {
+            Vector3d dirA, Vector3d dirB, int group, String style, String bed) {
     }
 
     /** A node's switch selection counter (SPEC §2.2 v1) — only non-zero ones travel. */
@@ -59,7 +60,7 @@ public record RailGraphSyncPayload(int revision, List<SyncNode> nodes, List<Sync
         for (RailSegment segment : network.graph().segments()) {
             segments.add(new SyncSegment(segment.id(), segment.nodeA(), segment.signA(),
                     segment.nodeB(), segment.signB(), segment.dirA(), segment.dirB(),
-                    segment.group(), segment.style()));
+                    segment.group(), segment.style(), segment.bed()));
         }
         List<SyncSwitch> switches = new ArrayList<>();
         for (Map.Entry<Integer, Integer> entry : network.graph().switchSelections().entrySet()) {
@@ -79,7 +80,7 @@ public record RailGraphSyncPayload(int revision, List<SyncNode> nodes, List<Sync
         for (SyncSegment segment : segments) {
             graph.putSegment(new RailSegment(segment.id(), segment.nodeA(), segment.signA(),
                     segment.nodeB(), segment.signB(), segment.dirA(), segment.dirB(),
-                    segment.group(), segment.style()));
+                    segment.group(), segment.style(), segment.bed()));
         }
         for (SyncSwitch sw : switches) {
             graph.setSwitchSelection(sw.nodeId(), sw.selection());
@@ -110,6 +111,7 @@ public record RailGraphSyncPayload(int revision, List<SyncNode> nodes, List<Sync
             writeOptionalDir(buf, segment.dirB());
             buf.writeVarInt(segment.group());
             buf.writeUtf(segment.style());
+            buf.writeUtf(segment.bed());
         }
         buf.writeVarInt(payload.switches.size());
         for (SyncSwitch sw : payload.switches) {
@@ -147,7 +149,8 @@ public record RailGraphSyncPayload(int revision, List<SyncNode> nodes, List<Sync
         for (int i = 0; i < segmentCount; i++) {
             segments.add(new SyncSegment(buf.readVarInt(),
                     buf.readVarInt(), buf.readByte(), buf.readVarInt(), buf.readByte(),
-                    readOptionalDir(buf), readOptionalDir(buf), buf.readVarInt(), buf.readUtf()));
+                    readOptionalDir(buf), readOptionalDir(buf), buf.readVarInt(), buf.readUtf(),
+                    buf.readUtf()));
         }
         int switchCount = buf.readVarInt();
         List<SyncSwitch> switches = new ArrayList<>(switchCount);

@@ -1,5 +1,9 @@
 package com.muzhik17.trainsmod;
 
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.Map;
+
 import org.slf4j.Logger;
 
 import com.mojang.logging.LogUtils;
@@ -10,6 +14,7 @@ import com.muzhik17.trainsmod.consist.RollingStockItem;
 import com.muzhik17.trainsmod.consist.WagonEntity;
 import com.muzhik17.trainsmod.network.RwatNetwork;
 import com.muzhik17.trainsmod.pack.RwatPacks;
+import com.muzhik17.trainsmod.rail.BedMaterial;
 import com.muzhik17.trainsmod.rail.RailItem;
 import com.muzhik17.trainsmod.rail.RailMarkerBlock;
 import com.muzhik17.trainsmod.rail.RailSwitchMarkerBlock;
@@ -69,6 +74,12 @@ public class RailsWheelsAndTrains {
                     .persistent(Codec.STRING)
                     .networkSynchronized(ByteBufCodecs.STRING_UTF8));
 
+    /** The bed material a rails item lays (SPEC §2.2, {@link BedMaterial} id); absent = gravel. */
+    public static final DeferredHolder<DataComponentType<?>, DataComponentType<String>> RAIL_BED =
+            DATA_COMPONENTS.registerComponentType("rail_bed", builder -> builder
+                    .persistent(Codec.STRING)
+                    .networkSynchronized(ByteBufCodecs.STRING_UTF8));
+
     /** The wagon type + livery a rolling stock item places (SPEC §6.11); absent = nothing chosen yet. */
     public static final DeferredHolder<DataComponentType<?>, DataComponentType<RollingStockItem.Selection>> STOCK_SELECTION =
             DATA_COMPONENTS.registerComponentType("stock_selection", builder -> builder
@@ -98,13 +109,11 @@ public class RailsWheelsAndTrains {
                     .updateInterval(10)
                     .build(MODID + ":wagon"));
 
-    /** Track bed: the rails' invisible collision block (SPEC §2.2, 0.3). */
-    public static final DeferredBlock<TrackBedBlock> TRACK_BED = BLOCKS.registerBlock("track_bed",
-            TrackBedBlock::new, BlockBehaviour.Properties.of()
-                    .mapColor(MapColor.STONE)
-                    .strength(1.5F)
-                    .sound(SoundType.GRAVEL)
-                    .noOcclusion());
+    /** Track bed: the rails' collision block (SPEC §2.2, 0.3), a block per bed material. */
+    public static final Map<BedMaterial, DeferredBlock<TrackBedBlock>> TRACK_BEDS = registerTrackBeds();
+
+    /** The gravel bed — the only one before bed materials, still under the plain name. */
+    public static final DeferredBlock<TrackBedBlock> TRACK_BED = TRACK_BEDS.get(BedMaterial.GRAVEL);
 
     public static final DeferredItem<BlockItem> TRACK_BED_ITEM =
             ITEMS.registerSimpleBlockItem("track_bed", TRACK_BED);
@@ -158,6 +167,20 @@ public class RailsWheelsAndTrains {
                         output.accept(CROWBAR.get());
                     })
                     .build());
+
+    private static Map<BedMaterial, DeferredBlock<TrackBedBlock>> registerTrackBeds() {
+        Map<BedMaterial, DeferredBlock<TrackBedBlock>> beds = new EnumMap<>(BedMaterial.class);
+        for (BedMaterial material : BedMaterial.values()) {
+            beds.put(material, BLOCKS.registerBlock(material.blockName(),
+                    properties -> new TrackBedBlock(properties, material), material.properties()));
+        }
+        return Collections.unmodifiableMap(beds);
+    }
+
+    /** The bed block of a material, for laying. */
+    public static TrackBedBlock trackBed(BedMaterial material) {
+        return TRACK_BEDS.get(material).get();
+    }
 
     // FML passes IEventBus / ModContainer in automatically by parameter type.
     public RailsWheelsAndTrains(IEventBus modEventBus, ModContainer modContainer) {

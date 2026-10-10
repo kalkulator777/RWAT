@@ -62,7 +62,7 @@ neoForge {
             if (project.hasProperty('quickPlay')) {
                 programArguments.addAll '--quickPlaySingleplayer', project.property('quickPlay').toString()
             }
-            // `-Pautoshot=stock:<type>[@livery]|rail:<style>` screenshots an item picker (debug.ClientAutoShot).
+            // `-Pautoshot=stock:<type>[@livery]|rail:<style>[@bed]` screenshots an item picker (debug.ClientAutoShot).
             if (project.hasProperty('autoshot')) {
                 systemProperty 'rwat.autoshot', project.property('autoshot').toString()
             }

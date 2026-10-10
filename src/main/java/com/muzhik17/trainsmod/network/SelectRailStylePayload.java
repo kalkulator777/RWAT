@@ -9,12 +9,15 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.InteractionHand;
 
 /**
- * Client→server: the rail style picked in the rails item's screen (SPEC
- * §6.10), stored on the rails stack in {@code hand}. {@code ""} = the mod's
- * own rail. The server checks the hand really holds rails; it doesn't check
- * the style exists — styles are client resources, like liveries.
+ * Client→server: the rail style and bed material picked in the rails item's
+ * screen (SPEC §6.10, §2.2), stored on the rails stack in {@code hand}.
+ * {@code ""} = the mod's own rail; {@code bed} is a {@code BedMaterial} id.
+ * The server checks the hand really holds rails and knows the bed material;
+ * it doesn't check the style exists — styles are client resources, like
+ * liveries.
  */
-public record SelectRailStylePayload(InteractionHand hand, String style) implements CustomPacketPayload {
+public record SelectRailStylePayload(InteractionHand hand, String style, String bed)
+        implements CustomPacketPayload {
 
     /** Longest accepted style id (a resource location — far below this in practice). */
     public static final int MAX_LENGTH = 256;
@@ -29,10 +32,12 @@ public record SelectRailStylePayload(InteractionHand hand, String style) impleme
     private static void write(FriendlyByteBuf buf, SelectRailStylePayload payload) {
         buf.writeEnum(payload.hand);
         buf.writeUtf(payload.style, MAX_LENGTH);
+        buf.writeUtf(payload.bed, MAX_LENGTH);
     }
 
     private static SelectRailStylePayload read(FriendlyByteBuf buf) {
-        return new SelectRailStylePayload(buf.readEnum(InteractionHand.class), buf.readUtf(MAX_LENGTH));
+        return new SelectRailStylePayload(buf.readEnum(InteractionHand.class), buf.readUtf(MAX_LENGTH),
+                buf.readUtf(MAX_LENGTH));
     }
 
     @Override
