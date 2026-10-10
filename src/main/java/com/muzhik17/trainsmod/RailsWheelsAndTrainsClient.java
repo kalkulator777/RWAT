@@ -2,7 +2,9 @@ package com.muzhik17.trainsmod;
 
 import com.muzhik17.trainsmod.client.ClientConsists;
 import com.muzhik17.trainsmod.client.ClientCabHud;
-import com.muzhik17.trainsmod.client.ClientLightsKey;
+import com.muzhik17.trainsmod.client.ClientConfig;
+import com.muzhik17.trainsmod.client.ClientDriverHud;
+import com.muzhik17.trainsmod.client.ClientPanelKey;
 import com.muzhik17.trainsmod.client.ClientRailGraph;
 import com.muzhik17.trainsmod.client.ClientRiderSync;
 import com.muzhik17.trainsmod.client.ClientWalk;
@@ -39,8 +41,10 @@ public class RailsWheelsAndTrainsClient {
         modEventBus.addListener(RailsWheelsAndTrainsClient::onClientSetup);
         modEventBus.addListener(RailsWheelsAndTrainsClient::onRegisterRenderers);
         modEventBus.addListener(RailsWheelsAndTrainsClient::onRegisterReloadListeners);
-        modEventBus.addListener(ClientLightsKey::register);
+        modEventBus.addListener(ClientPanelKey::register);
         modEventBus.addListener(ClientCabHud::register);
+        modEventBus.addListener(ClientDriverHud::register);
+        ClientConfig.register(container);
     }
 
     static void onClientSetup(FMLClientSetupEvent event) {

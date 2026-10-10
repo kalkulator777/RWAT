@@ -163,12 +163,9 @@ public final class ConsistManager extends SavedData {
             } else {
                 consist.takeControl(driver.cab().getUUID(), driver.facing());
             }
+            // the handles reach the driver's panel with the snapshot (SPEC §9.7)
             if (consist.advance(path)) {
                 dirty = true;
-            }
-            // handle moved → actionbar feedback (the v0 stand-in for a cab HUD)
-            if (consist.consumeControlsChanged() && driver != null) {
-                driver.player().displayClientMessage(controlsStatus(consist), true);
             }
 
             List<WagonEntity> wagons = new ArrayList<>();
@@ -609,16 +606,6 @@ public final class ConsistManager extends SavedData {
             }
         }
         return null;
-    }
-
-    /** Actionbar line shown when a handle moves — the v0 stand-in for a cab HUD. */
-    private static Component controlsStatus(Consist consist) {
-        double kmh = Math.abs(consist.speed()) * 20.0 * 3.6;
-        return Component.translatable("message.railswheelsandtrains.controls_status",
-                consist.reverser() > 0 ? "F" : consist.reverser() < 0 ? "R" : "N",
-                consist.throttleNotch(), Consist.NOTCHES,
-                consist.brakeNotch(), Consist.NOTCHES,
-                String.format("%.0f", kmh));
     }
 
     // --- SavedData ---

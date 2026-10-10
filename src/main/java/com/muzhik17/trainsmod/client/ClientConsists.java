@@ -291,6 +291,12 @@ public final class ClientConsists {
         return state.composition.slot(wagonIndex);
     }
 
+    /** The synced composition of a consist, or null if unknown. */
+    public static ConsistComposition composition(int consistId) {
+        State state = STATES.get(consistId);
+        return state == null ? null : state.composition;
+    }
+
     /** The driver's handles of a consist (SPEC §9), or {@link Handles#REST} if unknown. */
     public static Handles handles(int consistId) {
         State state = STATES.get(consistId);

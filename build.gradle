@@ -66,7 +66,7 @@ neoForge {
             if (project.hasProperty('autoshot')) {
                 systemProperty 'rwat.autoshot', project.property('autoshot').toString()
             }
-            // `-Pautoscene=cab|walk` plays a scripted scene with screenshots (debug.ClientAutoScene) — use a save copy.
+            // `-Pautoscene=cab|walk|panel|…` plays a scripted scene with screenshots (debug.ClientAutoScene) — use a save copy.
             if (project.hasProperty('autoscene')) {
                 systemProperty 'rwat.autoscene', project.property('autoscene').toString()
             }

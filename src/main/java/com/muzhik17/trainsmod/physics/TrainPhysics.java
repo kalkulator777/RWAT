@@ -49,6 +49,11 @@ public final class TrainPhysics {
     private TrainPhysics() {
     }
 
+    /** A speed in blocks/tick as km/h (1 block = 1 m), sign kept. */
+    public static double kmh(double blocksPerTick) {
+        return blocksPerTick * TICKS_PER_SECOND * 3.6;
+    }
+
     /**
      * One tick of longitudinal dynamics.
      *

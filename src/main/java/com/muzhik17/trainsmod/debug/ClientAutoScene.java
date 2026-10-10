@@ -24,7 +24,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 /**
  * Dev tool: a scripted scene with screenshots (debug, SPEC §2.4a), for looking
  * at world rendering from an automated run — {@code ./gradlew runClient
- * -PquickPlay=<world copy> -Pautoscene=cab|walk}. Off unless the system property
+ * -PquickPlay=<world copy> -Pautoscene=cab|walk|beam|gangway|er2|panel}. Off unless the system property
  * {@code rwat.autoscene} is set; use a throwaway copy of a save (it spawns a
  * train, changes time and game mode).
  *
@@ -69,6 +69,10 @@ public final class ClientAutoScene {
         }
         if (scene.equals("er2")) {
             er2(mc);
+            return;
+        }
+        if (scene.equals("panel")) {
+            panel(mc);
             return;
         }
         if (!scene.equals("cab")) {
@@ -223,13 +227,137 @@ public final class ClientAutoScene {
             case 456 -> look(mc, 170.0F, 0.0F);
             case 466 -> report(mc, String.format(Locale.ROOT, "looked 170 off the desk: yaw %.1f, wagon %.1f",
                     mc.player.getYRot(), wagon(mc).getYRot()));
-            case 470 -> mc.setScreen(new com.muzhik17.trainsmod.client.gui.TrainLightsScreen(
-                    wagon(mc).getConsistId()));
-            case 485 -> shot(mc, "rwat-walk-lights-menu.png");
+            case 470 -> mc.setScreen(new com.muzhik17.trainsmod.client.gui.DriverPanelScreen(wagon(mc)));
+            case 485 -> shot(mc, "rwat-walk-driver-panel.png");
             case 495 -> mc.stop();
             default -> {
             }
         }
+    }
+
+    /**
+     * {@code panel} (SPEC §9.7): the driver's instruments. A ChS4T with a
+     * coach, the player in its cab (a cab without a walkable interior: at the
+     * controls just by riding it), pulling away at notch 5, in a 1920×1080
+     * window — the HUD at the automatic GUI scale (4) and at 2; then the
+     * driver's panel, the mouse on the throttle's sixth lamp (outline and
+     * tooltip), a click there, the panel once the handle has moved, and the
+     * mouse on the reverser, locked on the move ({@code rwat-panel-*.png}).
+     */
+    private static void panel(Minecraft mc) {
+        switch (ticks) {
+            case 100 -> {
+                // 1080p with the automatic GUI scale (4): the most common setup
+                mc.getWindow().setWindowed(1920, 1080);
+                mc.options.guiScale().set(0);
+                mc.resizeDisplay();
+                origin = mc.player.position().add(4000.0, 0.0, 0.0);
+                command(mc, "gamemode creative");
+                command(mc, String.format(Locale.ROOT, "tp @s %.3f %.3f %.3f 0 0", origin.x, origin.y, origin.z));
+            }
+            case 160 -> command(mc, "rwat spawn with chs4t amendorf");
+            case 170 -> {
+                command(mc, "gamerule doDaylightCycle false");
+                command(mc, "time set noon");
+                command(mc, "weather clear");
+                // the ChS4T's own groups: its front headlight and cab light (lamps lit in the panel)
+                command(mc, "rwat control head1HL 1");
+                command(mc, "rwat control cab1 1");
+            }
+            // the loco is the far end of the train from where it was spawned
+            case 180 -> command(mc, "ride @s mount @e[type=railswheelsandtrains:wagon,sort=furthest,limit=1]");
+            case 190 -> {
+                command(mc, "rwat handle reverser 1");
+                command(mc, "rwat handle train_brake 0");
+                command(mc, "rwat handle throttle 5");
+                report(mc, "riding " + mc.player.getVehicle());
+            }
+            case 290 -> shot(mc, "rwat-panel-hud.png");
+            case 295 -> {
+                mc.options.guiScale().set(2);
+                mc.resizeDisplay();
+            }
+            case 310 -> shot(mc, "rwat-panel-hud-wide.png");
+            case 315 -> {
+                mc.options.guiScale().set(0);
+                mc.resizeDisplay();
+                if (mc.player.getVehicle() instanceof WagonEntity cab) {
+                    mc.setScreen(new com.muzhik17.trainsmod.client.gui.DriverPanelScreen(cab));
+                }
+            }
+            case 330 -> {
+                double[] at = panelPoint(mc, Consist.Handle.THROTTLE, 6);
+                if (at != null) {
+                    moveMouse(mc, at[0], at[1]);
+                }
+            }
+            case 340 -> shot(mc, "rwat-panel-screen-hover.png");
+            case 345 -> {
+                double[] at = panelPoint(mc, Consist.Handle.THROTTLE, 6);
+                if (at != null) {
+                    mc.screen.mouseClicked(at[0], at[1], 0);
+                }
+            }
+            case 360 -> {
+                report(mc, "handles " + com.muzhik17.trainsmod.client.ClientConsists.handles(
+                        mc.player.getVehicle() instanceof WagonEntity cab ? cab.getConsistId() : -1));
+                shot(mc, "rwat-panel-screen-clicked.png");
+            }
+            // on the move the reverser is locked: no outline, the tooltip says why
+            case 365 -> {
+                double[] at = panelPoint(mc, Consist.Handle.REVERSER, -1);
+                if (at != null) {
+                    moveMouse(mc, at[0], at[1]);
+                }
+            }
+            case 375 -> shot(mc, "rwat-panel-screen-reverser.png");
+            case 380 -> mc.stop();
+            default -> {
+            }
+        }
+    }
+
+    /**
+     * Put the mouse at a GUI point. A warp ({@code glfwSetCursorPos}) is not
+     * enough: GLFW on X11 drops the motion event of its own warp, so the game
+     * never hears of it — the mouse handler is told directly.
+     */
+    private static void moveMouse(Minecraft mc, double guiX, double guiY) {
+        double scale = mc.getWindow().getGuiScale();
+        long window = mc.getWindow().getWindow();
+        org.lwjgl.glfw.GLFW.glfwSetCursorPos(window, guiX * scale, guiY * scale);
+        try {
+            var onMove = net.minecraft.client.MouseHandler.class.getDeclaredMethod("onMove",
+                    long.class, double.class, double.class);
+            onMove.setAccessible(true);
+            onMove.invoke(mc.mouseHandler, window, guiX * scale, guiY * scale);
+        } catch (ReflectiveOperationException e) {
+            RailsWheelsAndTrains.LOGGER.warn("[autoscene] can't move the mouse: {}", e.toString());
+        }
+    }
+
+    /** A GUI point of the open driver's panel that stands for {@code handle} at {@code value}, or null. */
+    private static double[] panelPoint(Minecraft mc, Consist.Handle handle, int value) {
+        if (!(mc.screen instanceof com.muzhik17.trainsmod.client.gui.DriverPanelScreen screen)
+                || !(mc.player.getVehicle() instanceof WagonEntity cab)) {
+            return null;
+        }
+        var readout = com.muzhik17.trainsmod.client.gui.DriverPanel.readout(cab);
+        if (readout == null) {
+            return null;
+        }
+        int height = com.muzhik17.trainsmod.client.gui.DriverPanel.height(readout);
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < com.muzhik17.trainsmod.client.gui.DriverPanel.WIDTH; x++) {
+                var target = com.muzhik17.trainsmod.client.gui.DriverPanel.targetAt(mc.font,
+                        screen.panelX(), screen.panelY(), readout, screen.panelX() + x + 0.5,
+                        screen.panelY() + y + 0.5);
+                if (target != null && target.handle() == handle && target.value() == value) {
+                    return new double[]{screen.panelX() + x + 1.5, screen.panelY() + y + 2.5};
+                }
+            }
+        }
+        return null;
     }
 
     /**
@@ -628,9 +756,26 @@ public final class ClientAutoScene {
                 world.x, world.y, world.z, worldYaw, pitch));
     }
 
+    /**
+     * Run a command as the player — in singleplayer on the integrated server
+     * with operator rights, so a save without cheats (one a dedicated server
+     * made) works too.
+     */
     private static void command(Minecraft mc, String command) {
         RailsWheelsAndTrains.LOGGER.info("[autoscene] /{}", command);
-        mc.player.connection.sendCommand(command);
+        var server = mc.getSingleplayerServer();
+        if (server == null) {
+            mc.player.connection.sendCommand(command);
+            return;
+        }
+        java.util.UUID id = mc.player.getUUID();
+        server.execute(() -> {
+            var player = server.getPlayerList().getPlayer(id);
+            if (player != null) {
+                server.getCommands().performPrefixedCommand(
+                        player.createCommandSourceStack().withPermission(4), command);
+            }
+        });
     }
 
     private static void shot(Minecraft mc, String name) {
