@@ -98,6 +98,10 @@ public final class ClientAutoScene {
             doorClick(mc);
             return;
         }
+        if (scene.equals("walkgen") || scene.equals("walkgen-dr1")) {
+            walkGenerated(mc, scene.equals("walkgen") ? ER2 : DR1);
+            return;
+        }
         if (!scene.equals("cab")) {
             return;
         }
@@ -552,6 +556,15 @@ public final class ClientAutoScene {
         }
     }
 
+    /**
+     * True once the car the scene spawned has reached this client with its
+     * type: by the scene's origin — a world's own stock elsewhere, still
+     * loaded from where the player stood, isn't it.
+     */
+    private static boolean sceneCar(WagonEntity car) {
+        return car != null && car.typeNow() != null && origin != null && car.distanceToSqr(origin) < 64.0 * 64.0;
+    }
+
     /** The index of a car's door by id (the order isn't fixed: saves keep doors by id, SPEC §9.8), −1. */
     private static int doorIndex(WagonEntity car, String id) {
         if (car == null || car.typeNow() == null) {
@@ -577,7 +590,7 @@ public final class ClientAutoScene {
      */
     private static void doorClick(Minecraft mc) {
         WagonEntity car = ticks >= 175 ? carAt(mc, 0) : null; // spawned at 160
-        if (ticks == 179 && (car == null || car.typeNow() == null) && waited++ < 600) {
+        if (ticks == 179 && !sceneCar(car) && waited++ < 600) {
             ticks--; // hold the scene until the car and its type have reached this client
             return;
         }
@@ -635,6 +648,107 @@ public final class ClientAutoScene {
             case 338 -> pressUse = true;
             case 348 -> reportDoor(mc, car, doorIndex(car, "DoorTambur"), "its leaf where it is drawn (closes)");
             case 352 -> mc.stop();
+            default -> {
+            }
+        }
+    }
+
+    /** walkgen: the rider's model-frame Z last tick, and the pace seen while walking the aisle. */
+    private static double lastZ = Double.NaN;
+    private static double minStep = Double.MAX_VALUE;
+    private static double maxStep = 0.0;
+    private static int paceTicks;
+
+    /**
+     * A car to walk on its generated floor (walkgen): what to spawn, its
+     * front left side door (its leaf's centre, and a point in the doorway at
+     * that Z), the front vestibule's door into the saloon (id, centre), and
+     * the Z where the rear vestibule's shut door stops a rider walking back.
+     */
+    private record WalkCar(String spawn, String sideDoor, double doorX, double doorY, double doorZ,
+            String innerDoor, double innerZ, double stopZ) {
+    }
+
+    private static final WalkCar ER2 = new WalkCar("er2m er2t", "DrL", 1.72, 2.7, 8.8, "FrontD", 8.08, -7.3);
+    private static final WalkCar DR1 = new WalkCar("dr1a_trailed", "DL", 1.56, 2.6, 11.19, "ID1", 10.44, -9.6);
+
+    /**
+     * {@code walkgen} / {@code walkgen-dr1} (SPEC §9.8 step 2): an ER2 motor
+     * car / DR1a trailer on its generated floor — a real click on its front
+     * left door from the ground (the group's doorways open together), in
+     * through it, a click on the front vestibule's door into the saloon, then
+     * down the aisle between the seats to the rear vestibule's shut door, the
+     * step measured every tick (an even pace, no jerks: SPEC §9.8 play-test);
+     * shots of the aisle with the floor wireframes ({@code rwat-walkgen-*.png}).
+     */
+    private static void walkGenerated(Minecraft mc, WalkCar setup) {
+        WagonEntity car = ticks >= 175 ? carAt(mc, 0) : null; // spawned at 160
+        if (ticks == 179 && !sceneCar(car) && waited++ < 600) {
+            ticks--; // hold the scene until the car and its type have reached this client
+            return;
+        }
+        if (ticks > 200 && ticks < 240 && ticks % 10 == 0 && mc.player.getVehicle() == null) {
+            placeOn(mc, car, 1.3, 0.0, setup.doorZ(), -90.0F, 0.0F); // stay in the doorway till boarded
+        }
+        if (ticks > 302 && ticks <= 440 && mc.player.getVehicle() instanceof WagonEntity riding) {
+            Vector3d local = PoseMath.worldToLocal(new Vector3d(riding.getX(), riding.getY(), riding.getZ()),
+                    riding.getYRot(), riding.getXRot(),
+                    new Vector3d(mc.player.getX(), mc.player.getY(), mc.player.getZ()));
+            double z = riding.isFlipped() ? -local.z : local.z;
+            if (!Double.isNaN(lastZ) && z > setup.stopZ()) { // until the rear vestibule's door stops us
+                double step = lastZ - z;
+                minStep = Math.min(minStep, step);
+                maxStep = Math.max(maxStep, step);
+                paceTicks++;
+            }
+            lastZ = z;
+        }
+        switch (ticks) {
+            case 100 -> {
+                origin = mc.player.position().add(4000.0, 0.0, 0.0);
+                command(mc, "gamemode creative");
+                command(mc, String.format(Locale.ROOT, "tp @s %.3f %.3f %.3f 0 0", origin.x, origin.y, origin.z));
+            }
+            case 160 -> command(mc, "rwat spawn with " + setup.spawn());
+            case 170 -> {
+                command(mc, "time set noon");
+                command(mc, "rwat handle train_brake 8");
+            }
+            // from the ground beside the front left doorway (+X): click its leaf
+            case 180 -> placeOn(mc, car, 2.6, 0.0, setup.doorZ(), -90.0F, 0.0F);
+            case 185 -> aimAtModel(mc, car, setup.doorX(), setup.doorY(), setup.doorZ() - 0.2);
+            case 187 -> pressUse = true;
+            case 197 -> reportNear(mc, car, setup.sideDoor() + " clicked from the ground (its group too)");
+            case 200 -> placeOn(mc, car, 1.3, 0.0, setup.doorZ(), -90.0F, 0.0F);
+            case 240 -> reportCar(mc, "boarded");
+            case 241 -> {
+                aimAtModel(mc, car, 0.0, 3.4, setup.doorZ() + 0.2);
+                mc.options.keyUp.setDown(true);
+            }
+            case 252 -> {
+                mc.options.keyUp.setDown(false);
+                reportCar(mc, "in the front vestibule");
+            }
+            case 253 -> aimAtModel(mc, car, 0.0, 2.9, setup.innerZ());
+            case 255 -> pressUse = true;
+            case 265 -> reportDoor(mc, car, doorIndex(car, setup.innerDoor()), "the front vestibule's door clicked");
+            case 300 -> {
+                mc.options.hideGui = true;
+                com.muzhik17.trainsmod.client.ClientFloorDebug.setShown(true);
+                aimAtModel(mc, car, 0.0, 3.4, -20.0);
+                mc.options.keyUp.setDown(true);
+            }
+            case 330 -> shot(mc, "rwat-walkgen-aisle.png");
+            case 440 -> {
+                mc.options.keyUp.setDown(false);
+                reportCar(mc, "down the aisle");
+                RailsWheelsAndTrains.LOGGER.info(String.format(Locale.ROOT,
+                        "[autoscene] aisle pace over %d ticks: step %.4f … %.4f (walk speed %.2f)",
+                        paceTicks, minStep, maxStep, com.muzhik17.trainsmod.kinematics.RiderWalk.WALK_SPEED));
+            }
+            case 441 -> aimAtModel(mc, car, 0.0, 1.9, -4.0);
+            case 452 -> shot(mc, "rwat-walkgen-floor.png");
+            case 460 -> mc.stop();
             default -> {
             }
         }
