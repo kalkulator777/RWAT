@@ -1,7 +1,39 @@
 {
+  "name": {"ru_ru": "ДР1А, головной моторный вагон"},
+  "lights": {
+    "HLB": {"en_us": "Headlight (bright)", "ru_ru": "Прожектор (яркий)"},
+    "HLD": {"en_us": "Headlight (dim)", "ru_ru": "Прожектор (тусклый)"},
+    "THL": {"en_us": "Tail lights, top", "ru_ru": "Хвостовые сигналы верхние"},
+    "HBL": {"en_us": "Buffer light, left", "ru_ru": "Буферный фонарь левый"},
+    "HBR": {"en_us": "Buffer light, right", "ru_ru": "Буферный фонарь правый"},
+    "THBL": {"en_us": "Tail light, lower left", "ru_ru": "Хвостовой сигнал нижний левый"},
+    "THBR": {"en_us": "Tail light, lower right", "ru_ru": "Хвостовой сигнал нижний правый"},
+    "RL": {"en_us": "Route sign light", "ru_ru": "Подсветка маршрутного табло"},
+    "CL": {"en_us": "Cab light", "ru_ru": "Свет в кабине"},
+    "CCL": {"en_us": "Desk backlight", "ru_ru": "Подсветка пульта"},
+    "RadL": {"en_us": "Radio light", "ru_ru": "Подсветка радиостанции"},
+    "EL": {"en_us": "Engine room light", "ru_ru": "Свет в машинном отделении"},
+    "IL": {"en_us": "Saloon light", "ru_ru": "Свет в салоне"}
+  },
+  "floor": {
+    "level": [1.783, 1.971, 2.096],
+    "step_down": 0.1,
+    "ignore": ["^SEAT_"],
+    "add": [
+      {"min": [-0.25, 1.971, 4.15], "max": [0.25, 1.971, 4.45]},
+      {"min": [-0.75, 1.971, 7.5], "max": [-0.69, 1.971, 8.8]},
+      {"min": [0.5, 2.096, 11.2], "max": [1.15, 2.096, 11.5]},
+      {"min": [-0.85, 2.096, 11.0], "max": [-0.34, 2.096, 11.5]}
+    ]
+  },
   "type": {
     "brakes": {
       "system": "ep"
-    }
+    },
+    "doors": {
+      "DR": {"group": "DR"},
+      "door_7": {"group": "DR"}
+    },
+    "cab": {"seat": [-0.594, 2.658, 11.277], "seat_yaw": 0.0}
   }
 }
