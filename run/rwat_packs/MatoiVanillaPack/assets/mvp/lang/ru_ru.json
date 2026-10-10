@@ -2,6 +2,9 @@
   "light.mvp.amendorf.BBL": "Буферные фонари (зад)",
   "light.mvp.amendorf.FBL": "Буферные фонари (перед)",
   "light.mvp.amendorf.IL": "Свет в вагоне",
+  "light.mvp.amendorf_baggage.BBL": "Буферные фонари (зад)",
+  "light.mvp.amendorf_baggage.FBL": "Буферные фонари (перед)",
+  "light.mvp.amendorf_baggage.IL": "Свет в вагоне",
   "light.mvp.chme3.BgL": "Подсветка тележек",
   "light.mvp.chme3.FBL": "Буферные фонари (перед)",
   "light.mvp.chme3.FEL": "Хвостовые сигналы (перед)",
@@ -14,6 +17,7 @@
   "light.mvp.chme3_booster.BBL": "Буферные фонари бустера",
   "light.mvp.chme3_booster.BHL": "Прожектор бустера",
   "wagon.mvp.amendorf": "Плацкартный вагон (Аммендорф)",
+  "wagon.mvp.amendorf_baggage": "Багажный вагон (Аммендорф)",
   "wagon.mvp.chme3": "ЧМЭ3",
   "wagon.mvp.chme3_booster": "ЧМЭ3, бустерная секция"
 }

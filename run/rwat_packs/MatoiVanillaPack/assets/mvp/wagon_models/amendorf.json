@@ -5,6 +5,9 @@
     "door2": "stock/rolling_stock/passenger/mvp_ir_amendorf/anim/mvp_ir_amendorf_door2.anim",
     "door3": "stock/rolling_stock/passenger/mvp_ir_amendorf/anim/mvp_ir_amendorf_door3.anim",
     "door4": "stock/rolling_stock/passenger/mvp_ir_amendorf/anim/mvp_ir_amendorf_door4.anim",
+    "doorkupe": "stock/rolling_stock/passenger/mvp_ir_amendorf/anim/mvp_ir_amendorf_doorkupe.anim",
+    "doortambur": "stock/rolling_stock/passenger/mvp_ir_amendorf/anim/mvp_ir_amendorf_doortambur.anim",
+    "doortoilet": "stock/rolling_stock/passenger/mvp_ir_amendorf/anim/mvp_ir_amendorf_doortoilet.anim",
     "trap1": "stock/rolling_stock/passenger/mvp_ir_amendorf/anim/mvp_ir_amendorf_trap1.anim",
     "trap2": "stock/rolling_stock/passenger/mvp_ir_amendorf/anim/mvp_ir_amendorf_trap2.anim"
   },
