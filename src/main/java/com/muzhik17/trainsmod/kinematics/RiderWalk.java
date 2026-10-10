@@ -5,6 +5,7 @@ import java.util.List;
 import org.joml.Quaterniond;
 import org.joml.Vector3d;
 
+import com.muzhik17.trainsmod.stock.FloorRegion;
 import com.muzhik17.trainsmod.stock.WagonType;
 
 /**
@@ -17,11 +18,11 @@ import com.muzhik17.trainsmod.stock.WagonType;
  * look-relative input is turned into a world horizontal move exactly as
  * vanilla {@code moveRelative} does, then rotated into the wagon's local frame
  * by yaw only (pitch is ignored so a graded car's floor stays walkable), and
- * kept on the walkable floor — the {@link WagonType.Interior} zones, plus a
+ * kept on the walkable floor — wherever the body fits in the union of the
+ * {@link WagonType.Interior} zones (SPEC §9.8, {@link FloorRegion}), plus a
  * bridge through every open door between zones (SPEC §9.1). A step that would
- * leave the floor slides along the wall of the zone the rider stands in.
- * Vertical movement (stairs, jumping between decks) is out of v0: the feet
- * take the floor height of the zone they are in.
+ * leave the floor slides along the wall. Vertical movement (stairs, jumping
+ * between decks) is out of v0: the feet take the floor height under them.
  */
 public final class RiderWalk {
 
@@ -40,8 +41,12 @@ public final class RiderWalk {
      * thickness + the half-width the zones are shrunk by).
      */
     static final double BRIDGE_REACH = 0.6;
-    /** How far a hull door may sit from a zone's wall and still be that wall's way out. */
-    static final double DOOR_WALL_SLACK = 0.6;
+    /**
+     * How far a hull door's inner face may sit from where the floor ends in
+     * front of it and still be the way out there (MVP: −0.09 … 0.35 —
+     * the wall's thickness, or a floor running a little into the doorway).
+     */
+    static final double DOOR_WALL_SLACK = 0.4;
 
     private RiderWalk() {
     }
@@ -76,22 +81,33 @@ public final class RiderWalk {
         if (onFloor(next.x, next.z, interior, doors, openMask)) {
             return withFloor(next, local.y, interior);
         }
-        // slide: pull the step back inside each region the rider stands in —
-        // or ease into a zone just beside them (out of a doorway that isn't in
-        // line with the floor beyond it), only within SIDESTEP, which can't
-        // cross a wall: between zones a wall is ≥ 2 half-widths of no floor.
-        // Keep the candidate that makes the most headway along the step.
+        // slide: the step pulled back onto each box of the floor near the
+        // rider — along the wall they push against, or easing into floor just
+        // beside them (out of a doorway that isn't in line with the floor
+        // beyond it), only within SIDESTEP, which can't cross a wall: where a
+        // body fits, any wall leaves ≥ 2 half-widths of no room.
+        // Keep the candidate that makes the most headway along the step — but
+        // never (beyond AHEAD_SLACK) past the step's end: floor just ahead (an
+        // opening off the platzkart's aisle into a bay) would otherwise pull
+        // the rider up to SIDESTEP forward in one tick, and the aisle walk went
+        // in jerks (play-test).
         double mx = next.x - local.x;
         double mz = next.z - local.z;
+        double maxGain = mx * mx + mz * mz + AHEAD_SLACK * Math.hypot(mx, mz);
         Vector3d best = new Vector3d(local);
         double bestGain = 1.0e-9;
-        for (WagonType.Interior.Zone zone : interior.zones()) {
-            Vector3d c = zone.clamp(next.x, next.z, PLAYER_HALF_WIDTH);
-            boolean standsIn = zone.holds(local.x, local.z, PLAYER_HALF_WIDTH);
-            if (standsIn || Math.hypot(c.x - local.x, c.z - local.z) <= SIDESTEP) {
-                double gain = (c.x - local.x) * mx + (c.z - local.z) * mz;
-                if (gain > bestGain) {
-                    best = c;
+        FloorRegion region = interior.region(PLAYER_HALF_WIDTH);
+        List<FloorRegion.Piece> pieces = region.pieces();
+        for (int i = region.firstPieceReaching(local.z - SIDESTEP); i < pieces.size(); i++) {
+            FloorRegion.Piece piece = pieces.get(i);
+            if (piece.minZ() > local.z + SIDESTEP) {
+                break;
+            }
+            double[] c = piece.clamp(next.x, next.z);
+            if (Math.hypot(c[0] - local.x, c[1] - local.z) <= SIDESTEP) {
+                double gain = (c[0] - local.x) * mx + (c[1] - local.z) * mz;
+                if (gain > bestGain && gain <= maxGain) {
+                    best = new Vector3d(c[0], local.y, c[1]);
                     bestGain = gain;
                 }
             }
@@ -111,19 +127,27 @@ public final class RiderWalk {
     }
 
     /**
-     * The furthest a blocked step may ease sideways into a neighbouring zone:
-     * under the 0.6 of no floor any wall leaves between shrunk zones (the
+     * The furthest a blocked step may ease sideways onto floor beside it:
+     * under the 0.6 of no room any wall leaves where a body fits (the
      * ChME3's cab door opens 0.2 wider than the aisle behind it — play-test).
      */
     private static final double SIDESTEP = 0.3;
+    /**
+     * How far past the step's end (along it) a slide may still land: a
+     * sideways ease off a slightly askew step lands a hair ahead of it (the
+     * platzkart's vestibule onto its slanted aisle, 1 mm — without this
+     * slack the rider stuck there), a bay's opening ahead lands a block-fifth.
+     */
+    private static final double AHEAD_SLACK = 0.01;
 
     /**
      * The hull door a rider walks out through on this step, or −1 (SPEC v1.5,
-     * doors, IR-style): the step would carry their feet past the wall of the
-     * zone they stand in, on the side of an open hull door (or fixed opening)
-     * in that wall, at a point along the wall inside the door's span. A closed
-     * door is just wall — {@link #step} keeps the rider against it. Doors
-     * between zones never lead out.
+     * doors, IR-style): the step would carry them past where the floor ends
+     * straight ahead of them, towards an open hull door (or fixed opening)
+     * whose inner face is right there (within {@link #DOOR_WALL_SLACK}), at a
+     * point along the wall inside the door's span. A closed door is just wall
+     * — {@link #step} keeps the rider against it. Doors between zones never
+     * lead out.
      *
      * @param doors    the type's doors <b>in the pose frame</b> (already
      *                 mirrored for a flipped wagon)
@@ -133,6 +157,7 @@ public final class RiderWalk {
             float playerYaw, float wagonYaw, WagonType.Interior interior,
             List<WagonType.Door> doors, int openMask) {
         Vector3d next = unclamped(local, forward, strafe, playerYaw, wagonYaw);
+        FloorRegion region = interior.region(PLAYER_HALF_WIDTH);
         for (int i = 0; i < doors.size() && i < 32; i++) {
             WagonType.Door door = doors.get(i);
             if (door.inner() || !door.open(openMask, i)) {
@@ -145,23 +170,27 @@ public final class RiderWalk {
             if (along < door.spanMin() + DOOR_SPAN_INSET || along > door.spanMax() - DOOR_SPAN_INSET) {
                 continue;
             }
-            for (WagonType.Interior.Zone zone : interior.zones()) {
-                if (!zone.holds(local.x, local.z, PLAYER_HALF_WIDTH)) {
-                    continue;
-                }
-                double face = sideDoor ? (out > 0 ? zone.maxX() : zone.minX())
-                        : (out > 0 ? zone.maxZ() : zone.minZ());
-                double gap = out * (door.innerFace() - face);
-                if (gap < -DOOR_WALL_SLACK || gap > DOOR_WALL_SLACK) {
-                    continue; // the door isn't in this zone's wall
-                }
-                double wall = face - out * PLAYER_HALF_WIDTH;
-                if (out * across > out * wall) {
-                    return i;
-                }
+            // as far as they can walk straight at the door: NaN off the floor (in a door bridge)
+            double wall = region.reach(local.x, local.z, door.axis(), out);
+            if (Double.isNaN(wall) || !facesDoor(wall, door)) {
+                continue; // the floor doesn't end at this door here
+            }
+            if (out * across > out * wall) {
+                return i;
             }
         }
         return -1;
+    }
+
+    /**
+     * True if a floor whose centres reach {@code wall} (along the door's
+     * axis, towards it) ends at the door: a body there touches its inner face
+     * within {@link #DOOR_WALL_SLACK}.
+     */
+    public static boolean facesDoor(double wall, WagonType.Door door) {
+        int out = door.outward();
+        double gap = out * (door.innerFace() - (wall + out * PLAYER_HALF_WIDTH));
+        return gap >= -DOOR_WALL_SLACK && gap <= DOOR_WALL_SLACK;
     }
 
     /** Gap left between a rider arriving through a gangway door and its inner face. */
@@ -183,6 +212,18 @@ public final class RiderWalk {
      */
     public static Arrival gangwayArrival(List<WagonType.Door> doors, WagonType.Interior interior,
             int travel, double across) {
+        return gangwayArrival(doors, interior, travel, across, ~0);
+    }
+
+    /**
+     * {@link #gangwayArrival(List, WagonType.Interior, int, double)} through
+     * the next car's door only if it is open (bit {@code i} of {@code
+     * openMask}): a shut door of the next car is wall — the rider opens it
+     * themselves, through their own open door (play-test 2026-10-10: walking
+     * through it shut and seeing it swing open behind you was wrong).
+     */
+    public static Arrival gangwayArrival(List<WagonType.Door> doors, WagonType.Interior interior,
+            int travel, double across, int openMask) {
         int best = -1;
         double bestOff = Double.MAX_VALUE;
         for (int i = 0; i < doors.size() && i < 32; i++) {
@@ -195,7 +236,7 @@ public final class RiderWalk {
                 }
             }
         }
-        if (best < 0) {
+        if (best < 0 || !doors.get(best).open(openMask, best)) {
             return null;
         }
         WagonType.Door door = doors.get(best);
@@ -215,13 +256,11 @@ public final class RiderWalk {
         return lo > hi ? (door.spanMin() + door.spanMax()) * 0.5 : Math.clamp(value, lo, hi);
     }
 
-    /** True if a rider centred at (x, z) stands on the floor: in a zone or an open door's bridge. */
+    /** True if a rider centred at (x, z) stands on the floor: fits on it, or in an open door's bridge. */
     static boolean onFloor(double x, double z, WagonType.Interior interior,
             List<WagonType.Door> doors, int openMask) {
-        for (WagonType.Interior.Zone zone : interior.zones()) {
-            if (zone.holds(x, z, PLAYER_HALF_WIDTH)) {
-                return true;
-            }
+        if (interior.fits(x, z, PLAYER_HALF_WIDTH)) {
+            return true;
         }
         for (int i = 0; i < doors.size(); i++) {
             WagonType.Door door = doors.get(i);

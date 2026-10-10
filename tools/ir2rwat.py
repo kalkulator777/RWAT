@@ -25,7 +25,8 @@ floor is the IR "passenger" area, its doors are the model's DOOR_<n> objects —
 EXTERNAL (a way in and out), CONNECTING (an end door onto the gangway to the
 next car), else inner (between floor zones); the two leaves of one doorway
 make one door. A recipe's own "interior"/"doors" replace them; "doors": []
-turns the derived doors off.
+turns the derived doors off. "doors" as an object edits them by id instead
+({"<id>": {...}} edits or adds one door, {"<id>": null} removes it).
 
 Names: a per-type override file may carry "name" ({"ru_ru": "..."}) and
 "lights" ({"<group>": {"en_us": "...", "ru_ru": "..."}}) — the stock's display
@@ -424,6 +425,27 @@ def derive_doors(boxes):
     return doors
 
 
+def edit_doors(doors, edits, warn):
+    """A per-type "doors" object over the derived doors (SPEC §9.8): each key
+    is a door id (any case) — an object edits that door (deep-merged, so
+    "inner": null drops a flag) or adds it at the end, null removes it. The
+    others stay as derived, in their order; a list in the per-type file
+    replaces the derived doors instead."""
+    out = [dict(door) for door in doors]
+    for door_id, edit in edits.items():
+        at = next((i for i, door in enumerate(out) if door["id"].lower() == door_id.lower()), None)
+        if edit is None:
+            if at is None:
+                warn(f"\"doors\" removes {door_id}, which isn't a derived door")
+            else:
+                out.pop(at)
+        elif at is None:
+            out.append(deep_merge({"id": door_id}, edit))
+        else:
+            out[at] = deep_merge(out[at], edit)
+    return out
+
+
 def door_motion(boxes, animations):
     """How each DOOR_<n>'s leaf moves in RWAT (SPEC §9.5): "anim" (an IR
     .anim of its control group — only if the type declares a door of that
@@ -650,8 +672,9 @@ class Converter:
             interior = derive_interior(category, ir)
             if interior is not None:
                 type_json["interior"] = interior
+        edits = type_json.pop("doors") if isinstance(type_json.get("doors"), dict) else None
         if "doors" not in type_json and "interior" in type_json:
-            doors = derive_doors(boxes)
+            doors = edit_doors(derive_doors(boxes), edits or {}, lambda m: self.warn(f"{type_id}: {m}"))
             if doors:
                 type_json["doors"] = doors
         door_ids = {door["id"].lower() for door in type_json.get("doors", [])}

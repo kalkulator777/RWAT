@@ -166,12 +166,13 @@ public record WagonType(
      * local coordinates, the body pose carrying them along for free. A
      * passenger car is one zone (the saloon); a locomotive is its cab plus the
      * walkways and end platforms of the frame. Each zone's {@code minY} is the
-     * floor the feet rest on; its faces are walls. Zones that join must overlap
-     * (by at least a player width) — a rider crosses from one to the other
-     * where both hold them. Doors between zones ({@link Door#inner}) bridge
-     * the wall while open.
+     * floor the feet rest on. The floor is the <b>union</b> of the zones (SPEC
+     * §9.8): a rider stands wherever their body fits inside it, so zones that
+     * touch join without overlapping and a gap of any width between them is
+     * a wall ({@link FloorRegion}). Doors between zones ({@link Door#inner})
+     * bridge such a gap while open.
      */
-    public record Interior(List<Zone> zones) {
+    public static final class Interior {
 
         /** One box of floor. */
         public record Zone(double minX, double minY, double minZ,
@@ -196,17 +197,43 @@ public record WagonType(
 
         private static final double EPS = 1.0e-9;
 
-        public Interior {
+        private final List<Zone> zones;
+        /** Where a centre fits, for the last margin asked (in practice always the player's). */
+        private volatile FloorRegion region;
+        /** This floor turned 180° (a flipped wagon), made once. */
+        private volatile Interior mirror;
+
+        public Interior(List<Zone> zones) {
             if (zones.isEmpty()) {
                 throw new IllegalArgumentException("an interior needs at least one zone");
             }
-            zones = List.copyOf(zones);
+            this.zones = List.copyOf(zones);
         }
 
         /** A single-box interior (a passenger saloon; every declaration before §9.1). */
         public Interior(double minX, double minY, double minZ,
                 double maxX, double maxY, double maxZ) {
             this(List.of(new Zone(minX, minY, minZ, maxX, maxY, maxZ)));
+        }
+
+        /** The floor's boxes, as declared. */
+        public List<Zone> zones() {
+            return zones;
+        }
+
+        /** Where a rider centred there fits, {@code margin} (the player's half-width) off every wall. */
+        public FloorRegion region(double margin) {
+            FloorRegion r = region;
+            if (r == null || r.margin() != margin) {
+                r = FloorRegion.of(zones, margin);
+                region = r;
+            }
+            return r;
+        }
+
+        /** True if a rider centred at (x, z) stands on the floor, {@code margin} off every wall. */
+        public boolean fits(double x, double z, double margin) {
+            return region(margin).fits(x, z);
         }
 
         /** The lowest floor — where a rider is put when nothing better is known. */
@@ -236,12 +263,17 @@ public record WagonType(
         }
 
         /**
-         * Clamp a rider's feet to the walkable floor: the nearest point of any
-         * zone, {@code margin} (the player's half-width) off its walls, y on that
-         * zone's floor (no stairs/vertical movement). Degenerate-narrow axes
-         * collapse to their midpoint rather than throwing.
+         * Clamp a rider's feet to the walkable floor: the nearest point where
+         * they fit, {@code margin} (the player's half-width) off every wall, y
+         * on the floor there (no stairs/vertical movement). A floor no player
+         * fits anywhere gives the nearest zone's midline rather than throwing.
          */
         public org.joml.Vector3d clampFeet(org.joml.Vector3d local, double margin) {
+            double[] at = region(margin).nearest(local.x, local.z);
+            if (at != null) {
+                double floor = floorUnder(at[0], at[1]);
+                return new org.joml.Vector3d(at[0], Double.isNaN(floor) ? floorY() : floor, at[1]);
+            }
             org.joml.Vector3d best = null;
             double bestDist = Double.MAX_VALUE;
             for (Zone zone : zones) {
@@ -255,11 +287,19 @@ public record WagonType(
             return best;
         }
 
-        /** The highest floor among zones holding (x, z), or NaN if none does. */
+        /**
+         * The floor under a rider centred at (x, z) — the highest zone under
+         * that point — or NaN if they don't fit there.
+         */
         public double floorAt(double x, double z, double margin) {
+            return fits(x, z, margin) ? floorUnder(x, z) : Double.NaN;
+        }
+
+        /** The highest zone floor under the point (x, z), or NaN if no zone is. */
+        private double floorUnder(double x, double z) {
             double floor = Double.NaN;
             for (Zone zone : zones) {
-                if (zone.holds(x, z, margin) && !(zone.minY() <= floor)) {
+                if (zone.holds(x, z, 0.0) && !(zone.minY() <= floor)) {
                     floor = zone.minY();
                 }
             }
@@ -275,11 +315,32 @@ public record WagonType(
             if (!flipped) {
                 return this;
             }
-            List<Zone> mirrored = new java.util.ArrayList<>(zones.size());
-            for (Zone zone : zones) {
-                mirrored.add(zone.mirrored());
+            Interior m = mirror;
+            if (m == null) {
+                List<Zone> mirrored = new java.util.ArrayList<>(zones.size());
+                for (Zone zone : zones) {
+                    mirrored.add(zone.mirrored());
+                }
+                m = new Interior(mirrored);
+                m.mirror = this;
+                mirror = m;
             }
-            return new Interior(mirrored);
+            return m;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof Interior other && zones.equals(other.zones);
+        }
+
+        @Override
+        public int hashCode() {
+            return zones.hashCode();
+        }
+
+        @Override
+        public String toString() {
+            return "Interior[zones=" + zones + "]";
         }
 
         private static double clampAxis(double value, double min, double max, double margin) {

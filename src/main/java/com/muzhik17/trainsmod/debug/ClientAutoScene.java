@@ -44,6 +44,8 @@ public final class ClientAutoScene {
     private static int ticks;
     /** Press L at the start of the next tick, where real key presses land (before vanilla's keys). */
     private static boolean pressL;
+    /** Click the use (right) button at the start of the next tick: a real click, picked by the mod's handlers. */
+    private static boolean pressUse;
     private static Vec3 origin;
 
     private ClientAutoScene() {
@@ -55,6 +57,10 @@ public final class ClientAutoScene {
             pressL = false;
             net.minecraft.client.KeyMapping.click(com.mojang.blaze3d.platform.InputConstants.getKey(
                     org.lwjgl.glfw.GLFW.GLFW_KEY_L, 0));
+        }
+        if (pressUse) {
+            pressUse = false;
+            net.minecraft.client.KeyMapping.click(Minecraft.getInstance().options.keyUse.getKey());
         }
     }
 
@@ -442,14 +448,19 @@ public final class ClientAutoScene {
 
     /**
      * {@code gangway} (SPEC §9.5): two coupled platzkarts; from the ground in
-     * through the rear car's front-right door, along to its front end, into
-     * the shut gangway door, open it, on into the front car (its rear gangway
-     * door opens as we pass), along it, then back into the rear car. Where
-     * the player rides and stands is logged at each step; shots look back
-     * through the gangway and over the front car with the floor wireframes
-     * on ({@code rwat-gangway-*.png}).
+     * through the rear car's front-right door (waiting in the doorway until
+     * the server boards us), along to its front end, into the shut gangway
+     * door, open it; on into the front car's shut gangway door — wall — and
+     * open that one with a real right-click across the gangway; through into
+     * the front car, along it, then back into the rear car. Where the player
+     * rides and stands is logged at each step; shots look through the open
+     * gangway door at the next car's and over the rear car's front vestibule
+     * with the floor wireframes on ({@code rwat-gangway-*.png}).
      */
     private static void gangway(Minecraft mc) {
+        if (ticks > 200 && ticks < 240 && ticks % 10 == 0 && mc.player.getVehicle() == null) {
+            placeOn(mc, carAt(mc, 1), 1.3, 0.0, 11.28, -90.0F, 0.0F); // stay in the doorway till boarded
+        }
         switch (ticks) {
             case 100 -> {
                 origin = mc.player.position().add(4000.0, 0.0, 0.0);
@@ -467,57 +478,69 @@ public final class ClientAutoScene {
             case 195 -> reportNear(mc, carAt(mc, 1), "door opened?");
             case 200 -> placeOn(mc, carAt(mc, 1), 1.3, 0.0, 11.28, -90.0F, 0.0F);
             case 203 -> reportNear(mc, carAt(mc, 1), "in the doorway");
-            case 210 -> reportCar(mc, "boarded the rear car");
+            case 240 -> reportCar(mc, "boarded the rear car");
             // along the vestibule to the front end wall: the gangway door (Trap1, index 4) is shut
-            case 211 -> {
+            case 241 -> {
                 aimAtModel(mc, carAt(mc, 1), 0.0, 3.4, 13.0);
                 mc.options.keyUp.setDown(true);
             }
-            case 235 -> {
+            case 265 -> {
                 mc.options.keyUp.setDown(false);
                 reportCar(mc, "at the shut gangway door");
             }
-            case 236 -> {
+            case 266 -> {
                 PacketDistributor.sendToServer(new DoorTogglePayload(carAt(mc, 1).getId(), 4));
                 aimAtModel(mc, carAt(mc, 1), 0.0, 2.9, 14.0);
             }
-            // the gangway door swung open (its IR animation), the next car's end beyond
-            case 249 -> mc.options.hideGui = true;
-            case 290 -> shot(mc, "rwat-gangway-door-open.png");
-            case 291 -> mc.options.hideGui = false;
-            case 300 -> {
+            // our gangway door swung open (its IR animation): the next car's door beyond is shut
+            case 279 -> mc.options.hideGui = true;
+            case 320 -> shot(mc, "rwat-gangway-door-open.png");
+            case 321 -> mc.options.hideGui = false;
+            case 330 -> {
                 aimAtModel(mc, carAt(mc, 1), 0.0, 3.4, 15.0);
                 mc.options.keyUp.setDown(true);
             }
-            case 312 -> {
+            case 342 -> {
+                mc.options.keyUp.setDown(false);
+                reportCar(mc, "against the next car's shut door");
+            }
+            // right-click its leaf (Trap2, index 5) through our open door: a real click, picked by ClientDoorInteract
+            case 343 -> aimAtModel(mc, carAt(mc, 0), 0.0, 2.9, -11.9);
+            case 345 -> pressUse = true;
+            case 355 -> reportNear(mc, carAt(mc, 0), "the next car's door clicked");
+            case 356 -> {
+                aimAtModel(mc, carAt(mc, 1), 0.0, 3.4, 15.0);
+                mc.options.keyUp.setDown(true);
+            }
+            case 368 -> {
                 mc.options.keyUp.setDown(false);
                 reportCar(mc, "through the gangway");
             }
             // walk on along the front car, then back into the rear one
-            case 313 -> {
+            case 369 -> {
                 aimAtModel(mc, carAt(mc, 0), 0.0, 3.4, 5.0);
                 mc.options.keyUp.setDown(true);
             }
-            case 335 -> {
+            case 391 -> {
                 mc.options.keyUp.setDown(false);
                 reportCar(mc, "walked on in the front car");
             }
-            case 336 -> {
+            case 392 -> {
                 aimAtModel(mc, carAt(mc, 0), 0.0, 3.4, -16.0);
                 mc.options.keyUp.setDown(true);
             }
-            case 390 -> {
+            case 446 -> {
                 mc.options.keyUp.setDown(false);
                 reportCar(mc, "walked back");
             }
-            // the floor wireframes over the rear car's front vestibule: zone, side doors, gangway door
-            case 391 -> {
+            // the floor wireframes down the rear car's aisle: zones, where a centre fits (the aisle and the bays' openings)
+            case 447 -> {
                 mc.options.hideGui = true;
                 com.muzhik17.trainsmod.client.ClientFloorDebug.setShown(true);
-                aimAtModel(mc, carAt(mc, 1), 0.0, 1.9, 12.0);
+                aimAtModel(mc, carAt(mc, 1), 0.4, 1.9, 1.0);
             }
-            case 403 -> shot(mc, "rwat-gangway-floors.png");
-            case 410 -> mc.stop();
+            case 459 -> shot(mc, "rwat-gangway-floors.png");
+            case 466 -> mc.stop();
             default -> {
             }
         }

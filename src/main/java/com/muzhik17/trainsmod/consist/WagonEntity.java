@@ -19,6 +19,9 @@ import com.muzhik17.trainsmod.stock.ConsistComposition;
 import com.muzhik17.trainsmod.stock.WagonType;
 
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.StringTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
@@ -84,7 +87,7 @@ public class WagonEntity extends Entity {
     /** Position within the consist (0 = front); the client unrolls its pose from this. */
     private static final EntityDataAccessor<Integer> DATA_WAGON_INDEX =
             SynchedEntityData.defineId(WagonEntity.class, EntityDataSerializers.INT);
-    /** Open doors: bit {@code i} = door {@code i} of the type's list (SPEC v1.5, doors). */
+    /** Open doors: bit {@code i} = door {@code i} of the type's list (SPEC v1.5, doors); saved by id. */
     private static final EntityDataAccessor<Integer> DATA_DOORS =
             SynchedEntityData.defineId(WagonEntity.class, EntityDataSerializers.INT);
     /** Entity id of the player in the driver's chair (SPEC §9), −1 = empty. */
@@ -130,6 +133,12 @@ public class WagonEntity extends Entity {
     private boolean dismountAllowed;
     /** Where the rider leaving through a door lands; read by the dismount, then cleared. */
     private Vec3 doorExit;
+    /**
+     * Server: the ids of the doors a save had open, until the type is known
+     * and they are open again (SPEC §9.8: saved by id, so a pack may reorder
+     * or add doors); null once applied.
+     */
+    private List<String> savedOpenDoors;
 
     /** Client: door swing progress per door, this tick and last (0 closed … 1 open). */
     private float[] doorAnim = new float[0];
@@ -180,6 +189,9 @@ public class WagonEntity extends Entity {
     @Override
     public void tick() {
         super.tick();
+        if (!level().isClientSide && savedOpenDoors != null) {
+            reopenSavedDoors();
+        }
         if (level().isClientSide) {
             clientTick();
         } else if (level() instanceof ServerLevel serverLevel
@@ -581,8 +593,8 @@ public class WagonEntity extends Entity {
      * on that end (SPEC §9.5): the wagon ahead for a door in the front (+Z)
      * end wall, the one behind for the rear. Both pose frames point the same
      * way along the train, so the rider keeps their place across the car.
-     * False (the door stays wall) if no wagon is coupled there or it has no
-     * connecting door facing back.
+     * False (the door stays wall) if no wagon is coupled there, it has no
+     * connecting door facing back, or that door is shut.
      */
     private boolean passGangway(ServerPlayer player, WagonType.Door door, Vector3d local) {
         if (door.axis() != 2 || !(level() instanceof ServerLevel level)) {
@@ -614,9 +626,9 @@ public class WagonEntity extends Entity {
     /**
      * Where a rider coming through the gangway lands here (SPEC §9.5): just
      * inside this wagon's connecting door in the end wall facing them, at
-     * their place across the car (within the door), on the floor. Opens that
-     * door: they open it as they go through. Null if there is no such door
-     * or no floor.
+     * their place across the car (within the door), on the floor. Null if
+     * there is no such door, it is shut (the rider opens it themselves) or
+     * there is no floor.
      *
      * @param travel the way they walk along the train: +1 forward (they enter
      *               through this wagon's rear end), -1 back
@@ -628,12 +640,8 @@ public class WagonEntity extends Entity {
             return null;
         }
         RiderWalk.Arrival arrival = RiderWalk.gangwayArrival(framedDoors(),
-                type.interior().inFrame(isFlipped()), travel, across);
-        if (arrival == null) {
-            return null;
-        }
-        setDoorOpen(arrival.door(), true);
-        return arrival.feet();
+                type.interior().inFrame(isFlipped()), travel, across, doorMask());
+        return arrival == null ? null : arrival.feet();
     }
 
     /**
@@ -987,11 +995,33 @@ public class WagonEntity extends Entity {
         return getBoundingBox().inflate(16.0);
     }
 
+    /** Server: open the doors a save had open, once this wagon's type is known (SPEC §9.8). */
+    private void reopenSavedDoors() {
+        WagonType type = serverType();
+        if (type == null) {
+            return; // the consist isn't there yet
+        }
+        int mask = 0;
+        for (int i = 0; i < type.doors().size() && i < 32; i++) {
+            if (savedOpenDoors.contains(type.doors().get(i).id())) {
+                mask |= 1 << i;
+            }
+        }
+        this.entityData.set(DATA_DOORS, doorMask() | mask);
+        savedOpenDoors = null;
+    }
+
     @Override
     protected void readAdditionalSaveData(CompoundTag tag) {
         setConsistId(tag.getInt("ConsistId"));
         setWagonIndex(tag.getInt("WagonIndex"));
-        this.entityData.set(DATA_DOORS, tag.getInt("Doors"));
+        // open doors by id (SPEC §9.8); the old index mask "Doors" is dropped — those doors start shut
+        ListTag open = tag.getList("OpenDoors", Tag.TAG_STRING);
+        savedOpenDoors = new ArrayList<>(open.size());
+        for (int i = 0; i < open.size(); i++) {
+            savedOpenDoors.add(open.getString(i));
+        }
+        this.entityData.set(DATA_DOORS, 0);
         this.entityData.set(DATA_CONTROLS, tag.getCompound("Controls").copy());
     }
 
@@ -999,7 +1029,18 @@ public class WagonEntity extends Entity {
     protected void addAdditionalSaveData(CompoundTag tag) {
         tag.putInt("ConsistId", getConsistId());
         tag.putInt("WagonIndex", getWagonIndex());
-        tag.putInt("Doors", doorMask());
+        ListTag open = new ListTag();
+        WagonType type = typeNow();
+        if (savedOpenDoors != null) {
+            savedOpenDoors.forEach(id -> open.add(StringTag.valueOf(id))); // not applied yet: keep them
+        } else if (type != null) {
+            for (int i = 0; i < type.doors().size() && i < 32; i++) {
+                if (isDoorOpen(i)) {
+                    open.add(StringTag.valueOf(type.doors().get(i).id()));
+                }
+            }
+        }
+        tag.put("OpenDoors", open);
         tag.put("Controls", controls().copy());
     }
 }

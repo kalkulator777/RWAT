@@ -25,8 +25,8 @@ import com.muzhik17.trainsmod.kinematics.FloorCheck;
  * by {@code tools/ir2rwat.py --geometry}) plus its override file
  * ({@code packs/mvp/<id>.json}) give the floor, doors and chair the converter
  * would write — interior: the override's, else the one derived from IR's
- * passenger area; doors: the override's, else (with a floor) the model's
- * EXTERNAL/CONNECTING doors; cab: the override's, else an empty cab for a
+ * passenger area; doors: the override's list, else (with a floor) the model's
+ * doors, edited by id by the override's "doors" object; cab: the override's, else an empty cab for a
  * locomotive — and {@link FloorCheck} must find nothing wrong. Where the IR
  * packs are at hand, {@link PackFloorTest} checks the generated pack itself.
  */
@@ -72,10 +72,14 @@ class RecipeFloorTest {
         if (interior != null) {
             type.add("interior", interior);
         }
-        if (present(override, "doors")) {
+        if (present(override, "doors") && override.get("doors").isJsonArray()) {
             type.add("doors", override.get("doors"));
         } else if (interior != null) {
-            type.add("doors", digest.get("doors_in_model"));
+            JsonArray doors = digest.getAsJsonArray("doors_in_model").deepCopy();
+            if (present(override, "doors")) {
+                editDoors(doors, override.getAsJsonObject("doors"));
+            }
+            type.add("doors", doors);
         }
         if (present(override, "cab")) {
             type.add("cab", override.get("cab"));
@@ -83,6 +87,42 @@ class RecipeFloorTest {
             type.add("cab", new JsonObject());
         }
         return type;
+    }
+
+    /**
+     * The per-type "doors" object over the derived doors, as ir2rwat's
+     * {@code edit_doors} applies it (SPEC §9.8): by id (any case), an object
+     * edits or adds a door, null removes one.
+     */
+    private static void editDoors(JsonArray doors, JsonObject edits) {
+        for (String id : edits.keySet()) {
+            JsonElement edit = edits.get(id);
+            int at = -1;
+            for (int i = 0; i < doors.size(); i++) {
+                if (doors.get(i).getAsJsonObject().get("id").getAsString().equalsIgnoreCase(id)) {
+                    at = i;
+                }
+            }
+            if (edit.isJsonNull()) {
+                if (at >= 0) {
+                    doors.remove(at);
+                }
+                continue;
+            }
+            JsonObject door = at >= 0 ? doors.get(at).getAsJsonObject() : new JsonObject();
+            if (at < 0) {
+                door.addProperty("id", id);
+                doors.add(door);
+            }
+            for (String key : edit.getAsJsonObject().keySet()) {
+                JsonElement value = edit.getAsJsonObject().get(key);
+                if (value.isJsonNull()) {
+                    door.remove(key);
+                } else {
+                    door.add(key, value);
+                }
+            }
+        }
     }
 
     private static boolean present(JsonObject json, String key) {

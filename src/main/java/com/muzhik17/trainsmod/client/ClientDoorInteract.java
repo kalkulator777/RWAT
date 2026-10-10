@@ -31,8 +31,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * leaves are picked here instead: the look ray is taken into each nearby
  * wagon's local frame and tested against its door boxes. From outside, a leaf
  * only counts if it is on the near face of the hull (not seen through the
- * car); a rider picks among their own wagon's doors from inside. A nearer
- * block or entity under the crosshair keeps the click.
+ * car); a rider picks among their own wagon's doors from inside, and the
+ * next car's gangway door across the gangway. A nearer block or entity
+ * under the crosshair keeps the click.
  *
  * <p>Holding the button doesn't flap the door: vanilla repeats the use action
  * every few ticks while held, so a door click is armed again only after the
@@ -96,18 +97,24 @@ public final class ClientDoorInteract {
         return pick == null ? Double.POSITIVE_INFINITY : pick.distance();
     }
 
-    /** The nearest door leaf under the crosshair within reach, or null. */
+    /**
+     * The nearest door leaf under the crosshair within reach, or null. A
+     * rider picks among their own wagon's doors and, through the gangway,
+     * the next car's connecting door: looking through their own open
+     * connecting door at the next car's shut one, the click is that one's —
+     * a shut door of the next car is wall until they open it (SPEC §9.5).
+     */
     private static Pick pick(Minecraft mc, LocalPlayer player) {
         float partialTick = mc.getTimer().getGameTimeDeltaPartialTick(true);
         Vec3 eye = player.getEyePosition(partialTick);
         Vec3 look = player.getViewVector(partialTick);
         double reach = player.blockInteractionRange();
-        List<WagonEntity> wagons = player.getVehicle() instanceof WagonEntity own
-                ? List.of(own)
-                : mc.level.getEntitiesOfClass(WagonEntity.class,
-                        player.getBoundingBox().inflate(reach + 16.0));
+        WagonEntity own = player.getVehicle() instanceof WagonEntity w ? w : null;
+        List<WagonEntity> wagons = mc.level.getEntitiesOfClass(WagonEntity.class,
+                player.getBoundingBox().inflate(reach + 16.0));
 
         Pick best = null;
+        Pick shutBeyond = null; // the nearest shut connecting door of another car, for a rider
         for (WagonEntity wagon : wagons) {
             List<WagonType.Door> doors = wagon.framedDoors();
             if (doors.isEmpty()) {
@@ -133,8 +140,8 @@ public final class ClientDoorInteract {
             }
             for (int i = 0; i < doors.size(); i++) {
                 WagonType.Door d = doors.get(i);
-                if (d.fixed()) {
-                    continue; // an opening without a leaf: nothing to click (SPEC §9.1)
+                if (d.fixed() || (own != null && !inside && !d.connecting())) {
+                    continue; // no leaf to click (SPEC §9.1); a rider reaches only the next car's gangway door
                 }
                 double padX = d.axis() == 0 ? PAD_ACROSS : PAD_EDGE;
                 double padZ = d.axis() == 0 ? PAD_EDGE : PAD_ACROSS;
@@ -147,10 +154,18 @@ public final class ClientDoorInteract {
                 if (best == null || t < best.distance()) {
                     best = new Pick(wagon, i, t);
                 }
+                if (own != null && !inside && !wagon.isDoorOpen(i)
+                        && (shutBeyond == null || t < shutBeyond.distance())) {
+                    shutBeyond = new Pick(wagon, i, t);
+                }
             }
         }
         if (best == null) {
             return null;
+        }
+        if (shutBeyond != null && best.wagon() == own && best.distance() < shutBeyond.distance()
+                && own.framedDoors().get(best.door()).connecting() && own.isDoorOpen(best.door())) {
+            best = shutBeyond; // through our open gangway door, the next car's shut one
         }
         // something else nearer under the crosshair keeps the click (the
         // wagon's own small centre hitbox doesn't count — the door is its part)

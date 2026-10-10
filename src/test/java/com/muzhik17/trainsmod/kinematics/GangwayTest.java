@@ -88,6 +88,16 @@ class GangwayTest {
     }
 
     @Test
+    void theNextCarsShutDoor_isWall() {
+        // its rear gangway door (Trap2, index 5) shut: no way in — the rider opens it first
+        assertNull(RiderWalk.gangwayArrival(DOORS, PLATZKART, 1, 0.0, 0));
+        assertNull(RiderWalk.gangwayArrival(DOORS, PLATZKART, 1, 0.0, FRONT_GANGWAY));
+        RiderWalk.Arrival open = RiderWalk.gangwayArrival(DOORS, PLATZKART, 1, 0.0, 1 << 5);
+        assertNotNull(open);
+        assertEquals(5, open.door());
+    }
+
+    @Test
     void arrival_keepsTheRiderWithinTheDoorSpan() {
         // came through a wide door off-centre; this car's door is narrower
         RiderWalk.Arrival arrival = RiderWalk.gangwayArrival(DOORS, PLATZKART, 1, 1.2);

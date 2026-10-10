@@ -4,6 +4,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.kinematics.RiderWalk;
+import com.muzhik17.trainsmod.stock.FloorRegion;
 import com.muzhik17.trainsmod.stock.WagonType;
 
 import net.minecraft.client.renderer.LevelRenderer;
@@ -63,13 +64,17 @@ public final class ClientFloorDebug {
         VertexConsumer lines = buffers.getBuffer(RenderType.lines());
         double m = RiderWalk.PLAYER_HALF_WIDTH;
         if (type.interior() != null) {
-            for (WagonType.Interior.Zone zone : type.interior().zones()) {
+            WagonType.Interior interior = type.interior();
+            for (WagonType.Interior.Zone zone : interior.zones()) {
                 LevelRenderer.renderLineBox(pose, lines, zone.minX(), zone.minY(), zone.minZ(),
                         zone.maxX(), zone.minY() + ZONE_HEIGHT, zone.maxZ(), 0.2F, 0.8F, 0.2F, 0.6F);
-                if (zone.maxX() - zone.minX() > 2 * m && zone.maxZ() - zone.minZ() > 2 * m) {
-                    LevelRenderer.renderLineBox(pose, lines, zone.minX() + m, zone.minY(), zone.minZ() + m,
-                            zone.maxX() - m, zone.minY() + 0.02, zone.maxZ() - m, 0.4F, 1.0F, 0.4F, 1.0F);
-                }
+            }
+            // where a centre fits: the zones' union shrunk by a half-width (SPEC §9.8)
+            for (FloorRegion.Piece p : interior.region(m).pieces()) {
+                double y = interior.floorAt((p.minX() + p.maxX()) * 0.5, (p.minZ() + p.maxZ()) * 0.5, m);
+                y = Double.isNaN(y) ? interior.floorY() : y;
+                LevelRenderer.renderLineBox(pose, lines, p.minX(), y, p.minZ(),
+                        p.maxX(), y + 0.02, p.maxZ(), 0.4F, 1.0F, 0.4F, 1.0F);
             }
         }
         for (WagonType.Door door : type.doors()) {
