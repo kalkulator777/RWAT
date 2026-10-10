@@ -144,10 +144,10 @@ public final class ClientAutoScene {
     /**
      * {@code walk} (SPEC §9): the driver's way in, played with the keys and
      * the packets the mouse would send — climb the front step from the
-     * ground, walk the +X walkway to the cab, open its door, walk in, sit in
-     * the chair, pull the throttle; where the player is gets logged at each
-     * step, with first- and third-person shots and the driver's light menu
-     * ({@code rwat-walk-*.png}).
+     * ground, walk the +X walkway to the cab, open its door, walk in (a
+     * lever pulled standing is refused), sit in the chair, pull the throttle;
+     * where the player is gets logged at each step, with first- and
+     * third-person shots and the driver's panel ({@code rwat-walk-*.png}).
      */
     private static void walk(Minecraft mc) {
         switch (ticks) {
@@ -187,6 +187,21 @@ public final class ClientAutoScene {
             case 345 -> {
                 mc.options.keyUp.setDown(false);
                 report(mc, "through the door");
+            }
+            // walking, not seated: the throttle is named with "only from the driver's seat",
+            // and a lever sent anyway is refused (SPEC §9.7)
+            case 346 -> {
+                aimAt(mc, com.muzhik17.trainsmod.convention.ObjectRole.Kind.THROTTLE, null);
+                WagonEntity wagon = wagon(mc);
+                if (wagon != null) {
+                    PacketDistributor.sendToServer(new CabLeverPayload(wagon.getId(),
+                            Consist.Handle.THROTTLE.ordinal(), 3));
+                }
+            }
+            case 349 -> {
+                shot(mc, "rwat-walk-walker-throttle.png");
+                report(mc, "walker's lever refused? " + com.muzhik17.trainsmod.client.ClientConsists
+                        .handles(wagon(mc).getConsistId()));
             }
             case 350 -> {
                 mc.options.hideGui = true;

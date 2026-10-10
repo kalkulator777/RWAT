@@ -37,7 +37,7 @@
   "message.railswheelsandtrains.coupled": "Coupled · %s wagons",
   "message.railswheelsandtrains.uncoupled": "Uncoupled · %s + %s wagons",
   "message.railswheelsandtrains.crowbar_hint": "Crowbar: right-click the coupler between two wagons to uncouple them",
-  "message.railswheelsandtrains.board_hint_cab": "Walk with WASD · Right-click a door to open it · Right-click the chair to sit at the controls · Right-click and drag a lever",
+  "message.railswheelsandtrains.board_hint_cab": "Walk with WASD · Right-click a door to open it · Right-click a switch to flip it · Right-click the chair to sit at the controls",
   "message.railswheelsandtrains.seat_hint": "Throttle: W / S · Brake: D / A · Reverser: Space · Levers: right-click and drag · L: panel and lights · Sneak to stand up",
   "message.railswheelsandtrains.drive_other_cab_seated": "Another cab of this train is in control · Sneak to stand up",
   "key.categories.railswheelsandtrains": "Rails, Wheels & Trains",
@@ -89,5 +89,6 @@
   "hud.railswheelsandtrains.train_brake": "Brake",
   "hud.railswheelsandtrains.independent_brake": "Ind. brake",
   "hud.railswheelsandtrains.other_cab": "Another cab is in control",
-  "hud.railswheelsandtrains.reverser_locked": "Only at a standstill with the throttle shut"
+  "hud.railswheelsandtrains.reverser_locked": "Only at a standstill with the throttle shut",
+  "control.railswheelsandtrains.from_seat": "Only from the driver's seat"
 }

@@ -37,7 +37,7 @@
   "message.railswheelsandtrains.coupled": "Сцеплено · вагонов: %s",
   "message.railswheelsandtrains.uncoupled": "Расцеплено · %s + %s ваг.",
   "message.railswheelsandtrains.crowbar_hint": "Монтировка: ПКМ по сцепке между двумя вагонами — расцепить",
-  "message.railswheelsandtrains.board_hint_cab": "Ходьба — WASD · ПКМ по двери — открыть · ПКМ по креслу — сесть за пульт · ПКМ и тянуть — рычаг",
+  "message.railswheelsandtrains.board_hint_cab": "Ходьба — WASD · ПКМ по двери — открыть · ПКМ по тумблеру — переключить · ПКМ по креслу — сесть за пульт",
   "message.railswheelsandtrains.seat_hint": "Тяга: W / S · Тормоз: D / A · Реверс: пробел · Рычаги: ПКМ и тянуть · L — пульт и свет · Shift — встать",
   "message.railswheelsandtrains.drive_other_cab_seated": "Поездом управляют из другой кабины · Shift — встать",
   "key.categories.railswheelsandtrains": "Rails, Wheels & Trains",
@@ -89,5 +89,6 @@
   "hud.railswheelsandtrains.train_brake": "Тормоз",
   "hud.railswheelsandtrains.independent_brake": "Вспом.",
   "hud.railswheelsandtrains.other_cab": "Управляют из другой кабины",
-  "hud.railswheelsandtrains.reverser_locked": "Только на стоянке при нулевой тяге"
+  "hud.railswheelsandtrains.reverser_locked": "Только на стоянке при нулевой тяге",
+  "control.railswheelsandtrains.from_seat": "Только из кресла машиниста"
 }
