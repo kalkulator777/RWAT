@@ -11,14 +11,18 @@ import java.util.List;
  * {@code s}.
  *
  * <p>{@code headS} keeps its meaning: the path distance of the <b>front bogie
- * of wagon 0</b>. Bodies are placed nose-to-tail with {@link #COUPLER_GAP}
- * between frames; each wagon's bogies sit at its body centre ± its type's
+ * of wagon 0</b>. Bodies are placed nose-to-tail, {@link #COUPLER_GAP} apart
+ * (frame to frame); each wagon's bogies sit at its body centre ± its type's
  * bogie offsets ({@code flipped} negates them).
  */
 public record ConsistComposition(List<Slot> slots) {
 
-    /** Air between consecutive wagon frames, blocks (coupler slack, v-first fixed). */
-    public static final double COUPLER_GAP = 1.0;
+    /**
+     * Air between consecutive wagon frames, blocks: none — a type's length is
+     * over couplers, so coupled wagons meet coupler to coupler (SPEC §6.12).
+     * Was 1.0 until 2026-10-10: a block of daylight between every pair.
+     */
+    public static final double COUPLER_GAP = 0.0;
 
     /**
      * One wagon of the consist. {@code flipped} = the wagon faces backwards

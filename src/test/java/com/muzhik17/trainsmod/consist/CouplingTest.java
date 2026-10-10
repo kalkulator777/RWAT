@@ -119,9 +119,10 @@ class CouplingTest {
         List<RailGraph.RouteLeg> legs = routeOf(graph, 1);
         ConsistComposition locoC = comp(slot(LOCO, false));
         ConsistComposition carC = comp(slot(CAR, false));
-        // loco runs +s at 0.1 b/t, front face at 90; the car stands with its rear face at 90.5
+        // loco runs +s at 0.1 b/t, front face at 90; the car stands with its rear face
+        // half a block inside coupling reach (the loco ran into it during the tick)
         Coupling.Train loco = train(graph, legs, locoC, headForFront(locoC, 90.0), 0.1);
-        Coupling.Train car = train(graph, legs, carC, headForRear(carC, 90.5), 0.0);
+        Coupling.Train car = train(graph, legs, carC, headForRear(carC, 90.0 + GAP - 0.5), 0.0);
 
         Coupling.Merge merge = Coupling.tryCouple(loco, car);
 
@@ -155,7 +156,7 @@ class CouplingTest {
         ConsistComposition locoC = comp(slot(LOCO, false));
         ConsistComposition carC = comp(slot(CAR, false));
         double head = headForFront(locoC, 90.0);
-        double carHead = headForRear(carC, 90.5);
+        double carHead = headForRear(carC, 90.0 + GAP - 0.5);
 
         // same speed, both moving
         assertNull(Coupling.tryCouple(train(graph, legs, locoC, head, 0.2),
@@ -228,9 +229,11 @@ class CouplingTest {
         ConsistComposition carsC = comp(slot(CAR, false), slot(CAR, true));
         double length = forward.length();
         // loco front face at 90 (forward frame); the cars ahead of it, running the other
-        // way: their front face (back frame) at forward 90.4 = back length − 90.4
+        // way: their front face (back frame) 0.6 inside coupling reach, at forward
+        // 90 + GAP − 0.6 = back length − that
         Coupling.Train loco = train(graph, legs, locoC, headForFront(locoC, 90.0), 0.0);
-        Coupling.Train cars = train(graph, back, carsC, headForFront(carsC, length - 90.4), 0.05);
+        Coupling.Train cars = train(graph, back, carsC,
+                headForFront(carsC, length - (90.0 + GAP - 0.6)), 0.05);
 
         Coupling.Merge merge = Coupling.tryCouple(loco, cars);
 
@@ -247,7 +250,7 @@ class CouplingTest {
         assertEquals((40.0 * -0.05) / 120.0, merge.v(), EPS);
         // every car bogie lands where it was, up to the snap (0.6 back from the overlap)
         RoutePath mergedPath = graph.buildRoutePath(merge.legs());
-        double snap = GAP - 0.4;
+        double snap = 0.6;
         for (int i = 0; i < 2; i++) {
             int merged = 1 - i;
             Vector3d before = at(cars.path(), carsC.frontBogieS(cars.headS(), i));
@@ -310,7 +313,8 @@ class CouplingTest {
         Coupling.Train t1 = nearToe(sw, onStraight, sw.straight().id(), 0.6, carC, 0.2);
         Coupling.Train t2 = nearToe(sw, onDiverge, sw.diverge().id(), 0.6, carC, 0.2);
         assertTrue(t1.path().samplePosition(Coupling.rearEndS(carC, t1.headS())).distance(
-                t2.path().samplePosition(Coupling.rearEndS(carC, t2.headS()))) < GAP,
+                t2.path().samplePosition(Coupling.rearEndS(carC, t2.headS())))
+                        < GAP + Coupling.CONTACT_SLACK,
                 "the two faces are close in the world");
 
         // no route holds both: different tracks
@@ -344,8 +348,9 @@ class CouplingTest {
         // loco on the trunk: front face at the far end side, rear face 0.5 off the toe
         double kRear = fromToe(sw.graph(), kRoute, sw.trunk().id(), 0.5);
         Coupling.Train loco = train(sw.graph(), kRoute, locoC, headForRear(locoC, kRear), -0.1);
-        // car on the diverging leg with its toe-side face 0.3 off the toe
-        double cFace = fromToe(sw.graph(), cRoute, sw.diverge().id(), 0.3);
+        // car by the diverging leg, its toe-side face 0.2 inside coupling reach of the
+        // loco: GAP − 0.7 off the toe (a negative distance is past the toe, on the trunk)
+        double cFace = fromToe(sw.graph(), cRoute, sw.diverge().id(), GAP - 0.7);
         Coupling.Train car = train(sw.graph(), cRoute, carC, headForRear(carC, cFace), 0.0);
         assertTrue(car.path().partCount() == 2 && cRoute.get(1).segmentId() == sw.diverge().id());
 
@@ -379,9 +384,10 @@ class CouplingTest {
         double length = path.length();
         ConsistComposition locoC = comp(slot(LOCO, false));
         ConsistComposition carC = comp(slot(CAR, false));
-        // loco's front face 0.2 before the seam (s grows freely on loops: one lap on)
-        Coupling.Train loco = train(graph, legs, locoC, headForFront(locoC, 2 * length - 0.2), 0.1);
-        // car's rear face 0.4 past the seam
+        // car's rear face 0.4 past the seam; the loco's front face 0.4 inside coupling
+        // reach of it, written one lap on (s grows freely on loops)
+        Coupling.Train loco = train(graph, legs, locoC,
+                headForFront(locoC, 2 * length + 0.4 - (GAP - 0.4)), 0.1);
         Coupling.Train car = train(graph, legs, carC, headForRear(carC, 0.4), 0.0);
 
         Coupling.Merge merge = Coupling.tryCouple(loco, car);
@@ -417,7 +423,7 @@ class CouplingTest {
             assertEquals(0.0, at(pathFirst, s).distance(at(pathSecond, p.map(s))), 1.0e-6);
         }
         // a car ahead of the loco, on the other walk of the loop: couples
-        double carRearFirst = 8.0 + 0.5;
+        double carRearFirst = 8.0 + GAP - 0.5;
         Coupling.Train car = train(graph, fromSecond, carC,
                 headForRear(carC, p.map(carRearFirst)), 0.0);
         Coupling.Merge merge = Coupling.tryCouple(loco, car);
