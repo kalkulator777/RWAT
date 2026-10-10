@@ -42,9 +42,20 @@ public final class ClientAutoScene {
 
     private static final String PROPERTY = "rwat.autoscene";
     private static int ticks;
+    /** Press L at the start of the next tick, where real key presses land (before vanilla's keys). */
+    private static boolean pressL;
     private static Vec3 origin;
 
     private ClientAutoScene() {
+    }
+
+    @SubscribeEvent
+    static void onClientTickPre(ClientTickEvent.Pre event) {
+        if (pressL) {
+            pressL = false;
+            net.minecraft.client.KeyMapping.click(com.mojang.blaze3d.platform.InputConstants.getKey(
+                    org.lwjgl.glfw.GLFW.GLFW_KEY_L, 0));
+        }
     }
 
     @SubscribeEvent
@@ -258,6 +269,9 @@ public final class ClientAutoScene {
      * driver's panel, the mouse on the throttle's sixth lamp (outline and
      * tooltip), a click there, the panel once the handle has moved, and the
      * mouse on the reverser, locked on the move ({@code rwat-panel-*.png}).
+     * The panel is opened with {@code L}, pressed where real presses land
+     * (before vanilla's keys, whose advancements share it), and once closed
+     * nothing else must open.
      */
     private static void panel(Minecraft mc) {
         switch (ticks) {
@@ -293,10 +307,17 @@ public final class ClientAutoScene {
                 mc.resizeDisplay();
             }
             case 310 -> shot(mc, "rwat-panel-hud-wide.png");
-            case 315 -> {
+            // L at the controls: the driver's panel, not vanilla's advancements on the same key
+            case 312 -> {
                 mc.options.guiScale().set(0);
                 mc.resizeDisplay();
-                if (mc.player.getVehicle() instanceof WagonEntity cab) {
+                pressL = true;
+            }
+            case 314 -> report(mc, "L opened " + (mc.screen == null ? "nothing"
+                    : mc.screen.getClass().getSimpleName()));
+            case 315 -> {
+                if (!(mc.screen instanceof com.muzhik17.trainsmod.client.gui.DriverPanelScreen)
+                        && mc.player.getVehicle() instanceof WagonEntity cab) {
                     mc.setScreen(new com.muzhik17.trainsmod.client.gui.DriverPanelScreen(cab));
                 }
             }
@@ -326,7 +347,11 @@ public final class ClientAutoScene {
                 }
             }
             case 375 -> shot(mc, "rwat-panel-screen-reverser.png");
-            case 380 -> mc.stop();
+            // closed: the L press must not come back as the advancements
+            case 376 -> mc.setScreen(null);
+            case 379 -> report(mc, "after the panel closed: " + (mc.screen == null ? "nothing"
+                    : mc.screen.getClass().getSimpleName()));
+            case 382 -> mc.stop();
             default -> {
             }
         }

@@ -35,13 +35,28 @@ public final class ClientPanelKey {
         event.register(PANEL);
     }
 
+    /**
+     * At the start of the tick, before vanilla handles its keys: {@code L} is
+     * vanilla's advancements key too, and vanilla's handler runs first — it
+     * opened the advancements instead of the light menu (auto-scene
+     * {@code panel}, 2026-10-10). At the controls the panel takes the press
+     * and the advancements click on the same key is dropped (else it would
+     * open once the panel closes); anywhere else {@code L} stays the
+     * advancements key.
+     */
     @SubscribeEvent
-    static void onClientTick(ClientTickEvent.Post event) {
+    static void onClientTick(ClientTickEvent.Pre event) {
         Minecraft mc = Minecraft.getInstance();
         while (PANEL.consumeClick()) {
             WagonEntity cab = ClientDriverHud.cab(mc);
             if (cab != null && mc.screen == null) {
                 mc.setScreen(new DriverPanelScreen(cab));
+                KeyMapping advancements = mc.options.keyAdvancements;
+                if (advancements.same(PANEL)) {
+                    while (advancements.consumeClick()) {
+                        // dropped: this press was the panel's
+                    }
+                }
             }
         }
     }
