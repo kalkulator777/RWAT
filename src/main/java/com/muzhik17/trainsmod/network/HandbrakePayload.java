@@ -8,10 +8,10 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
 /**
- * Client→server request to set or release a wagon's handbrake (SPEC §5.3,
- * the crowbar on the wagon's body): the client picked the wagon under the
- * crosshair (network entity id). The server re-checks the crowbar in hand and
- * the reach before turning the wheel.
+ * Client→server request to set or release a wagon's handbrake (SPEC §5.3):
+ * the crowbar on the wagon's body, or the handbrake wheel in its cab — the
+ * client picked the wagon (network entity id). The server re-checks the reach
+ * before turning the wheel.
  */
 public record HandbrakePayload(int wagonId) implements CustomPacketPayload {
 

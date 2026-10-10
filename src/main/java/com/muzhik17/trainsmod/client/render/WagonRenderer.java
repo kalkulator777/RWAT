@@ -214,7 +214,7 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
             draw(baked.interior(), poseStack);
         }
         drawDoors(baked, wagon, slot, partialTick, poseStack);
-        drawControls(baked, wagon, slot, wagonIndex, drawInterior, poseStack, buffers);
+        drawControls(baked, wagon, slot, wagonIndex, drawInterior, partialTick, poseStack, buffers);
         if (ClientFloorDebug.shown()) {
             ClientFloorDebug.draw(poseStack, buffers, slot.type()); // SPEC §9.6 debug view
         }
@@ -402,16 +402,20 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
      * moved with it.
      */
     private static void drawControls(BakedStockModel baked, WagonEntity wagon,
-            ConsistComposition.Slot slot, int wagonIndex, boolean drawInterior,
+            ConsistComposition.Slot slot, int wagonIndex, boolean drawInterior, float partialTick,
             PoseStack poseStack, MultiBufferSource buffers) {
         if (baked.controls().isEmpty()) {
             return;
         }
         Handles handles = ClientConsists.handles(wagon.getConsistId());
         boolean activeCab = handles.activeCab() == wagonIndex;
+        int consistId = wagon.getConsistId();
         ControlValue.Readings readings = new ControlValue.Readings(
-                Math.abs(TrainPhysics.kmh(ClientConsists.speed(wagon.getConsistId()))),
-                slot.type().maxSpeedKmh());
+                Math.abs(TrainPhysics.kmh(ClientConsists.speed(consistId))),
+                slot.type().maxSpeedKmh(),
+                ClientConsists.trainBrakePressure(consistId),
+                ClientConsists.indBrakePressure(consistId),
+                wagon.handbrakeAnim(partialTick));
         for (BakedStockModel.BakedControl bc : baked.controls()) {
             StockModel.Control control = bc.control();
             if (control.interior() && !drawInterior) {

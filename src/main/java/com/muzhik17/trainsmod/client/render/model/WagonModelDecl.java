@@ -22,7 +22,8 @@ import com.google.gson.JsonSyntaxException;
  *   "bogies": [4.44, -4.44],
  *   "skip": ["WIPER_"],
  *   "animations": { "door1": "stock/.../anim/mvp_ir_amendorf_door1.anim" },
- *   "liveries": { "leader_770": "l_leader_770" }
+ *   "liveries": { "leader_770": "l_leader_770" },
+ *   "handbrake": ["WIDGET_5"]
  * }
  * }</pre>
  *
@@ -39,18 +40,25 @@ import com.google.gson.JsonSyntaxException;
  *                   the group id (lower case) matches a door id of the type
  * @param liveries   livery id → folder next to the OBJ whose same-named
  *                   textures replace the base ones
+ * @param handbrake  controls ({@code <KIND>_<n>} keys) that are the wagon's
+ *                   handbrake wheel (SPEC §5.3): a click turns the handbrake,
+ *                   the wheel shows it — e.g. MVP's {@code WIDGET}s labelled
+ *                   "Hand Brake"; an object named {@code HANDBRAKE_<n>} needs
+ *                   no entry
  */
 public record WagonModelDecl(
         String obj,
         double[] bogies,
         List<String> skip,
         Map<String, String> animations,
-        Map<String, String> liveries) {
+        Map<String, String> liveries,
+        List<String> handbrake) {
 
     public WagonModelDecl {
         skip = List.copyOf(skip);
         animations = Map.copyOf(animations);
         liveries = Map.copyOf(liveries);
+        handbrake = List.copyOf(handbrake);
     }
 
     /**
@@ -98,7 +106,13 @@ public record WagonModelDecl(
                 liveries.put(entry.getKey(), entry.getValue().getAsString());
             }
         }
-        return new WagonModelDecl(obj, bogies, skip, animations, liveries);
+        List<String> handbrake = new ArrayList<>();
+        if (json.has("handbrake")) {
+            for (JsonElement key : json.getAsJsonArray("handbrake")) {
+                handbrake.add(key.getAsString());
+            }
+        }
+        return new WagonModelDecl(obj, bogies, skip, animations, liveries, handbrake);
     }
 
     /** {@code path} → {@code namespace:path}; an already qualified path is kept. */

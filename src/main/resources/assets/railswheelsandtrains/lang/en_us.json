@@ -110,5 +110,8 @@
   "message.railswheelsandtrains.handbrake_set": "Handbrake set · %s of %s wagons braked",
   "message.railswheelsandtrains.handbrake_released": "Handbrake released · %s of %s wagons braked",
   "message.railswheelsandtrains.handbrake_auto": "Handbrakes set themselves on this server: they come off when the driver opens the throttle",
-  "hud.railswheelsandtrains.handbrakes": "Handbrakes %s/%s"
+  "hud.railswheelsandtrains.handbrakes": "Handbrakes %s/%s",
+  "control.railswheelsandtrains.handbrake": "Handbrake",
+  "control.railswheelsandtrains.handbrake_set": "set",
+  "control.railswheelsandtrains.handbrake_released": "released"
 }

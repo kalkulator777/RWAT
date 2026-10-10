@@ -3,5 +3,6 @@
   "liveries": {
     "mvp_minaz": "l_mvp_minaz",
     "mvp_dimzip": "l_mvp_dimzip"
-  }
+  },
+  "handbrake": ["WIDGET_17"]
 }

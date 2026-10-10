@@ -2,6 +2,7 @@ package com.muzhik17.trainsmod.client;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.BitSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -93,8 +94,11 @@ public final class ClientConsists {
         int frame;
         /** The driver's handles per the newest snapshot (SPEC §9: cab levers). */
         Handles handles = Handles.REST;
-        /** How many wagons have their handbrake set, per the newest snapshot (SPEC §5.3). */
-        int handbrakesSet;
+        /** Which wagons have their handbrake set, by index, per the newest snapshot (SPEC §5.3). */
+        BitSet handbrakes = new BitSet();
+        /** The train / loco brake in effect, 0..1 (the cab's pressure gauges). */
+        float trainBrakePressure;
+        float indBrakePressure;
 
         /** (Re)materialize the path when the spec or the client graph changed. */
         TrackPath path() {
@@ -142,7 +146,9 @@ public final class ClientConsists {
         }
         state.composition = payload.composition();
         state.handles = payload.handles();
-        state.handbrakesSet = payload.handbrakes().cardinality();
+        state.handbrakes = payload.handbrakes();
+        state.trainBrakePressure = payload.trainBrakePressure();
+        state.indBrakePressure = payload.indBrakePressure();
         int[] wagonIds = payload.wagonEntityIds();
         for (int i = 0; i < wagonIds.length; i++) {
             if (wagonIds[i] >= 0) {
@@ -303,7 +309,25 @@ public final class ClientConsists {
     /** How many of a consist's wagons have their handbrake set (SPEC §5.3); 0 if unknown. */
     public static int handbrakesSet(int consistId) {
         State state = STATES.get(consistId);
-        return state == null ? 0 : state.handbrakesSet;
+        return state == null ? 0 : state.handbrakes.cardinality();
+    }
+
+    /** True if wagon {@code index} of a consist has its handbrake set (SPEC §5.3). */
+    public static boolean handbrake(int consistId, int index) {
+        State state = STATES.get(consistId);
+        return state != null && index >= 0 && state.handbrakes.get(index);
+    }
+
+    /** The train brake in effect, 0..1 — what the cab's brake gauges read (SPEC §5.3). */
+    public static float trainBrakePressure(int consistId) {
+        State state = STATES.get(consistId);
+        return state == null ? 0.0F : state.trainBrakePressure;
+    }
+
+    /** The loco (independent) brake in effect, 0..1. */
+    public static float indBrakePressure(int consistId) {
+        State state = STATES.get(consistId);
+        return state == null ? 0.0F : state.indBrakePressure;
     }
 
     /** The driver's handles of a consist (SPEC §9), or {@link Handles#REST} if unknown. */

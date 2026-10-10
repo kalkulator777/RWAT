@@ -184,13 +184,13 @@ public final class RwatNetwork {
     }
 
     /**
-     * Set or release a wagon's handbrake with the crowbar (SPEC §5.3); the
-     * manager checks the reach.
+     * Set or release a wagon's handbrake (SPEC §5.3) — the crowbar on its body
+     * from outside, or its handbrake wheel in the cab; either way the manager
+     * checks the reach.
      */
     private static void handleHandbrake(HandbrakePayload payload, IPayloadContext context) {
         if (context.player() instanceof ServerPlayer player
                 && player.level() instanceof ServerLevel level
-                && player.getMainHandItem().is(RailsWheelsAndTrains.CROWBAR.get())
                 && level.getEntity(payload.wagonId()) instanceof WagonEntity wagon) {
             ConsistManager.get(level).toggleHandbrakeBy(player, wagon);
         }

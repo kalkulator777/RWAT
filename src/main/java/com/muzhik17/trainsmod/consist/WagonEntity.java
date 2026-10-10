@@ -106,6 +106,8 @@ public class WagonEntity extends Entity {
     private static final double EXIT_CLEARANCE = 0.05;
     /** Client: door swing duration in ticks (the asset's 81-frame animation, ~2 s). */
     private static final float DOOR_ANIM_TICKS = 40.0F;
+    /** Client: how long the handbrake wheel takes to wind on or off, ticks. */
+    private static final float HANDBRAKE_ANIM_TICKS = 30.0F;
     /**
      * Seated feet below the top of the chair cushion: the sitting player
      * model's hips are 0.75 above its feet, its thighs ~0.15 thick. Tuned by
@@ -136,6 +138,10 @@ public class WagonEntity extends Entity {
     private float[] doorAnimO = new float[0];
     /** Client: the first door state seen is adopted as-is, not animated. */
     private boolean doorAnimSeeded;
+    /** Client: the handbrake wheel's turn, this tick and last (0 released … 1 set; SPEC §5.3). */
+    private float handbrakeAnim;
+    private float handbrakeAnimO;
+    private boolean handbrakeAnimSeeded;
 
     public WagonEntity(EntityType<? extends WagonEntity> type, Level level) {
         super(type, level);
@@ -203,6 +209,7 @@ public class WagonEntity extends Entity {
         if (type != null) {
             tickDoorAnim(type);
         }
+        tickHandbrakeAnim();
         WagonPose pose = ClientConsists.tickPose(getConsistId(), getWagonIndex());
         if (pose != null) {
             setPos(pose.body().x, pose.body().y, pose.body().z);
@@ -833,6 +840,24 @@ public class WagonEntity extends Entity {
             doorAnim[i] += Math.clamp(target - doorAnim[i], -step, step);
         }
         doorAnimSeeded = true;
+    }
+
+    /** Client: wind the handbrake wheel toward the synced handbrake state. */
+    private void tickHandbrakeAnim() {
+        float target = ClientConsists.handbrake(getConsistId(), getWagonIndex()) ? 1.0F : 0.0F;
+        if (!handbrakeAnimSeeded) {
+            // the first state seen is taken as it is — once the consist is known
+            handbrakeAnim = target;
+            handbrakeAnimSeeded = ClientConsists.slot(getConsistId(), getWagonIndex()) != null;
+        }
+        handbrakeAnimO = handbrakeAnim;
+        float step = 1.0F / HANDBRAKE_ANIM_TICKS;
+        handbrakeAnim += Math.clamp(target - handbrakeAnim, -step, step);
+    }
+
+    /** Client: the handbrake wheel's turn at {@code partialTick}, 0 released … 1 set. */
+    public float handbrakeAnim(float partialTick) {
+        return handbrakeAnimO + (handbrakeAnim - handbrakeAnimO) * partialTick;
     }
 
     /** Client: door {@code index}'s swing at {@code partialTick}, 0 closed … 1 open. */

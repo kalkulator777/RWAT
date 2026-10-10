@@ -389,6 +389,10 @@ public final class IrStockModel {
         List<StockModel.Control> builtControls = new ArrayList<>();
         controls.forEach((key, control) -> {
             StockModel.Control built = control.build();
+            if (built != null && decl.handbrake().contains(key)) {
+                // the declaration says this widget is the handbrake wheel (SPEC §5.3)
+                built = built.withRole(built.role().withKind(ObjectRole.Kind.HANDBRAKE));
+            }
             if (built != null) {
                 builtControls.add(built);
             }

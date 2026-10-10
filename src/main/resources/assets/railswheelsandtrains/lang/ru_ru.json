@@ -110,5 +110,8 @@
   "message.railswheelsandtrains.handbrake_set": "Ручник затянут · на ручнике %s из %s ваг.",
   "message.railswheelsandtrains.handbrake_released": "Ручник отпущен · на ручнике %s из %s ваг.",
   "message.railswheelsandtrains.handbrake_auto": "На этом сервере ручники ставятся сами: отпускаются, когда машинист набирает тягу",
-  "hud.railswheelsandtrains.handbrakes": "Ручники %s/%s"
+  "hud.railswheelsandtrains.handbrakes": "Ручники %s/%s",
+  "control.railswheelsandtrains.handbrake": "Ручной тормоз",
+  "control.railswheelsandtrains.handbrake_set": "затянут",
+  "control.railswheelsandtrains.handbrake_released": "отпущен"
 }

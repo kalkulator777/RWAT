@@ -35,6 +35,8 @@ public final class DriverPanel {
     private static final int ROW = 12;
     private static final int LAMP_H = 7;
     private static final int LAMP_GAP = 1;
+    /** The brake pressure bar under a brake row's lamps, px (fits the gap to the next row). */
+    private static final int PRESSURE_H = 2;
     private static final int CELL_W = 12;
     private static final int CELL_H = 11;
     private static final int CELL_GAP = 1;
@@ -75,9 +77,10 @@ public final class DriverPanel {
         if (composition == null) {
             return null;
         }
-        return DriverReadout.of(ClientConsists.handles(wagon.getConsistId()),
-                ClientConsists.speed(wagon.getConsistId()), composition, wagon.getWagonIndex(),
-                ClientConsists.handbrakesSet(wagon.getConsistId()));
+        int consistId = wagon.getConsistId();
+        return DriverReadout.of(ClientConsists.handles(consistId), ClientConsists.speed(consistId),
+                composition, wagon.getWagonIndex(), ClientConsists.handbrakesSet(consistId),
+                ClientConsists.trainBrakePressure(consistId), ClientConsists.indBrakePressure(consistId));
     }
 
     /** The panel's height for this readout. */
@@ -260,6 +263,14 @@ public final class DriverPanel {
         for (int n = 1; n <= Consist.NOTCHES; n++) {
             int left = columns.lampLeft(x, n);
             graphics.fill(left, top, left + columns.lampW(), top + LAMP_H, n <= notch ? lit : OFF);
+        }
+        if (handle == Consist.Handle.TRAIN_BRAKE || handle == Consist.Handle.INDEPENDENT_BRAKE) {
+            // the cylinders' pressure under the lamps: the brake catching up with the handle (SPEC §5.3)
+            int from = columns.lampLeft(x, 1);
+            int to = columns.lampLeft(x, Consist.NOTCHES) + columns.lampW();
+            int fill = Math.round(readout.pressure(handle) * (to - from));
+            graphics.fill(from, top + LAMP_H + 1, to, top + LAMP_H + 1 + PRESSURE_H, OFF);
+            graphics.fill(from, top + LAMP_H + 1, from + fill, top + LAMP_H + 1 + PRESSURE_H, lit);
         }
         String value = Integer.toString(notch);
         graphics.drawString(font, value, x + WIDTH - PAD - font.width(value), top,

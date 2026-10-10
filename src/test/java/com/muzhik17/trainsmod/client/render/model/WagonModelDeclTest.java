@@ -92,4 +92,13 @@ class WagonModelDeclTest {
         assertNull(MtlParser.resolve("a", "../../escape.png"), "cannot climb out of the namespace");
         assertEquals("body.png", MtlParser.fileNameOf("x/y/body.png"));
     }
+    /** The handbrake wheels a model declares (SPEC §5.3): control keys; none by default. */
+    @Test
+    void handbrakeWheels() {
+        assertEquals(java.util.List.of("WIDGET_13", "WIDGET_14"), parse("""
+                { "obj": "mvp:stock/m62/mvp_ir_m62.obj", "handbrake": ["WIDGET_13", "WIDGET_14"] }""")
+                .handbrake());
+        assertTrue(parse("""
+                { "obj": "mvp:stock/up4/mvp_ir_up4.obj" }""").handbrake().isEmpty());
+    }
 }

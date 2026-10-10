@@ -122,6 +122,11 @@ public record StockModel(
             boolean interior, Vector3f pivot, Vector3f axis, float degrees, Vector3f slide,
             Vector3f boxMin, Vector3f boxMax) {
 
+        /** The same control doing another job (a declared handbrake wheel). */
+        public Control withRole(ObjectRole.Control newRole) {
+            return new Control(newRole, meshes, interior, pivot, axis, degrees, slide, boxMin, boxMax);
+        }
+
         /** The model-space transform at animation value {@code value} (IR order: slide, then turn). */
         public Matrix4f transform(float value, Matrix4f dest) {
             dest.identity().translate(slide.x * value, slide.y * value, slide.z * value);

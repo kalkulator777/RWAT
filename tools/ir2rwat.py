@@ -306,6 +306,24 @@ def derive_type(category, ir, extent, boxes):
     return declaration
 
 
+HANDBRAKE_LABEL = re.compile(r"_LABEL_hand\^?brake(?:_|$)", re.IGNORECASE)
+CONTROL_KEY = re.compile(r"(?:^|_)(WIDGET_\d+)(?=_|$)")
+
+
+def derive_handbrake(objects):
+    """The model's handbrake wheels (SPEC §5.3, §6.3): IR has no handbrake
+    control, MVP marks the wheel as a WIDGET labelled "Hand Brake" — its
+    control key ("WIDGET_5") goes to the model declaration's "handbrake",
+    and the mod turns the wagon's handbrake with it."""
+    keys = set()
+    for name in objects:
+        if HANDBRAKE_LABEL.search(name):
+            key = CONTROL_KEY.search(name)
+            if key:
+                keys.add(key.group(1))
+    return sorted(keys)
+
+
 def derive_interior(category, ir):
     """A passenger car's walkable floor (SPEC §9.6): IR's "passenger" area —
     centre_x along the car, length = HALF the length, width = the full width,
@@ -692,6 +710,9 @@ class Converter:
             model_json["animations"] = animations
         if liveries:
             model_json["liveries"] = liveries
+        handbrake = derive_handbrake(boxes)
+        if handbrake:
+            model_json["handbrake"] = handbrake
         model_json = deep_merge(model_json, overrides.get("model", {}))
 
         if self.geometry is not None:

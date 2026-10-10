@@ -554,6 +554,20 @@ public final class Consist {
         return v != prevV || v != 0.0 || handlesMoved || handbrakesMoved;
     }
 
+    /**
+     * The train brake in effect, 0..1 — the cylinders' pressure as a fraction
+     * of full (SPEC §5.3): it follows the handle with the brake's timing. The
+     * handle itself before the first tick.
+     */
+    public double trainBrakeEffort() {
+        return Double.isNaN(brakeEffort) ? brakeNotch / (double) NOTCHES : brakeEffort;
+    }
+
+    /** The independent (loco) brake in effect, 0..1 — see {@link #trainBrakeEffort}. */
+    public double independentBrakeEffort() {
+        return Double.isNaN(indBrakeEffort) ? indBrakeNotch / (double) NOTCHES : indBrakeEffort;
+    }
+
     /** Speed the consist ran into a track end with on its last advance, km/h; 0 = didn't. */
     public double endImpactKmh() {
         return endImpactKmh;
