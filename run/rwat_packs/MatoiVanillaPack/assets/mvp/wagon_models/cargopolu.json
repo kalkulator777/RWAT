@@ -3,5 +3,9 @@
   "liveries": {
     "mvp_red": "l_mvp_red",
     "mvp_blue": "l_mvp_blue"
+  },
+  "sounds": {
+    "wheels": "stock_17/sounds/default/mvp_freight_stock_wheels.ogg",
+    "clack": "stock_17/sounds/default/mvp_clack_wheelset_2-axle.ogg"
   }
 }

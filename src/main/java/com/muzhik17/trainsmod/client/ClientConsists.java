@@ -99,6 +99,8 @@ public final class ClientConsists {
         /** The train / loco brake in effect, 0..1 (the cab's pressure gauges). */
         float trainBrakePressure;
         float indBrakePressure;
+        /** The driver's held signals per the newest snapshot (SPEC §10). */
+        int signals;
 
         /** (Re)materialize the path when the spec or the client graph changed. */
         TrackPath path() {
@@ -149,6 +151,7 @@ public final class ClientConsists {
         state.handbrakes = payload.handbrakes();
         state.trainBrakePressure = payload.trainBrakePressure();
         state.indBrakePressure = payload.indBrakePressure();
+        state.signals = payload.signals();
         int[] wagonIds = payload.wagonEntityIds();
         for (int i = 0; i < wagonIds.length; i++) {
             if (wagonIds[i] >= 0) {
@@ -330,6 +333,12 @@ public final class ClientConsists {
         return state == null ? 0.0F : state.indBrakePressure;
     }
 
+    /** The signals the consist's driver holds (SPEC §10: {@code Consist.HORN}/{@code BELL}), 0 if unknown. */
+    public static int signals(int consistId) {
+        State state = STATES.get(consistId);
+        return state == null ? 0 : state.signals;
+    }
+
     /** The driver's handles of a consist (SPEC §9), or {@link Handles#REST} if unknown. */
     public static Handles handles(int consistId) {
         State state = STATES.get(consistId);
@@ -341,6 +350,30 @@ public final class ClientConsists {
         State state = STATES.get(consistId);
         Snapshot newest = state == null ? null : state.buffer.peekLast();
         return newest == null ? 0.0 : newest.v;
+    }
+
+    /**
+     * The consist's speed at the playback clock — in step with
+     * {@link #tickPose} rather than with the newest snapshot, so a lurch
+     * shows when the train is seen to stop — blocks/tick (signed), or 0.
+     */
+    public static double tickSpeed(int consistId) {
+        State state = STATES.get(consistId);
+        if (state == null || state.buffer.isEmpty() || Double.isNaN(state.clock)) {
+            return 0.0;
+        }
+        Snapshot previous = null;
+        for (Snapshot snapshot : state.buffer) {
+            if (snapshot.gameTime >= state.clock) {
+                if (previous == null) {
+                    return snapshot.v;
+                }
+                double f = (state.clock - previous.gameTime) / (snapshot.gameTime - previous.gameTime);
+                return previous.v + (snapshot.v - previous.v) * f;
+            }
+            previous = snapshot;
+        }
+        return state.buffer.peekLast().v;
     }
 
     /** The consist's materialized path (for debug rendering), or null. */

@@ -1,3 +1,14 @@
 {
-  "obj": "stock_17/rolling_stock/locomotives/mvp_ir_tgm4/mvp_ir_tgm4.obj"
+  "obj": "stock_17/rolling_stock/locomotives/mvp_ir_tgm4/mvp_ir_tgm4.obj",
+  "sounds": {
+    "idle": {
+      "main": "stock_17/sounds/diesel/mvp_tgm4/idle.ogg",
+      "pitch": [1.0, 1.5],
+      "volume": [0.55, 1.0]
+    },
+    "horn": "stock_17/sounds/diesel/mvp_tgm4/horn.ogg",
+    "bell": "stock_17/sounds/diesel/mvp_tgm4/bell.ogg",
+    "wheels": "stock_17/sounds/default/mvp_freight_stock_wheels.ogg",
+    "clack": "stock_17/sounds/default/mvp_clack_wheelset_2-axle.ogg"
+  }
 }

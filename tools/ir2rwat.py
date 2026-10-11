@@ -8,7 +8,7 @@ copied byte for byte — the RWAT model convention IS the IR one (SPEC §5.2) �
 only the declarations are generated:
 
     data/<ns>/wagon_types/<id>.json     physics, from IR "properties"/"trucks"
-    assets/<ns>/wagon_models/<id>.json  model, liveries, door animations
+    assets/<ns>/wagon_models/<id>.json  model, liveries, door animations, sounds
     assets/<ns>/rail_models/<id>.json   rail styles, from IR track/ definitions (SPEC §6.10)
     assets/<ns>/lang/<lang>.json        display names (wagon.<ns>.<id>, rail.<ns>.<id>,
                                         light.<ns>.<id>.<group>)
@@ -34,6 +34,13 @@ Names: a per-type override file may carry "name" ({"ru_ru": "..."}) and
 "lights" ({"<group>": {"en_us": "...", "ru_ru": "..."}}) — the stock's display
 name and its light groups' names in the driver's light menu (SPEC §8), written
 to the pack's lang files.
+
+Sounds (SPEC §10): IR's "sounds" (idle, horn, bell, wheels, clack, controls)
+and the door animations' sounds go to the model declaration's "sounds", the
+files copied byte for byte under <root>/sounds/. A recipe's "sound_defaults"
+fill in what IR leaves to its own built-in sounds: "wheels" by category and
+"clack" for every type. The engine's pitch and volume range comes from IR's
+"era" (a diesel revs with the throttle, an electric's hum barely changes).
 
 Several sources: the first one wins, later ones only add ids the earlier ones
 lack. Each source lands under its own root folder, so shared textures of
@@ -105,6 +112,13 @@ MIN_DOOR_SPAN = 0.3
 MAX_WIDGET_THICKNESS = 0.35
 # the leaves of one doorway touch along the wall (ER2: two sliding leaves meet in the middle)
 LEAF_GAP = 0.05
+# an engine's ("idle") pitch and volume from rest to full throttle, by IR era (SPEC §10)
+ENGINE_RANGES = {
+    "diesel": {"pitch": [1.0, 1.5], "volume": [0.55, 1.0]},
+    "electric": {"pitch": [1.0, 1.12], "volume": [0.45, 0.9]},
+}
+# IR's control sounds RWAT plays (SPEC §10): a notch ("move"), a valve opening ("engage")
+CONTROL_SOUNDS = ("move", "engage")
 
 
 # --------------------------------------------------------------------- input
@@ -138,7 +152,10 @@ class Source:
         return sorted(n for n in self.names if n.startswith(prefix) and not n.endswith("/"))
 
     def destination(self, zip_path, namespace):
-        """assets/immersiverailroading/models/<rest> → assets/<ns>/<root>/<rest>."""
+        """assets/immersiverailroading/models/<rest> → assets/<ns>/<root>/<rest>;
+        assets/immersiverailroading/sounds/<rest> → assets/<ns>/<root>/sounds/<rest>."""
+        if zip_path.startswith(IR_ROOT + "sounds/"):
+            return f"assets/{namespace}/{self.root}/{zip_path[len(IR_ROOT):]}"
         if not zip_path.startswith(IR_MODELS):
             raise ValueError(f"{zip_path} is outside {IR_MODELS}")
         return f"assets/{namespace}/{self.root}/{zip_path[len(IR_MODELS):]}"
@@ -848,6 +865,9 @@ class Converter:
         handbrake = derive_handbrake(boxes)
         if handbrake:
             model_json["handbrake"] = handbrake
+        sounds = self.convert_sounds(source, category, ir, door_ids, type_id)
+        if sounds:
+            model_json["sounds"] = sounds
         model_json = deep_merge(model_json, overrides.get("model", {}))
 
         if self.geometry is not None:
@@ -866,6 +886,84 @@ class Converter:
                     f" ({sum(1 for d in doors if d.get('connecting'))} gangway)")
         print(f"  {self.namespace}:{type_id:28} {category:11} {type_json['length']:7.3f} m "
               f"{type_json['mass_t']:7.1f} t  liveries={len(liveries):2}  {name}{walk}")
+
+    def copy_sound(self, source, ref, type_id):
+        """An IR sound reference ("sounds/x.ogg", "immersiverailroading:sounds/x.ogg") →
+        the copied file's path in the pack, or None (warned) if it isn't there."""
+        sound_zip = ir_location_to_zip(ref)
+        if not source.exists(sound_zip):
+            self.warn(f"{type_id}: sound {sound_zip} missing")
+            return None
+        try:
+            return self.model_location(self.copy(source, sound_zip))
+        except ValueError as problem:
+            self.warn(f"{type_id}: sound skipped — {problem}")
+            return None
+
+    def convert_sounds(self, source, category, ir, door_ids, type_id):
+        """The model declaration's "sounds" (SPEC §10) from IR's, the door
+        animations' and the recipe's "sound_defaults"."""
+        ir_sounds = ir.get("sounds", {})
+        defaults = self.recipe.get("sound_defaults", {})
+        sounds = {}
+
+        def loop(value, extra=None):
+            if isinstance(value, str):
+                main = self.copy_sound(source, value, type_id)
+                if main is None:
+                    return None
+                return dict({"main": main}, **extra) if extra else main
+            parts = {}
+            for key in ("start", "main", "stop"):
+                if value.get(key):
+                    copied = self.copy_sound(source, value[key], type_id)
+                    if copied is not None:
+                        parts[key] = copied
+            if "main" not in parts:
+                return None
+            return dict(parts, **extra) if extra else parts
+
+        engine = ENGINE_RANGES.get(ir.get("era", ""))
+        for key in ("idle", "horn", "bell"):
+            if ir_sounds.get(key):
+                converted = loop(ir_sounds[key], engine if key == "idle" else None)
+                if converted is not None:
+                    sounds[key] = converted
+        wheels = ir_sounds.get("wheels") or defaults.get("wheels", {}).get(category)
+        if wheels:
+            converted = loop(wheels)
+            if converted is not None:
+                sounds["wheels"] = converted
+        clack = ir_sounds.get("clack") or defaults.get("clack")
+        if clack:
+            converted = self.copy_sound(source, clack, type_id)
+            if converted is not None:
+                sounds["clack"] = converted
+
+        doors = {}
+        for animation in ir.get("animations", []):
+            group = animation.get("control_group", "").lower()
+            start = (animation.get("sound") or {}).get("start")
+            if group in door_ids and start:
+                converted = self.copy_sound(source, start, type_id)
+                if converted is not None:
+                    doors[group] = converted
+        if doors:
+            sounds["doors"] = dict(sorted(doors.items()))
+
+        controls = {}
+        for key, control in sorted(ir_sounds.get("controls", {}).items()):
+            converted = {}
+            for kind in CONTROL_SOUNDS:
+                if isinstance(control, dict) and control.get(kind):
+                    copied = self.copy_sound(source, control[kind], type_id)
+                    if copied is not None:
+                        converted[kind] = copied
+            if converted:
+                controls[key] = converted
+        if controls:
+            sounds["controls"] = controls
+        return sounds
 
     def add_names(self, type_id, overrides, boxes):
         """A per-type file's "name" and "lights" → the pack's lang files (SPEC §8, §9.6)."""

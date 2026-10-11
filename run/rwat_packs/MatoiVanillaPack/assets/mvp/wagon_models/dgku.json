@@ -6,5 +6,39 @@
     "koshmar004_blue": "l_koshmar004_blue",
     "koshmar004_green": "l_koshmar004_green",
     "rinary_red": "l_rinary_red"
+  },
+  "sounds": {
+    "idle": {
+      "main": "stock/sounds/diesel/mvp_dgku/idle.ogg",
+      "pitch": [1.0, 1.5],
+      "volume": [0.55, 1.0]
+    },
+    "horn": "stock/sounds/diesel/mvp_dgku/horn.ogg",
+    "bell": "stock/sounds/diesel/mvp_dgku/bell.ogg",
+    "wheels": "stock/sounds/default/mvp_freight_stock_wheels.ogg",
+    "clack": "stock/sounds/default/mvp_clack_wheelset_2-axle.ogg",
+    "controls": {
+      "INDEPENDENT_BRAKE_1": {
+        "engage": "stock/sounds/control/mvp_control_pnevmo2.ogg"
+      },
+      "REVERSER_1": {
+        "move": "stock/sounds/control/switch/mvp_control_reverser.ogg"
+      },
+      "THROTTLE_1": {
+        "move": "stock/sounds/control/switch/mvp_control_throttle.ogg"
+      },
+      "TRAIN_BRAKE_1": {
+        "engage": "stock/sounds/control/mvp_control_pnevmo2.ogg"
+      },
+      "WIDGET_4": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_5": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_6": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      }
+    }
   }
 }

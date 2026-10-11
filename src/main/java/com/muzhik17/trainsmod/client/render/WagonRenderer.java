@@ -13,12 +13,14 @@ import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.client.ClientCabInteract;
 import com.muzhik17.trainsmod.client.ClientConsists;
 import com.muzhik17.trainsmod.client.ClientFloorDebug;
+import com.muzhik17.trainsmod.client.ClientRide;
 import com.muzhik17.trainsmod.client.render.model.StockModel;
 import com.muzhik17.trainsmod.client.render.model.StockModels;
 import com.muzhik17.trainsmod.client.render.model.WagonModel;
 import com.muzhik17.trainsmod.consist.Handles;
 import com.muzhik17.trainsmod.consist.WagonEntity;
 import com.muzhik17.trainsmod.convention.ControlValue;
+import com.muzhik17.trainsmod.kinematics.Sway;
 import com.muzhik17.trainsmod.kinematics.WagonPose;
 import com.muzhik17.trainsmod.physics.TrainPhysics;
 import com.muzhik17.trainsmod.stock.ConsistComposition;
@@ -179,6 +181,7 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
         double bodyZ = pose != null ? pose.body().z : lerped.z;
         float yRot = pose != null ? pose.yaw() : wagon.getYRot();
         float xRot = pose != null ? pose.pitch() : wagon.getXRot();
+        Sway sway = ClientRide.sway(wagon.getId(), partialTick); // the body on its springs (SPEC §10)
 
         if (model.isEmpty()) {
             // no pack has a model for this type (or it failed to load) — the placeholder box
@@ -186,6 +189,7 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
             poseStack.translate(bodyX - lerped.x, bodyY - lerped.y, bodyZ - lerped.z);
             poseStack.mulPose(Axis.YP.rotationDegrees(-yRot));
             poseStack.mulPose(Axis.XP.rotationDegrees(xRot));
+            applySway(sway, poseStack);
             poseStack.translate(0.0F, BOX_LIFT, 0.0F);
             poseStack.scale(BOX_SCALE_X, BOX_SCALE_Y, (float) slot.type().length() / BOX_LENGTH);
             VertexConsumer body = buffers.getBuffer(RenderType.entityCutoutNoCull(WAGON_TEXTURE));
@@ -205,6 +209,7 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
         poseStack.translate(bodyX - lerped.x, bodyY - lerped.y, bodyZ - lerped.z);
         poseStack.mulPose(Axis.YP.rotationDegrees(-yRot));
         poseStack.mulPose(Axis.XP.rotationDegrees(xRot));
+        applySway(sway, poseStack); // in the pose frame, before the flip — riders sway the same
         if (flipped) {
             poseStack.mulPose(Axis.YP.rotationDegrees(180.0F));
         }
@@ -258,6 +263,21 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
             drawBogieMarker(poseStack, lines, lerped, pose.front(), 1.0F, 0.2F, 0.2F); // front: red
             drawBogieMarker(poseStack, lines, lerped, pose.rear(), 0.2F, 0.6F, 1.0F);  // rear: blue
         }
+    }
+
+    /**
+     * The body's rocking on its springs (SPEC §10), exactly as
+     * {@link Sway#apply} moves a rider: up by the bounce, turned about the
+     * rocking centre — roll about +Z, then pitch about +X.
+     */
+    private static void applySway(Sway sway, PoseStack poseStack) {
+        if (sway.equals(Sway.ZERO)) {
+            return;
+        }
+        poseStack.translate(0.0, Sway.CENTRE_Y + sway.bounce(), 0.0);
+        poseStack.mulPose(Axis.ZP.rotation((float) sway.roll()));
+        poseStack.mulPose(Axis.XP.rotation((float) sway.pitch()));
+        poseStack.translate(0.0, -Sway.CENTRE_Y, 0.0);
     }
 
     @SubscribeEvent

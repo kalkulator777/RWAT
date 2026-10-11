@@ -166,7 +166,7 @@ public final class ConsistManager extends SavedData {
             // "forward" is (SPEC §6.12: drive from any cab).
             Driver driver = driverOf(level, consist);
             if (driver == null) {
-                consist.setDriveInput(0, 0, false);
+                consist.setDriveInput(0, 0, false, 0);
             } else {
                 consist.takeControl(driver.cab().getUUID(), driver.facing());
             }

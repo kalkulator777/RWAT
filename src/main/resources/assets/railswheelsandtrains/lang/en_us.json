@@ -57,6 +57,8 @@
   "message.railswheelsandtrains.drive_other_cab_seated": "Another cab of this train is in control · Sneak to stand up",
   "key.categories.railswheelsandtrains": "Rails, Wheels & Trains",
   "key.railswheelsandtrains.lights": "Driver's panel (instruments and lights)",
+  "key.railswheelsandtrains.horn": "Horn (held)",
+  "key.railswheelsandtrains.whistle": "Whistle (held)",
   "screen.railswheelsandtrains.lights.none": "This train has no lights",
   "control.railswheelsandtrains.on": "on",
   "control.railswheelsandtrains.off": "off",

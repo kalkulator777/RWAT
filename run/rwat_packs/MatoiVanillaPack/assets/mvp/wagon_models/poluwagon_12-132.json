@@ -3,5 +3,17 @@
   "liveries": {
     "koshmar004_brown": "l_koshmar004_brown",
     "koshmar004_green": "l_koshmar004_green"
+  },
+  "sounds": {
+    "wheels": "stock/sounds/default/mvp_freight_stock_wheels.ogg",
+    "clack": "stock/sounds/default/mvp_clack_wheelset_2-axle.ogg",
+    "controls": {
+      "COUPLER_ENGAGED_1": {
+        "move": "stock/sounds/default/mvp_couple_switch.ogg"
+      },
+      "COUPLER_ENGAGED_2": {
+        "move": "stock/sounds/default/mvp_couple_switch.ogg"
+      }
+    }
   }
 }

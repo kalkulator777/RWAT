@@ -1,3 +1,51 @@
 {
-  "obj": "stock/rolling_stock/locomotives/mvp_ir_er2h/mvp_ir_er2h.obj"
+  "obj": "stock/rolling_stock/locomotives/mvp_ir_er2h/mvp_ir_er2h.obj",
+  "sounds": {
+    "idle": {
+      "main": "stock/sounds/electric/mvp_er2/idle.ogg",
+      "pitch": [1.0, 1.5],
+      "volume": [0.55, 1.0]
+    },
+    "bell": "stock/sounds/electric/mvp_er2/bell.ogg",
+    "wheels": "stock/sounds/electric/mvp_er2/wheels.ogg",
+    "clack": "stock/sounds/default/mvp_clack_wheelset_2-axle.ogg",
+    "controls": {
+      "REVERSER_1": {
+        "move": "stock/sounds/control/switch/mvp_control_reverser.ogg"
+      },
+      "THROTTLE_1": {
+        "move": "stock/sounds/control/switch/mvp_control_throttle.ogg"
+      },
+      "TRAIN_BRAKE_1": {
+        "engage": "stock/sounds/control/mvp_control_pnevmo2.ogg"
+      },
+      "WIDGET_1": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_2": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_3": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_4": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_5": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_6": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_7": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_8": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_9": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      }
+    }
+  }
 }

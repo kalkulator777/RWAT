@@ -13,5 +13,25 @@
     "rinary_198": "l_rinary_198",
     "teslov_236": "l_teslov_236",
     "wilsa_315": "l_wilsa_315"
+  },
+  "sounds": {
+    "wheels": "stock/sounds/electric/mvp_er2/wheels.ogg",
+    "clack": "stock/sounds/default/mvp_clack_wheelset_2-axle.ogg",
+    "doors": {
+      "cdf": "stock/sounds/control/door/mvp_control_door_1.ogg",
+      "cdr": "stock/sounds/control/door/mvp_control_door_1.ogg",
+      "dl": "stock/sounds/control/door/mvp_control_door_1.ogg",
+      "dr": "stock/sounds/control/door/mvp_control_door_1.ogg",
+      "id1": "stock/sounds/control/door/mvp_control_slide_door_1.ogg",
+      "id2": "stock/sounds/control/door/mvp_control_slide_door_1.ogg"
+    },
+    "controls": {
+      "COUPLER_ENGAGED_1": {
+        "move": "stock/sounds/default/mvp_couple_switch.ogg"
+      },
+      "COUPLER_ENGAGED_2": {
+        "move": "stock/sounds/default/mvp_couple_switch.ogg"
+      }
+    }
   }
 }

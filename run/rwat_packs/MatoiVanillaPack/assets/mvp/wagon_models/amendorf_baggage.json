@@ -18,5 +18,37 @@
     "mvp_rzd": "l_mvp_rzd",
     "koshmar004_rzd": "l_koshmar004_rzd",
     "koshmar004_krim": "l_koshmar004_krim"
+  },
+  "sounds": {
+    "wheels": "stock/sounds/default/mvp_pass_stock_wheels.ogg",
+    "clack": "stock/sounds/default/mvp_clack_wheelset_2-axle.ogg",
+    "doors": {
+      "door1": "stock/sounds/control/door/mvp_controls_door_close_1.ogg",
+      "door2": "stock/sounds/control/door/mvp_controls_door_close_1.ogg",
+      "door3": "stock/sounds/control/door/mvp_controls_door_close_1.ogg",
+      "door4": "stock/sounds/control/door/mvp_controls_door_close_1.ogg",
+      "doorkupe": "stock/sounds/control/door/mvp_control_slide_door_1.ogg",
+      "doortambur": "stock/sounds/control/door/mvp_controls_door_close_1.ogg",
+      "doortoilet": "stock/sounds/control/door/mvp_controls_door_close_1.ogg",
+      "trap1": "stock/sounds/control/door/mvp_controls_door_close_1.ogg",
+      "trap2": "stock/sounds/control/door/mvp_controls_door_close_1.ogg"
+    },
+    "controls": {
+      "COUPLER_ENGAGED_1": {
+        "move": "stock/sounds/default/mvp_couple_switch.ogg"
+      },
+      "COUPLER_ENGAGED_2": {
+        "move": "stock/sounds/default/mvp_couple_switch.ogg"
+      },
+      "WIDGET_7": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_8": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_9": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      }
+    }
   }
 }

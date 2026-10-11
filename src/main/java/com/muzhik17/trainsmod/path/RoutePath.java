@@ -19,6 +19,8 @@ public final class RoutePath implements TrackPath {
     private final boolean loop;
     /** cumulative[i] = arc length before part i; cumulative[parts.length] = total. */
     private final double[] cumulative;
+    /** jointsBefore[i] = rail joints in the parts before part i (SPEC §10). */
+    private final long[] jointsBefore;
 
     RoutePath(HermiteSegmentPath[] parts, boolean[] reversed, boolean loop) {
         if (parts.length == 0 || parts.length != reversed.length) {
@@ -28,8 +30,10 @@ public final class RoutePath implements TrackPath {
         this.reversed = reversed;
         this.loop = loop;
         this.cumulative = new double[parts.length + 1];
+        this.jointsBefore = new long[parts.length + 1];
         for (int i = 0; i < parts.length; i++) {
             cumulative[i + 1] = cumulative[i] + parts[i].length();
+            jointsBefore[i + 1] = jointsBefore[i] + jointsIn(parts[i].length());
         }
     }
 
@@ -92,6 +96,54 @@ public final class RoutePath implements TrackPath {
         }
         Vector3d tangent = parts[index].sampleTangent(local);
         return reversed[index] ? tangent.negate() : tangent;
+    }
+
+    // --- rail joints (SPEC §10) ---
+    // Each segment is laid with rails from its own start node: joints at
+    // 0, L, 2L … along the segment, and one at its end node (the next
+    // segment's start). A part travelled in reverse meets the same joints
+    // from the other end, so they stay put on the track for every route.
+
+    /** Joints of a part of length {@code len} in [start, end): the end node is the next part's. */
+    private static long jointsIn(double len) {
+        return Math.max(1L, (long) Math.ceil(len / JOINT_SPACING));
+    }
+
+    @Override
+    public long jointIndex(double s) {
+        double total = length();
+        long laps = 0;
+        double ranged;
+        if (loop) {
+            laps = (long) Math.floor(s / total);
+            ranged = s - laps * total;
+        } else {
+            ranged = Math.clamp(s, 0.0, total);
+        }
+        int index = partIndex(ranged);
+        double len = partLength(index);
+        double u = Math.min(ranged - cumulative[index], Math.nextDown(len));
+        long inPart;
+        if (!reversed[index]) {
+            inPart = (long) Math.floor(u / JOINT_SPACING) + 1L; // joints at k·L ≤ u
+        } else {
+            // the node at u = 0, then len − k·L for k ≥ 1 while it stays > 0
+            long kMax = jointsIn(len) - 1L;
+            long kMin = Math.max(1L, (long) Math.ceil((len - u) / JOINT_SPACING));
+            inPart = 1L + Math.max(0L, kMax - kMin + 1L);
+        }
+        return laps * jointsBefore[parts.length] + jointsBefore[index] + inPart;
+    }
+
+    @Override
+    public double jointDistance(double s) {
+        double ranged = intoRange(s);
+        int index = partIndex(ranged);
+        double len = partLength(index);
+        double u = ranged - cumulative[index];
+        double along = reversed[index] ? len - u : u; // from the segment's start node
+        double into = along - Math.floor(along / JOINT_SPACING) * JOINT_SPACING;
+        return Math.min(Math.min(u, len - u), Math.min(into, JOINT_SPACING - into));
     }
 
     private int partIndex(double s) {

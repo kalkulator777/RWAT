@@ -15,6 +15,12 @@ import org.joml.Vector3d;
  */
 public interface TrackPath {
 
+    /**
+     * Rail length between joints, blocks (SPEC §10): the standard 25 m rail
+     * of Russian jointed track — where the wheels knock and the car jolts.
+     */
+    double JOINT_SPACING = 25.0;
+
     /** Total path length in blocks. */
     double length();
 
@@ -39,4 +45,22 @@ public interface TrackPath {
      * fresh vector.
      */
     Vector3d sampleTangent(double s);
+
+    /**
+     * How many rail joints lie at or before {@code s} (SPEC §10), give or take
+     * a constant: a step function of {@code s}, so the joints a wheel crossed
+     * between two positions are the difference of the two counts. This
+     * default spaces the joints evenly along {@code s}; a {@link RoutePath}
+     * lays them per segment, so they stay put on the track whichever route
+     * runs over it.
+     */
+    default long jointIndex(double s) {
+        return (long) Math.floor(s / JOINT_SPACING);
+    }
+
+    /** Distance from {@code s} to the nearest rail joint, blocks (SPEC §10). */
+    default double jointDistance(double s) {
+        double into = s - Math.floor(s / JOINT_SPACING) * JOINT_SPACING;
+        return Math.min(into, JOINT_SPACING - into);
+    }
 }

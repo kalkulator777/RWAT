@@ -2,5 +2,9 @@
   "obj": "stock/rolling_stock/freight/mvp_ir_hopper/mvp_ir_hopper.obj",
   "liveries": {
     "mvp_green": "l_mvp_green"
+  },
+  "sounds": {
+    "wheels": "stock/sounds/default/mvp_freight_stock_wheels.ogg",
+    "clack": "stock/sounds/default/mvp_clack_wheelset_2-axle.ogg"
   }
 }

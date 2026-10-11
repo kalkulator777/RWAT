@@ -8,6 +8,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
+import com.muzhik17.trainsmod.client.sound.SoundSet;
 
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
@@ -64,6 +65,12 @@ public final class StockModels {
     public static List<String> liveries(String typeId) {
         WagonModelDecl decl = current.decls.get(typeId);
         return decl == null ? List.of() : decl.liveries().keySet().stream().sorted().toList();
+    }
+
+    /** The sounds a pack declares for a wagon type (SPEC §10); {@link SoundSet#NONE} if none. */
+    public static SoundSet sounds(String typeId) {
+        WagonModelDecl decl = current.decls.get(typeId);
+        return decl == null ? SoundSet.NONE : decl.sounds();
     }
 
     /**

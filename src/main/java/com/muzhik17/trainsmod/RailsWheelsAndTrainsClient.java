@@ -3,9 +3,11 @@ package com.muzhik17.trainsmod;
 import com.muzhik17.trainsmod.client.ClientConsists;
 import com.muzhik17.trainsmod.client.ClientCabHud;
 import com.muzhik17.trainsmod.client.ClientConfig;
+import com.muzhik17.trainsmod.client.ClientDriveInput;
 import com.muzhik17.trainsmod.client.ClientDriverHud;
 import com.muzhik17.trainsmod.client.ClientPanelKey;
 import com.muzhik17.trainsmod.client.ClientRailGraph;
+import com.muzhik17.trainsmod.client.ClientRide;
 import com.muzhik17.trainsmod.client.ClientRiderSync;
 import com.muzhik17.trainsmod.client.ClientWalk;
 import com.muzhik17.trainsmod.client.render.RailRenderer;
@@ -42,6 +44,7 @@ public class RailsWheelsAndTrainsClient {
         modEventBus.addListener(RailsWheelsAndTrainsClient::onRegisterRenderers);
         modEventBus.addListener(RailsWheelsAndTrainsClient::onRegisterReloadListeners);
         modEventBus.addListener(ClientPanelKey::register);
+        modEventBus.addListener(ClientDriveInput::register);
         modEventBus.addListener(ClientCabHud::register);
         modEventBus.addListener(ClientDriverHud::register);
         ClientConfig.register(container);
@@ -75,6 +78,7 @@ public class RailsWheelsAndTrainsClient {
             return;
         }
         ClientConsists.tickAll();
+        ClientRide.tickAll();
     }
 
     /** Snapshot buffers and the graph copy are per-connection state; drop them when leaving. */
@@ -83,6 +87,7 @@ public class RailsWheelsAndTrainsClient {
         ClientConsists.clearAll();
         ClientWalk.clearAll();
         ClientRiderSync.clearAll();
+        ClientRide.clearAll();
         ClientRailGraph.clear();
         RailRenderer.clear();
         WagonRenderer.clearBaked();

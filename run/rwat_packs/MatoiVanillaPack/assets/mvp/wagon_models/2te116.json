@@ -13,5 +13,75 @@
     "evgenygp_708_low_buffers": "l_evgenygp_708_lb",
     "evgenygp_823_low_buffers": "l_evgenygp_823_lb"
   },
-  "handbrake": ["WIDGET_12"]
+  "handbrake": ["WIDGET_12"],
+  "sounds": {
+    "idle": {
+      "main": "stock/sounds/diesel/mvp_2te116/idle.ogg",
+      "pitch": [1.0, 1.5],
+      "volume": [0.55, 1.0]
+    },
+    "horn": "stock/sounds/control/switch/mvp_control_tifon_start.ogg",
+    "bell": "stock/sounds/diesel/mvp_2te116/bell.ogg",
+    "wheels": "stock/sounds/default/mvp_freight_stock_wheels.ogg",
+    "clack": "stock/sounds/default/mvp_clack_wheelset_2-axle.ogg",
+    "controls": {
+      "COUPLER_ENGAGED_1": {
+        "move": "stock/sounds/default/mvp_couple_switch.ogg"
+      },
+      "COUPLER_ENGAGED_2": {
+        "move": "stock/sounds/default/mvp_couple_switch.ogg"
+      },
+      "DOOR_1": {
+        "move": "stock/sounds/control/door/mvp_controls_door_close_1.ogg"
+      },
+      "ENGINE_START_1": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "ENGINE_START_2": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "INDEPENDENT_BRAKE_1": {
+        "engage": "stock/sounds/control/mvp_control_pnevmo2.ogg"
+      },
+      "REVERSER_1": {
+        "move": "stock/sounds/control/switch/mvp_control_reverser.ogg"
+      },
+      "THROTTLE_1": {
+        "move": "stock/sounds/control/switch/mvp_control_throttle.ogg"
+      },
+      "TRAIN_BRAKE_1": {
+        "engage": "stock/sounds/control/mvp_control_pnevmo2.ogg"
+      },
+      "WIDGET_10": {
+        "engage": "stock/sounds/control/switch/mvp_control_svistok_start.ogg"
+      },
+      "WIDGET_11": {
+        "move": "stock/sounds/control/switch/mvp_control_epk.ogg"
+      },
+      "WIDGET_12": {
+        "engage": "stock/sounds/control/switch/mvp_control_tormoz.ogg"
+      },
+      "WIDGET_2": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_3": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_4": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_6": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_7": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_8": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_9": {
+        "engage": "stock/sounds/control/switch/mvp_control_tifon_start.ogg"
+      }
+    }
+  }
 }

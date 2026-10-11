@@ -10,6 +10,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonSyntaxException;
+import com.muzhik17.trainsmod.client.sound.SoundSet;
 
 /**
  * The client half of a stock declaration (SPEC §6.3): which OBJ draws a wagon
@@ -23,7 +24,8 @@ import com.google.gson.JsonSyntaxException;
  *   "skip": ["WIPER_"],
  *   "animations": { "door1": "stock/.../anim/mvp_ir_amendorf_door1.anim" },
  *   "liveries": { "leader_770": "l_leader_770" },
- *   "handbrake": ["WIDGET_5"]
+ *   "handbrake": ["WIDGET_5"],
+ *   "sounds": { "idle": "stock/sounds/diesel/mvp_chme3/idle.ogg", … }
  * }
  * }</pre>
  *
@@ -45,6 +47,8 @@ import com.google.gson.JsonSyntaxException;
  *                   the wheel shows it — e.g. MVP's {@code WIDGET}s labelled
  *                   "Hand Brake"; an object named {@code HANDBRAKE_<n>} needs
  *                   no entry
+ * @param sounds     engine, horns, wheels, joints, doors and controls (SPEC §10);
+ *                   {@link SoundSet#NONE} if the pack gives none
  */
 public record WagonModelDecl(
         String obj,
@@ -52,7 +56,8 @@ public record WagonModelDecl(
         List<String> skip,
         Map<String, String> animations,
         Map<String, String> liveries,
-        List<String> handbrake) {
+        List<String> handbrake,
+        SoundSet sounds) {
 
     public WagonModelDecl {
         skip = List.copyOf(skip);
@@ -112,7 +117,9 @@ public record WagonModelDecl(
                 handbrake.add(key.getAsString());
             }
         }
-        return new WagonModelDecl(obj, bogies, skip, animations, liveries, handbrake);
+        SoundSet sounds = json.has("sounds")
+                ? SoundSet.parse(namespace, json.getAsJsonObject("sounds")) : SoundSet.NONE;
+        return new WagonModelDecl(obj, bogies, skip, animations, liveries, handbrake, sounds);
     }
 
     /** {@code path} → {@code namespace:path}; an already qualified path is kept. */

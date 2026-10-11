@@ -2,5 +2,24 @@
   "obj": "stock/rolling_stock/locomotives/mvp_ir_chme3/mvp_ir_chme3_booster.obj",
   "liveries": {
     "koshmar004_4844": "l_koshmar004_4844"
+  },
+  "sounds": {
+    "idle": {
+      "main": "stock/sounds/diesel/mvp_chme3/idle.ogg",
+      "pitch": [1.0, 1.5],
+      "volume": [0.55, 1.0]
+    },
+    "horn": "stock/sounds/diesel/mvp_chme3/horn.ogg",
+    "bell": "stock/sounds/diesel/mvp_chme3/bell.ogg",
+    "wheels": "stock/sounds/default/mvp_freight_stock_wheels.ogg",
+    "clack": "stock/sounds/default/mvp_clack_wheelset_2-axle.ogg",
+    "controls": {
+      "COUPLER_ENGAGED_1": {
+        "move": "stock/sounds/default/mvp_couple_switch.ogg"
+      },
+      "COUPLER_ENGAGED_2": {
+        "move": "stock/sounds/default/mvp_couple_switch.ogg"
+      }
+    }
   }
 }

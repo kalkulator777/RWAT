@@ -16,6 +16,18 @@ public final class ClientConfig {
             .comment("Show the driver's instruments (speed, reverser, throttle, brakes) on screen while at the controls")
             .define("driverHud", true);
 
+    private static final ModConfigSpec.DoubleValue SWAY = BUILDER
+            .comment("How hard car bodies rock and jolt on the track (SPEC 10): 1 = as designed, 0 = never")
+            .defineInRange("swayStrength", 1.0, 0.0, 3.0);
+
+    private static final ModConfigSpec.DoubleValue CAMERA_SWAY = BUILDER
+            .comment("How much of the car's rocking tilts your view while riding: 1 = all of it (the camera is part of the car), 0 = the view stays level")
+            .defineInRange("cameraSway", 1.0, 0.0, 1.0);
+
+    private static final ModConfigSpec.DoubleValue VOLUME = BUILDER
+            .comment("Volume of trains (engines, wheels, horns, controls) on top of the 'Friendly Creatures' slider")
+            .defineInRange("trainVolume", 1.0, 0.0, 2.0);
+
     private static final ModConfigSpec SPEC = BUILDER.build();
 
     private ClientConfig() {
@@ -37,5 +49,20 @@ public final class ClientConfig {
             DRIVER_HUD.set(shown);
             DRIVER_HUD.save();
         }
+    }
+
+    /** Car body rocking, 0..3 (SPEC §10). */
+    public static double swayStrength() {
+        return SPEC.isLoaded() ? SWAY.get() : 1.0;
+    }
+
+    /** Share of the car's rocking that tilts a rider's view, 0..1 (SPEC §10). */
+    public static double cameraSway() {
+        return SPEC.isLoaded() ? CAMERA_SWAY.get() : 1.0;
+    }
+
+    /** Train sound volume, 0..2 (SPEC §10). */
+    public static double trainVolume() {
+        return SPEC.isLoaded() ? VOLUME.get() : 1.0;
     }
 }

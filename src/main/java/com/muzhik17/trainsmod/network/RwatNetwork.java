@@ -226,7 +226,7 @@ public final class RwatNetwork {
         ConsistManager.Driver driver = consist == null ? null : ConsistManager.driverOf(level, consist);
         if (driver != null && driver.player() == player) {
             consist.setDriveInput(payload.throttleDir(), payload.brakeDir(),
-                    payload.reverserToggle());
+                    payload.reverserToggle(), payload.signals());
         }
     }
 

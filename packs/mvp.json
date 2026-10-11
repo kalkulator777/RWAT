@@ -29,5 +29,14 @@
       "tile_length": 1.625
     }
   },
+  "sound_defaults": {
+    "wheels": {
+      "locomotives": "sounds/default/mvp_freight_stock_wheels.ogg",
+      "freight": "sounds/default/mvp_freight_stock_wheels.ogg",
+      "tank": "sounds/default/mvp_freight_stock_wheels.ogg",
+      "passenger": "sounds/default/mvp_pass_stock_wheels.ogg"
+    },
+    "clack": "sounds/default/mvp_clack_wheelset_2-axle.ogg"
+  },
   "overrides_dir": "mvp"
 }

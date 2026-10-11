@@ -16,5 +16,69 @@
     "koshmar004_1823": "l_koshmar004_1823",
     "nirens_1663": "l_nirens_1663",
     "nirens_1663_sme_3": "l_nirens_1663_sme_3"
+  },
+  "sounds": {
+    "idle": {
+      "main": "stock/sounds/electric/mvp_vl80/idle.ogg",
+      "pitch": [1.0, 1.5],
+      "volume": [0.55, 1.0]
+    },
+    "horn": "stock/sounds/electric/mvp_vl80/horn.ogg",
+    "bell": "stock/sounds/electric/mvp_vl80/bell.ogg",
+    "wheels": "stock/sounds/default/mvp_freight_stock_wheels.ogg",
+    "clack": "stock/sounds/default/mvp_clack_wheelset_2-axle.ogg",
+    "controls": {
+      "COUPLER_ENGAGED_1": {
+        "move": "stock/sounds/default/mvp_couple_switch.ogg"
+      },
+      "COUPLER_ENGAGED_2": {
+        "move": "stock/sounds/default/mvp_couple_switch.ogg"
+      },
+      "INDEPENDENT_BRAKE_1": {
+        "engage": "stock/sounds/control/mvp_control_pnevmo2.ogg"
+      },
+      "REVERSER_1": {
+        "move": "stock/sounds/control/switch/mvp_control_reverser.ogg"
+      },
+      "THROTTLE_1": {
+        "move": "stock/sounds/control/switch/mvp_control_throttle.ogg"
+      },
+      "TRAIN_BRAKE_1": {
+        "engage": "stock/sounds/control/mvp_control_pnevmo2.ogg"
+      },
+      "WIDGET_15": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_16": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_17": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_20": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_21": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_22": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_23": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_4": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_6": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_7": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_8": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      }
+    }
   }
 }

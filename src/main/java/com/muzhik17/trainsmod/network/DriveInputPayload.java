@@ -14,9 +14,11 @@ import net.minecraft.resources.ResourceLocation;
  * throws it at a standstill). Sent every client tick while riding the cab —
  * including all-zero, so the server has a continuous signal; the server
  * validates the sender is that consist's driver (its front-most manned cab).
+ * The held signal keys ride along as bits (SPEC §10: {@code Consist.HORN},
+ * {@code Consist.BELL}).
  */
 public record DriveInputPayload(int consistId, int throttleDir, int brakeDir,
-        boolean reverserToggle) implements CustomPacketPayload {
+        boolean reverserToggle, int signals) implements CustomPacketPayload {
 
     public static final CustomPacketPayload.Type<DriveInputPayload> TYPE =
             new CustomPacketPayload.Type<>(
@@ -30,11 +32,12 @@ public record DriveInputPayload(int consistId, int throttleDir, int brakeDir,
         buf.writeByte(payload.throttleDir);
         buf.writeByte(payload.brakeDir);
         buf.writeBoolean(payload.reverserToggle);
+        buf.writeByte(payload.signals);
     }
 
     private static DriveInputPayload read(FriendlyByteBuf buf) {
         return new DriveInputPayload(buf.readVarInt(), buf.readByte(), buf.readByte(),
-                buf.readBoolean());
+                buf.readBoolean(), buf.readUnsignedByte());
     }
 
     @Override

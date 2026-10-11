@@ -7,6 +7,7 @@ import java.util.Map;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.client.render.WagonRenderer;
+import com.muzhik17.trainsmod.client.sound.TrainSounds;
 
 import net.minecraft.resources.FileToIdConverter;
 import net.minecraft.resources.ResourceLocation;
@@ -52,5 +53,6 @@ public final class WagonModelReloadListener
             ProfilerFiller profiler) {
         StockModels.reset(decls);
         WagonRenderer.clearBaked();
+        TrainSounds.clearAll(); // the packs' sounds may have changed (SPEC §10)
     }
 }

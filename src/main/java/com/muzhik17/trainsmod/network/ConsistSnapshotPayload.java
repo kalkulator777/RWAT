@@ -37,12 +37,13 @@ import net.minecraft.resources.ResourceLocation;
  * handbrakes (SPEC §5.3) — which wagons have theirs set, by index — reach
  * the driver's panel and the cab's handbrake wheels the same way, and so do
  * the brake pressures (the train and loco brake in effect, 0..1, a byte
- * each) the cab's gauges read.
+ * each) the cab's gauges read. The driver's held signals (SPEC §10: horn,
+ * whistle) are a byte, so every client hears them from the cab.
  */
 public record ConsistSnapshotPayload(int consistId, double s, double v, long gameTime,
         TrackPathSpec pathSpec, ConsistComposition composition,
         int frame, int frameFrom, double frameShift, int[] wagonEntityIds, Handles handles,
-        BitSet handbrakes, float trainBrakePressure, float indBrakePressure)
+        BitSet handbrakes, float trainBrakePressure, float indBrakePressure, int signals)
         implements CustomPacketPayload {
 
     public static final CustomPacketPayload.Type<ConsistSnapshotPayload> TYPE =
@@ -62,7 +63,8 @@ public record ConsistSnapshotPayload(int consistId, double s, double v, long gam
                         consist.handle(Consist.Handle.INDEPENDENT_BRAKE),
                         activeCabIndex(consist)),
                 handbrakes(consist),
-                (float) consist.trainBrakeEffort(), (float) consist.independentBrakeEffort());
+                (float) consist.trainBrakeEffort(), (float) consist.independentBrakeEffort(),
+                consist.signals());
     }
 
     /** The wagons with their handbrake set, by index. */
@@ -118,6 +120,7 @@ public record ConsistSnapshotPayload(int consistId, double s, double v, long gam
         buf.writeBitSet(payload.handbrakes);
         buf.writeByte(pressureByte(payload.trainBrakePressure));
         buf.writeByte(pressureByte(payload.indBrakePressure));
+        buf.writeByte(payload.signals);
     }
 
     /** A pressure 0..1 in a byte (1/255 is finer than any gauge needle). */
@@ -153,9 +156,10 @@ public record ConsistSnapshotPayload(int consistId, double s, double v, long gam
         BitSet handbrakes = buf.readBitSet();
         float trainBrakePressure = buf.readUnsignedByte() / 255.0F;
         float indBrakePressure = buf.readUnsignedByte() / 255.0F;
+        int signals = buf.readUnsignedByte();
         return new ConsistSnapshotPayload(consistId, s, v, gameTime, spec,
                 new ConsistComposition(slots), frame, frameFrom, frameShift, wagonEntityIds,
-                handles, handbrakes, trainBrakePressure, indBrakePressure);
+                handles, handbrakes, trainBrakePressure, indBrakePressure, signals);
     }
 
     @Override

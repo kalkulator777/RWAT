@@ -9,6 +9,7 @@ import java.util.UUID;
 import org.joml.Vector3d;
 
 import com.muzhik17.trainsmod.client.ClientConsists;
+import com.muzhik17.trainsmod.client.ClientRide;
 import com.muzhik17.trainsmod.client.ClientWalk;
 import com.muzhik17.trainsmod.kinematics.HullCollision;
 import com.muzhik17.trainsmod.kinematics.PoseMath;
@@ -28,9 +29,7 @@ import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.sounds.SoundEvents;
 import net.minecraft.util.Mth;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
@@ -227,6 +226,7 @@ public class WagonEntity extends Entity {
             setPos(pose.body().x, pose.body().y, pose.body().z);
             setYRot(pose.yaw());
             setXRot(pose.pitch());
+            ClientRide.step(getId(), getConsistId(), pose); // the body on its springs (SPEC §10)
             // do NOT reposition riders here: vanilla ticks a passenger right
             // after its vehicle (setOldPosAndRot → rideTick → positionRider),
             // so it picks this fresh pose up by itself. Doing it inside the
@@ -747,9 +747,9 @@ public class WagonEntity extends Entity {
     }
 
     /**
-     * Open or close door {@code index} (server), with its sound — and the
-     * other doors of its group (SPEC §9.5: IR works a control group's doors
-     * together).
+     * Open or close door {@code index} (server) — and the other doors of its
+     * group (SPEC §9.5: IR works a control group's doors together). Each
+     * client sounds the doors that changed, with the pack's own sound (SPEC §10).
      */
     private void setDoorOpen(int index, boolean open) {
         List<WagonType.Door> doors = framedDoors();
@@ -759,17 +759,9 @@ public class WagonEntity extends Entity {
         WagonType.Door door = doors.get(index);
         int mask = doorMask();
         for (int i = 0; i < doors.size() && i < 32; i++) {
-            if (i != index && !doors.get(i).groupedWith(door)) {
-                continue;
+            if (i == index || doors.get(i).groupedWith(door)) {
+                mask = open ? mask | 1 << i : mask & ~(1 << i);
             }
-            mask = open ? mask | 1 << i : mask & ~(1 << i);
-            WagonType.Door d = doors.get(i);
-            Vector3d centre = PoseMath.localToWorld(new Vector3d(getX(), getY(), getZ()),
-                    getYRot(), getXRot(), new Vector3d((d.minX() + d.maxX()) * 0.5,
-                            (d.minY() + d.maxY()) * 0.5, (d.minZ() + d.maxZ()) * 0.5));
-            level().playSound(null, centre.x, centre.y, centre.z,
-                    open ? SoundEvents.IRON_DOOR_OPEN : SoundEvents.IRON_DOOR_CLOSE,
-                    SoundSource.BLOCKS, 1.0F, 1.0F);
         }
         this.entityData.set(DATA_DOORS, mask);
     }
@@ -895,6 +887,11 @@ public class WagonEntity extends Entity {
         if (local == null) {
             super.positionRider(passenger, move);
             return;
+        }
+        if (level().isClientSide) {
+            // riders rock with the body (SPEC §10) — the camera is part of
+            // the car; cosmetic, so the server keeps the plain pose
+            local = ClientRide.current(getId()).apply(local);
         }
         Vector3d world = PoseMath.localToWorld(new Vector3d(getX(), getY(), getZ()),
                 getYRot(), getXRot(), local);

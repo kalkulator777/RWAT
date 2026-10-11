@@ -5,5 +5,99 @@
     "rinary_198": "l_rinary_198",
     "teslov_236": "l_teslov_236",
     "wilsa_315": "l_wilsa_315"
+  },
+  "sounds": {
+    "idle": {
+      "start": "stock/sounds/diesel/mvp_dr1a/engine_start.ogg",
+      "main": "stock/sounds/diesel/mvp_dr1a/idle.ogg",
+      "stop": "stock/sounds/diesel/mvp_dr1a/engine_stop.ogg",
+      "pitch": [1.0, 1.5],
+      "volume": [0.55, 1.0]
+    },
+    "horn": {
+      "start": "stock/sounds/diesel/mvp_dr1a/tifon_start.ogg",
+      "main": "stock/sounds/diesel/mvp_dr1a/tifon_main.ogg",
+      "stop": "stock/sounds/diesel/mvp_dr1a/tifon_end.ogg"
+    },
+    "bell": "stock/sounds/electric/mvp_er2/bell.ogg",
+    "wheels": "stock/sounds/electric/mvp_er2/wheels.ogg",
+    "clack": "stock/sounds/default/mvp_clack_wheelset_2-axle.ogg",
+    "controls": {
+      "COUPLER_ENGAGED_1": {
+        "move": "stock/sounds/default/mvp_couple_switch.ogg"
+      },
+      "COUPLER_ENGAGED_2": {
+        "move": "stock/sounds/default/mvp_couple_switch.ogg"
+      },
+      "REVERSER_1": {
+        "move": "stock/sounds/control/switch/mvp_control_reverser.ogg"
+      },
+      "THROTTLE_1": {
+        "move": "stock/sounds/control/switch/mvp_control_throttle.ogg"
+      },
+      "TRAIN_BRAKE_1": {
+        "engage": "stock/sounds/control/mvp_control_pnevmo2.ogg"
+      },
+      "WIDGET_1": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_7.ogg"
+      },
+      "WIDGET_10": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_11": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_12": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_13": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_14": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_17": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_18": {
+        "engage": "stock/sounds/control/radio/radio_1.ogg"
+      },
+      "WIDGET_19": {
+        "move": "stock/sounds/control/switch/mvp_control_epk.ogg"
+      },
+      "WIDGET_2": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_7.ogg"
+      },
+      "WIDGET_24": {
+        "engage": "stock/sounds/control/switch/mvp_control_tormoz.ogg"
+      },
+      "WIDGET_27": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_28": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_3": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_4": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_5": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_7.ogg"
+      },
+      "WIDGET_6": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_7.ogg"
+      },
+      "WIDGET_7": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_8": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      },
+      "WIDGET_9": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_6.ogg"
+      }
+    }
   }
 }

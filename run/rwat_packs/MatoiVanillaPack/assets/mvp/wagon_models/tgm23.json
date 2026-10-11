@@ -4,5 +4,87 @@
     "mvp_minaz": "l_mvp_minaz",
     "mvp_dimzip": "l_mvp_dimzip"
   },
-  "handbrake": ["WIDGET_17"]
+  "handbrake": ["WIDGET_17"],
+  "sounds": {
+    "idle": {
+      "main": "stock/sounds/diesel/mvp_tgm23d/idle.ogg",
+      "pitch": [1.0, 1.5],
+      "volume": [0.55, 1.0]
+    },
+    "horn": "stock/sounds/diesel/mvp_tgm23d/horn.ogg",
+    "bell": "stock/sounds/diesel/mvp_tgm23d/bell.ogg",
+    "wheels": "stock/sounds/default/mvp_freight_stock_wheels.ogg",
+    "clack": "stock/sounds/default/mvp_clack_wheelset_2-axle.ogg",
+    "controls": {
+      "INDEPENDENT_BRAKE_1": {
+        "engage": "stock/sounds/control/mvp_control_pnevmo.ogg"
+      },
+      "INDEPENDENT_BRAKE_2": {
+        "engage": "stock/sounds/control/mvp_control_pnevmo.ogg"
+      },
+      "REVERSER_1": {
+        "move": "stock/sounds/control/switch/mvp_control_reverser.ogg"
+      },
+      "THROTTLE_1": {
+        "move": "stock/sounds/control/switch/mvp_control_throttle.ogg"
+      },
+      "THROTTLE_2": {
+        "move": "stock/sounds/control/switch/mvp_control_throttle.ogg"
+      },
+      "TRAIN_BRAKE_1": {
+        "engage": "stock/sounds/control/mvp_control_pnevmo.ogg"
+      },
+      "WIDGET_1": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_7.ogg"
+      },
+      "WIDGET_10": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_7.ogg"
+      },
+      "WIDGET_11": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_7.ogg"
+      },
+      "WIDGET_12": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_7.ogg"
+      },
+      "WIDGET_13": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_7.ogg"
+      },
+      "WIDGET_14": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_7.ogg"
+      },
+      "WIDGET_15": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_7.ogg"
+      },
+      "WIDGET_16": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_7.ogg"
+      },
+      "WIDGET_17": {
+        "engage": "stock/sounds/control/switch/mvp_control_tormoz.ogg"
+      },
+      "WIDGET_2": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_7.ogg"
+      },
+      "WIDGET_3": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_7.ogg"
+      },
+      "WIDGET_4": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_7.ogg"
+      },
+      "WIDGET_5": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_7.ogg"
+      },
+      "WIDGET_6": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_7.ogg"
+      },
+      "WIDGET_7": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_7.ogg"
+      },
+      "WIDGET_8": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_7.ogg"
+      },
+      "WIDGET_9": {
+        "move": "stock/sounds/control/switch/mvp_control_switch_7.ogg"
+      }
+    }
+  }
 }

@@ -56,6 +56,10 @@ public final class Consist {
 
     /** Throttle and brake handles both run 0..{@code NOTCHES} (SPEC §5.3). */
     public static final int NOTCHES = 8;
+    /** Driver's signal bits (SPEC §10): the horn (тифон) is sounding. */
+    public static final int HORN = 1;
+    /** The second signal — the whistle (свисток), IR's "bell" — is sounding. */
+    public static final int BELL = 2;
     /** Held notch keys repeat at this period, ticks (first press applies instantly). */
     private static final int NOTCH_REPEAT_TICKS = 5;
     /**
@@ -115,6 +119,8 @@ public final class Consist {
     private transient int throttleDir;
     private transient int brakeDir;
     private transient boolean reverserToggle;
+    /** Held signals from the driver (SPEC §10): {@link #HORN}, {@link #BELL}. */
+    private transient int signals;
     private transient int throttleHeldTicks;
     private transient int brakeHeldTicks;
     private transient boolean controlsChanged;
@@ -473,14 +479,20 @@ public final class Consist {
 
     /**
      * Driver input for the next tick (SPEC §5.3): held key directions for the
-     * throttle and train-brake handles (+1 up / −1 down / 0 idle) and a
-     * reverser-toggle edge. No driver → call with all zeros so stale held keys
-     * don't keep notching.
+     * throttle and train-brake handles (+1 up / −1 down / 0 idle), a
+     * reverser-toggle edge and the held signals (SPEC §10). No driver → call
+     * with all zeros so stale held keys don't keep notching (or sounding).
      */
-    public void setDriveInput(int throttleDir, int brakeDir, boolean reverserToggle) {
+    public void setDriveInput(int throttleDir, int brakeDir, boolean reverserToggle, int signals) {
         this.throttleDir = Integer.signum(throttleDir);
         this.brakeDir = Integer.signum(brakeDir);
         this.reverserToggle |= reverserToggle;
+        this.signals = signals & (HORN | BELL);
+    }
+
+    /** The signals the driver holds now ({@link #HORN}, {@link #BELL}); transient, rides the snapshot. */
+    public int signals() {
+        return signals;
     }
 
     public List<UUID> wagonIds() {

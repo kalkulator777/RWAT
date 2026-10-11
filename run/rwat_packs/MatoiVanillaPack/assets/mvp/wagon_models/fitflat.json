@@ -9,5 +9,17 @@
     "mvp_green_1": "l_mvp_green_1",
     "mvp_green_2": "l_mvp_green_2",
     "mvp_green_3": "l_mvp_green_3"
+  },
+  "sounds": {
+    "wheels": "stock/sounds/default/mvp_freight_stock_wheels.ogg",
+    "clack": "stock/sounds/default/mvp_clack_wheelset_2-axle.ogg",
+    "controls": {
+      "COUPLER_ENGAGED_1": {
+        "move": "stock/sounds/default/mvp_couple_switch.ogg"
+      },
+      "COUPLER_ENGAGED_2": {
+        "move": "stock/sounds/default/mvp_couple_switch.ogg"
+      }
+    }
   }
 }

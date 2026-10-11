@@ -1,3 +1,15 @@
 {
-  "obj": "stock/rolling_stock/freight/mvp_ir_cargoflat/mvp_ir_cargoflat.obj"
+  "obj": "stock/rolling_stock/freight/mvp_ir_cargoflat/mvp_ir_cargoflat.obj",
+  "sounds": {
+    "wheels": "stock/sounds/default/mvp_freight_stock_wheels.ogg",
+    "clack": "stock/sounds/default/mvp_clack_wheelset_2-axle.ogg",
+    "controls": {
+      "COUPLER_ENGAGED_1": {
+        "move": "stock/sounds/default/mvp_couple_switch.ogg"
+      },
+      "COUPLER_ENGAGED_2": {
+        "move": "stock/sounds/default/mvp_couple_switch.ogg"
+      }
+    }
+  }
 }

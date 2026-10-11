@@ -1,3 +1,7 @@
 {
-  "obj": "stock/rolling_stock/passenger/mvp_ir_er2t/mvp_ir_er2t.obj"
+  "obj": "stock/rolling_stock/passenger/mvp_ir_er2t/mvp_ir_er2t.obj",
+  "sounds": {
+    "wheels": "stock/sounds/electric/mvp_er2/wheels.ogg",
+    "clack": "stock/sounds/default/mvp_clack_wheelset_2-axle.ogg"
+  }
 }

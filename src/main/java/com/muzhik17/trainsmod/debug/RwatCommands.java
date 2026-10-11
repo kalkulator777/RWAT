@@ -83,7 +83,13 @@ public final class RwatCommands {
                                                 StringArgumentType.getString(ctx, "stock"))))))
                         .then(Commands.argument("length", DoubleArgumentType.doubleArg(2.0, 10000.0))
                                 .executes(ctx -> spawn(ctx, DoubleArgumentType.getDouble(ctx, "length"),
-                                        defaultConsist()))))
+                                        defaultConsist()))
+                                .then(Commands.literal("with")
+                                        .then(Commands.argument("stock", StringArgumentType.greedyString())
+                                                .suggests(RwatCommands::suggestStock)
+                                                .executes(ctx -> spawn(ctx,
+                                                        DoubleArgumentType.getDouble(ctx, "length"),
+                                                        parseConsist(StringArgumentType.getString(ctx, "stock"))))))))
                 .then(Commands.literal("types")
                         .executes(RwatCommands::types))
                 .then(Commands.literal("list")
