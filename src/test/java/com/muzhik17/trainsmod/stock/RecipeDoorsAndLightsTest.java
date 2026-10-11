@@ -69,6 +69,41 @@ class RecipeDoorsAndLightsTest {
         assertEquals("DrL", other.inFrame(true).group());
     }
 
+    @Test
+    void doorsWorkedBy_theGroupsDoors_caseAside() {
+        WagonType.Door left = new WagonType.Door("DrL", 1.677, 1.471, 8.156, 1.756, 3.915, 9.431,
+                false, false, false, "DrL");
+        WagonType.Door left3 = new WagonType.Door("DrL_3", 1.677, 1.471, -9.425, 1.756, 3.915, -8.15,
+                false, false, false, "DrL");
+        WagonType.Door alone = new WagonType.Door("Trap1", -0.4, 1.9, 11.4, 0.4, 3.9, 11.5, false, false, true);
+        WagonType.Door step = new WagonType.Door("DrR", -1.7, 1.0, 5.0, -1.6, 3.0, 6.0, false, true);
+        WagonType type = new WagonType("mvp:test", 21.0, new double[]{1.0, -1.0}, 40.0, 100.0,
+                WagonType.Resistance.NONE, null, null, WagonType.Brakes.NONE, null,
+                List.of(left, alone, left3, step));
+        assertEquals(0b101, type.doorsWorkedBy("DrL"));
+        assertEquals(0b010, type.doorsWorkedBy("trap1")); // named after the group, as animations match
+        assertEquals(0, type.doorsWorkedBy("DrR"));       // a doorway without a leaf isn't worked
+        assertEquals(0, type.doorsWorkedBy("IL"));
+    }
+
+    /** ER2's head-car switches {@code CG_DrL_GLOBAL}/{@code CG_DrR_GLOBAL}, DR1's {@code DL}/{@code DR}: both doorways of a side, in every car. */
+    @Test
+    void cabDoorSwitches_workBothDoorwaysOfTheirSide() throws IOException {
+        assumeTrue(Files.isDirectory(DIGESTS), "no geometry digests in " + DIGESTS);
+        String[][] cases = {{"er2h", "DrL", "DrR"}, {"er2h_reversed", "DrL", "DrR"}, {"er2m", "DrL", "DrR"},
+                {"er2t", "DrL", "DrR"}, {"dr1a_motorhead", "DL", "DR"}, {"dr1a_trailed", "DL", "DR"}};
+        for (String[] c : cases) {
+            Path overridePath = RECIPE.resolve(c[0] + ".json");
+            JsonObject override = Files.exists(overridePath) ? read(overridePath) : new JsonObject();
+            JsonObject recipeType = override.has("type") ? override.getAsJsonObject("type") : new JsonObject();
+            WagonType type = WagonTypeParser.parse("mvp:" + c[0],
+                    RecipeFloorTest.effective(read(DIGESTS.resolve(c[0] + ".json")), recipeType));
+            for (int side = 1; side <= 2; side++) {
+                assertEquals(2, Integer.bitCount(type.doorsWorkedBy(c[side])), c[0] + " " + c[side]);
+            }
+        }
+    }
+
     @TestFactory
     Stream<DynamicTest> everyDoorLeafHasItsDoor() throws IOException {
         return perType((stem, digest, override) -> {

@@ -87,26 +87,34 @@ public final class RwatNetwork {
     }
 
     /**
-     * A control group set by a player (SPEC §8–§9). One wagon's switch: the
-     * player rides it or stands within reach of it. A light group for the
-     * whole train (the driver's panel): only by its driver (SPEC §9.7).
+     * A control group set by a player (SPEC §8–§9). A wagon's switch: the
+     * player rides it or stands within reach of it; a {@code GLOBAL} one sets
+     * the group on every wagon of its train, as IR does. A light group for
+     * the whole train (the driver's panel): only by its driver (SPEC §9.7).
      */
     private static void handleControlGroup(ControlGroupPayload payload, IPayloadContext context) {
         if (!(context.player() instanceof ServerPlayer player)
                 || !(player.level() instanceof ServerLevel level)) {
             return;
         }
-        if (!payload.wholeTrain()) {
-            if (level.getEntity(payload.targetId()) instanceof WagonEntity wagon
-                    && (player.getVehicle() == wagon || wagon.withinReach(player))) {
-                wagon.setControl(payload.group(), payload.value());
+        Consist consist;
+        if (payload.scope() != ControlGroupPayload.Scope.PANEL) {
+            if (!(level.getEntity(payload.targetId()) instanceof WagonEntity wagon)
+                    || (player.getVehicle() != wagon && !wagon.withinReach(player))) {
+                return;
             }
-            return;
-        }
-        Consist consist = ConsistManager.get(level).byId(payload.targetId());
-        ConsistManager.Driver driver = consist == null ? null : ConsistManager.driverOf(level, consist);
-        if (driver == null || driver.player() != player) {
-            return;
+            consist = payload.scope() == ControlGroupPayload.Scope.GLOBAL_SWITCH
+                    ? ConsistManager.get(level).byId(wagon.getConsistId()) : null;
+            if (consist == null) {
+                wagon.setControl(payload.group(), payload.value());
+                return;
+            }
+        } else {
+            consist = ConsistManager.get(level).byId(payload.targetId());
+            ConsistManager.Driver driver = consist == null ? null : ConsistManager.driverOf(level, consist);
+            if (driver == null || driver.player() != player) {
+                return;
+            }
         }
         for (java.util.UUID id : consist.wagonIds()) {
             if (level.getEntity(id) instanceof WagonEntity wagon) {

@@ -306,7 +306,8 @@ public final class ClientCabInteract {
             PacketDistributor.sendToServer(new CabLeverPayload(wagon.getId(), handle.ordinal(),
                     Handles.fromTravel(handle, position)));
         } else {
-            PacketDistributor.sendToServer(new ControlGroupPayload(wagon.getId(), false,
+            PacketDistributor.sendToServer(new ControlGroupPayload(wagon.getId(), role.global()
+                    ? ControlGroupPayload.Scope.GLOBAL_SWITCH : ControlGroupPayload.Scope.SWITCH,
                     role.group(), position));
         }
     }

@@ -191,7 +191,7 @@ public final class IrStockModel {
                     a.group().equals(a.key()) ? b.group() : a.group(),
                     a.label() != null ? a.label() : b.label(),
                     a.toggle() || b.toggle(), a.press() || b.press(), a.invert() || b.invert(),
-                    a.hide() || b.hide(), a.noTouch() || b.noTouch(),
+                    a.hide() || b.hide(), a.noTouch() || b.noTouch(), a.global() || b.global(),
                     a.offset() != 0.0F ? a.offset() : b.offset(),
                     b.rangeMin() != 0.0F || b.rangeMax() != 1.0F ? b.rangeMin() : a.rangeMin(),
                     b.rangeMin() != 0.0F || b.rangeMax() != 1.0F ? b.rangeMax() : a.rangeMax(),

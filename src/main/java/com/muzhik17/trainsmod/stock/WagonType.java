@@ -562,6 +562,23 @@ public record WagonType(
         return -1;
     }
 
+    /**
+     * The doors control group {@code group} works, as open-door bits: those
+     * named after it or in its {@code group}, case aside (SPEC §9.5). IR opens
+     * a door by its control group, so a cab switch setting the group — ER2's
+     * {@code CG_DrL_GLOBAL} — opens them; doorways without a leaf aren't worked.
+     */
+    public int doorsWorkedBy(String group) {
+        int bits = 0;
+        for (int i = 0; i < doors.size() && i < 32; i++) {
+            Door d = doors.get(i);
+            if (!d.fixed() && (group.equalsIgnoreCase(d.id()) || group.equalsIgnoreCase(d.group()))) {
+                bits |= 1 << i;
+            }
+        }
+        return bits;
+    }
+
     /** Half the stock loading gauge, blocks — body half-width of the collision hull. */
     private static final double HULL_HALF_WIDTH = 1.7;
     /** Hull floor in model space: above the under-frame gap so an entity can't crouch under. */

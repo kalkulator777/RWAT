@@ -50,6 +50,20 @@ class ObjectRoleTest {
     }
 
     @Test
+    void globalSwitch_setsItsGroupOnTheWholeTrain() {
+        // ER2's head-car door switch: the group is DrL, GLOBAL a flag after it
+        ObjectRole doors = ObjectRole.parse("WIDGET_8_TOGGLE_INTERIOR_LCG_ER2H_CG_DrL_GLOBAL_LABEL_Doors^L");
+        assertEquals("DrL", doors.control().group());
+        assertTrue(doors.control().global());
+        assertTrue(doors.control().toggle());
+        assertEquals("ER2H", doors.lightGroup());
+        assertEquals("Doors L", doors.control().label());
+        assertTrue(ObjectRole.parse("WIDGET_3_TOGGLE_HIDE_INVERT_CG_Cable_GLOBAL_mvp_chme3_bost").control().global());
+        assertFalse(ObjectRole.parse("WIDGET_6_TOGGLE_INTERIOR_CG_FHL_LCG_IL_LABEL_Front^HeadLight")
+                .control().global());
+    }
+
+    @Test
     void toggleSwitch_drivesItsControlGroup() {
         ObjectRole sw = ObjectRole.parse("WIDGET_6_TOGGLE_INTERIOR_CG_FHL_LCG_IL_LABEL_Front^HeadLight");
         assertEquals(ObjectRole.Kind.WIDGET, sw.control().kind());

@@ -110,6 +110,10 @@ public final class ClientAutoScene {
             stock(mc, scene);
             return;
         }
+        if (scene.equals("cabswitch")) {
+            cabSwitch(mc);
+            return;
+        }
         if (!scene.equals("cab")) {
             return;
         }
@@ -1112,6 +1116,173 @@ public final class ClientAutoScene {
         }
     }
 
+    /**
+     * A train, the cab its first car's, the {@code GLOBAL} cab switches flipped
+     * there: the consist, the switches' groups (first on, off, on again; the rest
+     * on), at midnight or not, and where the camera looks back at it from.
+     */
+    private record SwitchTrain(String consist, String[] groups, boolean night, int shotCar,
+            double[] camera, double[] aim) {
+    }
+
+    private static final SwitchTrain[] SWITCH_TRAINS = {
+            // ER2: the left doors (DrL, the +X side) and the saloon light, from the head car's cab
+            new SwitchTrain("er2h er2m er2t", new String[]{"DrL", "ER2L"}, false, 1,
+                    new double[]{24.0, 1.2, 0.0, 90.0}, new double[]{0.0, 2.6, 0.0}),
+            // ChME3 + booster back to back: the booster's headlight from the ChME3's cab
+            new SwitchTrain("chme3 !chme3_booster", new String[]{"BHL"}, true, 1,
+                    new double[]{0.0, 1.2, 30.0, 180.0}, new double[]{0.0, 2.6, 9.0})};
+    private static int switchAt;
+    private static int switchTick;
+
+    /**
+     * {@code cabswitch} (SPEC §9.5): the cab's {@code GLOBAL} switches set
+     * their group on the whole train, and a group's doors follow it. Each
+     * {@link #SWITCH_TRAINS} train in turn: boarded through its first way in,
+     * seated in the first car's driver's chair, the switches clicked for real
+     * (the crosshair on them, a use click); after each click every car's
+     * value of the group and its open doors are logged, as the client sees
+     * them. Then a shot from outside ({@code rwat-cabswitch-<n>.png}).
+     */
+    private static void cabSwitch(Minecraft mc) {
+        if (ticks < 100) {
+            return;
+        }
+        if (switchAt >= SWITCH_TRAINS.length) {
+            if (switchTick++ == 10) {
+                mc.stop();
+            }
+            return;
+        }
+        SwitchTrain train = SWITCH_TRAINS[switchAt];
+        switchTick++;
+        WagonEntity car = switchTick > 30 ? carAt(mc, 0) : null;
+        com.muzhik17.trainsmod.stock.WagonType type = car == null ? null : car.typeNow();
+        boolean riding = car != null && mc.player.getVehicle() == car;
+        int entrance = entranceOf(type);
+        com.muzhik17.trainsmod.stock.WagonType.Door way = entrance < 0 ? null : type.doors().get(entrance);
+        if (switchTick > 50 && switchTick < 95 && switchTick % 10 == 5 && !riding && way != null) {
+            placeAtDoor(mc, car, way, -BOARD_INSET[Math.min((switchTick - 55) / 10, BOARD_INSET.length - 1)]);
+        }
+        // the switches: the first on (t 121), off (151), on (181); the rest on (211, 241…)
+        int clickAt = switchTick - 121;
+        if (clickAt >= 0 && clickAt % 30 == 0 && clickAt / 30 < train.groups().length + 2) {
+            int n = clickAt / 30;
+            String group = train.groups()[Math.max(n - 2, 0)];
+            aimAt(mc, car, com.muzhik17.trainsmod.convention.ObjectRole.Kind.WIDGET, group);
+        }
+        if (clickAt >= 0 && clickAt % 30 == 2 && clickAt / 30 < train.groups().length + 2) {
+            pressUse = true;
+        }
+        if (clickAt > 0 && clickAt % 30 == 28 && clickAt / 30 < train.groups().length + 2) {
+            int n = clickAt / 30;
+            String group = train.groups()[Math.max(n - 2, 0)];
+            reportGroup(mc, group, train.consist() + ", click " + (n + 1) + " on " + group);
+        }
+        int end = 121 + 30 * (train.groups().length + 2);
+        switch (switchTick) {
+            case 1 -> {
+                if (stockBase == null) {
+                    stockBase = mc.player.position().add(4000.0, 0.0, 0.0);
+                }
+                origin = stockBase.add(switchAt * 96.0, 0.0, 0.0);
+                waited = 0;
+                mc.options.hideGui = false;
+                command(mc, "gamemode creative");
+                command(mc, String.format(Locale.ROOT, "tp @s %.3f %.3f %.3f 0 0", origin.x, origin.y, origin.z));
+            }
+            case 10 -> {
+                mc.player.getAbilities().mayfly = true;
+                mc.player.getAbilities().flying = true;
+                mc.player.onUpdateAbilities();
+            }
+            case 20 -> command(mc, "rwat spawn with " + train.consist());
+            case 25 -> {
+                command(mc, "gamerule doDaylightCycle false");
+                command(mc, train.night() ? "time set midnight" : "time set noon");
+                command(mc, "rwat handle train_brake 8");
+            }
+            case 40 -> {
+                if (!sceneCar(car) && waited++ < 600) {
+                    switchTick--; // hold till the train and its types have reached this client
+                }
+            }
+            case 42 -> {
+                if (way != null && !way.fixed()) {
+                    placeAtDoor(mc, car, way, 0.8);
+                }
+            }
+            case 46 -> {
+                if (way != null && !way.fixed()) {
+                    PacketDistributor.sendToServer(new DoorTogglePayload(car.getId(), entrance));
+                }
+            }
+            case 100 -> {
+                reportCar(mc, train.consist() + ": boarded");
+                if (riding) {
+                    moveRider(mc, car, 0);
+                }
+            }
+            case 105 -> {
+                if (riding) {
+                    PacketDistributor.sendToServer(new SeatPayload(car.getId(), true, 0));
+                }
+            }
+            case 110 -> {
+                // the door boarded through shut again: the switch, not the click, opens it now
+                if (way != null && !way.fixed() && car.isDoorOpen(entrance)) {
+                    PacketDistributor.sendToServer(new DoorTogglePayload(car.getId(), entrance));
+                }
+            }
+            case 118 -> {
+                reportStand(mc, car, train.consist() + (car != null && car.isSeated(mc.player) ? ": seated" : ": NOT seated"));
+                reportGroup(mc, train.groups()[0], train.consist() + ", before");
+            }
+            default -> {
+            }
+        }
+        if (switchTick == end) {
+            if (riding && car.isSeated(mc.player)) {
+                PacketDistributor.sendToServer(new SeatPayload(car.getId(), false, -1));
+            }
+        } else if (switchTick == end + 5) {
+            if (riding) {
+                onServerCar(mc, car, ClientAutoScene::leaveCar);
+            }
+        } else if (switchTick == end + 10) {
+            command(mc, "gamemode spectator");
+        } else if (switchTick == end + 15) {
+            mc.options.hideGui = true;
+            double[] c = train.camera();
+            placeOn(mc, carAt(mc, train.shotCar()), c[0], c[1], c[2], (float) c[3], 0.0F);
+        } else if (switchTick == end + 20) {
+            double[] a = train.aim();
+            aimAtModel(mc, carAt(mc, train.shotCar()), a[0], a[1], a[2]);
+        } else if (switchTick == end + 50) {
+            shot(mc, "rwat-cabswitch-" + (switchAt + 1) + ".png");
+        } else if (switchTick == end + 55) {
+            mc.options.hideGui = false;
+            switchAt++;
+            switchTick = 0;
+        }
+    }
+
+    /** Log a control group's value on every car of the scene's train and each car's open doors. */
+    private static void reportGroup(Minecraft mc, String group, String what) {
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < 8; i++) {
+            WagonEntity car = carAt(mc, i);
+            if (car == null) {
+                break;
+            }
+            int worked = car.typeNow() == null ? 0 : car.typeNow().doorsWorkedBy(group);
+            out.append(String.format(Locale.ROOT, " | car %d %s: %s %.1f, its doors %s open %s",
+                    i, car.typeNow() == null ? "?" : car.typeNow().id(), group, car.controlValue(group),
+                    Integer.toBinaryString(worked), Integer.toBinaryString(car.doorMask() & worked)));
+        }
+        RailsWheelsAndTrains.LOGGER.info("[autoscene] {}:{}", what, out);
+    }
+
     /** The first way in from outside: an opening (a step) before a door; −1 if none. */
     private static int entranceOf(com.muzhik17.trainsmod.stock.WagonType type) {
         if (type == null) {
@@ -1451,7 +1622,12 @@ public final class ClientAutoScene {
      */
     private static void aimAt(Minecraft mc, com.muzhik17.trainsmod.convention.ObjectRole.Kind kind,
             String group) {
-        WagonEntity wagon = wagon(mc);
+        aimAt(mc, wagon(mc), kind, group);
+    }
+
+    /** Turn the player to look at the middle of {@code wagon}'s first control of a kind (and group). */
+    private static void aimAt(Minecraft mc, WagonEntity wagon, com.muzhik17.trainsmod.convention.ObjectRole.Kind kind,
+            String group) {
         var slot = wagon == null ? null
                 : com.muzhik17.trainsmod.client.ClientConsists.slot(wagon.getConsistId(), wagon.getWagonIndex());
         var model = slot == null ? null

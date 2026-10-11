@@ -17,7 +17,9 @@ import java.util.regex.Pattern;
  *       object with the same kind and number is one control;</li>
  *   <li>flags are {@code _FLAG_}, {@code FLAG_…} or {@code …_FLAG} tokens:
  *       {@code TOGGLE}, {@code PRESS}, {@code INVERT}, {@code HIDE},
- *       {@code NOTOUCH}/{@code NOINTERACT};</li>
+ *       {@code NOTOUCH}/{@code NOINTERACT}, {@code GLOBAL} (the control
+ *       sets its group on every wagon of the train, as IR's
+ *       {@code mapTrain} does: ER2's door switches, the ChME3's booster lights);</li>
  *   <li>{@code _CG_<name>} binds a control to a named control group (else it
  *       is its own group, {@code <KIND>_<n>}); {@code _LABEL_<text>} names it;
  *       {@code _OFFSET_<f>} shifts its value; {@code _RANGE_<min>_<max>} maps a
@@ -101,17 +103,18 @@ public record ObjectRole(Control control, float pivotDegrees, String lightGroup,
      * @param key    {@code <KIND>_<n>} as written, e.g. {@code THROTTLE_1} — the
      *               identity shared by all of the control's objects
      * @param group  the control group it sets/reads: {@code _CG_<name>}, else {@code key}
+     * @param global {@code GLOBAL}: setting it sets the group on the whole train
      * @param slideX source-space slide at full travel ({@code TL_<f>_X}), blocks; same for Y/Z
      */
     public record Control(Kind kind, int id, String key, String group, String label,
             boolean toggle, boolean press, boolean invert, boolean hide, boolean noTouch,
-            float offset, float rangeMin, float rangeMax,
+            boolean global, float offset, float rangeMin, float rangeMax,
             float slideX, float slideY, float slideZ) {
 
         /** This control doing another kind's job (a widget declared the handbrake wheel). */
         public Control withKind(Kind newKind) {
             return new Control(newKind, id, key, group, label, toggle, press, invert, hide, noTouch,
-                    offset, rangeMin, rangeMax, slideX, slideY, slideZ);
+                    global, offset, rangeMin, rangeMax, slideX, slideY, slideZ);
         }
     }
 
@@ -208,6 +211,7 @@ public record ObjectRole(Control control, float pivotDegrees, String lightGroup,
                     label.find() ? label.group(1).replace('^', ' ') : null,
                     hasToken(name, "TOGGLE"), hasToken(name, "PRESS"), hasToken(name, "INVERT"),
                     hasToken(name, "HIDE"), hasToken(name, "NOTOUCH") || hasToken(name, "NOINTERACT"),
+                    hasToken(name, "GLOBAL"),
                     offset.find() ? parseFloat(offset.group(1), 0.0F) : 0.0F,
                     rangeMin, rangeMax, slide[0], slide[1], slide[2]);
         }

@@ -202,8 +202,8 @@ public final class DriverPanelScreen extends Screen {
     private void toggle(String group) {
         boolean on = !isOn(group);
         pending.put(group, on);
-        PacketDistributor.sendToServer(new ControlGroupPayload(cab.getConsistId(), true, group,
-                on ? 1.0F : 0.0F));
+        PacketDistributor.sendToServer(new ControlGroupPayload(cab.getConsistId(),
+                ControlGroupPayload.Scope.PANEL, group, on ? 1.0F : 0.0F));
     }
 
     private static Component state(boolean on) {

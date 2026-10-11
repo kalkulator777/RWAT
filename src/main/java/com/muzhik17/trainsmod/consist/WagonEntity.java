@@ -569,7 +569,8 @@ public class WagonEntity extends Entity {
     /**
      * Set a control group (server): a cab switch, a light toggled from the
      * driver's menu. Names are the model's ({@code CG_<name>}/{@code LCG_<name>});
-     * the server only bounds their number and length.
+     * the server only bounds their number and length. The doors the group
+     * works ({@link WagonType#doorsWorkedBy}) open at 0.5 and over, else close.
      */
     public void setControl(String group, float value) {
         CompoundTag current = this.entityData.get(DATA_CONTROLS);
@@ -584,6 +585,13 @@ public class WagonEntity extends Entity {
         CompoundTag next = current.copy(); // a new instance, or the sync sees no change
         next.putFloat(group, clamped);
         this.entityData.set(DATA_CONTROLS, next);
+        // IR opens a door by its control group: the group's doors follow (SPEC §9.5)
+        WagonType type = typeNow();
+        int worked = type == null ? 0 : type.doorsWorkedBy(group);
+        if (worked != 0) {
+            int mask = doorMask();
+            this.entityData.set(DATA_DOORS, clamped >= 0.5F ? mask | worked : mask & ~worked);
+        }
     }
 
     /** Seat a walking rider, anchored at the interior point under where they stood. */
