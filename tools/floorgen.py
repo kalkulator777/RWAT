@@ -20,8 +20,15 @@ How it goes, in RWAT model space (+Z forward, X across, Y up):
     else the platzkart aisle (0.53 wide, the player 0.6) is impassable. An
     obstacle gives up that depth to the free cells next to it, but never the
     last cell of a run: a thin wall stays a wall (the engine reads a gap of
-    any width as a wall, so one cell is enough).
- 5. add / remove boxes of the per-type file are applied.
+    any width as a wall, so one cell is enough). With several levels, what
+    is free on another level counts as free: a wall between a cab and the
+    walkway below it isn't eaten from the cab's side on one level and from
+    the walkway's on the other.
+ 5. The per-type file's add boxes free their cells, then the remove boxes
+    block theirs. A high wall (HIGH_SLAB) a body's width long that the
+    clearance ate right up to an added cell keeps its last cell: a wall with
+    an added chair behind it is one run with the chair, and the add would
+    open a hole in it.
  6. REACHABLE only: the engine's own rule (FloorRegion: a centre fits where
     a 0.6 × 0.6 square lies inside the union) is run on the boxes; what is
     kept is what a rider can reach from an external or connecting door,
@@ -29,8 +36,11 @@ How it goes, in RWAT model space (+Z forward, X across, Y up):
     with no door, and floor under the frame outside the walls, fall away.
     With no such door in the model the largest piece is kept.
  7. The free cells are tiled into maximal rectangles (the better of rows and
-    columns); box min y = the level, max y = level + 2.5. Coordinates are
-    multiples of 1/16, written with 4 decimals (3 would round 0.0625).
+    columns); box min y = the level, max y = level + 2.5. A tile no body fits
+    in becomes the body-sized boxes over it, at the lowest level (the engine
+    stands a centre on the highest zone over it: they never lift a floor).
+    Coordinates are multiples of 1/16, written with 4 decimals (3 would round
+    0.0625).
 
 Per-type exceptions — generator input, a top-level "floor" key in
 packs/<recipe>/<id>.json (next to "name", "lights"; NOT inside "type"). All
@@ -43,8 +53,8 @@ of the same file wins over the generated one:
       "level": 1.81,                 floor height (a number) or [heights] for
                                      steps; default: found (locomotives: required)
       "add":    [{"min": [x, y, z], "max": [x, y, z]}],   free cells (x, z; y picks
-                                     the level if there are several), before
-                                     the reachability step
+                                     the level if there are several), after
+                                     the clearance, before the reachability step
       "remove": [{"min": [x, y, z], "max": [x, y, z]}],   blocked cells (x, z)
       "ignore": ["<object name or regex>"],               objects not an obstacle
       "slab":   [0.3, 1.8],          the body above the floor (default)
@@ -87,6 +97,8 @@ EPS = 1.0e-9
 LEVEL_TOLERANCE = 0.04
 # a step this far below the level is still floor (the vestibule sills of the DR1a, 0.13)
 STEP_DOWN = 0.15
+# a wall reaches this high above the floor (over a body's shoulders); a chair, a desk, a casing doesn't
+HIGH_SLAB = 1.4
 UP_FACING = 0.95
 MIN_LEVEL_AREA = 1.0
 OPTIONS = {"clearance", "level", "add", "remove", "ignore", "slab", "cell", "step_down"}
@@ -545,28 +557,56 @@ def slab_footprint(t, lo, hi):
     return [(p[0], p[2]) for p in poly] if poly else None
 
 
-def free_cells(grid, floor, obstacle, depth):
-    """FLOOR and not OBSTACLE, plus the clearance: an obstacle run (along X and
-    along Z) gives `depth` cells to a free cell on either end, but keeps at
-    least one cell — a thin wall stays a wall. (A diagonal wall's staircase has
-    runs of two and keeps both: a slanted aisle gets no clearance.)"""
-    nx, nz = grid.nx, grid.nz
-    free = [bytearray(nz) for _ in range(nx)]
-    for ix in range(nx):
-        f, o = floor[ix], obstacle[ix]
-        free[ix][:] = bytes(1 if f[iz] and not o[iz] else 0 for iz in range(nz))
-    freed = [bytearray(nz) for _ in range(nx)]
+def open_cells(grid, floor, obstacle, added):
+    """What a level has free before the clearance: FLOOR and not OBSTACLE, and what "add" frees."""
+    return [bytearray(1 if (floor[ix][iz] and not obstacle[ix][iz]) or added[ix][iz] else 0
+                      for iz in range(grid.nz)) for ix in range(grid.nx)]
 
-    def runs(line_o, line_free, n):
-        i = 0
+
+def free_cells(grid, floor, obstacle, depth, added=None, elsewhere=None, high=None):
+    """FLOOR and not OBSTACLE, plus the clearance, then the cells "add" frees.
+
+    The clearance: an obstacle run (along X and along Z) gives `depth` cells to
+    a free cell on either end, but keeps at least one cell — a thin wall stays
+    a wall. (A diagonal wall's staircase has runs of two and keeps both: a
+    slanted aisle gets no clearance.)
+
+    `added` is freed after the clearance, as the per-type file's author saw it
+    on the map. A wall with an added chair right behind it is one run with the
+    chair, given away from the room's side, and the add would open a hole in
+    it: where the clearance ate an obstacle right up to an added cell, it
+    keeps its last cell — if it is a wall, `high` (it reaches above a body's
+    shoulders: HIGH_SLAB) and a body's width (2 x HALF_WIDTH) long across the
+    run. A casing an add box cuts a way over, a lever, a pipe or an armrest
+    beside one stay eaten.
+
+    `elsewhere`: the cells free on the other levels (what is added there too)
+    end a run as a free cell does and are never part of one — they are never
+    this level's floor, nothing to give. A wall between a cab and the walkway
+    below it keeps its last cell: the cab's floor, which the walkway's body
+    slab crosses, isn't "behind the wall" on the walkway's level, and the two
+    levels don't eat the wall from both sides."""
+    nx, nz = grid.nx, grid.nz
+    added = added or grid.empty()
+    elsewhere = elsewhere or grid.empty()
+    high = high or grid.empty()
+    free = [bytearray(1 if floor[ix][iz] and not obstacle[ix][iz] else 0 for iz in range(nz)) for ix in range(nx)]
+    ends = [bytearray(free[ix][iz] or elsewhere[ix][iz] for iz in range(nz)) for ix in range(nx)]
+    blocked = [bytearray(obstacle[ix][iz] and not elsewhere[ix][iz] for iz in range(nz)) for ix in range(nx)]
+    freed = [bytearray(nz) for _ in range(nx)]
+    found = []   # (the run's cells (ix, iz) in order, free at its start, free at its end, the axis across it)
+
+    def runs(cells):
+        i, n = 0, len(cells)
         while i < n:
-            if not line_o[i]:
+            if not blocked[cells[i][0]][cells[i][1]]:
                 i += 1
                 continue
             j = i
-            while j < n and line_o[j]:
+            while j < n and blocked[cells[j][0]][cells[j][1]]:
                 j += 1
-            yield i, j, (i > 0 and line_free[i - 1]), (j < n and line_free[j])
+            yield (i, j, i > 0 and ends[cells[i - 1][0]][cells[i - 1][1]],
+                   j < n and ends[cells[j][0]][cells[j][1]])
             i = j
 
     def give(start, end, left, right):
@@ -581,24 +621,48 @@ def free_cells(grid, floor, obstacle, depth):
                 pl = min(depth, length - 1)
             if right and not left:
                 pr = min(depth, length - 1)
-        return start, start + pl, end - pr, end
+        return list(range(start, start + pl)) + list(range(end - pr, end))
 
     if depth > 0:
-        for ix in range(nx):
-            for start, end, left, right in runs(obstacle[ix], free[ix], nz):
-                a, b, c, d = give(start, end, left, right)
-                freed[ix][a:b] = b"\x01" * (b - a)
-                freed[ix][c:d] = b"\x01" * (d - c)
-        for iz in range(nz):
-            row_o = bytes(obstacle[ix][iz] for ix in range(nx))
-            row_f = bytes(free[ix][iz] for ix in range(nx))
-            for start, end, left, right in runs(row_o, row_f, nx):
-                a, b, c, d = give(start, end, left, right)
-                for ix in list(range(a, b)) + list(range(c, d)):
-                    freed[ix][iz] = 1
-    out = [bytearray(nz) for _ in range(nx)]
-    for ix in range(nx):
-        out[ix][:] = bytes(1 if free[ix][iz] or (freed[ix][iz] and floor[ix][iz]) else 0 for iz in range(nz))
+        # each column (a run along Z: across it is X) and each row (along X: across is Z)
+        lines = ([([(ix, iz) for iz in range(nz)], 0) for ix in range(nx)]
+                 + [([(ix, iz) for ix in range(nx)], 2) for iz in range(nz)])
+        for cells, axis in lines:
+            for start, end, left, right in runs(cells):
+                for k in give(start, end, left, right):
+                    freed[cells[k][0]][cells[k][1]] = 1
+                found.append((cells[start:end], left, right, axis))
+    out = [bytearray(1 if free[ix][iz] or added[ix][iz] or (freed[ix][iz] and floor[ix][iz]) else 0
+                     for iz in range(nz)) for ix in range(nx)]
+
+    # a wall eaten right up to an added cell keeps its last cell
+    wall = math.ceil(2 * HALF_WIDTH / grid.size - 1e-9)
+
+    def across(cell, axis):
+        """How far the high obstacle through `cell` reaches along `axis` (0 = X, 2 = Z), in cells."""
+        dx, dz = (1, 0) if axis == 0 else (0, 1)
+        length = 1
+        for sign in (1, -1):
+            x, z = cell[0] + sign * dx, cell[1] + sign * dz
+            while 0 <= x < nx and 0 <= z < nz and blocked[x][z] and high[x][z] and not added[x][z]:
+                length += 1
+                x, z = x + sign * dx, z + sign * dz
+        return length
+
+    for cells, left, right, axis in found:
+        for from_free, order in ((left, cells), (right, cells[::-1])):
+            if not from_free:
+                continue
+            eaten = []
+            for cell in order:
+                if added[cell[0]][cell[1]]:
+                    break
+                eaten.append(cell)
+            else:
+                continue   # nothing added in this run
+            if (eaten and all(out[c[0]][c[1]] and high[c[0]][c[1]] for c in eaten)
+                    and max(across(c, axis) for c in eaten) >= wall):
+                out[eaten[-1][0]][eaten[-1][1]] = 0
     return out
 
 
@@ -753,21 +817,27 @@ def generate(raw, config, doors=(), ir_floor=None, y_lift=0.40625 + 0.03):
     grid = Grid(config.cell, bounds)
     result.grid = grid
     depth = int(config.clearance / config.cell + 0.5)
+    # each level's floor (a higher level wins where both exist), obstacles and added cells
     taken = None
+    added_at, high_at = {}, {}
     for level in sorted(levels, reverse=True):
         floor = grid.empty()
         for t in floor_tris[level]:
             mark_floor_triangle(grid, floor, t)
         obstacle = grid.empty()
+        high = grid.empty()
         lo, hi = level + config.slab[0], level + config.slab[1]
         for _, t in active:
             footprint = slab_footprint(t, lo, hi)
             if footprint is not None:
                 mark_polygon(grid, obstacle, footprint)
-        if taken is not None:   # a higher level wins where both exist
+                above = slab_footprint(t, level + HIGH_SLAB, hi)
+                if above is not None:
+                    mark_polygon(grid, high, above)
+        if taken is not None:
             for ix in range(grid.nx):
                 floor[ix][:] = bytes(0 if taken[ix][iz] else floor[ix][iz] for iz in range(grid.nz))
-        free = free_cells(grid, floor, obstacle, depth)
+        added = grid.empty()
         for box in config.add:
             if len(levels) > 1 and min(levels, key=lambda v: abs(v - box["min"][1])) != level:
                 continue
@@ -776,7 +846,23 @@ def generate(raw, config, doors=(), ir_floor=None, y_lift=0.40625 + 0.03):
                 a = max(0, grid.span(box["min"][2], box["max"][2])[0] - grid.iz0)
                 b = min(grid.nz, grid.span(box["min"][2], box["max"][2])[1] - grid.iz0 + 1)
                 if b > a:
-                    free[ix][a:b] = b"\x01" * (b - a)
+                    added[ix][a:b] = b"\x01" * (b - a)
+        result.floor[level] = floor
+        result.obstacle[level] = obstacle
+        high_at[level] = high
+        added_at[level] = added
+        taken = [bytearray(1 if (taken and taken[ix][iz]) or floor[ix][iz] else 0 for iz in range(grid.nz))
+                 for ix in range(grid.nx)]
+    # the clearance (a cell free on another level ends a run as a free one does), add, remove
+    opened = {level: open_cells(grid, result.floor[level], result.obstacle[level], added_at[level])
+              for level in levels}
+    for level in levels:
+        floor, obstacle = result.floor[level], result.obstacle[level]
+        elsewhere = None
+        if len(levels) > 1:
+            elsewhere = [bytearray(any(opened[other][ix][iz] for other in levels if other != level)
+                                   for iz in range(grid.nz)) for ix in range(grid.nx)]
+        free = free_cells(grid, floor, obstacle, depth, added_at[level], elsewhere, high_at[level])
         for box in config.remove:
             for ix in range(max(0, grid.span(box["min"][0], box["max"][0])[0] - grid.ix0),
                             min(grid.nx, grid.span(box["min"][0], box["max"][0])[1] - grid.ix0 + 1)):
@@ -785,11 +871,7 @@ def generate(raw, config, doors=(), ir_floor=None, y_lift=0.40625 + 0.03):
                 if b > a:
                     free[ix][a:b] = bytes(b - a)
         reach_doors(grid, free, obstacle, door_list)
-        result.floor[level] = floor
-        result.obstacle[level] = obstacle
         result.free[level] = free
-        taken = [bytearray(1 if (taken and taken[ix][iz]) or floor[ix][iz] else 0 for iz in range(grid.nz))
-                 for ix in range(grid.nx)]
 
     # reachable: the engine's rule on the boxes of every level together
     def to_boxes(masks):
@@ -838,9 +920,15 @@ def generate(raw, config, doors=(), ir_floor=None, y_lift=0.40625 + 0.03):
     final = to_boxes(kept)
     # a tile no body fits in (FloorCheck: "holds no place a player fits") is
     # swapped for the body-sized boxes (a centre piece grown by the half-width)
-    # that cover its cells: same union, every box a place to stand
+    # that cover its cells: same union, every box a place to stand. They lie
+    # at the lowest level: such a box reaches over the floor around the piece
+    # it grew from — a lower level's, often — and the engine stands a centre
+    # on the highest zone over it, so the tile's own level would lift that
+    # floor; no centre stands on the swapped tile, and every centre has a kept
+    # tile of its own level over it
     kept_region = Region([b[1:] for b in final])
     stand = [p for i, p in enumerate(region.pieces) if labels[i] in keep]
+    lowest = min(levels)
     fixed, seen = [], set()
     for level, x0, z0, x1, z1 in final:
         if any(min(p[2], x1) >= max(p[0], x0) - EPS and min(p[3], z1) >= max(p[1], z0) - EPS
@@ -852,7 +940,7 @@ def generate(raw, config, doors=(), ir_floor=None, y_lift=0.40625 + 0.03):
                 cx, cz = (ix + grid.ix0 + 0.5) * s, (iz + grid.iz0 + 0.5) * s
                 for p in stand:
                     if p[0] - HALF_WIDTH <= cx <= p[2] + HALF_WIDTH and p[1] - HALF_WIDTH <= cz <= p[3] + HALF_WIDTH:
-                        box = (level, round((p[0] - HALF_WIDTH) / s) * s, round((p[1] - HALF_WIDTH) / s) * s,
+                        box = (lowest, round((p[0] - HALF_WIDTH) / s) * s, round((p[1] - HALF_WIDTH) / s) * s,
                                round((p[2] + HALF_WIDTH) / s) * s, round((p[3] + HALF_WIDTH) / s) * s)
                         if box not in seen:
                             seen.add(box)
