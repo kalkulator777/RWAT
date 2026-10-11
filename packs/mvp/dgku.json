@@ -1,0 +1,22 @@
+{
+  "name": {"ru_ru": "ДГКу"},
+  "lights": {
+    "HLF": {"en_us": "Front lights", "ru_ru": "Фары (перед)"},
+    "HLR": {"en_us": "Rear lights", "ru_ru": "Фары (зад)"},
+    "IL": {"en_us": "Cab and gauge lights", "ru_ru": "Свет в кабине и приборы"}
+  },
+  "floor": {
+    "level": 1.85,
+    "add": [
+      {"min": [-0.25, 1.85, 0.5625], "max": [0.25, 1.85, 1.25]},
+      {"min": [-0.8125, 1.85, 1.25], "max": [-0.1875, 1.85, 2.0]}
+    ]
+  },
+  "type": {
+    "doors": {
+      "door_1": {"inner": null},
+      "door_2": {"inner": null}
+    },
+    "cab": {"seat": [-0.5, 2.566, 1.72], "seat_yaw": 0.0}
+  }
+}

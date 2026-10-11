@@ -1,0 +1,26 @@
+{
+  "name": {"ru_ru": "ЧС4Т"},
+  "lights": {
+    "head1HL": {"en_us": "Front headlight", "ru_ru": "Прожектор передний"},
+    "head2HL": {"en_us": "Rear headlight", "ru_ru": "Прожектор задний"},
+    "cab1BL": {"en_us": "Buffer lights (cab 1)", "ru_ru": "Буферные фонари (кабина 1)"},
+    "cab2BL": {"en_us": "Buffer lights (cab 2)", "ru_ru": "Буферные фонари (кабина 2)"},
+    "cab1": {"en_us": "Cab 1 light (front)", "ru_ru": "Свет в кабине 1 (перед)"},
+    "cab2": {"en_us": "Cab 2 light (rear)", "ru_ru": "Свет в кабине 2 (зад)"}
+  },
+  "floor": {
+    "level": [2.25, 2.56],
+    "add": [
+      {"min": [-1.4375, 2.25, 6.375], "max": [1.4375, 2.25, 7.5625]},
+      {"min": [-0.8125, 2.56, 8.125], "max": [-0.375, 2.56, 8.625]}
+    ]
+  },
+  "type": {
+    "doors": {
+      "CabDoor1": {"min": [-0.344, 2.56, 7.6], "max": [0.344, 4.5, 7.72], "inner": true},
+      "side1": {"min": [1.5, 1.2, 6.5], "max": [1.6, 4.1, 7.15], "fixed": true},
+      "side2": {"min": [-1.6, 1.2, 6.5], "max": [-1.5, 4.1, 7.15], "fixed": true}
+    },
+    "cab": {"seat": [-0.625, 3.218, 8.375], "seat_yaw": 0.0}
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "name": {"ru_ru": "М62"},
+  "lights": {
+    "HL1": {"en_us": "Front headlight", "ru_ru": "Прожектор передний"},
+    "HL2": {"en_us": "Rear headlight", "ru_ru": "Прожектор задний"},
+    "LB1": {"en_us": "Front left buffer light", "ru_ru": "Буферный левый (перед)"},
+    "RB1": {"en_us": "Front right buffer light", "ru_ru": "Буферный правый (перед)"},
+    "LB2": {"en_us": "Rear left buffer light", "ru_ru": "Буферный левый (зад)"},
+    "RB2": {"en_us": "Rear right buffer light", "ru_ru": "Буферный правый (зад)"},
+    "RRB1": {"en_us": "Rear red light", "ru_ru": "Красный фонарь (зад)"},
+    "RRB2": {"en_us": "Front red light", "ru_ru": "Красный фонарь (перед)"},
+    "IL1": {"en_us": "Cab 1 light (front)", "ru_ru": "Свет в кабине 1 (перед)"},
+    "IL2": {"en_us": "Cab 2 light (rear)", "ru_ru": "Свет в кабине 2 (зад)"},
+    "PL1": {"en_us": "Cab 1 panel light", "ru_ru": "Подсветка пульта 1"},
+    "PL2": {"en_us": "Cab 2 panel light", "ru_ru": "Подсветка пульта 2"}
+  },
+  "floor": {
+    "level": 2.28,
+    "add": [
+      {"min": [-1.5, 2.28, 6.0], "max": [1.5, 2.28, 6.9375]},
+      {"min": [-1.125, 2.28, 7.1875], "max": [-0.5, 2.28, 7.875]}
+    ]
+  },
+  "type": {
+    "doors": {
+      "CabDoor1": {"min": [0.04, 2.28, 6.9], "max": [0.66, 4.3, 6.98], "inner": true},
+      "side1": {"min": [1.5, 1.2, 6.125], "max": [1.6, 4.05, 6.875], "fixed": true},
+      "side2": {"min": [-1.6, 1.2, 6.125], "max": [-1.5, 4.05, 6.875], "fixed": true}
+    },
+    "cab": {"seat": [-0.84, 2.937, 7.5], "seat_yaw": 0.0}
+  }
+}
