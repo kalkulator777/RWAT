@@ -55,7 +55,9 @@ of the same file wins over the generated one:
       "add":    [{"min": [x, y, z], "max": [x, y, z]}],   free cells (x, z; y picks
                                      the level if there are several), after
                                      the clearance, before the reachability step
-      "remove": [{"min": [x, y, z], "max": [x, y, z]}],   blocked cells (x, z)
+      "remove": [{"min": [x, y, z], "max": [x, y, z]}],   blocked cells (x, z; y picks
+                                     the level as for add — a box for every
+                                     level is a box per level)
       "ignore": ["<object name or regex>"],               objects not an obstacle
       "slab":   [0.3, 1.8],          the body above the floor (default)
       "cell":   0.0625,              grid (default 1/16)
@@ -759,6 +761,22 @@ class Floor:
         self.dropped_area = 0.0
 
 
+def box_level(box, levels):
+    """The level an add or remove box is for: the one nearest its min y."""
+    return min(levels, key=lambda v: abs(v - box["min"][1]))
+
+
+def mark_box(grid, mask, box, value):
+    """Set the cells an add / remove box covers (x, z) to `value`."""
+    ix_lo, ix_hi = grid.span(box["min"][0], box["max"][0])
+    iz_lo, iz_hi = grid.span(box["min"][2], box["max"][2])
+    a = max(0, iz_lo - grid.iz0)
+    b = min(grid.nz, iz_hi - grid.iz0 + 1)
+    if b > a:
+        for ix in range(max(0, ix_lo - grid.ix0), min(grid.nx, ix_hi - grid.ix0 + 1)):
+            mask[ix][a:b] = bytes([value]) * (b - a)
+
+
 def pick_levels(levels, config, ir_floor, y_range):
     """The floor heights to generate for."""
     if config.levels is not None:
@@ -839,14 +857,8 @@ def generate(raw, config, doors=(), ir_floor=None, y_lift=0.40625 + 0.03):
                 floor[ix][:] = bytes(0 if taken[ix][iz] else floor[ix][iz] for iz in range(grid.nz))
         added = grid.empty()
         for box in config.add:
-            if len(levels) > 1 and min(levels, key=lambda v: abs(v - box["min"][1])) != level:
-                continue
-            for ix in range(max(0, grid.span(box["min"][0], box["max"][0])[0] - grid.ix0),
-                            min(grid.nx, grid.span(box["min"][0], box["max"][0])[1] - grid.ix0 + 1)):
-                a = max(0, grid.span(box["min"][2], box["max"][2])[0] - grid.iz0)
-                b = min(grid.nz, grid.span(box["min"][2], box["max"][2])[1] - grid.iz0 + 1)
-                if b > a:
-                    added[ix][a:b] = b"\x01" * (b - a)
+            if box_level(box, levels) == level:
+                mark_box(grid, added, box, 1)
         result.floor[level] = floor
         result.obstacle[level] = obstacle
         high_at[level] = high
@@ -864,12 +876,8 @@ def generate(raw, config, doors=(), ir_floor=None, y_lift=0.40625 + 0.03):
                                    for iz in range(grid.nz)) for ix in range(grid.nx)]
         free = free_cells(grid, floor, obstacle, depth, added_at[level], elsewhere, high_at[level])
         for box in config.remove:
-            for ix in range(max(0, grid.span(box["min"][0], box["max"][0])[0] - grid.ix0),
-                            min(grid.nx, grid.span(box["min"][0], box["max"][0])[1] - grid.ix0 + 1)):
-                a = max(0, grid.span(box["min"][2], box["max"][2])[0] - grid.iz0)
-                b = min(grid.nz, grid.span(box["min"][2], box["max"][2])[1] - grid.iz0 + 1)
-                if b > a:
-                    free[ix][a:b] = bytes(b - a)
+            if box_level(box, levels) == level:
+                mark_box(grid, free, box, 0)
         reach_doors(grid, free, obstacle, door_list)
         result.free[level] = free
 
