@@ -1,4 +1,8 @@
 {
+  "name": {"ru_ru": "ЭР2, моторный вагон"},
+  "lights": {
+    "ER2L": {"en_us": "Saloon light", "ru_ru": "Свет в салоне"}
+  },
   "type": {
     "max_speed_kmh": 130,
     "traction": {

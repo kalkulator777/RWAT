@@ -1,4 +1,5 @@
 {
+  "name": {"ru_ru": "ЭР200, прицепной вагон"},
   "type": {
     "max_speed_kmh": 200,
     "brakes": {
