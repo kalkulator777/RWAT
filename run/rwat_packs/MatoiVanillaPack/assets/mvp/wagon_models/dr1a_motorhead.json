@@ -1,5 +1,18 @@
 {
   "obj": "stock/rolling_stock/motorcab/mvp_ir_dr1a/mvp_ir_dr1a_motorhead.obj",
+  "animations": {
+    "dl": "stock/rolling_stock/motorcab/mvp_ir_dr1a/anim/mvp_ir_dr1a_motorhead_d_left_int.anim",
+    "dr": "stock/rolling_stock/motorcab/mvp_ir_dr1a/anim/mvp_ir_dr1a_motorhead_d_right_int.anim",
+    "id4": "stock/rolling_stock/motorcab/mvp_ir_dr1a/anim/mvp_ir_dr1a_motorhead_d_front_middle_int.anim",
+    "id5": "stock/rolling_stock/motorcab/mvp_ir_dr1a/anim/mvp_ir_dr1a_motorhead_d_rear_middle_int.anim",
+    "edl": "stock/rolling_stock/motorcab/mvp_ir_dr1a/anim/mvp_ir_dr1a_motorhead_d_left_engine.anim",
+    "edr": "stock/rolling_stock/motorcab/mvp_ir_dr1a/anim/mvp_ir_dr1a_motorhead_d_right_engine.anim",
+    "cdr": "stock/rolling_stock/motorcab/mvp_ir_dr1a/anim/mvp_ir_dr1a_motorhead_d_connecting.anim",
+    "id3": "stock/rolling_stock/motorcab/mvp_ir_dr1a/anim/mvp_ir_dr1a_motorhead_d_int_3.anim",
+    "id2": "stock/rolling_stock/motorcab/mvp_ir_dr1a/anim/mvp_ir_dr1a_motorhead_d_int_2.anim",
+    "id1": "stock/rolling_stock/motorcab/mvp_ir_dr1a/anim/mvp_ir_dr1a_motorhead_d_int_1.anim",
+    "cd1": "stock/rolling_stock/motorcab/mvp_ir_dr1a/anim/mvp_ir_dr1a_motorhead_d_cab.anim"
+  },
   "liveries": {
     "etrod_173": "l_etrod_173",
     "rinary_198": "l_rinary_198",

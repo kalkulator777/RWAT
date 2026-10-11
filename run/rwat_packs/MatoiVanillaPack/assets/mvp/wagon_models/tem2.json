@@ -1,5 +1,9 @@
 {
   "obj": "stock/rolling_stock/locomotives/mvp_ir_tem2/mvp_ir_tem2.obj",
+  "animations": {
+    "cd1": "stock/rolling_stock/locomotives/mvp_ir_tem2/anim/mvp_ir_tem2_cd_1.anim",
+    "cd2": "stock/rolling_stock/locomotives/mvp_ir_tem2/anim/mvp_ir_tem2_cd_2.anim"
+  },
   "liveries": {
     "mvp_1": "l_mvp_1",
     "mvp_2": "l_mvp_2",

@@ -1,5 +1,17 @@
 {
   "obj": "stock/rolling_stock/locomotives/mvp_ir_vl80c/mvp_ir_vl80c.obj",
+  "animations": {
+    "doorengine1": "stock/rolling_stock/locomotives/mvp_ir_vl80c/anim/mvp_ir_vl80c_door_engine_1.anim",
+    "doorengine2": "stock/rolling_stock/locomotives/mvp_ir_vl80c/anim/mvp_ir_vl80c_door_engine_2.anim",
+    "doorengine3": "stock/rolling_stock/locomotives/mvp_ir_vl80c/anim/mvp_ir_vl80c_door_engine_3.anim",
+    "doorengine4": "stock/rolling_stock/locomotives/mvp_ir_vl80c/anim/mvp_ir_vl80c_door_engine_4.anim",
+    "doorcab": "stock/rolling_stock/locomotives/mvp_ir_vl80c/anim/mvp_ir_vl80c_door_cab.anim",
+    "doorconn": "stock/rolling_stock/locomotives/mvp_ir_vl80c/anim/mvp_ir_vl80c_door_connecting.anim",
+    "slide": "stock/rolling_stock/locomotives/mvp_ir_vl80c/anim/mvp_ir_vl80c_door_slide.anim",
+    "slide1": "stock/rolling_stock/locomotives/mvp_ir_vl80c/anim/mvp_ir_vl80c_door_slide_1.anim",
+    "slide2": "stock/rolling_stock/locomotives/mvp_ir_vl80c/anim/mvp_ir_vl80c_door_slide_2.anim",
+    "slide3": "stock/rolling_stock/locomotives/mvp_ir_vl80c/anim/mvp_ir_vl80c_door_slide_3.anim"
+  },
   "liveries": {
     "mvp_extra": "l_mvp_extra",
     "mvp_sme_3": "l_mvp_sme_3",
