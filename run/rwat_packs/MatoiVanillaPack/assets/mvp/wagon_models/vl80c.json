@@ -1,5 +1,17 @@
 {
   "obj": "stock/rolling_stock/locomotives/mvp_ir_vl80c/mvp_ir_vl80c.obj",
+  "animations": {
+    "doorengine1": "stock/rolling_stock/locomotives/mvp_ir_vl80c/anim/mvp_ir_vl80c_door_engine_1.anim",
+    "doorengine2": "stock/rolling_stock/locomotives/mvp_ir_vl80c/anim/mvp_ir_vl80c_door_engine_2.anim",
+    "doorengine3": "stock/rolling_stock/locomotives/mvp_ir_vl80c/anim/mvp_ir_vl80c_door_engine_3.anim",
+    "doorengine4": "stock/rolling_stock/locomotives/mvp_ir_vl80c/anim/mvp_ir_vl80c_door_engine_4.anim",
+    "doorcab": "stock/rolling_stock/locomotives/mvp_ir_vl80c/anim/mvp_ir_vl80c_door_cab.anim",
+    "doorconn": "stock/rolling_stock/locomotives/mvp_ir_vl80c/anim/mvp_ir_vl80c_door_connecting.anim",
+    "slide": "stock/rolling_stock/locomotives/mvp_ir_vl80c/anim/mvp_ir_vl80c_door_slide.anim",
+    "slide1": "stock/rolling_stock/locomotives/mvp_ir_vl80c/anim/mvp_ir_vl80c_door_slide_1.anim",
+    "slide2": "stock/rolling_stock/locomotives/mvp_ir_vl80c/anim/mvp_ir_vl80c_door_slide_2.anim",
+    "slide3": "stock/rolling_stock/locomotives/mvp_ir_vl80c/anim/mvp_ir_vl80c_door_slide_3.anim"
+  },
   "liveries": {
     "mvp_extra": "l_mvp_extra",
     "mvp_sme_3": "l_mvp_sme_3",
@@ -27,6 +39,14 @@
     "bell": "stock/sounds/electric/mvp_vl80/bell.ogg",
     "wheels": "stock/sounds/default/mvp_freight_stock_wheels.ogg",
     "clack": "stock/sounds/default/mvp_clack_wheelset_2-axle.ogg",
+    "doors": {
+      "doorcab": "stock/sounds/control/door/mvp_controls_door_close_1.ogg",
+      "doorconn": "stock/sounds/control/door/mvp_controls_door_close_1.ogg",
+      "doorengine1": "stock/sounds/control/door/mvp_controls_door_close_1.ogg",
+      "doorengine2": "stock/sounds/control/door/mvp_controls_door_close_1.ogg",
+      "doorengine3": "stock/sounds/control/door/mvp_controls_door_close_1.ogg",
+      "doorengine4": "stock/sounds/control/door/mvp_controls_door_close_1.ogg"
+    },
     "controls": {
       "COUPLER_ENGAGED_1": {
         "move": "stock/sounds/default/mvp_couple_switch.ogg"

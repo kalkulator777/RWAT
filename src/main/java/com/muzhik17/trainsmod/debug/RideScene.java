@@ -2,13 +2,18 @@ package com.muzhik17.trainsmod.debug;
 
 import java.util.Locale;
 
+import org.joml.Vector3d;
+
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.client.ClientConsists;
 import com.muzhik17.trainsmod.client.ClientDriveInput;
 import com.muzhik17.trainsmod.client.ClientRide;
 import com.muzhik17.trainsmod.client.sound.TrainSounds;
 import com.muzhik17.trainsmod.consist.WagonEntity;
+import com.muzhik17.trainsmod.kinematics.PoseMath;
 import com.muzhik17.trainsmod.kinematics.Sway;
+import com.muzhik17.trainsmod.network.SeatPayload;
+import com.muzhik17.trainsmod.stock.WagonType;
 
 import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
@@ -18,13 +23,14 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * Dev tool (SPEC §2.4a, §10): {@code -Pautoscene=ride} on a throwaway save
  * copy — a ChS4T with two coaches on a 1500-block straight, the player in
- * the cab: full throttle, the horn, then the whistle, screenshots ahead, out
- * of the side window and from behind at speed, braking to a stop, getting
- * off. Every second the log gets the speed, how the loco and the first coach
+ * the driver's chair: full throttle, the horn, then the whistle, screenshots ahead, out
+ * of the side window and from behind at speed, braking to a stop, standing
+ * up from the chair. Every second the log gets the speed, how the loco and the first coach
  * rock ({@code [ride]} lines) and what is sounding ({@link TrainSounds#describe}).
  * Quits the game at the end.
  */
@@ -46,13 +52,12 @@ public final class RideScene {
         if (ticks >= 200 && ticks % 20 == 0) {
             report(mc);
         }
-        // into the loco's cab: wagon 0 of the train (a selector by distance picked a coach),
-        // tried until the client knows it and the ride has taken
-        if (ticks >= 180 && ticks < 260 && ticks % 10 == 0
-                && !(mc.player.getVehicle() instanceof WagonEntity)) {
+        // into the loco's driver's chair: wagon 0 of the train (a selector by distance
+        // picked a coach), tried until the client knows it and the driver sits
+        if (ticks >= 180 && ticks < 260 && ticks % 10 == 0 && !atControls(mc)) {
             WagonEntity loco = wagonAt(mc, 0);
             if (loco != null) {
-                command(mc, "ride @s mount " + loco.getUUID());
+                sitDriver(mc, loco.getUUID());
             }
         }
         switch (ticks) {
@@ -95,7 +100,12 @@ public final class RideScene {
                 command(mc, "rwat handle throttle 0");
                 command(mc, "rwat handle train_brake 6");
             }
-            case 1180 -> command(mc, "ride @s dismount");
+            // the driver stands up: nobody at the controls of a train at rest, the engine stops
+            case 1180 -> {
+                if (mc.player.getVehicle() instanceof WagonEntity loco) {
+                    PacketDistributor.sendToServer(new SeatPayload(loco.getId(), false));
+                }
+            }
             case 1240 -> mc.stop();
             default -> {
             }
@@ -113,6 +123,54 @@ public final class RideScene {
         RailsWheelsAndTrains.LOGGER.info("[ride] t={} {} km/h | riding #{} | loco {} | coach {} | {}", ticks,
                 String.format(Locale.ROOT, "%.1f", kmh), loco.getWagonIndex(), sway(loco),
                 coach == null ? "-" : sway(coach), TrainSounds.describe());
+    }
+
+    private static boolean atControls(Minecraft mc) {
+        return mc.player.getVehicle() instanceof WagonEntity wagon
+                && ClientDriveInput.atControls(wagon, mc.player);
+    }
+
+    /**
+     * Board the loco at its chair and sit down (server, a dev shortcut past
+     * the doors): stand at the chair, board as a walking rider ({@code board}
+     * is private — reflection, like the other scenes), sit. A cab without a
+     * walkable interior is simply ridden.
+     */
+    private static void sitDriver(Minecraft mc, java.util.UUID locoId) {
+        var server = mc.getSingleplayerServer();
+        if (server == null) {
+            return;
+        }
+        java.util.UUID playerId = mc.player.getUUID();
+        server.execute(() -> {
+            var player = server.getPlayerList().getPlayer(playerId);
+            if (player == null || !(player.serverLevel().getEntity(locoId) instanceof WagonEntity loco)) {
+                return;
+            }
+            WagonType type = loco.typeNow();
+            if (type == null || type.interior() == null || loco.seat() == null) {
+                player.startRiding(loco, true);
+                return;
+            }
+            if (player.getVehicle() != loco) {
+                WagonType.Seat seat = loco.seat();
+                Vector3d chair = PoseMath.localToWorld(new Vector3d(loco.getX(), loco.getY(), loco.getZ()),
+                        loco.getYRot(), loco.getXRot(), new Vector3d(seat.x(), seat.y(), seat.z()));
+                player.stopRiding();
+                player.teleportTo(chair.x, chair.y, chair.z);
+                try {
+                    var board = WagonEntity.class.getDeclaredMethod("board",
+                            net.minecraft.server.level.ServerPlayer.class, WagonType.class);
+                    board.setAccessible(true);
+                    board.invoke(loco, player, type);
+                } catch (ReflectiveOperationException e) {
+                    RailsWheelsAndTrains.LOGGER.warn("[ride] can't board", e);
+                    return;
+                }
+            }
+            loco.sitDriver(player);
+            RailsWheelsAndTrains.LOGGER.info("[ride] seated: {}", loco.isSeated(player));
+        });
     }
 
     /** The nearest wagon with this index in its train (the scene's own train, spawned at the player). */

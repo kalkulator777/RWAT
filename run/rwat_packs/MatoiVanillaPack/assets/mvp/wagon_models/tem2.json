@@ -1,5 +1,9 @@
 {
   "obj": "stock/rolling_stock/locomotives/mvp_ir_tem2/mvp_ir_tem2.obj",
+  "animations": {
+    "cd1": "stock/rolling_stock/locomotives/mvp_ir_tem2/anim/mvp_ir_tem2_cd_1.anim",
+    "cd2": "stock/rolling_stock/locomotives/mvp_ir_tem2/anim/mvp_ir_tem2_cd_2.anim"
+  },
   "liveries": {
     "mvp_1": "l_mvp_1",
     "mvp_2": "l_mvp_2",
@@ -15,6 +19,10 @@
     "bell": "stock/sounds/diesel/mvp_tem2y/bell.ogg",
     "wheels": "stock/sounds/default/mvp_freight_stock_wheels.ogg",
     "clack": "stock/sounds/default/mvp_clack_wheelset_2-axle.ogg",
+    "doors": {
+      "cd1": "stock/sounds/control/door/mvp_controls_door_close_1.ogg",
+      "cd2": "stock/sounds/control/door/mvp_controls_door_close_1.ogg"
+    },
     "controls": {
       "COUPLER_ENGAGED_1": {
         "move": "stock/sounds/default/mvp_couple_switch.ogg"
