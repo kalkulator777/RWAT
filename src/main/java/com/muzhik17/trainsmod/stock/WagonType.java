@@ -148,24 +148,31 @@ public record WagonType(
     /**
      * Presence = the consist can be driven from here (SPEC §5.1). A cab with
      * a walkable {@link #interior} is walked like a passenger car and driven
-     * by its levers (SPEC §9); its optional {@code seat} is the driver's
-     * chair, where the keys drive. A cab without an interior seats the driver
-     * at the vehicle's own seat, keys only (every type before §9).
+     * by its levers (SPEC §9); its {@code seats} are the driver's chairs,
+     * where the keys drive — the assistant's chair beside the driver's, the
+     * other end's cab of a double-ended locomotive. A cab without an interior
+     * seats the driver at the vehicle's own seat, keys only (every type
+     * before §9).
      *
-     * @param seat the driver's chair, null = none
+     * @param seats the driver's chairs, in the pack's order (the first is the
+     *              one in control when several are manned); empty = none
      */
-    public record Cab(Seat seat) {
+    public record Cab(List<Seat> seats) {
+
+        public Cab {
+            seats = List.copyOf(seats);
+        }
 
         /** A cab without a chair. */
         public Cab() {
-            this(null);
+            this(List.of());
         }
     }
 
     /**
-     * The driver's chair (SPEC §9) in the <b>model's local frame</b>: the
-     * point on top of the cushion a seated driver sits on, and which way they
-     * face ({@code yaw} degrees, 0 = model +Z forward, +90 = towards −X, the
+     * A driver's chair (SPEC §9) in the <b>model's local frame</b>: the point
+     * on top of the cushion a seated driver sits on, and which way they face
+     * ({@code yaw} degrees, 0 = model +Z forward, +90 = towards −X, the
      * entity yaw sense).
      */
     public record Seat(double x, double y, double z, float yaw) {
@@ -173,6 +180,17 @@ public record WagonType(
         /** This chair as seen in the pose frame — mirrored for a flipped wagon. */
         public Seat inFrame(boolean flipped) {
             return flipped ? new Seat(-x, y, -z, yaw + 180.0F) : this;
+        }
+
+        /**
+         * True if the chair looks towards the model's rear (more than 90°
+         * off forward — the other end's cab): from it, the driver's forward
+         * is the model's −Z. A chair turned square to the side counts as
+         * forward.
+         */
+        public boolean facesBack() {
+            double off = ((yaw % 360.0) + 540.0) % 360.0 - 180.0;
+            return Math.abs(off) > 90.0;
         }
     }
 

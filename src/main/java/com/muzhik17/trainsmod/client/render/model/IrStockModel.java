@@ -84,11 +84,14 @@ public final class IrStockModel {
 
     /**
      * Object-name prefixes that are never geometry in the IR convention:
-     * {@code SEAT_} — flat passenger-seat marker quads; {@code CARGO_FILL} —
-     * the cargo at each load level (1/20/…/100 %), all overlapping; cargo isn't
-     * modelled, so the wagon renders empty.
+     * {@code CARGO_FILL} — the cargo at each load level (1/20/…/100 %), all
+     * overlapping; cargo isn't modelled, so the wagon renders empty. IR draws
+     * its {@code SEAT_} objects like the rest of the model, and so do we: in
+     * MVP the textured ones are cushions (the DR1's seats, its cab chairs),
+     * the flat passenger-seat markers have no material and drop out with
+     * every untextured part.
      */
-    private static final List<String> DEFAULT_SKIP_PREFIXES = List.of("SEAT_", "CARGO_FILL");
+    private static final List<String> DEFAULT_SKIP_PREFIXES = List.of("CARGO_FILL");
 
     /**
      * Where the loader reads pack files from (the client resource manager in

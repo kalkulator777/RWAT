@@ -37,7 +37,7 @@ import com.muzhik17.trainsmod.client.sound.SoundSet;
  * @param bogies     bogie pivot offsets in the OBJ, +forward, front first;
  *                   null = measured from the {@code BOGEY_*} meshes
  * @param skip       extra object-name prefixes left out of the render (on top
- *                   of the convention's {@code HIDE}/{@code SEAT_}/{@code CARGO_FILL})
+ *                   of the convention's {@code HIDE}/{@code CARGO_FILL})
  * @param animations animated group → its IR {@code .anim} ({@code ns:path});
  *                   the group id (lower case) matches a door id of the type
  * @param liveries   livery id → folder next to the OBJ whose same-named

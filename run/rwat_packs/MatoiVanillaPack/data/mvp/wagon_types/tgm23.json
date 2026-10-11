@@ -8,8 +8,15 @@
     "max_tractive_effort_kn": 107.9
   },
   "cab": {
-    "seat": [-0.97, 3.0, -1.93],
-    "seat_yaw": 0.0
+    "seats": [
+      {
+        "at": [-0.97, 3.0, -1.93]
+      },
+      {
+        "at": [1.0, 3.0, -1.885],
+        "yaw": 180
+      }
+    ]
   },
   "brakes": {
     "system": "passenger"

@@ -246,7 +246,7 @@ public final class ClientAutoScene {
             case 365 -> {
                 WagonEntity wagon = wagon(mc);
                 if (wagon != null) {
-                    PacketDistributor.sendToServer(new SeatPayload(wagon.getId(), true));
+                    PacketDistributor.sendToServer(new SeatPayload(wagon.getId(), true, 0));
                 }
             }
             case 380 -> report(mc, "seated?");
@@ -950,16 +950,19 @@ public final class ClientAutoScene {
     private static int stockAt;
     private static int stockTick;
     private static int stockEntrance = -1;
+    /** The driver's chair being tried (its index in {@code cab.seats}). */
+    private static int stockChair;
 
     /**
      * {@code stock} / {@code stock:<id>,<id>…} (SPEC §9.8): each marked-up
      * type in turn, on its own track 96 blocks on. Boarded the way a player
      * would — through its first way in from outside (its door opened, or a
-     * step), or by right-click if it has no doors — then moved to the
-     * driver's chair (or the middle of the car) and seated; a shot from the
-     * chair ({@code rwat-stock-<id>-seat.png}) and one back over the floor
-     * wireframes ({@code rwat-stock-<id>-floor.png}). What it boarded through
-     * and where the rider stands against the floor are logged.
+     * step), or by right-click if it has no doors — then moved to each
+     * driver's chair in turn (or the middle of the car) and seated; a shot
+     * from every chair ({@code rwat-stock-<id>-seat.png}, {@code -seat2.png}…)
+     * and one back over the floor wireframes ({@code rwat-stock-<id>-floor.png}).
+     * What it boarded through, where the rider stands against the floor and
+     * which way each chair drives (the server's driver facing) are logged.
      */
     private static void stock(Minecraft mc, String scene) {
         String[] ids = scene.startsWith("stock:") ? scene.substring("stock:".length()).split(",") : STOCK;
@@ -991,6 +994,7 @@ public final class ClientAutoScene {
                 origin = stockBase.add(stockAt * 96.0, 0.0, 0.0);
                 waited = 0;
                 stockEntrance = -1;
+                stockChair = 0;
                 mc.options.hideGui = false;
                 command(mc, "gamemode creative");
                 command(mc, String.format(Locale.ROOT, "tp @s %.3f %.3f %.3f 0 0", origin.x, origin.y, origin.z));
@@ -1015,7 +1019,7 @@ public final class ClientAutoScene {
                 stockEntrance = entranceOf(type);
                 RailsWheelsAndTrains.LOGGER.info("[autoscene] {}: {} zones, doors {}, seat {}, way in {}",
                         id, type == null || type.interior() == null ? 0 : type.interior().zones().size(),
-                        doorList(type), type == null || type.cab() == null ? null : type.cab().seat(),
+                        doorList(type), type == null || type.cab() == null ? null : type.cab().seats(),
                         stockEntrance >= 0 ? type.doors().get(stockEntrance).id()
                                 : type != null && !type.doorsOnly() ? "right-click" : "none");
             }
@@ -1046,35 +1050,45 @@ public final class ClientAutoScene {
                             Integer.toBinaryString(car.doorMask()), mc.player.getVehicle()));
                 }
             }
-            // to the chair (or the middle of the car), seated
+            // to each chair in turn (or the middle of the car), seated
             case 121 -> {
                 if (riding) {
-                    moveRider(mc, car);
+                    moveRider(mc, car, stockChair);
                 }
             }
             case 126 -> {
-                if (riding && car.seat() != null) {
-                    PacketDistributor.sendToServer(new SeatPayload(car.getId(), true));
+                if (riding && car.seat(stockChair) != null) {
+                    PacketDistributor.sendToServer(new SeatPayload(car.getId(), true, stockChair));
                 }
             }
             case 136 -> {
-                reportStand(mc, car, id + (car != null && car.isSeated(mc.player) ? ": seated" : ": standing"));
+                String chair = car != null && car.seat(stockChair) != null ? " chair " + stockChair : "";
+                reportStand(mc, car, id + chair + (car != null && car.isSeated(mc.player) ? ": seated" : ": standing"));
+                if (car != null && car.isSeated(mc.player)) {
+                    reportDriver(mc, car, id + chair);
+                }
                 mc.options.hideGui = true;
-                faceAlong(mc, car, chairYaw(type), 10.0F);
+                faceAlong(mc, car, chairYaw(type, stockChair), 10.0F);
             }
             case 150 -> {
                 if (riding && car.isSeated(mc.player)) {
-                    shot(mc, "rwat-stock-" + id + "-seat.png");
+                    shot(mc, "rwat-stock-" + id + "-seat" + (stockChair > 0 ? String.valueOf(stockChair + 1) : "") + ".png");
                 }
             }
             case 152 -> {
                 if (riding && car.isSeated(mc.player)) {
-                    PacketDistributor.sendToServer(new SeatPayload(car.getId(), false));
+                    PacketDistributor.sendToServer(new SeatPayload(car.getId(), false, -1));
+                }
+            }
+            case 156 -> {
+                if (riding && car.seat(stockChair + 1) != null) {
+                    stockChair++;
+                    stockTick = 120; // the next chair
                 }
             }
             case 158 -> {
                 com.muzhik17.trainsmod.client.ClientFloorDebug.setShown(true);
-                faceAlong(mc, car, chairYaw(type) + 180.0F, type != null && type.cab() != null ? 35.0F : 20.0F);
+                faceAlong(mc, car, chairYaw(type, stockChair) + 180.0F, type != null && type.cab() != null ? 35.0F : 20.0F);
             }
             case 172 -> {
                 if (riding) {
@@ -1133,9 +1147,22 @@ public final class ClientAutoScene {
         return max;
     }
 
-    /** Where the chair looks, in degrees off the model's forward; 0 without one. */
-    private static float chairYaw(com.muzhik17.trainsmod.stock.WagonType type) {
-        return type != null && type.cab() != null && type.cab().seat() != null ? type.cab().seat().yaw() : 0.0F;
+    /** Where chair {@code chair} looks, in degrees off the model's forward; 0 without it. */
+    private static float chairYaw(com.muzhik17.trainsmod.stock.WagonType type, int chair) {
+        return type != null && type.cab() != null && chair < type.cab().seats().size()
+                ? type.cab().seats().get(chair).yaw() : 0.0F;
+    }
+
+    /** Log whether the seated player drives the train and which way (the server's driver facing). */
+    private static void reportDriver(Minecraft mc, WagonEntity car, String what) {
+        onServerCar(mc, car, (wagon, player) -> {
+            var level = player.serverLevel();
+            var consist = com.muzhik17.trainsmod.consist.ConsistManager.get(level).byId(wagon.getConsistId());
+            var driver = consist == null ? null : com.muzhik17.trainsmod.consist.ConsistManager.driverOf(level, consist);
+            RailsWheelsAndTrains.LOGGER.info("[autoscene] {}: drives {}, facing {} (flipped {}), the train's cab facing {}",
+                    what, driver != null && driver.player() == player, driver == null ? 0 : driver.facing(),
+                    wagon.isFlipped(), consist == null ? 0 : consist.cabFacing());
+        });
     }
 
     /**
@@ -1202,21 +1229,30 @@ public final class ClientAutoScene {
     }
 
     /**
-     * Move the walking local player to the floor by the chair, or the middle
-     * of the car without one: the client's predicted place and the server's
+     * Move the walking local player to the floor by the chair (walked to
+     * from the last chair if it has no floor under it), or the middle of the
+     * car without one: the client's predicted place and the server's
      * (private to the entity — a dev-only scene reaches it by reflection
      * rather than walk the way).
      */
     @SuppressWarnings("unchecked")
-    private static void moveRider(Minecraft mc, WagonEntity car) {
+    private static void moveRider(Minecraft mc, WagonEntity car, int chair) {
         var type = car.typeNow();
         if (type == null || type.interior() == null) {
             return;
         }
-        var seat = car.seat();
-        Vector3d feet = type.interior().inFrame(car.isFlipped()).clampFeet(seat != null
-                ? new Vector3d(seat.x(), seat.y(), seat.z()) : new Vector3d(),
-                com.muzhik17.trainsmod.kinematics.RiderWalk.PLAYER_HALF_WIDTH);
+        var seat = car.seat(chair);
+        var interior = type.interior().inFrame(car.isFlipped());
+        double m = com.muzhik17.trainsmod.kinematics.RiderWalk.PLAYER_HALF_WIDTH;
+        Vector3d from = com.muzhik17.trainsmod.client.ClientWalk.get(mc.player.getId());
+        Vector3d nearest = interior.clampFeet(seat != null ? new Vector3d(seat.x(), seat.y(), seat.z()) : new Vector3d(), m);
+        // a chair off the floor (the assistant's, beside the desk): walked to from
+        // the last chair, as a player would — the nearest floor may be behind a wall
+        Vector3d feet = seat != null && chair > 0 && from != null
+                && Math.hypot(nearest.x - seat.x(), nearest.z - seat.z()) > 0.5
+                ? com.muzhik17.trainsmod.kinematics.RiderWalk.toward(from, seat.x(), seat.z(), interior,
+                        car.framedDoors(), car.doorMask())
+                : nearest;
         com.muzhik17.trainsmod.client.ClientWalk.put(mc.player.getId(), feet);
         onServerCar(mc, car, (wagon, player) -> {
             try {

@@ -10,10 +10,12 @@ import com.muzhik17.trainsmod.stock.WagonType;
 /**
  * Checks a type's walkable floor, doors and driver's chair the way {@link
  * RiderWalk} will use them (SPEC §9.6, §9.8) — the mistakes a pack author
- * makes measuring by hand: a zone no player fits in, parts of the floor
- * nobody can walk between, a door the floor doesn't end at (so it can't be
+ * makes measuring by hand: a zone no player fits in, a part of the floor
+ * nobody can walk to (from the first zone or a way in of its own — the
+ * other end's cab of a double-ended locomotive has its own steps), a door the floor doesn't end at (so it can't be
  * walked through), a gangway door that isn't in an end wall, a cab floor
- * without a driver's chair, a chair not over the floor. Pure; the type
+ * without a driver's chair, a chair nobody can stand near enough to sit in
+ * (or at the wrong height for the floor there). Pure; the type
  * registry logs what it finds on load, and a unit test runs it over every
  * type of the generated packs.
  */
@@ -22,7 +24,7 @@ public final class FloorCheck {
     private static final double M = RiderWalk.PLAYER_HALF_WIDTH;
     /** Thicker than this, a door box is more than its leaf (handles, frame — fine) or wrong. */
     private static final double MAX_DOOR_THICKNESS = 0.6;
-    /** The cushion top above the floor a sitting player fits: the seated feet hang SIT_DROP below it. */
+    /** The cushion top above the floor by it a sitting player fits: the seated feet hang SIT_DROP below it. */
     private static final double MIN_SEAT_HEIGHT = 0.2;
     private static final double MAX_SEAT_HEIGHT = 1.5;
     /** Step along a door's span when looking for a place to walk out through it. */
@@ -35,10 +37,10 @@ public final class FloorCheck {
     public static List<String> problems(WagonType type) {
         List<String> out = new ArrayList<>();
         WagonType.Interior interior = type.interior();
-        WagonType.Seat seat = type.cab() != null ? type.cab().seat() : null;
+        List<WagonType.Seat> seats = type.cab() != null ? type.cab().seats() : List.of();
         if (interior == null) {
-            if (seat != null) {
-                out.add("cab.seat without an interior: the chair needs a floor to walk to it");
+            if (!seats.isEmpty()) {
+                out.add("cab.seats without an interior: a chair needs a floor to walk to it");
             }
             return out;
         }
@@ -74,9 +76,11 @@ public final class FloorCheck {
             union(parent, link[0], link[1]);
         }
         List<WagonType.Door> doors = type.doors();
+        List<Integer> waysIn = new ArrayList<>(); // the floor pieces outside and gangway doors open onto
         for (int d = 0; d < doors.size(); d++) {
             WagonType.Door door = doors.get(d);
             String name = "door " + d + " '" + door.id() + "'";
+            int piece;
             double thick = door.axis() == 0 ? door.maxX() - door.minX() : door.maxZ() - door.minZ();
             if (thick > MAX_DOOR_THICKNESS) {
                 out.add(String.format(Locale.ROOT, "%s is %.2f thick: is the box the door leaf?", name, thick));
@@ -102,45 +106,62 @@ public final class FloorCheck {
                 if (first < 0) {
                     out.add(name + " (inner) touches no floor");
                 }
-            } else if (!walkableThrough(door, region)) {
+            } else if ((piece = walkablePiece(door, region)) >= 0) {
+                waysIn.add(piece);
+            } else {
                 out.add(name + " isn't where the floor ends: nobody can walk through it"
                         + " (a player must fit in front of it, inside its span, with the floor ending"
                         + " within " + RiderWalk.DOOR_WALL_SLACK + " of its inner face)");
             }
         }
         if (!inZone.isEmpty() && !inZone.get(0).isEmpty()) {
-            int home = find(parent, inZone.get(0).get(0));
+            // reached: zone 0's part of the floor, and every part a way in opens onto
+            java.util.Set<Integer> reachedParts = new java.util.HashSet<>();
+            reachedParts.add(find(parent, inZone.get(0).get(0)));
+            for (int p : waysIn) {
+                reachedParts.add(find(parent, p));
+            }
             List<Integer> cut = new ArrayList<>();
             for (int i = 1; i < zones.size(); i++) {
                 boolean reached = false;
                 for (int p : inZone.get(i)) {
-                    reached |= find(parent, p) == home;
+                    reached |= reachedParts.contains(find(parent, p));
                 }
                 if (!inZone.get(i).isEmpty() && !reached) {
                     cut.add(i);
                 }
             }
             if (!cut.isEmpty()) {
-                out.add("floor zones " + cut + " can't be walked to from zone 0: join them (zones that"
-                        + " touch join) or put an inner door between them");
+                out.add("floor zones " + cut + " can't be walked to from zone 0 or a way in: join them"
+                        + " (zones that touch join), put an inner door between them, or a door out of them");
             }
         }
-        if (type.cab() != null && seat == null) {
-            out.add("a walkable cab needs the driver's chair (cab.seat): in a cab with a floor the keys"
-                    + " drive only from the chair");
+        if (type.cab() != null && seats.isEmpty()) {
+            out.add("a walkable cab needs a driver's chair (cab.seats): in a cab with a floor the keys"
+                    + " drive only from a chair");
         }
-        if (seat != null) {
-            boolean over = false;
-            for (WagonType.Interior.Zone z : zones) {
-                double height = seat.y() - z.minY();
-                if (z.holds(seat.x(), seat.z(), 0.0) && height >= MIN_SEAT_HEIGHT && height <= MAX_SEAT_HEIGHT) {
-                    over = true;
+        // a chair needs floor to sit down from: a place to stand within reach,
+        // the cushion above the floor there (the chair itself may stand off
+        // the floor — the assistant's beside the desk: standing up walks the
+        // driver to beside it, RiderWalk.toward)
+        for (int i = 0; i < seats.size(); i++) {
+            WagonType.Seat seat = seats.get(i);
+            double reach = Double.POSITIVE_INFINITY;
+            double floor = Double.NaN;
+            for (FloorRegion.Piece piece : pieces) {
+                double[] c = piece.clamp(seat.x(), seat.z());
+                double d = Math.hypot(c[0] - seat.x(), c[1] - seat.z());
+                if (d < reach) {
+                    reach = d;
+                    floor = interior.floorAt(c[0], c[1], M);
                 }
             }
-            if (!over) {
-                out.add(String.format(Locale.ROOT, "cab.seat (%.2f, %.2f, %.2f) isn't over a floor zone, %.1f..%.1f"
-                        + " above it (the seat is the top of the cushion)",
-                        seat.x(), seat.y(), seat.z(), MIN_SEAT_HEIGHT, MAX_SEAT_HEIGHT));
+            double height = seat.y() - floor;
+            if (!(reach <= RiderWalk.SEAT_REACH) || !(height >= MIN_SEAT_HEIGHT && height <= MAX_SEAT_HEIGHT)) {
+                out.add(String.format(Locale.ROOT, "cab.seats[%d] (%.2f, %.2f, %.2f): the nearest place to stand"
+                        + " is %.2f off (sitting reaches %.1f), its floor %.2f below the cushion (%.1f..%.1f;"
+                        + " the seat is the top of the cushion)", i, seat.x(), seat.y(), seat.z(), reach,
+                        RiderWalk.SEAT_REACH, height, MIN_SEAT_HEIGHT, MAX_SEAT_HEIGHT));
             }
         }
         return out;
@@ -153,11 +174,18 @@ public final class FloorCheck {
      * ends at its inner face.
      */
     static boolean walkableThrough(WagonType.Door door, FloorRegion region) {
+        return walkablePiece(door, region) >= 0;
+    }
+
+    /** The piece of the region a rider walks through {@code door} from (see {@link #walkableThrough}), −1 if none. */
+    private static int walkablePiece(WagonType.Door door, FloorRegion region) {
         boolean side = door.axis() == 0;
         int out = door.outward();
         double lo = door.spanMin() + RiderWalk.DOOR_SPAN_INSET;
         double hi = door.spanMax() - RiderWalk.DOOR_SPAN_INSET;
-        for (FloorRegion.Piece p : region.pieces()) {
+        List<FloorRegion.Piece> pieces = region.pieces();
+        for (int i = 0; i < pieces.size(); i++) {
+            FloorRegion.Piece p = pieces.get(i);
             double pLo = Math.max(lo, side ? p.minZ() : p.minX());
             double pHi = Math.min(hi, side ? p.maxZ() : p.maxX());
             if (pHi < pLo) {
@@ -167,14 +195,14 @@ public final class FloorCheck {
             for (double along = pLo; ; along = Math.min(pHi, along + SPAN_STEP)) {
                 double wall = side ? region.reach(across, along, 0, out) : region.reach(along, across, 2, out);
                 if (!Double.isNaN(wall) && RiderWalk.facesDoor(wall, door)) {
-                    return true;
+                    return i;
                 }
                 if (along >= pHi) {
                     break;
                 }
             }
         }
-        return false;
+        return -1;
     }
 
     /** Where a rider's centre may be in an open inner door, as {@link RiderWalk} bridges it: {minX, minZ, maxX, maxZ}. */

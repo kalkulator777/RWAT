@@ -93,8 +93,9 @@ public final class ClientCabInteract {
             double distance, float[] position, float[] sent) {
     }
 
+    /** A control, or driver's chair {@code seat} (its index in {@code cab.seats}; −1 = a control). */
     private record Pick(WagonEntity wagon, StockModel.Control control, Vector3f hit,
-            double distance, boolean seat) {
+            double distance, int seat) {
     }
 
     private ClientCabInteract() {
@@ -121,10 +122,10 @@ public final class ClientCabInteract {
         return now != null && now.wagon == wagon && now.control == control;
     }
 
-    /** True if this wagon's driver's chair is under the crosshair. */
-    public static boolean seatHighlighted(WagonEntity wagon) {
+    /** The driver's chair of this wagon under the crosshair (its index in {@code cab.seats}), −1 if none. */
+    public static int highlightedSeat(WagonEntity wagon) {
         Pick now = hover;
-        return grab == null && now != null && now.wagon == wagon && now.seat;
+        return grab == null && now != null && now.wagon == wagon ? now.seat : -1;
     }
 
     /**
@@ -142,7 +143,7 @@ public final class ClientCabInteract {
         if (now == null) {
             return List.of();
         }
-        if (now.seat) {
+        if (now.seat >= 0) {
             return List.of(Component.translatable("control.railswheelsandtrains.seat"),
                     Component.translatable("control.railswheelsandtrains.seat_hint")
                             .withStyle(ChatFormatting.GRAY));
@@ -200,8 +201,8 @@ public final class ClientCabInteract {
         event.setCanceled(true);
         event.setSwingHand(false);
         armed = false;
-        if (pick.seat) {
-            PacketDistributor.sendToServer(new SeatPayload(pick.wagon.getId(), true));
+        if (pick.seat >= 0) {
+            PacketDistributor.sendToServer(new SeatPayload(pick.wagon.getId(), true, pick.seat));
             return;
         }
         StockModel.Control control = pick.control;
@@ -397,18 +398,24 @@ public final class ClientCabInteract {
             Vector3d dir = new Vector3d(toModel(wagon, eye.add(look))).sub(o);
             // nothing behind a wall of the model is reached (the desk, a partition, the hull)
             double wall = ClientWagonRay.wall(slot.type().id(), model, o, dir, reach) + ClientWagonRay.WALL_SLACK;
-            // the driver's chair, for a rider of this wagon who isn't in it
-            WagonType.Seat seat = slot.type().cab() != null ? slot.type().cab().seat() : null;
-            if (seat != null && player.getVehicle() == wagon && !wagon.isSeated(player)) {
-                double[] box = seatBox(seat);
-                double t = HullCollision.rayBox(o, dir, box[0], box[1], box[2], box[3], box[4], box[5]);
-                if (t >= 0.0 && t <= reach && t <= wall && (best == null || t < best.distance)) {
-                    best = new Pick(wagon, null, null, t, true);
+            // the driver's chairs nobody sits in, for a rider of this wagon who isn't in one
+            List<WagonType.Seat> chairs = slot.type().cab() != null ? slot.type().cab().seats() : List.of();
+            int sittingIn = player.getVehicle() == wagon ? wagon.chairOf(player) : -1;
+            if (player.getVehicle() == wagon && sittingIn < 0) {
+                for (int i = 0; i < chairs.size(); i++) {
+                    if (wagon.seatedIn(i) >= 0) {
+                        continue;
+                    }
+                    double[] box = seatBox(chairs.get(i));
+                    double t = HullCollision.rayBox(o, dir, box[0], box[1], box[2], box[3], box[4], box[5]);
+                    if (t >= 0.0 && t <= reach && t <= wall && (best == null || t < best.distance)) {
+                        best = new Pick(wagon, null, null, t, i);
+                    }
                 }
             }
             // the chair this player sits in (a WIDGET in the asset, ChME3 WIDGET_4) is under
             // every look down at the desk: it never takes the pick
-            WagonType.Seat sitting = seat != null && wagon.isSeated(player) ? seat : null;
+            WagonType.Seat sitting = sittingIn >= 0 && sittingIn < chairs.size() ? chairs.get(sittingIn) : null;
             Matrix4f m = new Matrix4f();
             for (StockModel.Control control : model.controls()) {
                 ObjectRole.Control role = control.role();
@@ -438,7 +445,7 @@ public final class ClientCabInteract {
                 }
                 Vector3f hit = new Vector3f((float) (o.x + dir.x * t), (float) (o.y + dir.y * t),
                         (float) (o.z + dir.z * t));
-                best = new Pick(wagon, control, hit, t, false);
+                best = new Pick(wagon, control, hit, t, -1);
             }
         }
         if (best == null || ClientDoorInteract.doorDistance(mc, player) < best.distance) {
@@ -456,7 +463,7 @@ public final class ClientCabInteract {
     }
 
     /**
-     * The driver's chair click box in the model frame, {@code {minX, minY,
+     * A driver's chair click box in the model frame, {@code {minX, minY,
      * minZ, maxX, maxY, maxZ}}: the cushion top ± a chair's size.
      */
     public static double[] seatBox(WagonType.Seat seat) {

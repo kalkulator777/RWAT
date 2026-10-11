@@ -127,6 +127,45 @@ public final class RiderWalk {
     }
 
     /**
+     * Walk straight at a floor-plane point as far as the floor lets the body
+     * go (SPEC §9: a driver standing up from a chair, from where they sat down
+     * towards it): {@link #step}s at the walk speed, sliding along walls, so it
+     * ends beside the point when the point itself isn't floor — never through
+     * a wall onto floor beyond it, as the nearest floor point could be.
+     * Pure, so the client predicts the same spot the server sets.
+     *
+     * @param from     where the walk starts (local feet, pose frame)
+     * @param interior the walkable floor <b>in the pose frame</b>
+     * @param doors    the type's doors <b>in the pose frame</b>
+     * @param openMask bit {@code i} set = door {@code i} open
+     */
+    public static Vector3d toward(Vector3d from, double x, double z, WagonType.Interior interior,
+            List<WagonType.Door> doors, int openMask) {
+        Vector3d at = new Vector3d(from);
+        for (int i = 0; i < TOWARD_STEPS; i++) {
+            double dx = x - at.x;
+            double dz = z - at.z;
+            double left = Math.hypot(dx, dz);
+            if (left < 1.0e-3) {
+                break;
+            }
+            // wagon yaw 0: the look yaw is the local direction (0 = +Z, +90 = −X)
+            float yaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
+            Vector3d next = step(at, Math.min(1.0, left / WALK_SPEED), 0.0, yaw, 0.0F, interior, doors, openMask);
+            if (next.distanceSquared(at) < 1.0e-8) {
+                break; // against the wall
+            }
+            at = next;
+        }
+        return at;
+    }
+
+    /** How far a walking rider may stand from a driver's chair and still sit down in it (feet to chair, horizontally). */
+    public static final double SEAT_REACH = 2.5;
+    /** Steps {@link #toward} takes at most: past {@link #SEAT_REACH} at the walk speed, with room to slide. */
+    private static final int TOWARD_STEPS = 64;
+
+    /**
      * The furthest a blocked step may ease sideways onto floor beside it:
      * under the 0.6 of no room any wall leaves where a body fits (the
      * ChME3's cab door opens 0.2 wider than the aisle behind it — play-test).

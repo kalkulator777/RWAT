@@ -242,9 +242,39 @@ class WagonTypeParserTest {
         assertFalse(type.doors().get(0).fixed());
         assertTrue(type.doors().get(1).fixed());
         assertTrue(type.doorsOnly(), "the steps are a way in");
-        assertNotNull(type.cab().seat());
-        assertEquals(-4.654, type.cab().seat().z(), 1.0e-9);
+        assertEquals(1, type.cab().seats().size(), "the one-chair form still reads");
+        assertEquals(-4.654, type.cab().seats().get(0).z(), 1.0e-9);
         assertTrue(type.drivable() && type.boardable());
+    }
+
+    /**
+     * Several driver's chairs (SPEC §9): the assistant's beside the driver's,
+     * the other end's cab looking back — from there the train's forward is
+     * the model's rear.
+     */
+    @Test
+    void parsesSeveralChairs() {
+        WagonType type = WagonTypeParser.parse("mvp:m62", json("""
+                {
+                  "length": 17.5, "bogies": [4.4, -4.4], "mass_t": 116,
+                  "cab": { "seats": [
+                    { "at": [-0.84, 2.937, 7.5] },
+                    { "at": [1.106, 2.937, 7.487], "yaw": 0 },
+                    { "at": [0.856, 2.937, -7.512], "yaw": 180 },
+                    { "at": [1.074, 3.153, -3.942], "yaw": 90 }
+                  ] }
+                }"""));
+        assertEquals(4, type.cab().seats().size());
+        assertEquals(1.106, type.cab().seats().get(1).x(), 1.0e-9);
+        assertFalse(type.cab().seats().get(0).facesBack());
+        assertTrue(type.cab().seats().get(2).facesBack());
+        assertFalse(type.cab().seats().get(3).facesBack(), "square to the side counts as forward");
+        assertFalse(type.cab().seats().get(2).inFrame(true).facesBack(), "a flipped wagon turns it round");
+        assertTrue(WagonTypeParser.parse("x:y", json("""
+                { "length": 10, "bogies": [3, -3], "mass_t": 10, "cab": {} }""")).cab().seats().isEmpty());
+        assertThrows(JsonSyntaxException.class, () -> WagonTypeParser.parse("x:y", json("""
+                { "length": 10, "bogies": [3, -3], "mass_t": 10,
+                  "cab": { "seat": [0, 2, 0], "seats": [ { "at": [0, 2, 1] } ] } }""")));
     }
 
     /** Doors between zones alone are no way in: the right-click board stays. */

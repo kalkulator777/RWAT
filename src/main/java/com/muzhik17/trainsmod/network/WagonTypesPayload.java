@@ -68,9 +68,8 @@ public record WagonTypesPayload(Map<String, WagonType> types) implements CustomP
         }
         buf.writeBoolean(type.cab() != null);
         if (type.cab() != null) {
-            WagonType.Seat seat = type.cab().seat();
-            buf.writeBoolean(seat != null);
-            if (seat != null) {
+            buf.writeVarInt(type.cab().seats().size());
+            for (WagonType.Seat seat : type.cab().seats()) {
                 buf.writeDouble(seat.x());
                 buf.writeDouble(seat.y());
                 buf.writeDouble(seat.z());
@@ -132,10 +131,13 @@ public record WagonTypesPayload(Map<String, WagonType> types) implements CustomP
                 : null;
         WagonType.Cab cab = null;
         if (buf.readBoolean()) {
-            cab = new WagonType.Cab(buf.readBoolean()
-                    ? new WagonType.Seat(buf.readDouble(), buf.readDouble(), buf.readDouble(),
-                            buf.readFloat())
-                    : null);
+            int seatCount = buf.readVarInt();
+            List<WagonType.Seat> seats = new ArrayList<>(seatCount);
+            for (int i = 0; i < seatCount; i++) {
+                seats.add(new WagonType.Seat(buf.readDouble(), buf.readDouble(), buf.readDouble(),
+                        buf.readFloat()));
+            }
+            cab = new WagonType.Cab(seats);
         }
         WagonType.Brakes brakes = new WagonType.Brakes(
                 buf.readDouble(), buf.readDouble(), buf.readDouble(),

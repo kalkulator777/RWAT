@@ -223,9 +223,9 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
         if (ClientFloorDebug.shown()) {
             ClientFloorDebug.draw(poseStack, buffers, slot.type()); // SPEC §9.6 debug view
         }
-        if (ClientCabInteract.seatHighlighted(wagon) && slot.type().cab() != null
-                && slot.type().cab().seat() != null) {
-            double[] box = ClientCabInteract.seatBox(slot.type().cab().seat());
+        int chair = ClientCabInteract.highlightedSeat(wagon);
+        if (chair >= 0 && slot.type().cab() != null && chair < slot.type().cab().seats().size()) {
+            double[] box = ClientCabInteract.seatBox(slot.type().cab().seats().get(chair));
             LevelRenderer.renderLineBox(poseStack, buffers.getBuffer(RenderType.lines()),
                     box[0], box[1], box[2], box[3], box[4], box[5],
                     OUTLINE_R, OUTLINE_G, OUTLINE_B, OUTLINE_A);

@@ -50,6 +50,9 @@ import com.google.gson.JsonSyntaxException;
  */
 public final class WagonTypeParser {
 
+    /** Driver's chairs a cab may have at most (network sanity: each is synced as who sits there). */
+    public static final int MAX_SEATS = 16;
+
     private WagonTypeParser() {
     }
 
@@ -195,17 +198,35 @@ public final class WagonTypeParser {
     }
 
     /**
-     * The {@code cab} section (SPEC §5.1, §9): presence = drivable; an
-     * optional driver's chair {@code "seat": [x,y,z]} (top of the cushion,
-     * model space) facing {@code "seat_yaw"} degrees (0 = forward).
+     * The {@code cab} section (SPEC §5.1, §9): presence = drivable; optional
+     * driver's chairs {@code "seats": [ {"at": [x,y,z], "yaw": deg}, … ]} —
+     * {@code at} the top of the cushion (model space), facing {@code yaw}
+     * degrees (0 = forward, 180 = the other end's cab; default 0). The older
+     * one-chair form {@code "seat": [x,y,z], "seat_yaw": deg} still reads.
      */
     private static WagonType.Cab cab(JsonObject cab) {
-        if (!cab.has("seat")) {
+        if (cab.has("seat") && cab.has("seats")) {
+            throw new JsonSyntaxException("'cab' has both 'seat' and 'seats': list every chair in 'seats'");
+        }
+        if (cab.has("seat")) {
+            double[] seat = vec3(cab, "seat");
+            return new WagonType.Cab(List.of(new WagonType.Seat(seat[0], seat[1], seat[2],
+                    (float) optionalDouble(cab, "seat_yaw"))));
+        }
+        if (!cab.has("seats")) {
             return new WagonType.Cab();
         }
-        double[] seat = vec3(cab, "seat");
-        return new WagonType.Cab(new WagonType.Seat(seat[0], seat[1], seat[2],
-                (float) optionalDouble(cab, "seat_yaw")));
+        JsonArray array = cab.getAsJsonArray("seats");
+        if (array.size() > MAX_SEATS) {
+            throw new JsonSyntaxException("'seats' lists more than " + MAX_SEATS + " chairs");
+        }
+        List<WagonType.Seat> seats = new ArrayList<>();
+        for (JsonElement element : array) {
+            JsonObject seat = element.getAsJsonObject();
+            double[] at = vec3(seat, "at");
+            seats.add(new WagonType.Seat(at[0], at[1], at[2], (float) optionalDouble(seat, "yaw")));
+        }
+        return new WagonType.Cab(seats);
     }
 
     /**

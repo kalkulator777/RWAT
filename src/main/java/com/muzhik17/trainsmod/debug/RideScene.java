@@ -103,7 +103,7 @@ public final class RideScene {
             // the driver stands up: nobody at the controls of a train at rest, the engine stops
             case 1180 -> {
                 if (mc.player.getVehicle() instanceof WagonEntity loco) {
-                    PacketDistributor.sendToServer(new SeatPayload(loco.getId(), false));
+                    PacketDistributor.sendToServer(new SeatPayload(loco.getId(), false, -1));
                 }
             }
             case 1240 -> mc.stop();
@@ -148,12 +148,12 @@ public final class RideScene {
                 return;
             }
             WagonType type = loco.typeNow();
-            if (type == null || type.interior() == null || loco.seat() == null) {
+            if (type == null || type.interior() == null || loco.seat(0) == null) {
                 player.startRiding(loco, true);
                 return;
             }
             if (player.getVehicle() != loco) {
-                WagonType.Seat seat = loco.seat();
+                WagonType.Seat seat = loco.seat(0);
                 Vector3d chair = PoseMath.localToWorld(new Vector3d(loco.getX(), loco.getY(), loco.getZ()),
                         loco.getYRot(), loco.getXRot(), new Vector3d(seat.x(), seat.y(), seat.z()));
                 player.stopRiding();
@@ -168,7 +168,7 @@ public final class RideScene {
                     return;
                 }
             }
-            loco.sitDriver(player);
+            loco.sitDriver(player, 0);
             RailsWheelsAndTrains.LOGGER.info("[ride] seated: {}", loco.isSeated(player));
         });
     }

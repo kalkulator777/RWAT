@@ -59,8 +59,8 @@ public final class ClientWalkInput {
     private static Float prevWagonYaw;
     /** The ridden wagon's flipped flag last tick, to notice a coupling turning it; null when not aboard. */
     private static Boolean prevFlipped;
-    /** Whether this player sat in the driver's chair last tick (SPEC §9). */
-    private static boolean prevSeated;
+    /** The driver's chair this player sat in last tick (pose frame, SPEC §9), null if none. */
+    private static WagonType.Seat prevSeat;
     /** Sneak-key state, to send the stand-up as a single edge. */
     private static boolean sneakWasDown = true;
     /** Entity id of the wagon the predicted feet belong to, or -1 when not walking one. */
@@ -77,7 +77,7 @@ public final class ClientWalkInput {
             useWasDown = true;
             prevWagonYaw = null;
             prevFlipped = null;
-            prevSeated = false;
+            prevSeat = null;
             walkedWagon = -1;
             ClientWalk.clearLocalOwner();
             if (player != null) {
@@ -136,12 +136,12 @@ public final class ClientWalkInput {
         }
         prevWagonYaw = wagonYaw;
 
-        // the driver's chair (SPEC §9): seated, the keys drive (ClientDriveInput)
+        // a driver's chair (SPEC §9): seated, the keys drive (ClientDriveInput)
         // and sneaking stands up; the feet are the chair's, not predicted
-        WagonType.Seat seat = wagon.seat();
-        if (seat != null && wagon.isSeated(player)) {
+        WagonType.Seat seat = wagon.seatOf(player);
+        if (seat != null) {
             float facing = wagonYaw + seat.yaw();
-            if (!prevSeated) {
+            if (prevSeat == null) {
                 player.setYRot(facing); // sit down facing the desk
                 player.yRotO = facing;
                 sneakWasDown = true;   // the key held while sitting down doesn't count
@@ -149,19 +149,22 @@ public final class ClientWalkInput {
             player.setYBodyRot(facing);
             boolean sneak = mc.options.keyShift.isDown();
             if (sneak && !sneakWasDown) {
-                PacketDistributor.sendToServer(new SeatPayload(wagon.getId(), false));
+                PacketDistributor.sendToServer(new SeatPayload(wagon.getId(), false, -1));
             }
             sneakWasDown = sneak;
-            prevSeated = true;
+            prevSeat = seat;
             useWasDown = true;
             return;
         }
-        if (prevSeated && seat != null) {
-            // stood up: the server puts the feet beside the chair — predict the same
-            ClientWalk.put(player.getId(), interior.clampFeet(
-                    new Vector3d(seat.x(), seat.y(), seat.z()), RiderWalk.PLAYER_HALF_WIDTH));
+        if (prevSeat != null) {
+            // stood up: the server walks the feet from where they sat down from to
+            // beside the chair — predict the same (the feet kept from before sitting)
+            Vector3d feet = wagon.standingFeet(ClientWalk.get(player.getId()), prevSeat);
+            if (feet != null) {
+                ClientWalk.put(player.getId(), feet);
+            }
         }
-        prevSeated = false;
+        prevSeat = null;
 
         float forward = (mc.options.keyUp.isDown() ? 1f : 0f) - (mc.options.keyDown.isDown() ? 1f : 0f);
         float strafe = (mc.options.keyLeft.isDown() ? 1f : 0f) - (mc.options.keyRight.isDown() ? 1f : 0f);

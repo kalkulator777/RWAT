@@ -676,8 +676,9 @@ public final class ConsistManager extends SavedData {
 
     /**
      * Who drives a consist: the player seated in a cab, the cab wagon, and
-     * which way along the path that cab faces (+1 = +s; a cab in a flipped
-     * slot faces −s).
+     * which way along the path the driver faces (+1 = +s; a cab in a flipped
+     * slot faces −s, and so does a chair looking to the model's rear — the
+     * other end's cab).
      */
     public record Driver(ServerPlayer player, WagonEntity cab, int facing) {
     }
@@ -686,11 +687,12 @@ public final class ConsistManager extends SavedData {
      * The consist's driver (SPEC §6.12: any cab, not just the head wagon):
      * the player at the controls of the first {@linkplain WagonType#drivable()
      * cab} wagon, by index, that has one — with several manned cabs the
-     * front-most is in control. At the controls (SPEC §9.7) means in the
-     * driver's chair of a walkable cab, or riding a cab without a walkable
-     * interior: someone walking about a cab — or the saloon of an EMU's head
-     * car — never drives, the chair decides, not the kind of wagon. Null if
-     * no cab is manned.
+     * front-most is in control, and with several manned chairs in one wagon
+     * (the assistant's chair, the other end's cab) the one listed first. At
+     * the controls (SPEC §9.7) means in a driver's chair of a walkable cab, or
+     * riding a cab without a walkable interior: someone walking about a cab —
+     * or the saloon of an EMU's head car — never drives, the chair decides,
+     * not the kind of wagon. Null if no cab is manned.
      */
     public static Driver driverOf(ServerLevel level, Consist consist) {
         List<UUID> ids = consist.wagonIds();
@@ -700,10 +702,22 @@ public final class ConsistManager extends SavedData {
             if (!slot.type().drivable() || !(level.getEntity(ids.get(i)) instanceof WagonEntity wagon)) {
                 continue;
             }
+            ServerPlayer driver = null;
+            int driverChair = Integer.MAX_VALUE;
             for (Entity passenger : wagon.getPassengers()) {
                 if (passenger instanceof ServerPlayer player && atControls(wagon, player)) {
-                    return new Driver(player, wagon, slot.flipped() ? -1 : 1);
+                    int chair = Math.max(wagon.chairOf(player), 0); // a cab without chairs: its one rider
+                    if (chair < driverChair) {
+                        driver = player;
+                        driverChair = chair;
+                    }
                 }
+            }
+            if (driver != null) {
+                List<WagonType.Seat> chairs = slot.type().cab().seats();
+                boolean back = wagon.isSeated(driver) && driverChair < chairs.size()
+                        && chairs.get(driverChair).facesBack();
+                return new Driver(driver, wagon, (slot.flipped() ? -1 : 1) * (back ? -1 : 1));
             }
         }
         return null;

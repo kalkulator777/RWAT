@@ -1,6 +1,7 @@
 package com.muzhik17.trainsmod.consist;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -89,9 +90,12 @@ public class WagonEntity extends Entity {
     /** Open doors: bit {@code i} = door {@code i} of the type's list (SPEC v1.5, doors); saved by id. */
     private static final EntityDataAccessor<Integer> DATA_DOORS =
             SynchedEntityData.defineId(WagonEntity.class, EntityDataSerializers.INT);
-    /** Entity id of the player in the driver's chair (SPEC §9), −1 = empty. */
-    private static final EntityDataAccessor<Integer> DATA_SEATED =
-            SynchedEntityData.defineId(WagonEntity.class, EntityDataSerializers.INT);
+    /**
+     * Who sits in the driver's chairs (SPEC §9): {@code "S"} = entity ids by
+     * chair index, −1 = empty; chairs past its end are empty too.
+     */
+    private static final EntityDataAccessor<CompoundTag> DATA_SEATED =
+            SynchedEntityData.defineId(WagonEntity.class, EntityDataSerializers.COMPOUND_TAG);
     /**
      * Control-group positions (SPEC §8–§9): group name → 0..1. The model's
      * light groups ({@code LCG_<name>}) and switches ({@code CG_<name>}) read
@@ -116,8 +120,6 @@ public class WagonEntity extends Entity {
      * play-test, not gospel.
      */
     private static final double SIT_DROP = 0.6;
-    /** How close (feet to chair, horizontally) a walking rider must be to sit down. */
-    private static final double SEAT_REACH = 2.5;
     /**
      * How far the seated driver may look round from the chair's facing,
      * degrees each way (vanilla's boat: 105) — the body stays to the desk, so
@@ -187,7 +189,7 @@ public class WagonEntity extends Entity {
         builder.define(DATA_CONSIST_ID, -1);
         builder.define(DATA_WAGON_INDEX, 0);
         builder.define(DATA_DOORS, 0);
-        builder.define(DATA_SEATED, -1);
+        builder.define(DATA_SEATED, new CompoundTag());
         builder.define(DATA_CONTROLS, new CompoundTag());
     }
 
@@ -349,34 +351,85 @@ public class WagonEntity extends Entity {
      * renderer asks this instead.
      */
     public boolean shouldRiderSit(Entity passenger) {
-        return passenger.getId() == seatedId() || shouldRiderSit();
+        return isSeated(passenger) || shouldRiderSit();
     }
 
-    // --- the driver's chair (SPEC §9) ---
+    // --- the driver's chairs (SPEC §9) ---
 
-    /** Entity id of the player in the driver's chair, −1 if empty. */
-    public int seatedId() {
-        return this.entityData.get(DATA_SEATED);
+    /** Entity ids in the driver's chairs by chair index, −1 = empty (may stop short of the last chair). */
+    private int[] seatedIds() {
+        return this.entityData.get(DATA_SEATED).getIntArray("S");
     }
 
-    /** True if this entity sits in the driver's chair here. */
+    /** Entity id of whoever sits in chair {@code chair}, −1 if it's empty. */
+    public int seatedIn(int chair) {
+        int[] ids = seatedIds();
+        return chair >= 0 && chair < ids.length ? ids[chair] : -1;
+    }
+
+    /** The chair this entity sits in here (its index in {@code cab.seats}), −1 if none. */
+    public int chairOf(Entity passenger) {
+        int[] ids = seatedIds();
+        for (int i = 0; i < ids.length; i++) {
+            if (ids[i] == passenger.getId()) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** True if this entity sits in one of the driver's chairs here. */
     public boolean isSeated(Entity passenger) {
-        return passenger.getId() == seatedId();
+        return chairOf(passenger) >= 0;
     }
 
-    /** The driver's chair in the pose frame (mirrored for a flipped wagon), or null if none. */
-    public WagonType.Seat seat() {
+    /** Put {@code entityId} in chair {@code chair}, −1 to empty it (server). */
+    private void setSeated(int chair, int entityId) {
+        int[] ids = seatedIds();
+        int[] next = Arrays.copyOf(ids, Math.max(ids.length, chair + 1));
+        Arrays.fill(next, ids.length, next.length, -1);
+        next[chair] = entityId;
+        CompoundTag tag = new CompoundTag();
+        tag.putIntArray("S", next);
+        this.entityData.set(DATA_SEATED, tag);
+    }
+
+    /**
+     * Driver's chair {@code chair} in the pose frame (mirrored for a flipped
+     * wagon), or null if there's no such chair (or no walkable interior).
+     */
+    public WagonType.Seat seat(int chair) {
         WagonType type = typeNow();
-        if (type == null || type.cab() == null || type.cab().seat() == null
-                || type.interior() == null) {
+        if (chair < 0 || type == null || type.cab() == null || type.interior() == null
+                || chair >= type.cab().seats().size()) {
             return null;
         }
-        return type.cab().seat().inFrame(isFlipped());
+        return type.cab().seats().get(chair).inFrame(isFlipped());
     }
 
-    /** World yaw the chair faces (the body of whoever sits in it), or NaN if there's no chair. */
-    public float seatFacing() {
-        WagonType.Seat seat = seat();
+    /** The chair this passenger sits in, in the pose frame, or null if they don't sit. */
+    public WagonType.Seat seatOf(Entity passenger) {
+        return seat(chairOf(passenger));
+    }
+
+    /**
+     * The chair the train is driven from here: the first manned one (the
+     * one in control, {@code ConsistManager.driverOf}), else the first; pose
+     * frame, null if there's none.
+     */
+    public WagonType.Seat deskSeat() {
+        int[] ids = seatedIds();
+        for (int i = 0; i < ids.length; i++) {
+            if (ids[i] >= 0 && seat(i) != null) {
+                return seat(i);
+            }
+        }
+        return seat(0);
+    }
+
+    /** World yaw this passenger's chair faces (their body), or NaN if they don't sit. */
+    public float seatFacing(Entity passenger) {
+        WagonType.Seat seat = seatOf(passenger);
         return seat == null ? Float.NaN : getYRot() + seat.yaw();
     }
 
@@ -397,11 +450,9 @@ public class WagonEntity extends Entity {
     /** The mouse turned a passenger (client): the seated driver's look stays within the chair's. */
     @Override
     public void onPassengerTurned(Entity passenger) {
-        if (passenger.getId() == seatedId()) {
-            float facing = seatFacing();
-            if (!Float.isNaN(facing)) {
-                clampSeatedLook(passenger, facing);
-            }
+        float facing = seatFacing(passenger);
+        if (!Float.isNaN(facing)) {
+            clampSeatedLook(passenger, facing);
         }
     }
 
@@ -411,36 +462,76 @@ public class WagonEntity extends Entity {
     }
 
     /**
-     * A walking rider sits down in the driver's chair (server, SPEC §9): only
-     * a rider of this wagon, near the chair, and only if it is free. Seated,
-     * the keys drive the train (as in a cab without an interior); sneaking
-     * stands back up.
+     * A walking rider sits down in driver's chair {@code chair} (server, SPEC
+     * §9): only a rider of this wagon not seated already, near the chair, and
+     * only if it is free. Seated, the keys drive the train (as in a cab
+     * without an interior) if theirs is the chair in control; sneaking stands
+     * back up.
      */
-    public void sitDriver(ServerPlayer player) {
-        WagonType.Seat seat = seat();
+    public void sitDriver(ServerPlayer player, int chair) {
+        WagonType.Seat seat = seat(chair);
         Vector3d local = riderLocal.get(player.getUUID());
-        if (seat == null || local == null || player.getVehicle() != this || seatedId() >= 0
-                || Math.hypot(local.x - seat.x(), local.z - seat.z()) > SEAT_REACH) {
+        if (seat == null || local == null || player.getVehicle() != this || isSeated(player)
+                || occupied(chair)
+                || Math.hypot(local.x - seat.x(), local.z - seat.z()) > RiderWalk.SEAT_REACH) {
             return;
         }
-        this.entityData.set(DATA_SEATED, player.getId());
+        setSeated(chair, player.getId());
         player.displayClientMessage(Component.translatable(inControl(player)
                 ? "message.railswheelsandtrains.seat_hint"
                 : "message.railswheelsandtrains.drive_other_cab_seated"), true);
     }
 
-    /** The seated driver stands up beside the chair, back to walking (server). */
+    /** True if someone aboard sits in chair {@code chair} (the id of a rider long gone doesn't count). */
+    private boolean occupied(int chair) {
+        int id = seatedIn(chair);
+        if (id < 0) {
+            return false;
+        }
+        for (Entity passenger : getPassengers()) {
+            if (passenger.getId() == id) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The seated driver stands up beside their chair, back to walking
+     * (server): from where they sat down from, a walk at the chair as far as
+     * the floor goes ({@link #standingFeet}).
+     */
     public void standDriver(ServerPlayer player) {
-        if (player.getId() != seatedId()) {
+        int chair = chairOf(player);
+        if (chair < 0) {
             return;
         }
-        this.entityData.set(DATA_SEATED, -1);
-        WagonType type = serverType();
-        WagonType.Seat seat = seat();
-        if (type != null && type.interior() != null && seat != null) {
-            riderLocal.put(player.getUUID(), type.interior().inFrame(isFlipped()).clampFeet(
-                    new Vector3d(seat.x(), seat.y(), seat.z()), RiderWalk.PLAYER_HALF_WIDTH));
+        setSeated(chair, -1);
+        WagonType.Seat seat = seat(chair);
+        Vector3d feet = seat == null ? null : standingFeet(riderLocal.get(player.getUUID()), seat);
+        if (feet != null) {
+            riderLocal.put(player.getUUID(), feet);
         }
+    }
+
+    /**
+     * Where a driver standing up from {@code seat} (pose frame) lands, both
+     * sides alike (the client predicts it): walked from {@code satFrom} — the
+     * feet they sat down from — straight at the chair as far as the floor
+     * lets them ({@link RiderWalk#toward}), so a chair with no floor under it
+     * (the assistant's, beside the desk) leaves them beside it, never through
+     * the wall behind it. Without {@code satFrom}, the floor nearest the chair.
+     * Null if this wagon has no walkable floor.
+     */
+    public Vector3d standingFeet(Vector3d satFrom, WagonType.Seat seat) {
+        WagonType type = typeNow();
+        if (type == null || type.interior() == null) {
+            return null;
+        }
+        WagonType.Interior interior = type.interior().inFrame(isFlipped());
+        Vector3d from = satFrom != null ? satFrom
+                : interior.clampFeet(new Vector3d(seat.x(), seat.y(), seat.z()), RiderWalk.PLAYER_HALF_WIDTH);
+        return RiderWalk.toward(from, seat.x(), seat.z(), interior, framedDoors(), doorMask());
     }
 
     /**
@@ -530,7 +621,7 @@ public class WagonEntity extends Entity {
      */
     public void setWalkInput(ServerPlayer player, float forward, float strafe, float yaw,
             boolean exit) {
-        if (player.getId() == seatedId()) {
+        if (isSeated(player)) {
             return; // seated: the keys drive (DriveInputPayload), sneaking stands up
         }
         WagonType type = serverType();
@@ -879,7 +970,7 @@ public class WagonEntity extends Entity {
         if (!hasPassenger(passenger)) {
             return;
         }
-        WagonType.Seat seat = passenger.getId() == seatedId() ? seat() : null;
+        WagonType.Seat seat = seatOf(passenger);
         Vector3d local = seat != null ? seatedFeet(seat)
                 : level().isClientSide
                         ? ClientWalk.get(passenger.getId())
@@ -994,8 +1085,9 @@ public class WagonEntity extends Entity {
     protected void removePassenger(Entity passenger) {
         super.removePassenger(passenger);
         riderLocal.remove(passenger.getUUID());
-        if (!level().isClientSide && passenger.getId() == seatedId()) {
-            this.entityData.set(DATA_SEATED, -1);
+        int chair = chairOf(passenger);
+        if (!level().isClientSide && chair >= 0) {
+            setSeated(chair, -1);
         }
     }
 

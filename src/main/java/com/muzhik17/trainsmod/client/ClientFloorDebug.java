@@ -23,7 +23,7 @@ import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
  * high; bright green at the floor: where a player's centre can stand), its
  * doors — way in/out cyan, between zones yellow, gangway magenta, opening
  * without a leaf grey — and the driver's chair (red). The way to check a
- * pack's measured {@code interior}/{@code doors}/{@code cab.seat} against the
+ * pack's measured {@code interior}/{@code doors}/{@code cab.seats} against the
  * model in game. Client-only, nothing is sent to the server.
  */
 @EventBusSubscriber(modid = RailsWheelsAndTrains.MODID, value = Dist.CLIENT)
@@ -97,10 +97,12 @@ public final class ClientFloorDebug {
             LevelRenderer.renderLineBox(pose, lines, door.minX(), door.minY(), door.minZ(),
                     door.maxX(), door.maxY(), door.maxZ(), r, g, b, 1.0F);
         }
-        if (type.cab() != null && type.cab().seat() != null) {
-            double[] box = ClientCabInteract.seatBox(type.cab().seat());
-            LevelRenderer.renderLineBox(pose, lines, box[0], box[1], box[2], box[3], box[4], box[5],
-                    1.0F, 0.2F, 0.2F, 1.0F);
+        if (type.cab() != null) {
+            for (WagonType.Seat seat : type.cab().seats()) {
+                double[] box = ClientCabInteract.seatBox(seat);
+                LevelRenderer.renderLineBox(pose, lines, box[0], box[1], box[2], box[3], box[4], box[5],
+                        1.0F, 0.2F, 0.2F, 1.0F);
+            }
         }
     }
 }

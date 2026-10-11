@@ -8,11 +8,12 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
 /**
- * Client→server: a walking rider sits down in the cab's driver's chair
- * (right-click on it) or the seated driver stands up (sneak) — SPEC §9. The
- * wagon checks the rider is aboard, near the chair and that it is free.
+ * Client→server: a walking rider sits down in one of the cab's driver's
+ * chairs (right-click on it; {@code seat} = its index in {@code cab.seats})
+ * or the seated driver stands up (sneak; {@code seat} unused) — SPEC §9.
+ * The wagon checks the rider is aboard, near the chair and that it is free.
  */
-public record SeatPayload(int wagonId, boolean sit) implements CustomPacketPayload {
+public record SeatPayload(int wagonId, boolean sit, int seat) implements CustomPacketPayload {
 
     public static final CustomPacketPayload.Type<SeatPayload> TYPE =
             new CustomPacketPayload.Type<>(
@@ -24,10 +25,11 @@ public record SeatPayload(int wagonId, boolean sit) implements CustomPacketPaylo
     private static void write(FriendlyByteBuf buf, SeatPayload payload) {
         buf.writeVarInt(payload.wagonId);
         buf.writeBoolean(payload.sit);
+        buf.writeVarInt(payload.seat + 1); // -1 (standing up) → 0
     }
 
     private static SeatPayload read(FriendlyByteBuf buf) {
-        return new SeatPayload(buf.readVarInt(), buf.readBoolean());
+        return new SeatPayload(buf.readVarInt(), buf.readBoolean(), buf.readVarInt() - 1);
     }
 
     @Override

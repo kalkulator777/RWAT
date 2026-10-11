@@ -115,13 +115,13 @@ public final class RwatNetwork {
         }
     }
 
-    /** Sit down in / stand up from a cab's driver's chair (SPEC §9). */
+    /** Sit down in / stand up from one of a cab's driver's chairs (SPEC §9). */
     private static void handleSeat(SeatPayload payload, IPayloadContext context) {
         if (context.player() instanceof ServerPlayer player
                 && player.getVehicle() instanceof WagonEntity wagon
                 && wagon.getId() == payload.wagonId()) {
             if (payload.sit()) {
-                wagon.sitDriver(player);
+                wagon.sitDriver(player, payload.seat());
             } else {
                 wagon.standDriver(player);
             }

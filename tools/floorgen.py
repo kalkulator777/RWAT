@@ -45,7 +45,7 @@ How it goes, in RWAT model space (+Z forward, X across, Y up):
 Per-type exceptions — generator input, a top-level "floor" key in
 packs/<recipe>/<id>.json (next to "name", "lights"; NOT inside "type"). All
 members optional; "floor": {} on a locomotive turns the generator on for it
-(a walkable cab also needs cab.seat, which stays manual); a "type.interior"
+(a walkable cab also needs cab.seats, which stay manual); a "type.interior"
 of the same file wins over the generated one:
 
     "floor": {

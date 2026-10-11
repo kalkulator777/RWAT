@@ -332,8 +332,8 @@ public final class TrainSounds {
             audio.bell = sounds.bell() != null ? new LoopPlayer(sounds.bell(), BELL_DISTANCE, true) : null;
         }
 
-        // the driver's desk, or the middle of the cab wagon
-        WagonType.Seat seat = cab.seat();
+        // the driver's desk (the chair driven from), or the middle of the cab wagon
+        WagonType.Seat seat = cab.deskSeat();
         Vector3d desk = PoseMath.localToWorld(new Vector3d(cab.getX(), cab.getY(), cab.getZ()),
                 cab.getYRot(), cab.getXRot(),
                 seat != null ? new Vector3d(seat.x(), seat.y(), seat.z()) : new Vector3d(0.0, 2.0, 0.0));
