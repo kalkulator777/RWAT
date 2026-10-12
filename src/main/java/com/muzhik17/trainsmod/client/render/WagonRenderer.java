@@ -628,6 +628,9 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
         if (outline.fixedCount() == 0 && outline.smoothCount() == 0) {
             return false;
         }
+        if (outlinesHidden()) {
+            return true; // drawn, invisibly: no box in its place either
+        }
         PoseStack.Pose pose = poseStack.last();
         Vector3f eye = pose.pose().invertAffine(TO_PART).transformPosition(new Vector3f());
         VertexConsumer lines = buffers.getBuffer(RenderType.lines());
@@ -654,11 +657,19 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
     /** A box outline at the current pose, for a part without a mesh; red if {@code refused}. */
     private static void outlineBox(PoseStack poseStack, MultiBufferSource buffers, boolean refused,
             double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {
+        if (outlinesHidden()) {
+            return;
+        }
         LevelRenderer.renderLineBox(poseStack, buffers.getBuffer(RenderType.lines()),
                 minX - OUTLINE_PAD, minY - OUTLINE_PAD, minZ - OUTLINE_PAD,
                 maxX + OUTLINE_PAD, maxY + OUTLINE_PAD, maxZ + OUTLINE_PAD,
                 refused ? REFUSED_R : OUTLINE_R, refused ? REFUSED_G : OUTLINE_G,
                 refused ? REFUSED_B : OUTLINE_B, OUTLINE_A);
+    }
+
+    /** With the HUD hidden (F1) no part is outlined, as vanilla shows no block outline then. */
+    private static boolean outlinesHidden() {
+        return Minecraft.getInstance().options.hideGui;
     }
 
     /** Fallback when no pose is known: bogie rides the body frame at its pivot offset. */
