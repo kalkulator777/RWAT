@@ -24,7 +24,7 @@
   "message.railswheelsandtrains.drive_hint": "Тяга: W / S · Тормоз: D / A · Реверс: пробел (на стоянке) · L — пульт · Shift — выйти",
   "message.railswheelsandtrains.controls_status": "[%s] Тяга %s/%s · Тормоз %s/%s · %s км/ч",
   "message.railswheelsandtrains.board_hint": "Ходьба — WASD · ПКМ — сойти",
-  "message.railswheelsandtrains.board_hint_doors": "Ходьба — WASD · ПКМ по двери — открыть/закрыть · Выход — через открытую дверь",
+  "message.railswheelsandtrains.board_hint_doors": "Ходьба — WASD · ПКМ по двери — открыть/закрыть · Выход — через открытую дверь · Shift — присесть, не выйдешь",
   "message.railswheelsandtrains.rail.click_marker": "Рельсы: кликните по маркеру, чтобы соединить его с другим.",
   "message.railswheelsandtrains.rail.restyled": "Сегментов перерисовано: %s, стиль — %s, подложка — %s.",
   "message.railswheelsandtrains.rolling_stock.choose_first": "Сначала выберите подвижной состав: ПКМ в воздух.",
