@@ -13,9 +13,11 @@ import net.minecraft.world.entity.player.Player;
 /**
  * Suppresses vanilla's per-tick walk-animation update for a wagon-bound walking
  * rider (SPEC v1.5-б, client only). Such a rider's legs are driven from the
- * <b>local floor step</b> by {@code ClientWalkInput} (the train carries them in
- * world space, so vanilla's world-delta is a near-zero, jittery air-control
- * drift). Without this, {@code walkAnimation.update} runs twice a tick — vanilla
+ * <b>local floor step</b> by {@code ClientRiderSteps} — the local player's from
+ * its prediction, everyone else's from the synced feet (the train carries them
+ * in world space, so vanilla's world-delta is a near-zero, jittery air-control
+ * drift, and for an observed rider zero: nothing moved their legs, they
+ * glided). Without this, {@code walkAnimation.update} runs twice a tick — vanilla
  * here and ours in {@code ClientTickEvent.Post} — and each call advances the
  * animation phase ({@code position += speed}); the render only interpolates the
  * last advance, so the surplus shows as a once-per-tick phase stutter. Cancelling

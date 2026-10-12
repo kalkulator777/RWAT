@@ -1,6 +1,5 @@
 package com.muzhik17.trainsmod.client;
 
-import org.joml.Quaterniond;
 import org.joml.Vector3d;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
@@ -43,7 +42,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * The player also stands ({@code WagonEntity.shouldRiderSit}), turns the model
  * toward the <b>direction of the floor walk</b> (vanilla's body-turn reads the
  * world delta, ≈0 for a rider, so strafing never turned the body), and gets a
- * <b>walk animation</b> from the local step distance.
+ * <b>walk animation</b>, the view bob and footsteps from the local step
+ * distance ({@link ClientRiderSteps}).
  *
  * <p>Shift <b>crouches</b> (SPEC v1.5-б): the step is a creep and an open hull
  * door doesn't let the rider out ({@code RiderWalk.exitDoor}) — the same
@@ -97,6 +97,7 @@ public final class ClientWalkInput {
             prevSeat = null;
             walkedWagon = -1;
             ClientWalk.clearLocalOwner();
+            ClientRiderSteps.resetLocal();
             if (player != null) {
                 ClientWalk.remove(player.getId());
             }
@@ -110,6 +111,7 @@ public final class ClientWalkInput {
             prevFlipped = null;
             walkedWagon = -1;
             ClientWalk.clearLocalOwner();
+            ClientRiderSteps.resetLocal();
             ClientWalk.remove(player.getId());
             return;
         }
@@ -214,43 +216,12 @@ public final class ClientWalkInput {
                 wagon.framedDoors(), wagon.doorMask(), sneak);
         ClientWalk.put(player.getId(), wagonId, next);
 
-        double dx = next.x - local.x;
-        double dz = next.z - local.z;
-        double stepDist = Math.hypot(dx, dz);
-
-        // turn the model toward where it actually walks (the head keeps the look)
-        if (stepDist > 0.02) {
-            faceMovement(player, dx, dz, wagonYaw);
-        }
+        // the body turns toward where it walks, the legs, the view bob and the
+        // footsteps follow the floor step (vanilla's see ≈0 world delta)
+        ClientRiderSteps.localStep(player, wagon, next.x - local.x, next.z - local.z, sneak);
         player.setYHeadRot(player.getYRot());
 
-        // walk animation from the local step distance (vanilla's rider walkAnimation
-        // sees ≈0 world delta), scaled like vanilla's calculateEntityAnimation
-        player.walkAnimation.update(Math.min((float) stepDist * 4.0f, 1.0f), 0.4f);
-
         PacketDistributor.sendToServer(new WalkInputPayload(wagonId, forward, strafe, yaw, sneak, exit));
-    }
-
-    /**
-     * Ease the player's body toward the world-space direction of their floor
-     * walk and keep the head within 50° of it — the same shape as vanilla's
-     * {@code tickHeadTurn}/{@code getMaxHeadRotationRelativeToBody}, but fed the
-     * local movement (which vanilla can't see, the rider being carried). The
-     * world direction is the local step rotated out of the car's frame by its
-     * yaw (the inverse of {@link RiderWalk}'s into-frame rotation).
-     */
-    private static void faceMovement(LocalPlayer player, double dx, double dz, float wagonYaw) {
-        Vector3d worldDir = new Quaterniond()
-                .rotateY(Math.toRadians(-wagonYaw))
-                .transform(new Vector3d(dx, 0.0, dz));
-        float targetYaw = PoseMath.yawDegrees(worldDir);
-        float toward = Mth.wrapDegrees(targetYaw - player.yBodyRot);
-        player.setYBodyRot(player.yBodyRot + toward * 0.5f);
-        float headBody = Mth.wrapDegrees(player.getYRot() - player.yBodyRot);
-        float max = 50.0f; // vanilla Player.getMaxHeadRotationRelativeToBody
-        if (Math.abs(headBody) > max) {
-            player.setYBodyRot(player.yBodyRot + (headBody - Math.signum(headBody) * max));
-        }
     }
 
     /** True if the ridden wagon is left only through its doors (no right-click exit). */
