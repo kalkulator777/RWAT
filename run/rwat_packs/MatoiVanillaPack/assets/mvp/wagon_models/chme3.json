@@ -2,7 +2,8 @@
   "obj": "stock/rolling_stock/locomotives/mvp_ir_chme3/mvp_ir_chme3.obj",
   "animations": {
     "door1": "stock/rolling_stock/locomotives/mvp_ir_chme3/anim/mvp_ir_chme3_door_1.anim",
-    "door2": "stock/rolling_stock/locomotives/mvp_ir_chme3/anim/mvp_ir_chme3_door_2.anim"
+    "door2": "stock/rolling_stock/locomotives/mvp_ir_chme3/anim/mvp_ir_chme3_door_2.anim",
+    "trap": "stock/rolling_stock/locomotives/mvp_ir_chme3/anim/mvp_ir_chme3_trap.anim"
   },
   "liveries": {
     "koshmar004_4844": "l_koshmar004_4844",

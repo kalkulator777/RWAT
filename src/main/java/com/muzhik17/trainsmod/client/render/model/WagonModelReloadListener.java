@@ -6,7 +6,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
+import com.muzhik17.trainsmod.client.ClientRide;
 import com.muzhik17.trainsmod.client.render.WagonRenderer;
+import com.muzhik17.trainsmod.client.sound.PackSoundFiles;
 import com.muzhik17.trainsmod.client.sound.TrainSounds;
 
 import net.minecraft.resources.FileToIdConverter;
@@ -52,7 +54,10 @@ public final class WagonModelReloadListener
     protected void apply(Map<String, WagonModelDecl> decls, ResourceManager resources,
             ProfilerFiller profiler) {
         StockModels.reset(decls);
+        ClientRide.typeSway(StockModels.sway()); // per-type rocking (SPEC §10.2)
         WagonRenderer.clearBaked();
         TrainSounds.clearAll(); // the packs' sounds may have changed (SPEC §10)
+        // the sound engine opens only indexed files (SPEC §10.3); the sound manager re-indexed just before
+        PackSoundFiles.register(resources, decls.values().stream().map(WagonModelDecl::sounds).toList());
     }
 }

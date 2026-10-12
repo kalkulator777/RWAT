@@ -1,5 +1,6 @@
 package com.muzhik17.trainsmod.debug;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -109,8 +110,10 @@ public final class CouplerScene {
             return;
         }
         Vector3d o = new Vector3d(origin.x, origin.y, origin.z);
+        UUID playerId = mc.player.getUUID();
         server.execute(() -> {
             var level = server.overworld();
+            var player = server.getPlayerList().getPlayer(playerId);
             RailNetwork network = RailNetwork.get(level);
             Vector3d a0 = new Vector3d(o).add(0.0, 0.0, -60.0);
             Vector3d a = new Vector3d(o);
@@ -120,10 +123,9 @@ public final class CouplerScene {
             Vector3d north = new Vector3d(0.0, 0.0, 1.0);
             Vector3d east = new Vector3d(1.0, 0.0, 0.0);
             Vector3d south = new Vector3d(0.0, 0.0, -1.0);
-            network.createSegment(level, a0, north, a, north, RailSegment.Look.DEFAULT);
-            network.createSegment(level, a, north, b, east, RailSegment.Look.DEFAULT);
-            network.createSegment(level, b, east, c, south, RailSegment.Look.DEFAULT);
-            network.createSegment(level, c, south, d, south, RailSegment.Look.DEFAULT);
+            network.build(level, player, List.of(new RailNetwork.SegmentSpec(a0, north, a, north),
+                    new RailNetwork.SegmentSpec(a, north, b, east), new RailNetwork.SegmentSpec(b, east, c, south),
+                    new RailNetwork.SegmentSpec(c, south, d, south)), RailSegment.Look.DEFAULT, List.of());
             RailsWheelsAndTrains.LOGGER.info("[couplers] laid the half circle, {} segments",
                     network.graph().segments().size());
         });

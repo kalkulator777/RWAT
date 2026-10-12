@@ -35,6 +35,10 @@ Names: a per-type override file may carry "name" ({"ru_ru": "..."}) and
 name and its light groups' names in the driver's light menu (SPEC §8), written
 to the pack's lang files.
 
+Sway: a per-type file's "sway" (a number from 0 to 3) goes to the model
+declaration — how hard that car's body rocks, on top of the player's own
+setting (SPEC §10.2).
+
 Sounds (SPEC §10): IR's "sounds" (idle, horn, bell, wheels, clack, controls)
 and the door animations' sounds go to the model declaration's "sounds", the
 files copied byte for byte under <root>/sounds/. A recipe's "sound_defaults"
@@ -868,6 +872,12 @@ class Converter:
         sounds = self.convert_sounds(source, category, ir, door_ids, type_id)
         if sounds:
             model_json["sounds"] = sounds
+        sway = overrides.get("sway")
+        if sway is not None:  # the body's rocking, on top of the client setting (SPEC §10.2)
+            if isinstance(sway, (int, float)) and not isinstance(sway, bool) and 0 <= sway <= 3:
+                model_json["sway"] = sway
+            else:
+                self.warn(f"{type_id}: \"sway\" must be a number from 0 to 3, left out")
         model_json = deep_merge(model_json, overrides.get("model", {}))
 
         if self.geometry is not None:

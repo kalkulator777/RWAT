@@ -2,6 +2,7 @@ package com.muzhik17.trainsmod.client.render.model;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -71,6 +72,17 @@ public final class StockModels {
     public static SoundSet sounds(String typeId) {
         WagonModelDecl decl = current.decls.get(typeId);
         return decl == null ? SoundSet.NONE : decl.sounds();
+    }
+
+    /** How hard each declared type's body rocks (SPEC §10.2): type id → factor, the types not at 1. */
+    public static Map<String, Double> sway() {
+        Map<String, Double> sway = new HashMap<>();
+        current.decls.forEach((typeId, decl) -> {
+            if (decl.sway() != 1.0) {
+                sway.put(typeId, decl.sway());
+            }
+        });
+        return sway;
     }
 
     /**

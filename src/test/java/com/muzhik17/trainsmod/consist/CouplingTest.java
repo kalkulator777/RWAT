@@ -436,6 +436,44 @@ class CouplingTest {
     }
 
     @Test
+    void aRouteOverTheSameTrackTwice_couplesWhereTheyTouch() {
+        // a balloon loop: the stem walked in, round the balloon, and back out
+        // over the stem (SPEC §2.2) — the route runs over the stem twice
+        RailGraph graph = new RailGraph();
+        Vector3d x = new Vector3d(1, 0, 0);
+        RailSegment stem = graph.createSegment(new Vector3d(-60, 0, 0), x, new Vector3d(0, 0, 0), x);
+        graph.createSegment(new Vector3d(0, 0, 0), x, new Vector3d(30, 0, 15), x);
+        graph.createSegment(new Vector3d(0, 0, 0), x, new Vector3d(30, 0, -15), x);
+        graph.createSegment(new Vector3d(30, 0, 15), x, new Vector3d(60, 0, 0), new Vector3d(0, 0, 1));
+        graph.createSegment(new Vector3d(60, 0, 0), new Vector3d(0, 0, 1), new Vector3d(30, 0, -15), x);
+        List<RailGraph.RouteLeg> legs = routeOf(graph, stem.id());
+        assertEquals(new RailGraph.RouteLeg(stem.id(), false), legs.get(0));
+        assertEquals(new RailGraph.RouteLeg(stem.id(), true), legs.get(legs.size() - 1));
+        RoutePath path = graph.buildRoutePath(legs);
+        double outStart = path.partStartS(legs.size() - 1); // the stem, on the way out: s grows toward −X
+        ConsistComposition locoC = comp(slot(LOCO, false));
+        ConsistComposition carC = comp(slot(CAR, false));
+        // a car parked on the stem facing the switch, its front face at x = −25 (stem s = 35)
+        Coupling.Train car = train(graph, legs, carC, headForFront(carC, 35.0), 0.0);
+        // the loco comes back out of the balloon at it, front face just inside coupling reach
+        Coupling.Train loco = train(graph, legs, locoC,
+                headForFront(locoC, outStart + 25.0 - GAP + 0.5), 0.1);
+
+        Coupling.Merge merge = Coupling.tryCouple(loco, car);
+
+        assertNotNull(merge, "same leg list, different passes over the stem: they touch");
+        assertEquals(CAR, merge.composition().slot(0).type(), "the car is ahead of the loco");
+        assertTrue(merge.members().get(0).turned(), "and faces the other way on the outbound pass");
+        // the loco (kept) doesn't move; the car snaps to the coupler gap, half a block
+        assertEquals(0.0, at(path, locoC.bodyCenterS(loco.headS(), 0)).distance(
+                at(graph.buildRoutePath(merge.legs()), merge.composition().bodyCenterS(merge.headS(), 1))),
+                1.0e-6, "the loco stays put");
+        assertEquals(0.5, at(path, carC.bodyCenterS(car.headS(), 0)).distance(
+                at(graph.buildRoutePath(merge.legs()), merge.composition().bodyCenterS(merge.headS(), 0))),
+                1.0e-6, "the car is where it stood, closed up to the coupler gap");
+    }
+
+    @Test
     void negativeCouplerOffsets_coupleWithTheFramesOverlapping() {
         RailGraph graph = line();
         List<RailGraph.RouteLeg> legs = routeOf(graph, 1);
@@ -527,6 +565,56 @@ class CouplingTest {
         assertTrue(bump.keptV() < 0.0, "the loco is shoved back");
         assertTrue(bump.absorbedV() < 0.5 && bump.absorbedV() < 0.0, "the car bounces off, backwards in its frame");
         assertTrue(bump.absorbedShift() < 0.0, "pushed back along its own route");
+    }
+
+    // --- a row of standing wagons (SPEC §2.1, 2026-10-12: contact on the track, loaded or not) ---
+
+    @Test
+    void aLongRowOfStandingWagons_isTakenUpWagonByWagon() {
+        // 1500 blocks of straight track, far past any view distance
+        RailGraph graph = new RailGraph();
+        for (int i = 0; i < 15; i++) {
+            connect(graph, new Vector3d(i * 100.0, 0, 0), new Vector3d((i + 1) * 100.0, 0, 0));
+        }
+        List<RailGraph.RouteLeg> legs = routeOf(graph, 1);
+        ConsistComposition locoC = comp(slot(LOCO, false));
+        ConsistComposition carC = comp(slot(CAR, false));
+        double couplingMax = 15.0 / 3.6 / 20.0; // the standard profile's 15 km/h, blocks/tick
+        // 60 cars standing 2 blocks apart, the first 3 blocks ahead of the loco; none ever coupled
+        int rowLength = 60;
+        Coupling.Train[] row = new Coupling.Train[rowLength];
+        for (int k = 0; k < rowLength; k++) {
+            row[k] = train(graph, legs, carC, headForRear(carC, 33.0 + k * (CAR.length() + 2.0)), 0.0);
+        }
+        for (int k = 0; k + 1 < rowLength; k++) {
+            assertNull(Coupling.contact(row[k], row[k + 1], couplingMax), "standing cars don't couple");
+        }
+        // the loco runs in at 0.2 b/t (14 km/h, just under the limit)
+        Coupling.Train train = train(graph, legs, locoC, headForFront(locoC, 30.0), 0.2);
+        double locoCentre = locoC.bodyCenterS(train.headS(), 0);
+
+        int taken = 0;
+        for (int tick = 0; tick < 100_000 && taken < rowLength; tick++) {
+            train = new Coupling.Train(train.legs(), train.path(), train.composition(),
+                    train.headS() + train.v(), train.v());
+            locoCentre += train.v();
+            Coupling.Contact contact = Coupling.contact(train, row[taken], couplingMax);
+            if (contact == null) {
+                continue;
+            }
+            Coupling.Merge merge = assertInstanceOf(Coupling.Merge.class, contact, "car " + taken);
+            train = new Coupling.Train(merge.legs(), graph.buildRoutePath(merge.legs()),
+                    merge.composition(), merge.headS(), merge.v());
+            taken++;
+            // the loco (last, the cars ahead of it) didn't move in the merge
+            assertEquals(locoCentre, merge.composition().bodyCenterS(merge.headS(), taken), EPS);
+        }
+
+        assertEquals(rowLength, taken, "every car of the row coupled, the farthest too");
+        assertEquals(rowLength + 1, train.composition().wagonCount());
+        assertEquals(LOCO, train.composition().slot(rowLength).type());
+        // momentum: 80 t at 0.2 shared with 60 × 20 t
+        assertEquals(80.0 * 0.2 / (80.0 + rowLength * 20.0), train.v(), EPS);
     }
 
     @Test

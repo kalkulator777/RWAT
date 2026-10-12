@@ -120,6 +120,7 @@ public final class ClientWagonRay {
         ClientDoorInteract.frame(mc, player, look);
         ClientCabInteract.frame(mc, player, look);
         ClientCouplerInteract.frame(mc, player, look);
+        ClientBogieHit.frame(mc, player, look);
     }
 
     /**

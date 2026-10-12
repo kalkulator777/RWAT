@@ -184,7 +184,7 @@ public final class ClientAutoScene {
      * {@code walk} (SPEC §9): the driver's way in, played with the keys and
      * the packets the mouse would send — climb the front step from the
      * ground, walk the +X walkway to the cab, open its door, walk in (a
-     * lever pulled standing is refused), sit in the chair, pull the throttle;
+     * lever pulled standing is taken, SPEC §9.2), sit in the chair, pull the throttle;
      * where the player is gets logged at each step, with first- and
      * third-person shots and the driver's panel ({@code rwat-walk-*.png}).
      */
@@ -227,8 +227,8 @@ public final class ClientAutoScene {
                 mc.options.keyUp.setDown(false);
                 report(mc, "through the door");
             }
-            // walking, not seated: the throttle is named with "only from the driver's seat",
-            // and a lever sent anyway is refused (SPEC §9.7)
+            // standing in the cab with nobody at the controls: the throttle is worked
+            // standing too (SPEC §9.2, 2026-10-12 — before, it was refused)
             case 346 -> {
                 aimAt(mc, com.muzhik17.trainsmod.convention.ObjectRole.Kind.THROTTLE, null);
                 WagonEntity wagon = wagon(mc);
@@ -239,7 +239,7 @@ public final class ClientAutoScene {
             }
             case 349 -> {
                 shot(mc, "rwat-walk-walker-throttle.png");
-                report(mc, "walker's lever refused? " + com.muzhik17.trainsmod.client.ClientConsists
+                report(mc, "walker's lever taken (throttle 3)? " + com.muzhik17.trainsmod.client.ClientConsists
                         .handles(wagon(mc).getConsistId()));
             }
             case 350 -> {
@@ -277,10 +277,11 @@ public final class ClientAutoScene {
             case 440 -> shot(mc, "rwat-walk-hover-throttle.png");
             case 441 -> aimAt(mc, com.muzhik17.trainsmod.convention.ObjectRole.Kind.WIDGET, "FHL");
             case 455 -> shot(mc, "rwat-walk-hover-switch.png");
-            // look far round: the seated head stops at the chair's limit
+            // look far round: the camera turns freely, the drawn head stops at the chair's limit
             case 456 -> look(mc, 170.0F, 0.0F);
-            case 466 -> report(mc, String.format(Locale.ROOT, "looked 170 off the desk: yaw %.1f, wagon %.1f",
-                    mc.player.getYRot(), wagon(mc).getYRot()));
+            case 466 -> report(mc, String.format(Locale.ROOT,
+                    "looked 170 off the desk: yaw %.1f, head %.1f, body %.1f, wagon %.1f",
+                    mc.player.getYRot(), mc.player.getYHeadRot(), mc.player.yBodyRot, wagon(mc).getYRot()));
             case 470 -> mc.setScreen(new com.muzhik17.trainsmod.client.gui.DriverPanelScreen(wagon(mc)));
             case 485 -> shot(mc, "rwat-walk-driver-panel.png");
             case 495 -> mc.stop();

@@ -1,8 +1,10 @@
 package com.muzhik17.trainsmod.client.sound;
 
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -64,6 +66,31 @@ public record SoundSet(Loop idle, Loop horn, Loop bell, Loop wheels, String clac
     /** True if a sound reference names a file rather than a sound event. */
     public static boolean isFile(String ref) {
         return ref.endsWith(".ogg");
+    }
+
+    /** Every Ogg file the set names, each once ({@code ns:path}; sound event ids left out). */
+    public Set<String> files() {
+        Set<String> files = new LinkedHashSet<>();
+        for (Loop loop : new Loop[] {idle, horn, bell, wheels}) {
+            if (loop != null) {
+                addFile(files, loop.start());
+                addFile(files, loop.main());
+                addFile(files, loop.stop());
+            }
+        }
+        addFile(files, clack);
+        doors.values().forEach(ref -> addFile(files, ref));
+        for (Control control : controls.values()) {
+            addFile(files, control.move());
+            addFile(files, control.engage());
+        }
+        return files;
+    }
+
+    private static void addFile(Set<String> files, String ref) {
+        if (ref != null && isFile(ref)) {
+            files.add(ref);
+        }
     }
 
     /**

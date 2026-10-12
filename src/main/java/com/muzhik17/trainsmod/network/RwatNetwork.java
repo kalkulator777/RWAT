@@ -5,6 +5,7 @@ import com.muzhik17.trainsmod.client.ClientConsists;
 import com.muzhik17.trainsmod.client.ClientRailGraph;
 import com.muzhik17.trainsmod.client.ClientRiderSync;
 import com.muzhik17.trainsmod.client.ClientWalk;
+import com.muzhik17.trainsmod.consist.CabAccess;
 import com.muzhik17.trainsmod.consist.Consist;
 import com.muzhik17.trainsmod.consist.ConsistManager;
 import com.muzhik17.trainsmod.consist.RollingStockItem;
@@ -57,19 +58,25 @@ public final class RwatNetwork {
                 (payload, context) -> context.enqueueWork(() -> handleUncouple(payload, context)));
         registrar.playToServer(HandbrakePayload.TYPE, HandbrakePayload.STREAM_CODEC,
                 (payload, context) -> context.enqueueWork(() -> handleHandbrake(payload, context)));
+        registrar.playToServer(WagonStrikePayload.TYPE, WagonStrikePayload.STREAM_CODEC,
+                (payload, context) -> context.enqueueWork(() -> handleWagonStrike(payload, context)));
         registrar.playToServer(CabLeverPayload.TYPE, CabLeverPayload.STREAM_CODEC,
                 (payload, context) -> context.enqueueWork(() -> handleCabLever(payload, context)));
         registrar.playToServer(ControlGroupPayload.TYPE, ControlGroupPayload.STREAM_CODEC,
                 (payload, context) -> context.enqueueWork(() -> handleControlGroup(payload, context)));
         registrar.playToServer(SeatPayload.TYPE, SeatPayload.STREAM_CODEC,
                 (payload, context) -> context.enqueueWork(() -> handleSeat(payload, context)));
+        registrar.playToServer(CarControlPayload.TYPE, CarControlPayload.STREAM_CODEC,
+                (payload, context) -> context.enqueueWork(() -> handleCarControl(payload, context)));
     }
 
     /**
      * A cab lever dragged, or a handle set from the driver's panel, by a
      * player (SPEC §9, §9.7): only by the consist's driver — at the controls
-     * of its front-most manned cab — so a passenger, someone walking about
-     * the cab or a second cab can't fight the driver.
+     * of its front-most manned cab — so a passenger or a second cab can't
+     * fight the driver. With nobody at the controls, by anyone standing in
+     * the leading cab (SPEC §9.2: the levers are worked standing too); the
+     * driver's key, if the server wants it, either way.
      */
     private static void handleCabLever(CabLeverPayload payload, IPayloadContext context) {
         Consist.Handle handle = Consist.Handle.byOrdinal(payload.handle());
@@ -80,8 +87,7 @@ public final class RwatNetwork {
             return;
         }
         Consist consist = ConsistManager.get(level).byId(wagon.getConsistId());
-        ConsistManager.Driver driver = consist == null ? null : ConsistManager.driverOf(level, consist);
-        if (driver != null && driver.player() == player) {
+        if (consist != null && CabAccess.check(player) && ConsistManager.mayMoveHandles(level, consist, player)) {
             consist.setHandle(handle, payload.value());
         }
     }
@@ -89,8 +95,10 @@ public final class RwatNetwork {
     /**
      * A control group set by a player (SPEC §8–§9). A wagon's switch: the
      * player rides it or stands within reach of it; a {@code GLOBAL} one sets
-     * the group on every wagon of its train, as IR does. A light group for
-     * the whole train (the driver's panel): only by its driver (SPEC §9.7).
+     * the group on every wagon of its train, as IR does. A switch of a car
+     * with a cab wants the driver's key if the server wants it (SPEC §9.2).
+     * A light group for the whole train (the driver's panel): only by its
+     * driver at the controls (SPEC §9.7).
      */
     private static void handleControlGroup(ControlGroupPayload payload, IPayloadContext context) {
         if (!(context.player() instanceof ServerPlayer player)
@@ -103,6 +111,10 @@ public final class RwatNetwork {
                     || (player.getVehicle() != wagon && !wagon.withinReach(player))) {
                 return;
             }
+            WagonType type = wagon.typeNow();
+            if (type != null && type.drivable() && !CabAccess.check(player)) {
+                return;
+            }
             consist = payload.scope() == ControlGroupPayload.Scope.GLOBAL_SWITCH
                     ? ConsistManager.get(level).byId(wagon.getConsistId()) : null;
             if (consist == null) {
@@ -111,14 +123,49 @@ public final class RwatNetwork {
             }
         } else {
             consist = ConsistManager.get(level).byId(payload.targetId());
-            ConsistManager.Driver driver = consist == null ? null : ConsistManager.driverOf(level, consist);
-            if (driver == null || driver.player() != player) {
+            if (consist == null || !ConsistManager.atPanel(level, consist, player)) {
                 return;
             }
         }
         for (java.util.UUID id : consist.wagonIds()) {
             if (level.getEntity(id) instanceof WagonEntity wagon) {
                 wagon.setControl(payload.group(), payload.value());
+            }
+        }
+    }
+
+    /**
+     * The doors and lights of the train's cars from the driver's panel (SPEC
+     * §9.7): only by the train's driver, at the controls (and so with the
+     * driver's key the server may want). Left and right as that driver sees
+     * them; doors as if each were clicked — their group goes along, every
+     * client sounds them; the lights are the car's groups the client names.
+     */
+    private static void handleCarControl(CarControlPayload payload, IPayloadContext context) {
+        if (!(context.player() instanceof ServerPlayer player)
+                || !(player.level() instanceof ServerLevel level)) {
+            return;
+        }
+        Consist consist = ConsistManager.get(level).byId(payload.consistId());
+        ConsistManager.Driver driver = consist == null ? null : ConsistManager.driverOf(level, consist);
+        if (driver == null || !driver.seated() || driver.player() != player) {
+            return;
+        }
+        for (java.util.UUID id : consist.wagonIds()) {
+            if (!(level.getEntity(id) instanceof WagonEntity wagon)
+                    || payload.wagonId() >= 0 && wagon.getId() != payload.wagonId()) {
+                continue;
+            }
+            switch (payload.target()) {
+                case DOORS_LEFT -> wagon.setPassengerDoors(true, driver.facing(), payload.on());
+                case DOORS_RIGHT -> wagon.setPassengerDoors(false, driver.facing(), payload.on());
+                case LIGHTS -> {
+                    if (payload.wagonId() >= 0) {
+                        for (String group : payload.groups()) {
+                            wagon.setControl(group, payload.on() ? 1.0F : 0.0F);
+                        }
+                    }
+                }
             }
         }
     }
@@ -193,14 +240,34 @@ public final class RwatNetwork {
 
     /**
      * Set or release a wagon's handbrake (SPEC §5.3) — the crowbar on its body
-     * from outside, or its handbrake wheel in the cab; either way the manager
-     * checks the reach.
+     * from outside, or its handbrake wheel in the cab (or the driving key for
+     * it); either way the manager checks the reach. The wheel of a car with a
+     * cab is a control of the cab: the driver's key if the server wants it
+     * (SPEC §9.2). The crowbar is a tool of its own and works any car's.
      */
     private static void handleHandbrake(HandbrakePayload payload, IPayloadContext context) {
         if (context.player() instanceof ServerPlayer player
                 && player.level() instanceof ServerLevel level
                 && level.getEntity(payload.wagonId()) instanceof WagonEntity wagon) {
+            WagonType type = wagon.typeNow();
+            if (!player.getMainHandItem().is(RailsWheelsAndTrains.CROWBAR.get())
+                    && type != null && type.drivable() && !CabAccess.check(player)) {
+                return;
+            }
             ConsistManager.get(level).toggleHandbrakeBy(player, wagon);
+        }
+    }
+
+    /**
+     * A player struck a wagon's bogie (SPEC §6.11): the manager checks the
+     * blow can be there and that the player may break things here, then the
+     * wagon takes it as an attack.
+     */
+    private static void handleWagonStrike(WagonStrikePayload payload, IPayloadContext context) {
+        if (context.player() instanceof ServerPlayer player
+                && player.level() instanceof ServerLevel level
+                && level.getEntity(payload.wagonId()) instanceof WagonEntity wagon) {
+            ConsistManager.get(level).strikeBogie(level, player, wagon, payload.front());
         }
     }
 
@@ -220,8 +287,10 @@ public final class RwatNetwork {
      * Apply a driver throttle on the server, but only if the sender is the
      * consist's driver — at the controls of its front-most manned cab (SPEC
      * §6.12: any cab wagon, not just the head; §9.7: in a walkable cab, the
-     * driver's chair) — basic anti-cheat so a client can't drive a train it
-     * isn't in, nor fight the driver from a second cab.
+     * driver's chair; a driver standing in the cab works the levers, the
+     * keys walk) — basic anti-cheat so a client can't drive a train it
+     * isn't in, nor fight the driver from a second cab. Who lacks the
+     * driver's key the server wants is no driver ({@code driverOf}).
      */
     private static void handleDriveInput(DriveInputPayload payload, IPayloadContext context) {
         if (!(context.player() instanceof ServerPlayer player)
@@ -232,8 +301,8 @@ public final class RwatNetwork {
         }
         Consist consist = ConsistManager.get(level).byId(payload.consistId());
         ConsistManager.Driver driver = consist == null ? null : ConsistManager.driverOf(level, consist);
-        if (driver != null && driver.player() == player) {
-            consist.setDriveInput(payload.throttleDir(), payload.brakeDir(),
+        if (driver != null && driver.seated() && driver.player() == player) {
+            consist.setDriveInput(payload.throttleDir(), payload.brakeDir(), payload.indBrakeDir(),
                     payload.reverserToggle(), payload.signals());
         }
     }
@@ -242,13 +311,16 @@ public final class RwatNetwork {
      * Apply a walking rider's input (SPEC v1.5-б), but only if the sender is
      * actually riding a wagon — the wagon is authoritative over the resulting
      * local position (it clamps against the interior). The wagon is taken from
-     * the player's vehicle, so a client can't move a rider it isn't.
+     * the player's vehicle, so a client can't move a rider it isn't; input
+     * the client meant for another wagon (it hasn't seen a gangway carry it
+     * on yet, SPEC §9.5) is dropped.
      */
     private static void handleWalkInput(WalkInputPayload payload, IPayloadContext context) {
         if (context.player() instanceof ServerPlayer player
-                && player.getVehicle() instanceof WagonEntity wagon) {
+                && player.getVehicle() instanceof WagonEntity wagon
+                && wagon.getId() == payload.wagonId()) {
             wagon.setWalkInput(player, payload.forward(), payload.strafe(),
-                    payload.yaw(), payload.exit());
+                    payload.yaw(), payload.sneak(), payload.exit());
         }
     }
 }

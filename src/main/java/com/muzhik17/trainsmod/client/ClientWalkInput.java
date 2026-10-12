@@ -1,6 +1,5 @@
 package com.muzhik17.trainsmod.client;
 
-import org.joml.Quaterniond;
 import org.joml.Vector3d;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
@@ -14,6 +13,7 @@ import com.muzhik17.trainsmod.stock.WagonType;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket;
 import net.minecraft.util.Mth;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -42,7 +42,14 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * The player also stands ({@code WagonEntity.shouldRiderSit}), turns the model
  * toward the <b>direction of the floor walk</b> (vanilla's body-turn reads the
  * world delta, ≈0 for a rider, so strafing never turned the body), and gets a
- * <b>walk animation</b> from the local step distance.
+ * <b>walk animation</b>, the view bob and footsteps from the local step
+ * distance ({@link ClientRiderSteps}).
+ *
+ * <p>Shift <b>crouches</b> (SPEC v1.5-б): the step is a creep and an open hull
+ * door doesn't let the rider out ({@code RiderWalk.exitDoor}) — the same
+ * rule the server runs on the sneak flag of the input. Sneaking never
+ * dismounts from a walkable car (a mixin on {@code wantsToStopRiding}); in
+ * the driver's chair it stands up.
  *
  * <p>Coupling can <b>turn</b> the wagon in its consist (SPEC §6.12: it joined
  * a train running the other way, its {@code flipped} flag toggles): the pose
@@ -74,12 +81,23 @@ public final class ClientWalkInput {
         Minecraft mc = Minecraft.getInstance();
         LocalPlayer player = mc.player;
         if (player == null || !(player.getVehicle() instanceof WagonEntity wagon)) {
+            if (player != null && walkedWagon != -1) {
+                // off a walkable car: aboard, the sneak key reached the server
+                // with the riding input, which stops with the ride, and vanilla
+                // sends it on foot only when it changes — say what it is now, or
+                // the server keeps the rider crouched (Shift-use, the pose) after
+                // they let go of the key at the door
+                player.connection.send(new ServerboundPlayerCommandPacket(player, player.isShiftKeyDown()
+                        ? ServerboundPlayerCommandPacket.Action.PRESS_SHIFT_KEY
+                        : ServerboundPlayerCommandPacket.Action.RELEASE_SHIFT_KEY));
+            }
             useWasDown = true;
             prevWagonYaw = null;
             prevFlipped = null;
             prevSeat = null;
             walkedWagon = -1;
             ClientWalk.clearLocalOwner();
+            ClientRiderSteps.resetLocal();
             if (player != null) {
                 ClientWalk.remove(player.getId());
             }
@@ -93,21 +111,30 @@ public final class ClientWalkInput {
             prevFlipped = null;
             walkedWagon = -1;
             ClientWalk.clearLocalOwner();
+            ClientRiderSteps.resetLocal();
             ClientWalk.remove(player.getId());
             return;
         }
-        if (wagon.getId() != walkedWagon) {
+        int wagonId = wagon.getId();
+        if (wagonId != walkedWagon) {
             // aboard another wagon (boarded, or a gangway carried us on, SPEC
             // §9.5): its own frame — drop the last car's feet, yaw and flip, and
-            // start from the server's spot if it gave one, else the world position
-            walkedWagon = wagon.getId();
+            // start from the server's spot if it gave one, else from the feet
+            // the server synced on this car, else the world position
+            walkedWagon = wagonId;
             prevWagonYaw = null;
             prevFlipped = null;
-            ClientWalk.remove(player.getId());
-            Vector3d placed = ClientWalk.takePlacement(wagon.getId());
-            if (placed != null) {
-                ClientWalk.put(player.getId(), placed);
+            Vector3d synced = ClientWalk.on(player.getId(), wagonId);
+            if (synced != null) {
+                ClientWalk.put(player.getId(), wagonId, synced);
+            } else {
+                ClientWalk.remove(player.getId());
             }
+        }
+        // a spot the server gave on this car wins over the prediction (taken once)
+        Vector3d placed = ClientWalk.takePlacement(wagonId);
+        if (placed != null) {
+            ClientWalk.put(player.getId(), wagonId, placed);
         }
         // this player's local feet are predicted here — keep the server sync
         // (which lists everyone) from overwriting them with a round-trip-stale value
@@ -124,7 +151,7 @@ public final class ClientWalkInput {
             // a coupling turned the car in its consist: same spot, mirrored frame
             Vector3d feet = ClientWalk.get(player.getId());
             if (feet != null) {
-                ClientWalk.put(player.getId(), new Vector3d(-feet.x, feet.y, -feet.z));
+                ClientWalk.put(player.getId(), wagonId, new Vector3d(-feet.x, feet.y, -feet.z));
             }
         }
         prevFlipped = flipped;
@@ -161,7 +188,7 @@ public final class ClientWalkInput {
             // beside the chair — predict the same (the feet kept from before sitting)
             Vector3d feet = wagon.standingFeet(ClientWalk.get(player.getId()), prevSeat);
             if (feet != null) {
-                ClientWalk.put(player.getId(), feet);
+                ClientWalk.put(player.getId(), wagonId, feet);
             }
         }
         prevSeat = null;
@@ -169,6 +196,8 @@ public final class ClientWalkInput {
         float forward = (mc.options.keyUp.isDown() ? 1f : 0f) - (mc.options.keyDown.isDown() ? 1f : 0f);
         float strafe = (mc.options.keyLeft.isDown() ? 1f : 0f) - (mc.options.keyRight.isDown() ? 1f : 0f);
         float yaw = player.getYRot();
+        // read the key, not the player: crouched is what the server is told
+        boolean sneak = mc.options.keyShift.isDown();
 
         boolean useDown = mc.options.keyUse.isDown();
         boolean exit = useDown && !useWasDown && !doorsOnly(wagon);
@@ -184,46 +213,15 @@ public final class ClientWalkInput {
                     RiderWalk.PLAYER_HALF_WIDTH);
         }
         Vector3d next = RiderWalk.step(local, forward, strafe, yaw, wagonYaw, interior,
-                wagon.framedDoors(), wagon.doorMask());
-        ClientWalk.put(player.getId(), next);
+                wagon.framedDoors(), wagon.doorMask(), sneak);
+        ClientWalk.put(player.getId(), wagonId, next);
 
-        double dx = next.x - local.x;
-        double dz = next.z - local.z;
-        double stepDist = Math.hypot(dx, dz);
-
-        // turn the model toward where it actually walks (the head keeps the look)
-        if (stepDist > 0.02) {
-            faceMovement(player, dx, dz, wagonYaw);
-        }
+        // the body turns toward where it walks, the legs, the view bob and the
+        // footsteps follow the floor step (vanilla's see ≈0 world delta)
+        ClientRiderSteps.localStep(player, wagon, next.x - local.x, next.z - local.z, sneak);
         player.setYHeadRot(player.getYRot());
 
-        // walk animation from the local step distance (vanilla's rider walkAnimation
-        // sees ≈0 world delta), scaled like vanilla's calculateEntityAnimation
-        player.walkAnimation.update(Math.min((float) stepDist * 4.0f, 1.0f), 0.4f);
-
-        PacketDistributor.sendToServer(new WalkInputPayload(forward, strafe, yaw, exit));
-    }
-
-    /**
-     * Ease the player's body toward the world-space direction of their floor
-     * walk and keep the head within 50° of it — the same shape as vanilla's
-     * {@code tickHeadTurn}/{@code getMaxHeadRotationRelativeToBody}, but fed the
-     * local movement (which vanilla can't see, the rider being carried). The
-     * world direction is the local step rotated out of the car's frame by its
-     * yaw (the inverse of {@link RiderWalk}'s into-frame rotation).
-     */
-    private static void faceMovement(LocalPlayer player, double dx, double dz, float wagonYaw) {
-        Vector3d worldDir = new Quaterniond()
-                .rotateY(Math.toRadians(-wagonYaw))
-                .transform(new Vector3d(dx, 0.0, dz));
-        float targetYaw = PoseMath.yawDegrees(worldDir);
-        float toward = Mth.wrapDegrees(targetYaw - player.yBodyRot);
-        player.setYBodyRot(player.yBodyRot + toward * 0.5f);
-        float headBody = Mth.wrapDegrees(player.getYRot() - player.yBodyRot);
-        float max = 50.0f; // vanilla Player.getMaxHeadRotationRelativeToBody
-        if (Math.abs(headBody) > max) {
-            player.setYBodyRot(player.yBodyRot + (headBody - Math.signum(headBody) * max));
-        }
+        PacketDistributor.sendToServer(new WalkInputPayload(wagonId, forward, strafe, yaw, sneak, exit));
     }
 
     /** True if the ridden wagon is left only through its doors (no right-click exit). */

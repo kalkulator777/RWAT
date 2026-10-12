@@ -52,6 +52,22 @@ class WagonModelDeclTest {
         assertTrue(decl.skip().isEmpty());
         assertTrue(decl.animations().isEmpty());
         assertTrue(decl.liveries().isEmpty());
+        assertEquals(1.0, decl.sway(), "a type rocks as designed unless its pack says otherwise");
+    }
+
+    /** A type's own sway factor (SPEC §10.2): a number from 0 (never rocks) to 3. */
+    @Test
+    void swayIsAFactorFromZeroToThree() {
+        assertEquals(0.6, parse("""
+                { "obj": "a.obj", "sway": 0.6 }""").sway());
+        assertEquals(0.0, parse("""
+                { "obj": "a.obj", "sway": 0 }""").sway());
+        assertEquals(3.0, parse("""
+                { "obj": "a.obj", "sway": 3 }""").sway());
+        for (String bad : new String[] {"-0.5", "3.5", "\"strong\"", "true", "[1]", "null"}) {
+            assertThrows(JsonSyntaxException.class,
+                    () -> parse("{ \"obj\": \"a.obj\", \"sway\": " + bad + " }"), "sway " + bad);
+        }
     }
 
     @Test

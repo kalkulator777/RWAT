@@ -33,7 +33,9 @@ public final class ConsistEvents {
      * open door). Sanctioned exits set {@link WagonEntity#dismountAllowed()};
      * a removed wagon or a removed/dead rider always dismounts so nobody is
      * trapped. The seated cab driver isn't a walking rider, so they sneak out
-     * as before.
+     * as before. (Shift no longer even asks on a walkable car — it crouches,
+     * {@code PlayerWagonSneakMixin}; this stays the guard for every other way
+     * a dismount is tried.)
      */
     @SubscribeEvent
     static void onMount(EntityMountEvent event) {
