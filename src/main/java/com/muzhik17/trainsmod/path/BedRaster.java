@@ -24,12 +24,28 @@ import org.joml.Vector3d;
  * to 1–8 — a thin frame on flat ground, stepping up on slopes; a column the
  * foot climbs through gets a full block below and the remainder above.
  *
+ * <p>Above the bed the rails stand up to half a block over their foot; where
+ * the foot climbs high in a column, the rail heads reach into the block above
+ * the bed. Those blocks are the bed's {@linkplain Raster#headroom headroom}:
+ * they must be clear for the rails not to cut through whatever is there
+ * (SPEC §2.2). Parts of a style drawn below the foot (an embankment, a bridge
+ * deck) are ground, not headroom.
+ *
  * <p>Pure math, no MC imports (SPEC principle #4); placement-time only.
  */
 public final class BedRaster {
 
     /** A bed block. */
     public record Cell(int x, int y, int z) {
+    }
+
+    /**
+     * What a swept tile needs of the world: the bed cells with their layer
+     * counts, and the headroom — the cells above the bed in the same columns
+     * that the drawn rails reach into (none on level track: the rails stand
+     * in the bed's own block).
+     */
+    public record Raster(Map<Cell, Integer> bed, Set<Cell> headroom) {
     }
 
     /**
@@ -101,6 +117,15 @@ public final class BedRaster {
      * its columns are complete, others may be missing.
      */
     public static Map<Cell, Integer> cells(TrackPath path, TileFootprint tile, Area area) {
+        return raster(path, tile, area).bed();
+    }
+
+    /**
+     * The bed and its headroom ({@link Raster}) of {@code tile} swept along
+     * {@code path}; {@code area} limits the work as in
+     * {@link #cells(TrackPath, TileFootprint, Area)}.
+     */
+    public static Raster raster(TrackPath path, TileFootprint tile, Area area) {
         Map<Long, Touch> touched = new LinkedHashMap<>();
         double length = path.length();
         if (length >= 1.0e-6 && tile.triangleCount > 0) {
@@ -129,7 +154,7 @@ public final class BedRaster {
                 rasterizeTile(tile, frame, scratch, touched);
             }
         }
-        return levels(touched);
+        return new Raster(levels(touched), headroom(touched));
     }
 
     /** A block column's key, as {@link Area#columns} takes them. */
@@ -168,35 +193,42 @@ public final class BedRaster {
         return cells;
     }
 
-    /** What the model leaves in one block column: whether it shows there, and the foot heights. */
+    /** What the model leaves in one block column: whether it shows there, the foot heights, the model's top. */
     private static final class Touch {
         boolean shown;
         double minY = Double.POSITIVE_INFINITY;
         double maxY = Double.NEGATIVE_INFINITY;
+        double topY = Double.NEGATIVE_INFINITY;
     }
 
-    /** Per-tile work buffers: one bent triangle and the two clipping buffers (x, z, foot y). */
+    /** Per-tile work buffers: one bent triangle and the two clipping buffers (x, z, foot y, model y). */
     private static final class Scratch {
         final double[] tx = new double[3];
         final double[] tz = new double[3];
         final double[] ty = new double[3];
+        final double[] tm = new double[3];
         double[] ax = new double[MAX_CLIPPED];
         double[] az = new double[MAX_CLIPPED];
         double[] ay = new double[MAX_CLIPPED];
+        double[] am = new double[MAX_CLIPPED];
         double[] bx = new double[MAX_CLIPPED];
         double[] bz = new double[MAX_CLIPPED];
         double[] by = new double[MAX_CLIPPED];
+        double[] bm = new double[MAX_CLIPPED];
 
         void swap() {
             double[] x = ax;
             double[] z = az;
             double[] y = ay;
+            double[] m = am;
             ax = bx;
             az = bz;
             ay = by;
+            am = bm;
             bx = x;
             bz = z;
             by = y;
+            bm = m;
         }
     }
 
@@ -205,7 +237,7 @@ public final class BedRaster {
      * local (along, height, across) lands at {@code pos + right·across +
      * up·(height + RAIL_Y_OFFSET)} of its station's frame — and rasterize its
      * ground projection. The foot height carried along is the spline height
-     * at the vertex's station.
+     * at the vertex's station; the model height, the vertex's own.
      */
     private static void rasterizeTile(TileFootprint tile, double[] frame, Scratch s,
             Map<Long, Touch> touched) {
@@ -218,6 +250,7 @@ public final class BedRaster {
                 s.tx[c] = frame[o] + frame[o + 6] * across + frame[o + 9] * height;
                 s.tz[c] = frame[o + 2] + frame[o + 8] * across + frame[o + 11] * height;
                 s.ty[c] = frame[o + 1];
+                s.tm[c] = frame[o + 1] + frame[o + 7] * across + frame[o + 10] * height;
             }
             rasterizeTriangle(s, touched);
         }
@@ -250,6 +283,7 @@ public final class BedRaster {
                 for (int i = 0; i < n; i++) {
                     touch.minY = Math.min(touch.minY, s.ay[i]);
                     touch.maxY = Math.max(touch.maxY, s.ay[i]);
+                    touch.topY = Math.max(touch.topY, s.am[i]);
                 }
             }
         }
@@ -257,13 +291,15 @@ public final class BedRaster {
 
     /**
      * Sutherland–Hodgman: the scratch triangle clipped to the column
-     * {@code [cx, cx+1] × [cz, cz+1]}, foot height interpolated along the cut
-     * edges. The result is left in {@code s.ax/az/ay}; returns its corner count.
+     * {@code [cx, cx+1] × [cz, cz+1]}, foot and model heights interpolated
+     * along the cut edges. The result is left in {@code s.ax/az/ay/am};
+     * returns its corner count.
      */
     private static int clipToColumn(Scratch s, int cx, int cz) {
         System.arraycopy(s.tx, 0, s.ax, 0, 3);
         System.arraycopy(s.tz, 0, s.az, 0, 3);
         System.arraycopy(s.ty, 0, s.ay, 0, 3);
+        System.arraycopy(s.tm, 0, s.am, 0, 3);
         int n = 3;
         n = clip(s, n, true, cx, true);
         n = clip(s, n, true, cx + 1, false);
@@ -292,6 +328,7 @@ public final class BedRaster {
                 s.bx[out] = s.ax[i];
                 s.bz[out] = s.az[i];
                 s.by[out] = s.ay[i];
+                s.bm[out] = s.am[i];
                 out++;
             }
             if (inI != inJ) {
@@ -299,6 +336,7 @@ public final class BedRaster {
                 s.bx[out] = s.ax[i] + (s.ax[j] - s.ax[i]) * f;
                 s.bz[out] = s.az[i] + (s.az[j] - s.az[i]) * f;
                 s.by[out] = s.ay[i] + (s.ay[j] - s.ay[i]) * f;
+                s.bm[out] = s.am[i] + (s.am[j] - s.am[i]) * f;
                 out++;
             }
         }
@@ -323,6 +361,27 @@ public final class BedRaster {
             sum += Math.hypot(x[j] - x[i], z[j] - z[i]);
         }
         return sum;
+    }
+
+    /**
+     * Touched columns → headroom: in every bed column, the cells above its top
+     * bed cell that the model reaches into by more than {@link #MIN_TOUCH}.
+     */
+    private static Set<Cell> headroom(Map<Long, Touch> touched) {
+        Set<Cell> cells = new LinkedHashSet<>();
+        for (Map.Entry<Long, Touch> entry : touched.entrySet()) {
+            Touch touch = entry.getValue();
+            if (!touch.shown) {
+                continue;
+            }
+            int x = (int) (entry.getKey() >> 32);
+            int z = (int) entry.getKey().longValue();
+            int top = (int) Math.floor(touch.maxY + LEVEL_EPSILON);
+            for (int cy = top + 1; touch.topY > cy + MIN_TOUCH; cy++) {
+                cells.add(new Cell(x, cy, z));
+            }
+        }
+        return cells;
     }
 
     /** Touched columns → bed cells: drop mere grazes ({@link #MIN_TOUCH}), stack the levels. */
