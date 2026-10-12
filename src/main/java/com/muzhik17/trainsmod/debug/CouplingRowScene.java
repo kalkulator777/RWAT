@@ -48,8 +48,10 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
  * loaded ({@code [row]} lines); a train front running more than the overlap
  * past a standing car is reported as {@code PASSED THROUGH}. Ends with
  * {@code [row] RESULT} — how many of the row coupled — the driver getting
- * out, and the chunks held 22 s later (the linger is 20 s); screenshots
- * {@code rwat-row-before/end.png}; quits the game. With
+ * out, the chunks held 22 s later (the linger is 20 s), and again 3 s into
+ * a roll with nobody aboard; screenshots {@code rwat-row-before/end.png};
+ * quits the game, the train still rolling — {@code -Pautoscene=row-reload}
+ * on the same save then shows a restart ({@link #reload}). With
  * {@code [chunk_loading] mode = "OFF"} in the save's server config it shows
  * the coupling alone: no chunks held, the far cars stay unloaded and couple
  * all the same.
@@ -93,7 +95,14 @@ public final class CouplingRowScene {
     @SubscribeEvent
     static void onClientTick(ClientTickEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
-        if (!"row".equals(System.getProperty("rwat.autoscene")) || mc.player == null || mc.level == null) {
+        if (mc.player == null || mc.level == null) {
+            return;
+        }
+        if ("row-reload".equals(System.getProperty("rwat.autoscene"))) {
+            reload(mc);
+            return;
+        }
+        if (!"row".equals(System.getProperty("rwat.autoscene"))) {
             return;
         }
         ticks++;
@@ -158,6 +167,29 @@ public final class CouplingRowScene {
             // rolling with nobody at the controls: it holds its chunks again
             server(mc, server -> report(server, "3 s into an unmanned roll"));
         } else if (finishedAt > 0 && ticks == finishedAt + 660) {
+            mc.stop();
+        }
+    }
+
+    /**
+     * {@code row-reload}: the save {@code row} quit on (its train rolling away
+     * with nobody aboard), opened again — a restart. Ticket leases aren't
+     * saved; the log shows whether the rolling train takes its chunks again
+     * and rolls on.
+     */
+    private static void reload(Minecraft mc) {
+        ticks++;
+        if (ticks == 2 || ticks == 40 || ticks == 100) {
+            server(mc, server -> {
+                ConsistManager manager = ConsistManager.get(server.overworld());
+                for (Consist consist : manager.all()) {
+                    RailsWheelsAndTrains.LOGGER.info(String.format(Locale.ROOT,
+                            "[row] after the restart, t=%d: train #%d %d wagons s=%.1f %.1f km/h, holds %d chunks",
+                            ticks, consist.id(), consist.composition().wagonCount(), consist.s(),
+                            Math.abs(TrainPhysics.kmh(consist.speed())), manager.chunksHeld(consist.id())));
+                }
+            });
+        } else if (ticks == 120) {
             mc.stop();
         }
     }
