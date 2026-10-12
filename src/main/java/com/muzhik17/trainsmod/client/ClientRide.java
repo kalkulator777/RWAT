@@ -18,6 +18,10 @@ import com.muzhik17.trainsmod.path.TrackPath;
  * rail joints each bogie crossed, which the wheels' knock plays from
  * ({@link #takeJoints}).
  *
+ * <p>How hard a body rocks is the client's {@code swayStrength} times its
+ * type's own factor ({@code "sway"} in the pack's model declaration), handed
+ * over by the model reload ({@link #typeSway}).
+ *
  * <p>Nothing here is synced: each client steps its own copy from the same
  * snapshots. Deliberately free of client-only MC classes so the common
  * {@code WagonEntity} can call it.
@@ -41,9 +45,13 @@ public final class ClientRide {
         int frontCrossed;
         int rearCrossed;
         long lastTick;
+        /** The wagon type's own sway factor. */
+        double typeFactor = 1.0;
     }
 
     private static final Map<Integer, Ride> RIDES = new HashMap<>();
+    /** Sway factor by wagon type id, the types the packs scale (the rest rock at 1). */
+    private static Map<String, Double> typeSway = Map.of();
     private static long ticks;
 
     private ClientRide() {
@@ -55,17 +63,24 @@ public final class ClientRide {
         RIDES.values().removeIf(ride -> ticks - ride.lastTick > STALE_TICKS);
     }
 
+    /** The packs' per-type sway factors (SPEC §10.2), from each model reload: type id → factor. */
+    public static void typeSway(Map<String, Double> factors) {
+        typeSway = Map.copyOf(factors);
+    }
+
     /**
      * Step one wagon's body (from its client tick, after its pose is set).
      *
-     * @param pose the wagon's tick pose
+     * @param typeId the wagon's type, for its sway factor; null = unknown yet
+     * @param pose   the wagon's tick pose
      */
-    public static void step(int entityId, int consistId, WagonPose pose) {
+    public static void step(int entityId, int consistId, String typeId, WagonPose pose) {
         Ride ride = RIDES.computeIfAbsent(entityId, id -> new Ride());
         if (ride.lastTick == ticks) {
             return; // ticked twice in one client tick — never step twice
         }
         ride.lastTick = ticks;
+        ride.typeFactor = typeId == null ? 1.0 : typeSway.getOrDefault(typeId, 1.0);
         TrackPath path = ClientConsists.trackPath(consistId);
         double frontS = pose.front().pathS();
         double rearS = pose.rear().pathS();
@@ -100,21 +115,24 @@ public final class ClientRide {
         ride.current = ride.motion.sway();
     }
 
-    /** The body's sway for rendering at {@code partialTick} (the tick window, like the pose), scaled by the client setting. */
+    /**
+     * The body's sway for rendering at {@code partialTick} (the tick window,
+     * like the pose), scaled by the client setting and the wagon type's factor.
+     */
     public static Sway sway(int entityId, float partialTick) {
         Ride ride = RIDES.get(entityId);
-        double strength = ClientConfig.swayStrength();
-        if (ride == null || strength <= 0.0) {
+        double strength = ride == null ? 0.0 : ClientConfig.swayStrength() * ride.typeFactor;
+        if (strength <= 0.0) {
             return Sway.ZERO;
         }
         return Sway.lerp(ride.previous, ride.current, partialTick).scaled(strength);
     }
 
-    /** The body's sway at the current tick, where riders are placed (scaled by the client setting). */
+    /** The body's sway at the current tick, where riders are placed (scaled like {@link #sway}). */
     public static Sway current(int entityId) {
         Ride ride = RIDES.get(entityId);
-        double strength = ClientConfig.swayStrength();
-        if (ride == null || strength <= 0.0) {
+        double strength = ride == null ? 0.0 : ClientConfig.swayStrength() * ride.typeFactor;
+        if (strength <= 0.0) {
             return Sway.ZERO;
         }
         return ride.current.scaled(strength);

@@ -13,7 +13,6 @@ import java.io.IOException;
 import java.io.Reader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -58,6 +57,22 @@ class SoundSetTest {
         assertEquals("mvp:stock/sounds/door.ogg", sounds.doors().get("door1"));
         assertEquals("mvp:stock/sounds/notch.ogg", sounds.controls().get("THROTTLE_1").move());
         assertEquals("mvp:stock/sounds/hiss.ogg", sounds.controls().get("TRAIN_BRAKE_1").engage());
+    }
+
+    /** The files a set names, each once, sound events left out: what the sound engine is told about (SPEC §10.3). */
+    @Test
+    void listsItsFilesOnceAndNoSoundEvents() {
+        SoundSet sounds = parse("""
+                {
+                  "idle": { "start": "s/start.ogg", "main": "s/idle.ogg", "stop": "s/stop.ogg" },
+                  "wheels": "minecraft:entity.minecart.riding",
+                  "clack": "s/clack.ogg",
+                  "doors": { "door1": "s/door.ogg", "door2": "s/door.ogg" },
+                  "controls": { "THROTTLE_1": { "move": "s/notch.ogg", "engage": "other:s/hiss.ogg" } }
+                }""");
+        assertEquals(List.of("mvp:s/start.ogg", "mvp:s/idle.ogg", "mvp:s/stop.ogg", "mvp:s/clack.ogg",
+                "mvp:s/door.ogg", "mvp:s/notch.ogg", "other:s/hiss.ogg"), List.copyOf(sounds.files()));
+        assertTrue(SoundSet.NONE.files().isEmpty());
     }
 
     @Test
@@ -130,10 +145,7 @@ class SoundSetTest {
             try (Reader reader = Files.newBufferedReader(model)) {
                 decl = WagonModelDecl.parse(namespace, JsonParser.parseReader(reader).getAsJsonObject());
             }
-            for (String ref : refs(decl.sounds())) {
-                if (!SoundSet.isFile(ref)) {
-                    continue;
-                }
+            for (String ref : decl.sounds().files()) {
                 int colon = ref.indexOf(':');
                 Path file = assets.resolve(ref.substring(0, colon)).resolve(ref.substring(colon + 1));
                 assertTrue(Files.isRegularFile(file), model + ": " + ref + " missing");
@@ -143,33 +155,5 @@ class SoundSetTest {
             }
         }
         assertTrue(checked > 100, "only " + checked + " sounds referenced");
-    }
-
-    private static List<String> refs(SoundSet sounds) {
-        List<String> refs = new ArrayList<>();
-        for (SoundSet.Loop loop : new SoundSet.Loop[] {sounds.idle(), sounds.horn(), sounds.bell(), sounds.wheels()}) {
-            if (loop != null) {
-                refs.add(loop.main());
-                if (loop.start() != null) {
-                    refs.add(loop.start());
-                }
-                if (loop.stop() != null) {
-                    refs.add(loop.stop());
-                }
-            }
-        }
-        if (sounds.clack() != null) {
-            refs.add(sounds.clack());
-        }
-        refs.addAll(sounds.doors().values());
-        for (SoundSet.Control control : sounds.controls().values()) {
-            if (control.move() != null) {
-                refs.add(control.move());
-            }
-            if (control.engage() != null) {
-                refs.add(control.engage());
-            }
-        }
-        return refs;
     }
 }

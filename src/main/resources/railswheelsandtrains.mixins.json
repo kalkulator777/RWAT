@@ -11,7 +11,8 @@
     "ClientLevelSectionDirtyMixin",
     "EntityRendererCabinLightMixin",
     "LivingEntityRendererSeatMixin",
-    "LivingEntityWalkAnimationMixin"
+    "LivingEntityWalkAnimationMixin",
+    "SoundManagerFilesMixin"
   ],
   "injectors": {
     "defaultRequire": 1

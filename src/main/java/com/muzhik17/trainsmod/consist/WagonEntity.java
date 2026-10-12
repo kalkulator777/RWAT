@@ -228,7 +228,8 @@ public class WagonEntity extends Entity {
             setPos(pose.body().x, pose.body().y, pose.body().z);
             setYRot(pose.yaw());
             setXRot(pose.pitch());
-            ClientRide.step(getId(), getConsistId(), pose); // the body on its springs (SPEC §10)
+            // the body on its springs (SPEC §10)
+            ClientRide.step(getId(), getConsistId(), type == null ? null : type.id(), pose);
             // do NOT reposition riders here: vanilla ticks a passenger right
             // after its vehicle (setOldPosAndRot → rideTick → positionRider),
             // so it picks this fresh pose up by itself. Doing it inside the

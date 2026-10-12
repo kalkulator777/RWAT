@@ -55,24 +55,24 @@ final class LoopPlayer {
                     return;
                 }
                 if (loop.start() != null) {
-                    lead = play(sounds, loop.start(), false, x, y, z, volume, pitch);
+                    lead = play(loop.start(), false, x, y, z, volume, pitch);
                     nextAt = after(now, loop.start());
                     state = State.STARTING;
                 } else {
-                    startMain(sounds, now, x, y, z, volume, pitch);
+                    startMain(now, x, y, z, volume, pitch);
                 }
             }
             case STARTING -> {
                 if (!on) {
                     end(lead);
                     lead = null;
-                    playStop(sounds, x, y, z, volume, pitch);
+                    playStop(x, y, z, volume, pitch);
                     state = State.OFF;
                     return;
                 }
                 place(lead, x, y, z, volume, pitch);
                 if (over(sounds, now, lead)) {
-                    startMain(sounds, now, x, y, z, volume, pitch);
+                    startMain(now, x, y, z, volume, pitch);
                 }
             }
             case RUNNING -> {
@@ -82,21 +82,20 @@ final class LoopPlayer {
                         end(main);
                     }
                     main = null;
-                    playStop(sounds, x, y, z, volume, pitch);
+                    playStop(x, y, z, volume, pitch);
                     state = State.OFF;
                     return;
                 }
                 place(main, x, y, z, volume, pitch);
                 if (repeat && over(sounds, now, main)) {
-                    startMain(sounds, now, x, y, z, volume, pitch); // the next blast
+                    startMain(now, x, y, z, volume, pitch); // the next blast
                 }
             }
         }
     }
 
-    private void startMain(SoundManager sounds, long now, double x, double y, double z,
-            float volume, float pitch) {
-        main = play(sounds, loop.main(), !repeat, x, y, z, volume, pitch);
+    private void startMain(long now, double x, double y, double z, float volume, float pitch) {
+        main = play(loop.main(), !repeat, x, y, z, volume, pitch);
         nextAt = repeat ? after(now, loop.main()) : -1;
         lead = null; // a lead-in plays out by itself
         state = State.RUNNING;
@@ -113,10 +112,9 @@ final class LoopPlayer {
         return nextAt >= 0 ? now >= nextAt : current == null || !sounds.isActive(current);
     }
 
-    private void playStop(SoundManager sounds, double x, double y, double z, float volume,
-            float pitch) {
+    private void playStop(double x, double y, double z, float volume, float pitch) {
         if (loop.stop() != null) {
-            play(sounds, loop.stop(), false, x, y, z, volume, pitch);
+            play(loop.stop(), false, x, y, z, volume, pitch);
         }
     }
 
@@ -129,12 +127,12 @@ final class LoopPlayer {
         state = State.OFF;
     }
 
-    private TrainSound play(SoundManager sounds, String ref, boolean looping, double x, double y,
-            double z, float volume, float pitch) {
+    private TrainSound play(String ref, boolean looping, double x, double y, double z, float volume,
+            float pitch) {
         TrainSound sound = TrainSound.of(ref, looping, distance);
         if (sound != null) {
             place(sound, x, y, z, volume, pitch);
-            sounds.play(sound);
+            TrainSounds.play(sound);
         }
         return sound;
     }
