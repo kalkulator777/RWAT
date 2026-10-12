@@ -96,18 +96,26 @@ public final class ClientWalkInput {
             ClientWalk.remove(player.getId());
             return;
         }
-        if (wagon.getId() != walkedWagon) {
+        int wagonId = wagon.getId();
+        if (wagonId != walkedWagon) {
             // aboard another wagon (boarded, or a gangway carried us on, SPEC
             // §9.5): its own frame — drop the last car's feet, yaw and flip, and
-            // start from the server's spot if it gave one, else the world position
-            walkedWagon = wagon.getId();
+            // start from the server's spot if it gave one, else from the feet
+            // the server synced on this car, else the world position
+            walkedWagon = wagonId;
             prevWagonYaw = null;
             prevFlipped = null;
-            ClientWalk.remove(player.getId());
-            Vector3d placed = ClientWalk.takePlacement(wagon.getId());
-            if (placed != null) {
-                ClientWalk.put(player.getId(), placed);
+            Vector3d synced = ClientWalk.on(player.getId(), wagonId);
+            if (synced != null) {
+                ClientWalk.put(player.getId(), wagonId, synced);
+            } else {
+                ClientWalk.remove(player.getId());
             }
+        }
+        // a spot the server gave on this car wins over the prediction (taken once)
+        Vector3d placed = ClientWalk.takePlacement(wagonId);
+        if (placed != null) {
+            ClientWalk.put(player.getId(), wagonId, placed);
         }
         // this player's local feet are predicted here — keep the server sync
         // (which lists everyone) from overwriting them with a round-trip-stale value
@@ -124,7 +132,7 @@ public final class ClientWalkInput {
             // a coupling turned the car in its consist: same spot, mirrored frame
             Vector3d feet = ClientWalk.get(player.getId());
             if (feet != null) {
-                ClientWalk.put(player.getId(), new Vector3d(-feet.x, feet.y, -feet.z));
+                ClientWalk.put(player.getId(), wagonId, new Vector3d(-feet.x, feet.y, -feet.z));
             }
         }
         prevFlipped = flipped;
@@ -161,7 +169,7 @@ public final class ClientWalkInput {
             // beside the chair — predict the same (the feet kept from before sitting)
             Vector3d feet = wagon.standingFeet(ClientWalk.get(player.getId()), prevSeat);
             if (feet != null) {
-                ClientWalk.put(player.getId(), feet);
+                ClientWalk.put(player.getId(), wagonId, feet);
             }
         }
         prevSeat = null;
@@ -185,7 +193,7 @@ public final class ClientWalkInput {
         }
         Vector3d next = RiderWalk.step(local, forward, strafe, yaw, wagonYaw, interior,
                 wagon.framedDoors(), wagon.doorMask());
-        ClientWalk.put(player.getId(), next);
+        ClientWalk.put(player.getId(), wagonId, next);
 
         double dx = next.x - local.x;
         double dz = next.z - local.z;
@@ -201,7 +209,7 @@ public final class ClientWalkInput {
         // sees ≈0 world delta), scaled like vanilla's calculateEntityAnimation
         player.walkAnimation.update(Math.min((float) stepDist * 4.0f, 1.0f), 0.4f);
 
-        PacketDistributor.sendToServer(new WalkInputPayload(forward, strafe, yaw, exit));
+        PacketDistributor.sendToServer(new WalkInputPayload(wagonId, forward, strafe, yaw, exit));
     }
 
     /**

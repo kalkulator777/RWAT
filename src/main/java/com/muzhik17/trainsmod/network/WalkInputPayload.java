@@ -15,8 +15,15 @@ import net.minecraft.resources.ResourceLocation;
  * server has a continuous signal; the server validates the sender actually
  * rides a boardable wagon and is authoritative over the resulting local
  * position (it clamps against the interior walls).
+ *
+ * <p>{@code wagonId} is the wagon the client walks — its prediction's frame.
+ * The server drops input meant for another wagon than the one the player
+ * rides there: right after a gangway carried them on (SPEC §9.5) the client
+ * still walks the last car until the passenger change reaches it, and those
+ * steps, read in the next car's frame, would put the server ahead of the
+ * client's prediction for good.
  */
-public record WalkInputPayload(float forward, float strafe, float yaw, boolean exit)
+public record WalkInputPayload(int wagonId, float forward, float strafe, float yaw, boolean exit)
         implements CustomPacketPayload {
 
     public static final CustomPacketPayload.Type<WalkInputPayload> TYPE =
@@ -27,6 +34,7 @@ public record WalkInputPayload(float forward, float strafe, float yaw, boolean e
             StreamCodec.of(WalkInputPayload::write, WalkInputPayload::read);
 
     private static void write(FriendlyByteBuf buf, WalkInputPayload payload) {
+        buf.writeVarInt(payload.wagonId);
         buf.writeFloat(payload.forward);
         buf.writeFloat(payload.strafe);
         buf.writeFloat(payload.yaw);
@@ -34,7 +42,7 @@ public record WalkInputPayload(float forward, float strafe, float yaw, boolean e
     }
 
     private static WalkInputPayload read(FriendlyByteBuf buf) {
-        return new WalkInputPayload(buf.readFloat(), buf.readFloat(), buf.readFloat(),
+        return new WalkInputPayload(buf.readVarInt(), buf.readFloat(), buf.readFloat(), buf.readFloat(),
                 buf.readBoolean());
     }
 

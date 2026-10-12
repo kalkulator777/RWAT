@@ -159,6 +159,8 @@ public class WagonEntity extends Entity {
     private final Map<UUID, Vector3d> riderLocal = new HashMap<>();
     /** Set true only while {@link #exitRider} runs, so the dismount guard lets it through. */
     private boolean dismountAllowed;
+    /** Set true only while a gangway boards a rider here ({@link #boardAt}): see {@link #carryingOn()}. */
+    private boolean carryingOn;
     /** Set true only while a blow at a bogie lands ({@link #strikeBy}): the body itself takes no harm. */
     private boolean bogieStruck;
     /** Where the rider leaving through a door lands; read by the dismount, then cleared. */
@@ -457,6 +459,16 @@ public class WagonEntity extends Entity {
     public boolean isFlipped() {
         ConsistComposition.Slot slot = slotNow();
         return slot != null && slot.flipped();
+    }
+
+    /**
+     * True if this car's floor is walked (SPEC v1.5-б): its riders walk the
+     * interior or sit in its driver's chairs — never on the vanilla seat —
+     * so sneaking crouches them rather than getting them off. Either side.
+     */
+    public boolean walkable() {
+        WagonType type = typeNow();
+        return type != null && type.boardable();
     }
 
     /**
@@ -882,10 +894,18 @@ public class WagonEntity extends Entity {
      * Take a player on as a walking rider at a given local spot (server) and
      * tell their client where: its prediction would otherwise start from the
      * world position, which the vanilla dismount from the last wagon moved.
+     * Vanilla's mount teleport is left out ({@link #carryingOn()}).
      */
     private void boardAt(ServerPlayer player, Vector3d local) {
         riderLocal.put(player.getUUID(), local);
-        if (player.startRiding(this, true)) {
+        carryingOn = true;
+        boolean boarded;
+        try {
+            boarded = player.startRiding(this, true);
+        } finally {
+            carryingOn = false;
+        }
+        if (boarded) {
             repositionRiders();
             PacketDistributor.sendToPlayer(player, new RiderPlacePayload(getId(), local.x, local.y, local.z));
         } else {
@@ -1100,6 +1120,13 @@ public class WagonEntity extends Entity {
      * else (the cab driver) at the vanilla seat. Called by vanilla each tick via
      * the passenger's {@code rideTick}, and again by {@link #repositionRiders}
      * after the body pose is refreshed.
+     *
+     * <p>On a client, only feet known <b>on this wagon</b> place a walking
+     * rider ({@link ClientWalk#on}); until they are known — a gangway has just
+     * carried the rider here (SPEC §9.5), an observer's sync hasn't caught up
+     * — the rider holds where they are for the tick, rather than being put at
+     * the old car's spot in this car's frame (a car length off) or on the
+     * vanilla seat.
      */
     @Override
     protected void positionRider(Entity passenger, Entity.MoveFunction move) {
@@ -1109,9 +1136,12 @@ public class WagonEntity extends Entity {
         WagonType.Seat seat = seatOf(passenger);
         Vector3d local = seat != null ? seatedFeet(seat)
                 : level().isClientSide
-                        ? ClientWalk.get(passenger.getId())
+                        ? ClientWalk.on(passenger.getId(), getId())
                         : riderLocal.get(passenger.getUUID());
         if (local == null) {
+            if (level().isClientSide && walkable()) {
+                return; // a walking rider whose feet on this car aren't known yet: hold
+            }
             super.positionRider(passenger, move);
             return;
         }
@@ -1195,6 +1225,19 @@ public class WagonEntity extends Entity {
     /** True only while a sanctioned {@link #exitRider} is in progress. */
     public boolean dismountAllowed() {
         return dismountAllowed;
+    }
+
+    /**
+     * True only while a gangway carries a rider on into this car (SPEC §9.5,
+     * server). Vanilla teleports a player it mounts — a position-and-look
+     * packet that puts the client where the server has them: here a tick
+     * or two ahead of the client's interpolated train, with a look a tick
+     * old — and that snap was part of the jolt at the gangway. The rider's
+     * client places them on the car itself ({@code RiderPlacePayload}), so
+     * {@code ServerPlayerMountMixin} leaves the teleport out for them.
+     */
+    public boolean carryingOn() {
+        return carryingOn;
     }
 
     /** Drop a walking rider out the nearer side of the car, by their floor spot. */

@@ -257,11 +257,14 @@ public final class RwatNetwork {
      * Apply a walking rider's input (SPEC v1.5-б), but only if the sender is
      * actually riding a wagon — the wagon is authoritative over the resulting
      * local position (it clamps against the interior). The wagon is taken from
-     * the player's vehicle, so a client can't move a rider it isn't.
+     * the player's vehicle, so a client can't move a rider it isn't; input
+     * the client meant for another wagon (it hasn't seen a gangway carry it
+     * on yet, SPEC §9.5) is dropped.
      */
     private static void handleWalkInput(WalkInputPayload payload, IPayloadContext context) {
         if (context.player() instanceof ServerPlayer player
-                && player.getVehicle() instanceof WagonEntity wagon) {
+                && player.getVehicle() instanceof WagonEntity wagon
+                && wagon.getId() == payload.wagonId()) {
             wagon.setWalkInput(player, payload.forward(), payload.strafe(),
                     payload.yaw(), payload.exit());
         }

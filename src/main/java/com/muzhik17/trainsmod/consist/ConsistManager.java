@@ -218,7 +218,7 @@ public final class ConsistManager extends SavedData {
                     // catch, because here it's the wagon that moved)
                     shoveOutsiders(level, wagon);
                     wagon.walkingRiderLocals().forEach((id, local) ->
-                            riders.add(new RiderLocal(id, local.x, local.y, local.z)));
+                            riders.add(new RiderLocal(id, wagon.getId(), local.x, local.y, local.z)));
                 }
             }
 
