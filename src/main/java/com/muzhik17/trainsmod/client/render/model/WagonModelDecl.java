@@ -25,7 +25,8 @@ import com.muzhik17.trainsmod.client.sound.SoundSet;
  *   "animations": { "door1": "stock/.../anim/mvp_ir_amendorf_door1.anim" },
  *   "liveries": { "leader_770": "l_leader_770" },
  *   "handbrake": ["WIDGET_5"],
- *   "sounds": { "idle": "stock/sounds/diesel/mvp_chme3/idle.ogg", … }
+ *   "sounds": { "idle": "stock/sounds/diesel/mvp_chme3/idle.ogg", … },
+ *   "sway": 0.7
  * }
  * }</pre>
  *
@@ -49,6 +50,9 @@ import com.muzhik17.trainsmod.client.sound.SoundSet;
  *                   no entry
  * @param sounds     engine, horns, wheels, joints, doors and controls (SPEC §10);
  *                   {@link SoundSet#NONE} if the pack gives none
+ * @param sway       how hard this type's body rocks on its springs, on top of
+ *                   the client's {@code swayStrength} (SPEC §10.2): 1 = as
+ *                   designed, 0 = never, up to {@link #MAX_SWAY}
  */
 public record WagonModelDecl(
         String obj,
@@ -57,7 +61,11 @@ public record WagonModelDecl(
         Map<String, String> animations,
         Map<String, String> liveries,
         List<String> handbrake,
-        SoundSet sounds) {
+        SoundSet sounds,
+        double sway) {
+
+    /** The most a type may scale its rocking by (as much as the client setting allows). */
+    public static final double MAX_SWAY = 3.0;
 
     public WagonModelDecl {
         skip = List.copyOf(skip);
@@ -119,7 +127,16 @@ public record WagonModelDecl(
         }
         SoundSet sounds = json.has("sounds")
                 ? SoundSet.parse(namespace, json.getAsJsonObject("sounds")) : SoundSet.NONE;
-        return new WagonModelDecl(obj, bogies, skip, animations, liveries, handbrake, sounds);
+        double sway = 1.0;
+        if (json.has("sway")) {
+            JsonElement element = json.get("sway");
+            sway = element.isJsonPrimitive() && element.getAsJsonPrimitive().isNumber()
+                    ? element.getAsDouble() : Double.NaN;
+            if (!(sway >= 0.0 && sway <= MAX_SWAY)) {
+                throw new JsonSyntaxException("'sway' must be a number from 0 to " + MAX_SWAY);
+            }
+        }
+        return new WagonModelDecl(obj, bogies, skip, animations, liveries, handbrake, sounds, sway);
     }
 
     /** {@code path} → {@code namespace:path}; an already qualified path is kept. */
