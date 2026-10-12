@@ -3,6 +3,7 @@ package com.muzhik17.trainsmod.consist;
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -35,7 +36,11 @@ public final class ConsistEvents {
      * trapped. The seated cab driver isn't a walking rider, so they sneak out
      * as before. (Shift no longer even asks on a walkable car — it crouches,
      * {@code PlayerWagonSneakMixin}; this stays the guard for every other way
-     * a dismount is tried.)
+     * a dismount is tried.) A player logging out gets off too: the car stays
+     * in its train ({@link WagonEntity#hasExactlyOnePlayerPassenger}), and
+     * the logout takes them off it ({@code PlayerList.remove} → {@code
+     * unRide}) once they are marked disconnected, but before they are removed
+     * — refused, the car would keep a player gone from the world aboard.
      */
     @SubscribeEvent
     static void onMount(EntityMountEvent event) {
@@ -44,7 +49,8 @@ public final class ConsistEvents {
                 || !(event.getEntityMounting() instanceof Player player)) {
             return;
         }
-        if (wagon.isWalkingRider(player) && !wagon.dismountAllowed()
+        boolean leavingTheGame = player instanceof ServerPlayer serverPlayer && serverPlayer.hasDisconnected();
+        if (wagon.isWalkingRider(player) && !wagon.dismountAllowed() && !leavingTheGame
                 && !wagon.isRemoved() && !player.isRemoved()) {
             event.setCanceled(true);
         }
