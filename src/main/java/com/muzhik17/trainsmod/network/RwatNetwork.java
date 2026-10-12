@@ -64,6 +64,8 @@ public final class RwatNetwork {
                 (payload, context) -> context.enqueueWork(() -> handleControlGroup(payload, context)));
         registrar.playToServer(SeatPayload.TYPE, SeatPayload.STREAM_CODEC,
                 (payload, context) -> context.enqueueWork(() -> handleSeat(payload, context)));
+        registrar.playToServer(CarControlPayload.TYPE, CarControlPayload.STREAM_CODEC,
+                (payload, context) -> context.enqueueWork(() -> handleCarControl(payload, context)));
     }
 
     /**
@@ -126,6 +128,42 @@ public final class RwatNetwork {
         for (java.util.UUID id : consist.wagonIds()) {
             if (level.getEntity(id) instanceof WagonEntity wagon) {
                 wagon.setControl(payload.group(), payload.value());
+            }
+        }
+    }
+
+    /**
+     * The doors and lights of the train's cars from the driver's panel (SPEC
+     * §9.7): only by the train's driver, at the controls (and so with the
+     * driver's key the server may want). Left and right as that driver sees
+     * them; doors as if each were clicked — their group goes along, every
+     * client sounds them; the lights are the car's groups the client names.
+     */
+    private static void handleCarControl(CarControlPayload payload, IPayloadContext context) {
+        if (!(context.player() instanceof ServerPlayer player)
+                || !(player.level() instanceof ServerLevel level)) {
+            return;
+        }
+        Consist consist = ConsistManager.get(level).byId(payload.consistId());
+        ConsistManager.Driver driver = consist == null ? null : ConsistManager.driverOf(level, consist);
+        if (driver == null || !driver.seated() || driver.player() != player) {
+            return;
+        }
+        for (java.util.UUID id : consist.wagonIds()) {
+            if (!(level.getEntity(id) instanceof WagonEntity wagon)
+                    || payload.wagonId() >= 0 && wagon.getId() != payload.wagonId()) {
+                continue;
+            }
+            switch (payload.target()) {
+                case DOORS_LEFT -> wagon.setPassengerDoors(true, driver.facing(), payload.on());
+                case DOORS_RIGHT -> wagon.setPassengerDoors(false, driver.facing(), payload.on());
+                case LIGHTS -> {
+                    if (payload.wagonId() >= 0) {
+                        for (String group : payload.groups()) {
+                            wagon.setControl(group, payload.on() ? 1.0F : 0.0F);
+                        }
+                    }
+                }
             }
         }
     }

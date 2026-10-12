@@ -932,6 +932,26 @@ public class WagonEntity extends Entity {
     }
 
     /**
+     * Open or close the passengers' doors on one side (server; SPEC §9.7, the
+     * driver's panel): the driver's left or right, as one facing {@code
+     * facing} along the path (+1 = +s) sees it — a car running turned round
+     * has them the other way. Each door as if clicked: its group goes with it.
+     */
+    public void setPassengerDoors(boolean left, int facing, boolean open) {
+        WagonType type = typeNow();
+        if (type == null) {
+            return;
+        }
+        int side = CabArea.leftSide(isFlipped(), facing) * (left ? 1 : -1);
+        int doors = CabArea.passengerSideDoors(type, side);
+        for (int i = 0; i < 32; i++) {
+            if ((doors >> i & 1) != 0) {
+                setDoorOpen(i, open);
+            }
+        }
+    }
+
+    /**
      * Open or close door {@code index} (server) — and the other doors of its
      * group (SPEC §9.5: IR works a control group's doors together). Each
      * client sounds the doors that changed, with the pack's own sound (SPEC §10).

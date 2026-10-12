@@ -241,6 +241,43 @@ public final class CabArea {
     }
 
     /**
+     * The passengers' side doors of {@code type} on one side of the model,
+     * as open-door bits (SPEC §9.7, the doors from the driver's panel):
+     * doors in a side wall to outside, with a leaf, facing {@code modelSide}
+     * (+1 = the model's +X, the left as one looks along its +Z), not wanting
+     * the key. On a car with a cab only the doors of a group count — the
+     * passenger doors IR's multiple units work together from the cab (the
+     * ER2's {@code DrL}, the DR1's {@code DL}); a locomotive's engine-room
+     * doors (the VL80's, the DR1's {@code EDL}) are no passengers' doors.
+     */
+    public static int passengerSideDoors(WagonType type, int modelSide) {
+        CabArea area = of(type);
+        boolean cab = type.cab() != null;
+        int bits = 0;
+        List<WagonType.Door> doors = type.doors();
+        for (int d = 0; d < doors.size() && d < 32; d++) {
+            WagonType.Door door = doors.get(d);
+            if (door.axis() == 0 && door.external() && !door.fixed() && door.outward() == modelSide
+                    && !area.cabDoor(d) && (!cab || door.group() != null)) {
+                bits |= 1 << d;
+            }
+        }
+        return bits;
+    }
+
+    /**
+     * Which side of a car's model is the driver's left (+1 = the model's
+     * +X, −1 = its −X): looking along the model's +Z its +X is on the left;
+     * a car running flipped has its +Z towards −s, and a driver facing −s
+     * (the other end's cab) has the sides the other way round.
+     *
+     * @param facing which way along the path the driver looks: +1 = +s
+     */
+    public static int leftSide(boolean flipped, int facing) {
+        return (flipped ? -1 : 1) * (facing < 0 ? -1 : 1);
+    }
+
+    /**
      * Which way along the path a driver at {@code chair} of a car looks (+1
      * = +s, SPEC §6.12): a car in a flipped slot looks towards −s, and so
      * does a chair facing the model's rear. Null chair: a cab seat without

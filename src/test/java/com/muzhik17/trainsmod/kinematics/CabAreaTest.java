@@ -86,6 +86,20 @@ class CabAreaTest {
     }
 
     @Test
+    void passengerSideDoors_groupedOnesNotTheCabsNorTheEngineRooms() {
+        assertEquals(0b00001, CabArea.passengerSideDoors(EMU_HEAD, 1));
+        assertEquals(0b00010, CabArea.passengerSideDoors(EMU_HEAD, -1));
+        // a coach without a cab: every side door with a leaf counts, grouped or not
+        WagonType coach = type(new WagonType.Interior(List.of(zone(-1.3, -9.5, 1.3, 9.5))),
+                List.of(side("D1", 1, 2.0, 3.0, null), side("D2", -1, 2.0, 3.0, null),
+                        side("D3", 1, -3.0, -2.0, null)), null);
+        assertEquals(0b101, CabArea.passengerSideDoors(coach, 1));
+        assertEquals(0b010, CabArea.passengerSideDoors(coach, -1));
+        assertEquals(0, CabArea.of(coach).cabDoors());
+        assertEquals(-1, CabArea.of(coach).cabAt(0.0, 0.0));
+    }
+
+    @Test
     void doorOfACabDoorsGroup_wantsTheKeyToo() {
         // the ER2's CabD pair: the partition door and the one into the cab open together
         WagonType er2 = type(new WagonType.Interior(List.of(
@@ -131,7 +145,12 @@ class CabAreaTest {
     }
 
     @Test
-    void facing_asTheDriverSeesIt() {
+    void sidesAndFacing_asTheDriverSeesThem() {
+        // the model's +X is the left looking along its +Z
+        assertEquals(1, CabArea.leftSide(false, 1));
+        assertEquals(-1, CabArea.leftSide(false, -1), "the driver looks back along the train");
+        assertEquals(-1, CabArea.leftSide(true, 1), "a car running turned round");
+        assertEquals(1, CabArea.leftSide(true, -1));
         assertEquals(1, CabArea.facing(false, null));
         assertEquals(-1, CabArea.facing(true, null));
         assertEquals(-1, CabArea.facing(false, chair(0.0, 0.0, 180.0F)));
