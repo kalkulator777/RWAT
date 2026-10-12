@@ -161,4 +161,25 @@ class ObjectRoleTest {
         assertEquals("WIDGET_13", wheel.key());
         assertEquals("Hand Brake", wheel.label());
     }
+
+    @Test
+    void couplerHeads_oneObjectPerState() {
+        // IR shows a HIDE part while its value isn't 1; COUPLED's value is 1 while coupled
+        ObjectRole.Coupled shut = ObjectRole.coupled("COUPLED_FRONT_1_HIDE_INVERT");
+        assertTrue(shut.front());
+        assertSame(ObjectRole.Coupled.Shown.COUPLED, shut.shown());
+        ObjectRole.Coupled hanging = ObjectRole.coupled("COUPLED_REAR_2_HIDE_mvp_dr1a");
+        assertFalse(hanging.front());
+        assertSame(ObjectRole.Coupled.Shown.UNCOUPLED, hanging.shown());
+        assertSame(ObjectRole.Coupled.Shown.ALWAYS, ObjectRole.coupled("COUPLED_REAR_1").shown());
+        // not a control, and the uncoupling lever on the frame is no head
+        assertNull(ObjectRole.parse("COUPLED_FRONT_1_HIDE_INVERT").control());
+        assertNull(ObjectRole.coupled("COUPLER_ENGAGED_FRONT_1_TOGGLE_mvp_amendorf"));
+        assertNull(ObjectRole.coupled("FRAME_mvp_amendorf"));
+
+        assertTrue(ObjectRole.Coupled.Shown.COUPLED.at(true));
+        assertFalse(ObjectRole.Coupled.Shown.COUPLED.at(false));
+        assertTrue(ObjectRole.Coupled.Shown.UNCOUPLED.at(false));
+        assertTrue(ObjectRole.Coupled.Shown.ALWAYS.at(false));
+    }
 }

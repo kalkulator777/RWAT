@@ -101,6 +101,8 @@ public final class ClientConsists {
         float indBrakePressure;
         /** The driver's held signals per the newest snapshot (SPEC §10). */
         int signals;
+        /** The wagons' entity ids by index per the newest snapshot (−1: not tracked here). */
+        int[] wagonIds = new int[0];
 
         /** (Re)materialize the path when the spec or the client graph changed. */
         TrackPath path() {
@@ -153,6 +155,7 @@ public final class ClientConsists {
         state.indBrakePressure = payload.indBrakePressure();
         state.signals = payload.signals();
         int[] wagonIds = payload.wagonEntityIds();
+        state.wagonIds = wagonIds;
         for (int i = 0; i < wagonIds.length; i++) {
             if (wagonIds[i] >= 0) {
                 MEMBERS.put(wagonIds[i], new Member(payload.consistId(), i));
@@ -212,6 +215,12 @@ public final class ClientConsists {
     public static int memberConsist(int entityId, int fallback) {
         Member member = MEMBERS.get(entityId);
         return member != null ? member.consistId : fallback;
+    }
+
+    /** The entity id of wagon {@code index} of a consist per the newest snapshot, −1 if unknown. */
+    public static int entityIdAt(int consistId, int index) {
+        State state = STATES.get(consistId);
+        return state == null || index < 0 || index >= state.wagonIds.length ? -1 : state.wagonIds[index];
     }
 
     /** The wagon's index in that consist — see {@link #memberConsist}. */

@@ -17,6 +17,7 @@ import com.muzhik17.trainsmod.consist.WagonEntity;
 import com.muzhik17.trainsmod.kinematics.HullCollision;
 import com.muzhik17.trainsmod.kinematics.PoseMath;
 import com.muzhik17.trainsmod.kinematics.RayGrid;
+import com.muzhik17.trainsmod.kinematics.Sway;
 import com.muzhik17.trainsmod.kinematics.WagonPose;
 import com.muzhik17.trainsmod.stock.ConsistComposition;
 import com.muzhik17.trainsmod.stock.WagonType;
@@ -153,6 +154,22 @@ public final class ClientWagonRay {
             DRAWN.put(wagon.getId(), new Matrix4d(m));
         }
         return m;
+    }
+
+    /**
+     * Wagon {@code index} of a consist as drawn at {@code partialTick}, model
+     * frame → world, without its entity — the next car a coupler head turns
+     * to (SPEC §6.12); null if its pose or slot isn't known yet.
+     */
+    public static Matrix4d drawnAt(int consistId, int index, float partialTick) {
+        WagonPose pose = ClientConsists.renderPose(consistId, index, partialTick);
+        ConsistComposition.Slot slot = ClientConsists.slot(consistId, index);
+        if (pose == null || slot == null) {
+            return null;
+        }
+        int entityId = ClientConsists.entityIdAt(consistId, index);
+        return PoseMath.drawnBody(new Vector3d(pose.body()), pose.yaw(), pose.pitch(),
+                entityId >= 0 ? ClientRide.sway(entityId, partialTick) : Sway.ZERO, slot.flipped());
     }
 
     /**

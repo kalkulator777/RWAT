@@ -126,6 +126,7 @@ public record ObjectRole(Control control, float pivotDegrees, String lightGroup,
     private static final Pattern LCG = Pattern.compile("_LCG_([^_]+)");
     private static final Pattern RGB = Pattern.compile("_0[xX]([0-9A-Fa-f]{6})(?=_|$)");
     private static final Pattern HEADLIGHT = Pattern.compile("(?:^|_)HEADLIGHT_\\d+(?=_|$)");
+    private static final Pattern COUPLED = Pattern.compile("(?:^|_)COUPLED_(FRONT|REAR)_\\d+(?=_|$)");
     /** Blender's suffix on a duplicated object, {@code .001}. */
     private static final Pattern COPY_SUFFIX = Pattern.compile("\\.\\d{3}$");
 
@@ -158,6 +159,40 @@ public record ObjectRole(Control control, float pivotDegrees, String lightGroup,
     public static ObjectRole door(String objectName) {
         ObjectRole role = parse(objectName, true);
         return role.control() != null ? role : null;
+    }
+
+    /**
+     * A coupler head object (SPEC §6.12): IR's {@code COUPLED_FRONT_<n>} /
+     * {@code COUPLED_REAR_<n>} readout parts — one object per state of the
+     * head, at the model's {@code front} end or the rear. The readout is 1
+     * while that end is coupled, and IR shows a {@code HIDE} part while its
+     * value isn't 1 ({@code INVERT}: while it isn't 0): {@code _HIDE} is the
+     * head hanging free, {@code _HIDE_INVERT} the head coupled; without
+     * {@code HIDE} it shows either way.
+     */
+    public record Coupled(boolean front, Shown shown) {
+
+        /** When a head is drawn. */
+        public enum Shown {
+            COUPLED, UNCOUPLED, ALWAYS;
+
+            /** True if a head shown so is drawn at an end that is (or isn't) {@code coupled}. */
+            public boolean at(boolean coupled) {
+                return this == ALWAYS || (this == COUPLED) == coupled;
+            }
+        }
+    }
+
+    /** Read an object name as a coupler head ({@link Coupled}); null if it isn't one. */
+    public static Coupled coupled(String objectName) {
+        String name = COPY_SUFFIX.matcher(objectName).replaceFirst("");
+        Matcher head = COUPLED.matcher(name);
+        if (!head.find()) {
+            return null;
+        }
+        Coupled.Shown shown = !hasToken(name, "HIDE") ? Coupled.Shown.ALWAYS
+                : hasToken(name, "INVERT") ? Coupled.Shown.COUPLED : Coupled.Shown.UNCOUPLED;
+        return new Coupled(head.group(1).equals("FRONT"), shown);
     }
 
     private static ObjectRole parse(String objectName, boolean door) {

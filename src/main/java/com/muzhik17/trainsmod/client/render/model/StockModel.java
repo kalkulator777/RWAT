@@ -39,6 +39,9 @@ import net.minecraft.resources.ResourceLocation;
  * animation (SPEC §9.5): built like controls, each moved by the openness of
  * the wagon type's door whose box holds it ({@code WagonType.doorHolding}).
  *
+ * <p>The {@code couplers} are the coupler heads (SPEC §6.12), one per state
+ * of each end, which turn on their pivots to meet the next car's.
+ *
  * <p>Light (SPEC §8): every quad's {@code tag} says how it is lit —
  * {@link #tag}; {@code lightGroups} are the model's light groups (a tag's group
  * index points here), {@code lamps} the cabin lamps that light the interior,
@@ -61,7 +64,8 @@ public record StockModel(
         Map<String, Map<ResourceLocation, ResourceLocation>> liveries,
         List<String> lightGroups,
         List<Lamp> lamps,
-        List<Headlight> headlights) {
+        List<Headlight> headlights,
+        List<Coupler> couplers) {
 
     /** Quad tag bits (SPEC §8): low byte = light group index + 1 (0 = none). */
     public static final int TAG_GROUP_MASK = 0xFF;
@@ -142,6 +146,17 @@ public record StockModel(
         }
     }
 
+    /**
+     * A coupler head in one of its states (SPEC §6.12, {@link ObjectRole.Coupled}):
+     * at the model's {@code front} end or the rear, drawn when {@code shown}
+     * says for that end, turning on {@code pivot} (model space: on the centre
+     * line, at the inner end of its end's heads — where the shank leaves the
+     * frame) toward the next car's head.
+     */
+    public record Coupler(boolean front, ObjectRole.Coupled.Shown shown, Map<ResourceLocation, Mesh> meshes,
+            Vector3f pivot) {
+    }
+
     /** A cabin lamp (SPEC §8): the centre of a glowing island of its group's mesh. */
     public record Lamp(float x, float y, float z, int group) {
     }
@@ -201,7 +216,7 @@ public record StockModel(
     public static StockModel empty() {
         Bogie none = new Bogie(Map.of(), List.of());
         return new StockModel(Map.of(), Map.of(), List.of(), List.of(), List.of(), none, none,
-                Map.of(), List.of(), List.of(), List.of());
+                Map.of(), List.of(), List.of(), List.of(), List.of());
     }
 
     public boolean isEmpty() {

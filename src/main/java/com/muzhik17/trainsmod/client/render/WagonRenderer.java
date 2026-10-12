@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.joml.Matrix4d;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
@@ -17,12 +18,14 @@ import com.muzhik17.trainsmod.client.ClientConsists;
 import com.muzhik17.trainsmod.client.ClientDoorInteract;
 import com.muzhik17.trainsmod.client.ClientFloorDebug;
 import com.muzhik17.trainsmod.client.ClientRide;
+import com.muzhik17.trainsmod.client.ClientWagonRay;
 import com.muzhik17.trainsmod.client.render.model.StockModel;
 import com.muzhik17.trainsmod.client.render.model.StockModels;
 import com.muzhik17.trainsmod.client.render.model.WagonModel;
 import com.muzhik17.trainsmod.consist.Handles;
 import com.muzhik17.trainsmod.consist.WagonEntity;
 import com.muzhik17.trainsmod.convention.ControlValue;
+import com.muzhik17.trainsmod.kinematics.CouplerAim;
 import com.muzhik17.trainsmod.kinematics.EdgeOutline;
 import com.muzhik17.trainsmod.kinematics.PoseMath;
 import com.muzhik17.trainsmod.kinematics.Sway;
@@ -75,6 +78,12 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
      * render. Off now that the bogie seating is play-test confirmed.
      */
     private static final boolean DEBUG_BOGIES = false;
+    /**
+     * Debug (SPEC §2.4a): coupler heads drawn straight, as before they
+     * turned — the {@code couplers} autoscene flips it (by reflection) to
+     * show both side by side.
+     */
+    private static boolean debugStraightCouplers;
     /** Half-extent of a bogie marker box, blocks. */
     private static final float BOGIE_MARK = 0.35F;
 
@@ -250,6 +259,7 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
             double[] box = ClientCabInteract.seatBox(seat);
             outlineBox(poseStack, buffers, box[0], box[1], box[2], box[3], box[4], box[5]);
         }
+        drawCouplers(baked, wagon, slot, wagonIndex, partialTick, poseStack);
         if (ClientFloorDebug.shown()) {
             ClientFloorDebug.draw(poseStack, buffers, slot.type()); // SPEC §9.6 debug view
         }
@@ -504,6 +514,91 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
             poseStack.popPose();
         }
         return chairOutlined;
+    }
+
+    /**
+     * The coupler heads (SPEC §6.12): at each end the head of that end's
+     * state — coupled, or hanging free — on the body, so it sways with it; a
+     * coupled head turned on its pivot toward the middle of its pivot and the
+     * next car's, both cars as drawn, so the two heads meet in a curve
+     * instead of parting at an angle, within {@link CouplerAim#LIMIT_DEGREES}.
+     */
+    private static void drawCouplers(BakedStockModel baked, WagonEntity wagon, ConsistComposition.Slot slot,
+            int wagonIndex, float partialTick, PoseStack poseStack) {
+        if (baked.couplers().isEmpty()) {
+            return;
+        }
+        int consistId = wagon.getConsistId();
+        Matrix4d toWorld = null;
+        for (boolean front : new boolean[]{true, false}) {
+            // the model's front is the path-front end (toward index − 1) unless the car runs turned
+            boolean pathFront = front != slot.flipped();
+            int next = pathFront ? wagonIndex - 1 : wagonIndex + 1;
+            boolean coupled = next >= 0 && ClientConsists.slot(consistId, next) != null;
+            double[] turn = null;
+            for (BakedStockModel.BakedCoupler head : baked.couplers()) {
+                StockModel.Coupler coupler = head.coupler();
+                if (coupler.front() != front || !coupler.shown().at(coupled)) {
+                    continue;
+                }
+                Vector3f pivot = coupler.pivot();
+                if (turn == null) {
+                    if (coupled && toWorld == null) {
+                        toWorld = ClientWagonRay.drawn(wagon, partialTick);
+                    }
+                    turn = coupled && !debugStraightCouplers
+                            ? aimCoupler(toWorld, pivot, front, consistId, next, pathFront, partialTick)
+                            : new double[]{0.0, 0.0};
+                }
+                poseStack.pushPose();
+                poseStack.translate(pivot.x, pivot.y, pivot.z);
+                poseStack.mulPose(Axis.YP.rotation((float) turn[0]));
+                poseStack.mulPose(Axis.XP.rotation((float) turn[1]));
+                poseStack.translate(-pivot.x, -pivot.y, -pivot.z);
+                draw(head.meshes(), poseStack);
+                poseStack.popPose();
+            }
+        }
+    }
+
+    /**
+     * The turn of a coupled head on {@code pivot} (model frame of a car drawn
+     * by {@code toWorld}): toward the middle of its pivot and the facing
+     * pivot of the next car {@code next}, that car as drawn.
+     */
+    private static double[] aimCoupler(Matrix4d toWorld, Vector3f pivot, boolean front, int consistId, int next,
+            boolean pathFront, float partialTick) {
+        Matrix4d nextToWorld = ClientWagonRay.drawnAt(consistId, next, partialTick);
+        ConsistComposition.Slot nextSlot = ClientConsists.slot(consistId, next);
+        if (nextToWorld == null || nextSlot == null) {
+            return new double[]{0.0, 0.0};
+        }
+        // the car ahead faces us with its path-rear end, the car behind with its path-front;
+        // its model front is its path front unless it runs turned
+        boolean nextFront = !pathFront != nextSlot.flipped();
+        Vector3d theirs = nextToWorld.transformPosition(couplerPivot(nextSlot, nextFront, pivot.y));
+        Vector3d meet = toWorld.transformPosition(new Vector3d(pivot.x, pivot.y, pivot.z)).add(theirs).mul(0.5);
+        Vector3d local = toWorld.invertAffine(new Matrix4d()).transformPosition(meet);
+        return CouplerAim.angles(pivot.x, pivot.y, pivot.z, local.x, local.y, local.z, front,
+                CouplerAim.LIMIT_DEGREES);
+    }
+
+    /**
+     * A car's coupler pivot at its model {@code front} end or rear (model
+     * frame): its heads' pivot, or — a model without heads — its coupler
+     * point at height {@code y}.
+     */
+    private static Vector3d couplerPivot(ConsistComposition.Slot slot, boolean front, float y) {
+        StockModel model = StockModels.model(slot.type().id());
+        if (model != null) {
+            for (StockModel.Coupler coupler : model.couplers()) {
+                if (coupler.front() == front) {
+                    return new Vector3d(coupler.pivot());
+                }
+            }
+        }
+        double reach = slot.type().couplerReach(front);
+        return new Vector3d(0.0, y, front ? reach : -reach);
     }
 
     /** True if a control's rest box holds the top of the chair's cushion: the control is the chair. */

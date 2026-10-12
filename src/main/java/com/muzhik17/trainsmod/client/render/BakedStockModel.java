@@ -49,6 +49,10 @@ public final class BakedStockModel implements AutoCloseable {
     public record BakedControl(StockModel.Control control, List<GpuMesh> meshes) {
     }
 
+    /** A coupler head's buffers (SPEC §6.12); the coupler says when it shows and where it turns. */
+    public record BakedCoupler(StockModel.Coupler coupler, List<GpuMesh> meshes) {
+    }
+
     /** Block light a lamp gives right beside it; it falls off by one per block, like MC's. */
     private static final float LAMP_LEVEL = 15.0F;
     private static final float LAMP_FALLOFF = 1.0F;
@@ -66,10 +70,11 @@ public final class BakedStockModel implements AutoCloseable {
     private final List<BakedControl> doorLeaves;
     private final BakedBogie front;
     private final BakedBogie rear;
+    private final List<BakedCoupler> couplers;
 
     private BakedStockModel(List<GpuMesh> body, List<GpuMesh> interior, List<BakedDoor> doors,
             List<BakedControl> controls, List<BakedControl> doorLeaves, BakedBogie front,
-            BakedBogie rear) {
+            BakedBogie rear, List<BakedCoupler> couplers) {
         this.body = body;
         this.interior = interior;
         this.doors = doors;
@@ -77,6 +82,12 @@ public final class BakedStockModel implements AutoCloseable {
         this.doorLeaves = doorLeaves;
         this.front = front;
         this.rear = rear;
+        this.couplers = couplers;
+    }
+
+    /** The coupler heads (SPEC §6.12), each state of each end. */
+    public List<BakedCoupler> couplers() {
+        return couplers;
     }
 
     public List<GpuMesh> body() {
@@ -126,7 +137,17 @@ public final class BakedStockModel implements AutoCloseable {
                 bakeControls(model.controls(), swaps, light),
                 bakeControls(model.doorLeaves(), swaps, light),
                 bakeBogie(model.frontBogie(), swaps, light),
-                bakeBogie(model.rearBogie(), swaps, light));
+                bakeBogie(model.rearBogie(), swaps, light),
+                bakeCouplers(model.couplers(), swaps, light));
+    }
+
+    private static List<BakedCoupler> bakeCouplers(List<StockModel.Coupler> couplers,
+            Map<ResourceLocation, ResourceLocation> swaps, Mesh.VertexLight light) {
+        List<BakedCoupler> baked = new ArrayList<>(couplers.size());
+        for (StockModel.Coupler coupler : couplers) {
+            baked.add(new BakedCoupler(coupler, bakeBuckets(coupler.meshes(), swaps, light)));
+        }
+        return List.copyOf(baked);
     }
 
     /** The per-vertex light of a bake (SPEC §8). */
@@ -251,6 +272,9 @@ public final class BakedStockModel implements AutoCloseable {
         }
         for (BakedControl leaf : doorLeaves) {
             leaf.meshes().forEach(GpuMesh::close);
+        }
+        for (BakedCoupler coupler : couplers) {
+            coupler.meshes().forEach(GpuMesh::close);
         }
         closeBogie(front);
         closeBogie(rear);
