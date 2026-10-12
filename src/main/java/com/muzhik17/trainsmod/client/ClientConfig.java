@@ -2,11 +2,16 @@ package com.muzhik17.trainsmod.client;
 
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.config.ModConfig;
+import net.neoforged.neoforge.client.gui.ConfigurationScreen;
+import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 /**
- * The mod's client settings ({@code config/railswheelsandtrains-client.toml}).
- * The loader's config API stays in this one adapter (SPEC §7.3).
+ * The mod's client settings ({@code config/railswheelsandtrains-client.toml}),
+ * also changed in game: Mods → Rails, Wheels And Trains → Config (the
+ * loader's own config screen; names and tooltips from the lang files,
+ * {@code railswheelsandtrains.configuration.<key>}). The loader's config API
+ * stays in this one adapter (SPEC §7.3).
  */
 public final class ClientConfig {
 
@@ -39,9 +44,10 @@ public final class ClientConfig {
     private ClientConfig() {
     }
 
-    /** Mod construction (from the client mod class). */
+    /** Mod construction (from the client mod class): the settings and the in-game screen for every config of the mod. */
     public static void register(ModContainer container) {
         container.registerConfig(ModConfig.Type.CLIENT, SPEC);
+        container.registerExtensionPoint(IConfigScreenFactory.class, ConfigurationScreen::new);
     }
 
     /** True if the driver's instruments are shown on the HUD (SPEC §9.7). */
