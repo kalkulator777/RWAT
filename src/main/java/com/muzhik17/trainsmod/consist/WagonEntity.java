@@ -121,11 +121,12 @@ public class WagonEntity extends Entity {
      */
     private static final double SIT_DROP = 0.6;
     /**
-     * How far the seated driver may look round from the chair's facing,
-     * degrees each way (vanilla's boat: 105) — the body stays to the desk, so
-     * the head no longer spins all the way round (play-test).
+     * How far the seated driver's head turns from the chair's facing as the
+     * model is drawn, degrees each way (a living entity's own limit, 75): the
+     * camera turns all the way round, the body and legs stay square to the
+     * desk and the head never spins round like an owl's (SPEC §9.2).
      */
-    public static final float SEAT_LOOK = 105.0F;
+    public static final float SEAT_HEAD_TURN = 75.0F;
     /** Control groups a wagon keeps at most, and the longest group name (network sanity). */
     private static final int MAX_CONTROL_GROUPS = 64;
     private static final int MAX_CONTROL_NAME = 32;
@@ -434,25 +435,25 @@ public class WagonEntity extends Entity {
     }
 
     /**
-     * Keep a seated driver's look within {@link #SEAT_LOOK} of the chair's
-     * facing, body square to the desk (vanilla {@code Boat.clampRotation}):
-     * shifting {@code yRotO} with {@code yRot} keeps the frame lerp smooth.
+     * Pose a seated driver (SPEC §9.2): the body and legs square to the desk,
+     * the head turned towards the look but no more than {@link
+     * #SEAT_HEAD_TURN} off the chair. The look itself ({@code yRot}, the
+     * camera) is left alone — free all the way round; only the drawn head
+     * stops (2026-10-12: a look clamped to the chair, like vanilla's boat,
+     * kept the driver from looking back along the train).
      */
-    public static void clampSeatedLook(Entity passenger, float facing) {
+    public static void seatPose(Entity passenger, float facing) {
         passenger.setYBodyRot(facing);
         float off = Mth.wrapDegrees(passenger.getYRot() - facing);
-        float clamped = Mth.clamp(off, -SEAT_LOOK, SEAT_LOOK);
-        passenger.yRotO += clamped - off;
-        passenger.setYRot(passenger.getYRot() + clamped - off);
-        passenger.setYHeadRot(passenger.getYRot());
+        passenger.setYHeadRot(facing + Mth.clamp(off, -SEAT_HEAD_TURN, SEAT_HEAD_TURN));
     }
 
-    /** The mouse turned a passenger (client): the seated driver's look stays within the chair's. */
+    /** The mouse turned a passenger (client): a seated driver's head follows, within the chair's reach. */
     @Override
     public void onPassengerTurned(Entity passenger) {
         float facing = seatFacing(passenger);
         if (!Float.isNaN(facing)) {
-            clampSeatedLook(passenger, facing);
+            seatPose(passenger, facing);
         }
     }
 
@@ -996,8 +997,8 @@ public class WagonEntity extends Entity {
                 getYRot(), getXRot(), local);
         move.accept(passenger, world.x, world.y, world.z);
         if (seat != null) {
-            // every side, every tick: the body square to the desk, the look within reach of it
-            clampSeatedLook(passenger, getYRot() + seat.yaw());
+            // every side, every tick: the body square to the desk, the head within reach of it
+            seatPose(passenger, getYRot() + seat.yaw());
         }
     }
 

@@ -277,10 +277,11 @@ public final class ClientAutoScene {
             case 440 -> shot(mc, "rwat-walk-hover-throttle.png");
             case 441 -> aimAt(mc, com.muzhik17.trainsmod.convention.ObjectRole.Kind.WIDGET, "FHL");
             case 455 -> shot(mc, "rwat-walk-hover-switch.png");
-            // look far round: the seated head stops at the chair's limit
+            // look far round: the camera turns freely, the drawn head stops at the chair's limit
             case 456 -> look(mc, 170.0F, 0.0F);
-            case 466 -> report(mc, String.format(Locale.ROOT, "looked 170 off the desk: yaw %.1f, wagon %.1f",
-                    mc.player.getYRot(), wagon(mc).getYRot()));
+            case 466 -> report(mc, String.format(Locale.ROOT,
+                    "looked 170 off the desk: yaw %.1f, head %.1f, body %.1f, wagon %.1f",
+                    mc.player.getYRot(), mc.player.getYHeadRot(), mc.player.yBodyRot, wagon(mc).getYRot()));
             case 470 -> mc.setScreen(new com.muzhik17.trainsmod.client.gui.DriverPanelScreen(wagon(mc)));
             case 485 -> shot(mc, "rwat-walk-driver-panel.png");
             case 495 -> mc.stop();
