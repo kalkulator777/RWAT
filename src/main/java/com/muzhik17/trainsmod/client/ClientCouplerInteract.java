@@ -7,7 +7,6 @@ import org.joml.Vector3d;
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.consist.WagonEntity;
 import com.muzhik17.trainsmod.kinematics.HullCollision;
-import com.muzhik17.trainsmod.kinematics.PoseMath;
 import com.muzhik17.trainsmod.network.HandbrakePayload;
 import com.muzhik17.trainsmod.network.UncouplePayload;
 import com.muzhik17.trainsmod.stock.ConsistComposition;
@@ -44,7 +43,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * </ul>
  * The nearest hit wins; a hull in front of it (aiming through a car) or a
  * nearer block keeps the click. A hull hit anywhere else on the car is its
- * handbrake. Runs before the door pick: with the crowbar
+ * handbrake. Picked once per frame against the cars as drawn
+ * ({@link ClientWagonRay}); a click takes the last frame's pick. Runs before the door pick: with the crowbar
  * in hand a coupler beats a door next to it, and a miss falls through to the
  * doors and the item (which hints what it is for).
  */
@@ -65,8 +65,16 @@ public final class ClientCouplerInteract {
 
     /** False after an uncouple click until the use button is released. */
     private static boolean armed = true;
+    /** The coupler or handbrake under the crosshair in the last frame, crowbar in hand; or null. */
+    private static Pick framePick;
 
     private ClientCouplerInteract() {
+    }
+
+    /** Pick for this frame, against the cars as drawn ({@link ClientWagonRay}) — with the crowbar only. */
+    static void frame(Minecraft mc, LocalPlayer player, ClientWagonRay.Look look) {
+        framePick = player.getMainHandItem().is(RailsWheelsAndTrains.CROWBAR.get())
+                ? pick(mc, player, look) : null;
     }
 
     @SubscribeEvent(priority = EventPriority.HIGH)
@@ -80,8 +88,8 @@ public final class ClientCouplerInteract {
                 || !player.getMainHandItem().is(RailsWheelsAndTrains.CROWBAR.get())) {
             return;
         }
-        Pick pick = pick(mc, player);
-        if (pick == null) {
+        Pick pick = framePick;
+        if (pick == null || pick.wagon().isRemoved()) {
             return; // no coupler under the crosshair: doors / the item's hint
         }
         event.setCanceled(true); // the click belongs to the coupler / the handbrake
@@ -109,10 +117,8 @@ public final class ClientCouplerInteract {
     }
 
     /** The nearest coupler (or handbrake) under the crosshair within reach, or null. */
-    private static Pick pick(Minecraft mc, LocalPlayer player) {
-        float partialTick = mc.getTimer().getGameTimeDeltaPartialTick(true);
-        Vec3 eye = player.getEyePosition(partialTick);
-        Vec3 look = player.getViewVector(partialTick);
+    private static Pick pick(Minecraft mc, LocalPlayer player, ClientWagonRay.Look look) {
+        Vec3 eye = look.eye();
         double reach = player.blockInteractionRange();
         List<WagonEntity> wagons = mc.level.getEntitiesOfClass(WagonEntity.class,
                 player.getBoundingBox().inflate(reach + 16.0));
@@ -129,11 +135,11 @@ public final class ClientCouplerInteract {
             boolean hasFront = index > 0 && ClientConsists.slot(consistId, index - 1) != null;
             boolean hasRear = ClientConsists.slot(consistId, index + 1) != null;
 
-            Vector3d body = new Vector3d(wagon.getX(), wagon.getY(), wagon.getZ());
-            Vector3d origin = PoseMath.worldToLocal(body, wagon.getYRot(), wagon.getXRot(),
-                    new Vector3d(eye.x, eye.y, eye.z));
-            Vector3d dir = PoseMath.worldToLocal(body, wagon.getYRot(), wagon.getXRot(),
-                    new Vector3d(eye.x + look.x, eye.y + look.y, eye.z + look.z)).sub(origin);
+            // the pose frame as drawn this frame
+            ClientWagonRay.LocalRay ray = ClientWagonRay.into(
+                    ClientWagonRay.drawnPose(wagon, look.partialTick()), look);
+            Vector3d origin = ray.origin();
+            Vector3d dir = ray.dir();
 
             // the pose frame's +Z is the path-forward end (towards index − 1),
             // whichever way the model is turned; the frame is centred on the body

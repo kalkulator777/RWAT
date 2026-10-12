@@ -15,6 +15,7 @@
     "ClientMountMessageMixin",
     "EntityRendererCabinLightMixin",
     "KeyMappingDrivingMixin",
+    "LevelRendererWagonSectionMixin",
     "LivingEntityRendererSeatMixin",
     "LivingEntityWalkAnimationMixin",
     "LocalPlayerCrouchMixin",

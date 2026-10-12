@@ -5,20 +5,32 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.joml.Matrix4d;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
 
+import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.client.render.model.Mesh;
 import com.muzhik17.trainsmod.client.render.model.StockModel;
 import com.muzhik17.trainsmod.consist.WagonEntity;
 import com.muzhik17.trainsmod.kinematics.HullCollision;
 import com.muzhik17.trainsmod.kinematics.PoseMath;
 import com.muzhik17.trainsmod.kinematics.RayGrid;
+import com.muzhik17.trainsmod.kinematics.Sway;
+import com.muzhik17.trainsmod.kinematics.WagonPose;
+import com.muzhik17.trainsmod.stock.ConsistComposition;
 import com.muzhik17.trainsmod.stock.WagonType;
 
+import net.minecraft.client.Camera;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 
 /**
  * Picking on a wagon's model (SPEC §9.3, §9.5): the look ray in the wagon's
@@ -28,7 +40,21 @@ import net.minecraft.world.phys.Vec3;
  * open door is closed by clicking its leaf, not the empty doorway) and never
  * reaches through a wall. Client thread only; a model's triangle grid is
  * built the first time it is asked for.
+ *
+ * <p><b>Picking runs in the frame</b> (SPEC §9.3): once per frame, before the
+ * entities are drawn, the frame's crosshair ray ({@link Look}: the camera, or
+ * the eye at the frame's partial tick) goes into each wagon's model frame
+ * <b>as the wagon is drawn in that frame</b> ({@link #drawn}: the render pose
+ * of the tick window, the body's sway, the turn of a flipped car) — the
+ * doors first, then the cab's controls (a nearer door keeps the click), then
+ * the crowbar's couplers. Clicks and drags in the tick use what the last
+ * frame picked, as vanilla clicks what its last pick hit. Picking against the
+ * wagon's <i>tick</i> pose (its entity position) put the hit boxes up to a
+ * tick's travel ahead of the model, which is drawn a tick behind the clock
+ * (SPEC §2.1): on a fast train they ran off the parts in the direction of
+ * travel (play-test, 2026-10-12).
  */
+@EventBusSubscriber(modid = RailsWheelsAndTrains.MODID, value = Dist.CLIENT)
 public final class ClientWagonRay {
 
     /** Grid cube size for the model's walls, blocks. */
@@ -48,17 +74,134 @@ public final class ClientWagonRay {
 
     private static final Map<String, Built> BUILT = new HashMap<>();
 
+    /**
+     * The crosshair ray of one frame: from {@code eye} along the unit
+     * {@code dir}, at the frame's {@code partialTick}.
+     */
+    public record Look(Vec3 eye, Vec3 dir, float partialTick) {
+
+        /** The point {@code t} blocks along the ray. */
+        public Vec3 at(double t) {
+            return eye.add(dir.scale(t));
+        }
+    }
+
+    /** A ray in a wagon's model (or pose) frame: origin and unit direction. */
+    public record LocalRay(Vector3d origin, Vector3d dir) {
+    }
+
+    /** Model → world of each wagon as drawn this frame, by entity id (render thread only). */
+    private static final Map<Integer, Matrix4d> DRAWN = new HashMap<>();
+    /** The partial tick {@link #DRAWN} holds the wagons at. */
+    private static float drawnAt = Float.NaN;
+
     private ClientWagonRay() {
     }
 
-    /** A world point in the wagon's model frame: the pose frame, turned 180° for a flipped wagon. */
-    static Vector3d toModel(WagonEntity wagon, Vec3 world) {
-        Vector3d local = PoseMath.worldToLocal(new Vector3d(wagon.getX(), wagon.getY(), wagon.getZ()),
-                wagon.getYRot(), wagon.getXRot(), new Vector3d(world.x, world.y, world.z));
-        if (wagon.isFlipped()) {
-            local.set(-local.x, local.y, -local.z);
+    /**
+     * Every frame, before the terrain and the entities: the frame's look,
+     * then the picks in their order — a door nearer than a control keeps the
+     * click, so the doors go first.
+     */
+    @SubscribeEvent
+    static void onRenderStage(RenderLevelStageEvent event) {
+        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_SKY) {
+            return;
         }
-        return local;
+        Minecraft mc = Minecraft.getInstance();
+        LocalPlayer player = mc.player;
+        if (player == null || mc.level == null) {
+            return;
+        }
+        float partialTick = event.getPartialTick().getGameTimeDeltaPartialTick(true);
+        DRAWN.clear();
+        drawnAt = partialTick;
+        Look look = look(event.getCamera(), player, partialTick);
+        ClientDoorInteract.frame(mc, player, look);
+        ClientCabInteract.frame(mc, player, look);
+        ClientCouplerInteract.frame(mc, player, look);
+        ClientBogieHit.frame(mc, player, look);
+    }
+
+    /**
+     * Where the crosshair points this frame: in first person the camera — its
+     * place, and its direction after the view's sway (SPEC §10), which is
+     * where the crosshair is; otherwise the player's eye and view at the
+     * frame's partial tick, as vanilla picks.
+     */
+    public static Look look(Camera camera, LocalPlayer player, float partialTick) {
+        if (camera.isInitialized() && camera.getEntity() == player && !camera.isDetached()) {
+            Vector3f f = camera.getLookVector();
+            return new Look(camera.getPosition(), new Vec3(f.x, f.y, f.z), partialTick);
+        }
+        return new Look(player.getEyePosition(partialTick), player.getViewVector(partialTick), partialTick);
+    }
+
+    /**
+     * A wagon's model frame → world as {@code WagonRenderer} draws it at
+     * {@code partialTick}: the render pose (the tick window behind the clock,
+     * SPEC §2.1), the body's sway (SPEC §10), the 180° turn of a flipped car
+     * ({@link PoseMath#drawnBody}); without a pose yet, at the entity, as the
+     * renderer falls back to. A fresh matrix.
+     */
+    public static Matrix4d drawn(WagonEntity wagon, float partialTick) {
+        Matrix4d cached = partialTick == drawnAt ? DRAWN.get(wagon.getId()) : null;
+        if (cached != null) {
+            return new Matrix4d(cached);
+        }
+        ConsistComposition.Slot slot = ClientConsists.slot(wagon.getConsistId(), wagon.getWagonIndex());
+        Matrix4d m = bodyAt(wagon, partialTick, slot != null ? slot.flipped() : wagon.isFlipped());
+        if (partialTick == drawnAt) {
+            DRAWN.put(wagon.getId(), new Matrix4d(m));
+        }
+        return m;
+    }
+
+    /**
+     * Wagon {@code index} of a consist as drawn at {@code partialTick}, model
+     * frame → world, without its entity — the next car a coupler head turns
+     * to (SPEC §6.12); null if its pose or slot isn't known yet.
+     */
+    public static Matrix4d drawnAt(int consistId, int index, float partialTick) {
+        WagonPose pose = ClientConsists.renderPose(consistId, index, partialTick);
+        ConsistComposition.Slot slot = ClientConsists.slot(consistId, index);
+        if (pose == null || slot == null) {
+            return null;
+        }
+        int entityId = ClientConsists.entityIdAt(consistId, index);
+        return PoseMath.drawnBody(new Vector3d(pose.body()), pose.yaw(), pose.pitch(),
+                entityId >= 0 ? ClientRide.sway(entityId, partialTick) : Sway.ZERO, slot.flipped());
+    }
+
+    /**
+     * The wagon's <b>pose</b> frame as drawn — {@link #drawn} without the
+     * flip: +Z is the path-forward end, whichever way the model is turned.
+     */
+    public static Matrix4d drawnPose(WagonEntity wagon, float partialTick) {
+        return bodyAt(wagon, partialTick, false);
+    }
+
+    private static Matrix4d bodyAt(WagonEntity wagon, float partialTick, boolean flipped) {
+        WagonPose pose = ClientConsists.renderPose(wagon.getConsistId(), wagon.getWagonIndex(), partialTick);
+        Vec3 lerped = pose == null ? wagon.getPosition(partialTick) : null;
+        Vector3d body = pose != null ? new Vector3d(pose.body()) : new Vector3d(lerped.x, lerped.y, lerped.z);
+        return PoseMath.drawnBody(body, pose != null ? pose.yaw() : wagon.getYRot(),
+                pose != null ? pose.pitch() : wagon.getXRot(),
+                ClientRide.sway(wagon.getId(), partialTick), flipped);
+    }
+
+    /** The look ray in the frame {@code toWorld} maps to the world. */
+    public static LocalRay into(Matrix4d toWorld, Look look) {
+        Matrix4d inverse = toWorld.invertAffine(new Matrix4d());
+        Vector3d origin = inverse.transformPosition(new Vector3d(look.eye().x, look.eye().y, look.eye().z));
+        Vector3d dir = inverse.transformDirection(new Vector3d(look.dir().x, look.dir().y, look.dir().z))
+                .normalize();
+        return new LocalRay(origin, dir);
+    }
+
+    /** The look ray in the wagon's model frame, the wagon as drawn at the look's partial tick. */
+    public static LocalRay inModel(WagonEntity wagon, Look look) {
+        return into(drawn(wagon, look.partialTick()), look);
     }
 
     /**

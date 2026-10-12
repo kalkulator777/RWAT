@@ -13,6 +13,7 @@ import com.muzhik17.trainsmod.client.ClientConsists;
 import com.muzhik17.trainsmod.client.ClientRide;
 import com.muzhik17.trainsmod.client.ClientWalk;
 import com.muzhik17.trainsmod.kinematics.CabArea;
+import com.muzhik17.trainsmod.kinematics.ClickReach;
 import com.muzhik17.trainsmod.kinematics.HullCollision;
 import com.muzhik17.trainsmod.kinematics.PoseMath;
 import com.muzhik17.trainsmod.kinematics.ReturnAboard;
@@ -754,21 +755,42 @@ public class WagonEntity extends Entity {
     /**
      * True if the player's eyes are within block reach (plus slack) of this
      * car's hull — near enough to work a switch on it from outside (server
-     * check for {@code ControlGroupPayload}).
+     * check for {@code ControlGroupPayload}); on a moving train, of the hull
+     * where the player's client drew it ({@link #clickSweep}).
      */
     public boolean withinReach(ServerPlayer player) {
         WagonType.Hull hull = collisionHull();
         if (hull == null) {
             return false;
         }
-        Vector3d eye = PoseMath.worldToLocal(new Vector3d(getX(), getY(), getZ()),
-                getYRot(), getXRot(), new Vector3d(player.getEyePosition().x,
-                        player.getEyePosition().y, player.getEyePosition().z));
-        double dx = Math.max(Math.max(hull.minX() - eye.x, eye.x - hull.maxX()), 0.0);
-        double dy = Math.max(Math.max(hull.minY() - eye.y, eye.y - hull.maxY()), 0.0);
-        double dz = Math.max(Math.max(hull.minZ() - eye.z, eye.z - hull.maxZ()), 0.0);
+        Vector3d eye = localEye(player);
         double reach = player.blockInteractionRange() + DOOR_REACH_SLACK;
-        return dx * dx + dy * dy + dz * dz <= reach * reach;
+        return ClickReach.distanceSq(eye.x, eye.y, eye.z, clickSweep(player),
+                hull.minX(), hull.minY(), hull.minZ(), hull.maxX(), hull.maxY(), hull.maxZ()) <= reach * reach;
+    }
+
+    /** The player's eye in this car's pose frame (server). */
+    public Vector3d localEye(ServerPlayer player) {
+        Vec3 eye = player.getEyePosition();
+        return PoseMath.worldToLocal(new Vector3d(getX(), getY(), getZ()), getYRot(), getXRot(),
+                new Vector3d(eye.x, eye.y, eye.z));
+    }
+
+    /**
+     * How far along its pose frame's z the player's eye is swept back to
+     * where their client drew this car when they clicked it (SPEC §9.3,
+     * {@link ClickReach}): the train's speed times the lag the client draws
+     * it with. None for a rider of the same train — they run with it, and
+     * the server places them on it. Server.
+     */
+    public double clickSweep(ServerPlayer player) {
+        if (player.getVehicle() instanceof WagonEntity ridden && ridden.getConsistId() == getConsistId()
+                || !(level() instanceof ServerLevel serverLevel)) {
+            return 0.0;
+        }
+        Consist consist = ConsistManager.get(serverLevel).byId(getConsistId());
+        return consist == null ? 0.0 : consist.speed()
+                * ClickReach.lagTicks(ClientConsists.INTERP_DELAY_TICKS, player.connection.latency());
     }
 
     // --- control groups (SPEC §8–§9) ---
@@ -1070,11 +1092,13 @@ public class WagonEntity extends Entity {
         if (door.fixed()) {
             return; // an opening without a leaf (SPEC §9.1)
         }
-        Vector3d centre = PoseMath.localToWorld(new Vector3d(getX(), getY(), getZ()),
-                getYRot(), getXRot(), new Vector3d((door.minX() + door.maxX()) * 0.5,
-                        (door.minY() + door.maxY()) * 0.5, (door.minZ() + door.maxZ()) * 0.5));
+        double cx = (door.minX() + door.maxX()) * 0.5;
+        double cy = (door.minY() + door.maxY()) * 0.5;
+        double cz = (door.minZ() + door.maxZ()) * 0.5;
+        Vector3d eye = localEye(player); // the door as the player's client drew it (SPEC §9.3)
         double reach = player.blockInteractionRange() + DOOR_REACH_SLACK;
-        if (player.getEyePosition().distanceToSqr(centre.x, centre.y, centre.z) > reach * reach) {
+        if (ClickReach.distanceSq(eye.x, eye.y, eye.z, clickSweep(player), cx, cy, cz, cx, cy, cz)
+                > reach * reach) {
             return;
         }
         if (cabArea().cabDoor(index) && !CabAccess.check(player)) {
@@ -1494,11 +1518,19 @@ public class WagonEntity extends Entity {
         return false;
     }
 
-    /** Long wagons get culled by their tight AABB otherwise (SPEC §2.4, 0.2). */
+    /**
+     * Long wagons get culled by their tight AABB otherwise (SPEC §2.4, 0.2).
+     * The box is round the entity, but the model is drawn up to a tick
+     * behind it (SPEC §2.1): a fast car's box reaches its run further.
+     */
     @Override
     public AABB getBoundingBoxForCulling() {
         // half the longest stock frame (platzkart ~12.6) plus curve slack
-        return getBoundingBox().inflate(16.0);
+        double reach = 16.0;
+        if (level().isClientSide) {
+            reach += Math.abs(ClientConsists.speed(getConsistId())) * 2.0;
+        }
+        return getBoundingBox().inflate(reach);
     }
 
     /** Server: open the doors a save had open, once this wagon's type is known (SPEC §9.8). */

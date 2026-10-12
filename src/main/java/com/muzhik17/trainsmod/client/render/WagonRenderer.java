@@ -4,7 +4,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.joml.Matrix4d;
 import org.joml.Matrix4f;
+import org.joml.Vector3d;
+import org.joml.Vector3f;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -13,25 +16,33 @@ import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.client.ClientCabInteract;
 import com.muzhik17.trainsmod.client.ClientConfig;
 import com.muzhik17.trainsmod.client.ClientConsists;
+import com.muzhik17.trainsmod.client.ClientDoorInteract;
 import com.muzhik17.trainsmod.client.ClientFloorDebug;
 import com.muzhik17.trainsmod.client.ClientRide;
+import com.muzhik17.trainsmod.client.ClientWagonRay;
 import com.muzhik17.trainsmod.client.render.model.StockModel;
 import com.muzhik17.trainsmod.client.render.model.StockModels;
 import com.muzhik17.trainsmod.client.render.model.WagonModel;
 import com.muzhik17.trainsmod.consist.Handles;
 import com.muzhik17.trainsmod.consist.WagonEntity;
 import com.muzhik17.trainsmod.convention.ControlValue;
+import com.muzhik17.trainsmod.kinematics.CouplerAim;
+import com.muzhik17.trainsmod.kinematics.EdgeOutline;
+import com.muzhik17.trainsmod.kinematics.PoseMath;
 import com.muzhik17.trainsmod.kinematics.Sway;
 import com.muzhik17.trainsmod.kinematics.WagonPose;
 import com.muzhik17.trainsmod.physics.TrainPhysics;
 import com.muzhik17.trainsmod.stock.ConsistComposition;
 import com.muzhik17.trainsmod.stock.WagonType;
 
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
+import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
@@ -69,6 +80,12 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
      * render. Off now that the bogie seating is play-test confirmed.
      */
     private static final boolean DEBUG_BOGIES = false;
+    /**
+     * Debug (SPEC §2.4a): coupler heads drawn straight, as before they
+     * turned — the {@code couplers} autoscene flips it (by reflection) to
+     * show both side by side.
+     */
+    private static boolean debugStraightCouplers;
     /** Half-extent of a bogie marker box, blocks. */
     private static final float BOGIE_MARK = 0.35F;
 
@@ -122,7 +139,12 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
 
     /** Scratch for a control's transform (render thread only). */
     private static final Matrix4f CONTROL_FRAME = new Matrix4f();
-    /** The outline round the cab control under the crosshair (SPEC §9.3): warm white. */
+    /**
+     * The outline round the control, chair or door under the crosshair (SPEC
+     * §9.3): the vanilla block outline's lines render type and width, in warm
+     * white — vanilla's black at 40 % vanishes on the black levers and
+     * switches of the cabs (play-test, 2026-10-12).
+     */
     private static final float OUTLINE_R = 1.0F;
     private static final float OUTLINE_G = 0.92F;
     private static final float OUTLINE_B = 0.7F;
@@ -131,8 +153,10 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
     private static final float REFUSED_R = 1.0F;
     private static final float REFUSED_G = 0.25F;
     private static final float REFUSED_B = 0.2F;
-    /** Outline gap round a control's box, blocks. */
+    /** Outline gap round a box drawn for a part without a mesh, blocks. */
     private static final float OUTLINE_PAD = 0.01F;
+    /** Scratch for the camera in a part's frame (render thread only). */
+    private static final Matrix4f TO_PART = new Matrix4f();
 
     private record BakeKey(StockModel model, String livery, int packedLight, long litMask) {
         @Override
@@ -218,19 +242,29 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
         if (drawInterior) {
             draw(baked.interior(), poseStack);
         }
-        drawDoors(baked, wagon, slot, partialTick, poseStack);
-        drawControls(baked, wagon, slot, wagonIndex, drawInterior, partialTick, poseStack, buffers);
+        // the door under the crosshair is outlined by its leaves, or by its box if the model moves none;
+        // red if it won't open for the player (a cab door without the driver's key)
+        int hoveredDoor = ClientDoorInteract.highlightedDoor(wagon);
+        boolean doorLocked = hoveredDoor >= 0 && ClientDoorInteract.highlightLocked();
+        if (!drawDoors(baked, wagon, slot, partialTick, hoveredDoor, doorLocked, poseStack, buffers)
+                && hoveredDoor >= 0 && hoveredDoor < slot.type().doors().size()) {
+            WagonType.Door door = slot.type().doors().get(hoveredDoor);
+            outlineBox(poseStack, buffers, doorLocked, door.minX(), door.minY(), door.minZ(),
+                    door.maxX(), door.maxY(), door.maxZ());
+        }
+        // the chair under the crosshair: by the control that is the chair (ChME3 WIDGET_4), else its box
+        int chair = ClientCabInteract.highlightedSeat(wagon);
+        WagonType.Seat seat = chair >= 0 && slot.type().cab() != null && chair < slot.type().cab().seats().size()
+                ? slot.type().cab().seats().get(chair) : null;
+        if (!drawControls(baked, wagon, slot, wagonIndex, drawInterior, partialTick, seat, poseStack, buffers)
+                && seat != null) {
+            double[] box = ClientCabInteract.seatBox(seat);
+            outlineBox(poseStack, buffers, ClientCabInteract.highlightRefused(),
+                    box[0], box[1], box[2], box[3], box[4], box[5]);
+        }
+        drawCouplers(baked, wagon, slot, wagonIndex, partialTick, poseStack);
         if (ClientFloorDebug.shown()) {
             ClientFloorDebug.draw(poseStack, buffers, slot.type()); // SPEC §9.6 debug view
-        }
-        int chair = ClientCabInteract.highlightedSeat(wagon);
-        if (chair >= 0 && slot.type().cab() != null && chair < slot.type().cab().seats().size()) {
-            double[] box = ClientCabInteract.seatBox(slot.type().cab().seats().get(chair));
-            boolean refused = ClientCabInteract.highlightRefused();
-            LevelRenderer.renderLineBox(poseStack, buffers.getBuffer(RenderType.lines()),
-                    box[0], box[1], box[2], box[3], box[4], box[5],
-                    refused ? REFUSED_R : OUTLINE_R, refused ? REFUSED_G : OUTLINE_G,
-                    refused ? REFUSED_B : OUTLINE_B, OUTLINE_A);
         }
         if (pose == null) {
             // no pose yet — ride the bogies rigidly at their pivots
@@ -370,13 +404,19 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
      * two nearest frames — on top of the body pose. Progress 0 is frame 0,
      * the rest pose, so a closed door draws exactly where the asset put it.
      * A leaf the asset moves by name (SPEC §9.5) turns/slides by the progress
-     * of the type's door whose box holds it.
+     * of the type's door whose box holds it. The {@code hovered} door's leaves
+     * and pieces are outlined by their contours (SPEC §9.3), red if it is
+     * {@code locked} to the player.
+     *
+     * @return true if the hovered door was outlined so (false: the model moves no leaf of it)
      */
-    private static void drawDoors(BakedStockModel baked, WagonEntity wagon,
-            ConsistComposition.Slot slot, float partialTick, PoseStack poseStack) {
+    private static boolean drawDoors(BakedStockModel baked, WagonEntity wagon,
+            ConsistComposition.Slot slot, float partialTick, int hovered, boolean locked, PoseStack poseStack,
+            MultiBufferSource buffers) {
         if (baked.doors().isEmpty() && baked.doorLeaves().isEmpty()) {
-            return;
+            return false;
         }
+        boolean outlined = false;
         WagonType type = slot.type();
         for (BakedStockModel.BakedControl leaf : baked.doorLeaves()) {
             StockModel.Control control = leaf.control();
@@ -387,16 +427,21 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
             poseStack.pushPose();
             poseStack.mulPose(CONTROL_FRAME);
             draw(leaf.meshes(), poseStack);
+            if (door >= 0 && door == hovered) {
+                outlined |= drawOutline(control.outline(), locked, poseStack, buffers);
+            }
             poseStack.popPose();
         }
         List<WagonType.Door> declared = type.doors();
         for (BakedStockModel.BakedDoor door : baked.doors()) {
             float progress = 0.0F;
+            int index = -1;
             for (int i = 0; i < declared.size(); i++) {
                 // the model's animation group and the type's door id match ignoring case
                 // (SPEC §6.3): DOOR_5_..._CG_Trap1 makes a door "Trap1", its .anim "trap1"
                 if (declared.get(i).id().equalsIgnoreCase(door.id())) {
                     progress = wagon.doorAnim(i, partialTick);
+                    index = i;
                     break;
                 }
             }
@@ -409,9 +454,13 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
                 poseStack.pushPose();
                 poseStack.mulPose(DOOR_FRAME);
                 draw(piece.meshes(), poseStack);
+                if (index >= 0 && index == hovered) {
+                    outlined |= drawOutline(piece.outline(), locked, poseStack, buffers);
+                }
                 poseStack.popPose();
             }
         }
+        return outlined;
     }
 
     /**
@@ -420,15 +469,19 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
      * a switch by the wagon's control group, a gauge by its reading. A lever
      * the local player is dragging shows where the mouse holds it, ahead of
      * the server's answer. Inside controls are skipped at a distance, like the
-     * interior. The control under the crosshair gets an outline of its box,
-     * moved with it.
+     * interior. The control under the crosshair is outlined by its contour,
+     * moved with it — as is the control that is the {@code chair} under the
+     * crosshair, if one is (its cushion in the control's box).
+     *
+     * @return true if the chair was outlined so
      */
-    private static void drawControls(BakedStockModel baked, WagonEntity wagon,
+    private static boolean drawControls(BakedStockModel baked, WagonEntity wagon,
             ConsistComposition.Slot slot, int wagonIndex, boolean drawInterior, float partialTick,
-            PoseStack poseStack, MultiBufferSource buffers) {
+            WagonType.Seat chair, PoseStack poseStack, MultiBufferSource buffers) {
         if (baked.controls().isEmpty()) {
-            return;
+            return false;
         }
+        boolean chairOutlined = false;
         Handles handles = ClientConsists.handles(wagon.getConsistId());
         boolean activeCab = handles.activeCab() == wagonIndex;
         int consistId = wagon.getConsistId();
@@ -453,18 +506,159 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
             poseStack.pushPose();
             poseStack.mulPose(CONTROL_FRAME);
             draw(bc.meshes(), poseStack);
-            if (ClientCabInteract.highlighted(wagon, control)) {
-                var lo = control.boxMin();
-                var hi = control.boxMax();
+            boolean isChair = chair != null && holds(control, chair);
+            if (ClientCabInteract.highlighted(wagon, control) || isChair) {
                 boolean refused = ClientCabInteract.highlightRefused();
-                LevelRenderer.renderLineBox(poseStack, buffers.getBuffer(RenderType.lines()),
-                        lo.x - OUTLINE_PAD, lo.y - OUTLINE_PAD, lo.z - OUTLINE_PAD,
-                        hi.x + OUTLINE_PAD, hi.y + OUTLINE_PAD, hi.z + OUTLINE_PAD,
-                        refused ? REFUSED_R : OUTLINE_R, refused ? REFUSED_G : OUTLINE_G,
-                        refused ? REFUSED_B : OUTLINE_B, OUTLINE_A);
+                if (!drawOutline(control.outline(), refused, poseStack, buffers)) {
+                    var lo = control.boxMin();
+                    var hi = control.boxMax();
+                    outlineBox(poseStack, buffers, refused, lo.x, lo.y, lo.z, hi.x, hi.y, hi.z);
+                }
+                chairOutlined |= isChair;
             }
             poseStack.popPose();
         }
+        return chairOutlined;
+    }
+
+    /**
+     * The coupler heads (SPEC §6.12): at each end the head of that end's
+     * state — coupled, or hanging free — on the body, so it sways with it; a
+     * coupled head turned on its pivot toward the middle of its pivot and the
+     * next car's, both cars as drawn, so the two heads meet in a curve
+     * instead of parting at an angle, within {@link CouplerAim#LIMIT_DEGREES}.
+     */
+    private static void drawCouplers(BakedStockModel baked, WagonEntity wagon, ConsistComposition.Slot slot,
+            int wagonIndex, float partialTick, PoseStack poseStack) {
+        if (baked.couplers().isEmpty()) {
+            return;
+        }
+        int consistId = wagon.getConsistId();
+        Matrix4d toWorld = null;
+        for (boolean front : new boolean[]{true, false}) {
+            // the model's front is the path-front end (toward index − 1) unless the car runs turned
+            boolean pathFront = front != slot.flipped();
+            int next = pathFront ? wagonIndex - 1 : wagonIndex + 1;
+            boolean coupled = next >= 0 && ClientConsists.slot(consistId, next) != null;
+            double[] turn = null;
+            for (BakedStockModel.BakedCoupler head : baked.couplers()) {
+                StockModel.Coupler coupler = head.coupler();
+                if (coupler.front() != front || !coupler.shown().at(coupled)) {
+                    continue;
+                }
+                Vector3f pivot = coupler.pivot();
+                if (turn == null) {
+                    if (coupled && toWorld == null) {
+                        toWorld = ClientWagonRay.drawn(wagon, partialTick);
+                    }
+                    turn = coupled && !debugStraightCouplers
+                            ? aimCoupler(toWorld, pivot, front, consistId, next, pathFront, partialTick)
+                            : new double[]{0.0, 0.0};
+                }
+                poseStack.pushPose();
+                poseStack.translate(pivot.x, pivot.y, pivot.z);
+                poseStack.mulPose(Axis.YP.rotation((float) turn[0]));
+                poseStack.mulPose(Axis.XP.rotation((float) turn[1]));
+                poseStack.translate(-pivot.x, -pivot.y, -pivot.z);
+                draw(head.meshes(), poseStack);
+                poseStack.popPose();
+            }
+        }
+    }
+
+    /**
+     * The turn of a coupled head on {@code pivot} (model frame of a car drawn
+     * by {@code toWorld}): toward the middle of its pivot and the facing
+     * pivot of the next car {@code next}, that car as drawn.
+     */
+    private static double[] aimCoupler(Matrix4d toWorld, Vector3f pivot, boolean front, int consistId, int next,
+            boolean pathFront, float partialTick) {
+        Matrix4d nextToWorld = ClientWagonRay.drawnAt(consistId, next, partialTick);
+        ConsistComposition.Slot nextSlot = ClientConsists.slot(consistId, next);
+        if (nextToWorld == null || nextSlot == null) {
+            return new double[]{0.0, 0.0};
+        }
+        // the car ahead faces us with its path-rear end, the car behind with its path-front;
+        // its model front is its path front unless it runs turned
+        boolean nextFront = !pathFront != nextSlot.flipped();
+        Vector3d theirs = nextToWorld.transformPosition(couplerPivot(nextSlot, nextFront, pivot.y));
+        Vector3d meet = toWorld.transformPosition(new Vector3d(pivot.x, pivot.y, pivot.z)).add(theirs).mul(0.5);
+        Vector3d local = toWorld.invertAffine(new Matrix4d()).transformPosition(meet);
+        return CouplerAim.angles(pivot.x, pivot.y, pivot.z, local.x, local.y, local.z, front,
+                CouplerAim.LIMIT_DEGREES);
+    }
+
+    /**
+     * A car's coupler pivot at its model {@code front} end or rear (model
+     * frame): its heads' pivot, or — a model without heads — its coupler
+     * point at height {@code y}.
+     */
+    private static Vector3d couplerPivot(ConsistComposition.Slot slot, boolean front, float y) {
+        StockModel model = StockModels.model(slot.type().id());
+        if (model != null) {
+            for (StockModel.Coupler coupler : model.couplers()) {
+                if (coupler.front() == front) {
+                    return new Vector3d(coupler.pivot());
+                }
+            }
+        }
+        double reach = slot.type().couplerReach(front);
+        return new Vector3d(0.0, y, front ? reach : -reach);
+    }
+
+    /** True if a control's rest box holds the top of the chair's cushion: the control is the chair. */
+    private static boolean holds(StockModel.Control control, WagonType.Seat chair) {
+        double cushion = chair.y() - 0.05;
+        return chair.x() >= control.boxMin().x && chair.x() <= control.boxMax().x
+                && cushion >= control.boxMin().y && cushion <= control.boxMax().y
+                && chair.z() >= control.boxMin().z && chair.z() <= control.boxMax().z;
+    }
+
+    /**
+     * A part's hover outline at the current pose (SPEC §9.3): its creases and
+     * boundary, and its smooth edges on the silhouette from the camera — at
+     * the origin of the entity pose stack's space, so taken into the part's
+     * frame by the pose's inverse — in the vanilla block outline's lines;
+     * red if the player can't work the part now ({@code refused}).
+     *
+     * @return false if the part has no outline (no mesh): the caller draws a box
+     */
+    private static boolean drawOutline(EdgeOutline outline, boolean refused, PoseStack poseStack,
+            MultiBufferSource buffers) {
+        if (outline.fixedCount() == 0 && outline.smoothCount() == 0) {
+            return false;
+        }
+        PoseStack.Pose pose = poseStack.last();
+        Vector3f eye = pose.pose().invertAffine(TO_PART).transformPosition(new Vector3f());
+        VertexConsumer lines = buffers.getBuffer(RenderType.lines());
+        float r = refused ? REFUSED_R : OUTLINE_R;
+        float g = refused ? REFUSED_G : OUTLINE_G;
+        float b = refused ? REFUSED_B : OUTLINE_B;
+        outline.forEach(eye.x, eye.y, eye.z, (x0, y0, z0, x1, y1, z1) -> {
+            float dx = x1 - x0;
+            float dy = y1 - y0;
+            float dz = z1 - z0;
+            float length = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
+            if (length < 1.0e-6F) {
+                return;
+            }
+            dx /= length;
+            dy /= length;
+            dz /= length;
+            lines.addVertex(pose, x0, y0, z0).setColor(r, g, b, OUTLINE_A).setNormal(pose, dx, dy, dz);
+            lines.addVertex(pose, x1, y1, z1).setColor(r, g, b, OUTLINE_A).setNormal(pose, dx, dy, dz);
+        });
+        return true;
+    }
+
+    /** A box outline at the current pose, for a part without a mesh; red if {@code refused}. */
+    private static void outlineBox(PoseStack poseStack, MultiBufferSource buffers, boolean refused,
+            double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {
+        LevelRenderer.renderLineBox(poseStack, buffers.getBuffer(RenderType.lines()),
+                minX - OUTLINE_PAD, minY - OUTLINE_PAD, minZ - OUTLINE_PAD,
+                maxX + OUTLINE_PAD, maxY + OUTLINE_PAD, maxZ + OUTLINE_PAD,
+                refused ? REFUSED_R : OUTLINE_R, refused ? REFUSED_G : OUTLINE_G,
+                refused ? REFUSED_B : OUTLINE_B, OUTLINE_A);
     }
 
     /** Fallback when no pose is known: bogie rides the body frame at its pivot offset. */
@@ -499,6 +693,34 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
                 -BOGIE_MARK, -BOGIE_MARK, -BOGIE_MARK, BOGIE_MARK, BOGIE_MARK, BOGIE_MARK,
                 r, g, b, 1.0F);
         poseStack.popPose();
+    }
+
+    /**
+     * The block whose chunk section must be built for this car to be drawn
+     * (SPEC §2.4, {@code LevelRendererWagonSectionMixin}); null — draw it
+     * regardless — for a car of the train the local player rides. Vanilla
+     * asks about the entity's position, the centre of a car up to 26 blocks
+     * long: from its end, looking back on a fast train, that section is one
+     * never in view and never built. Any other car is asked about at its
+     * hull's point nearest the camera — the part of it the player sees first.
+     */
+    public static BlockPos testedSection(WagonEntity wagon, Vec3 camera) {
+        LocalPlayer player = Minecraft.getInstance().player;
+        if (player != null && player.getVehicle() instanceof WagonEntity ridden
+                && ridden.getConsistId() == wagon.getConsistId()) {
+            return null;
+        }
+        WagonType.Hull hull = wagon.collisionHull();
+        if (hull == null) {
+            return wagon.blockPosition();
+        }
+        Vector3d body = new Vector3d(wagon.getX(), wagon.getY(), wagon.getZ());
+        Vector3d local = PoseMath.worldToLocal(body, wagon.getYRot(), wagon.getXRot(),
+                new Vector3d(camera.x, camera.y, camera.z));
+        local.set(Math.clamp(local.x, hull.minX(), hull.maxX()), Math.clamp(local.y, hull.minY(), hull.maxY()),
+                Math.clamp(local.z, hull.minZ(), hull.maxZ()));
+        Vector3d nearest = PoseMath.localToWorld(body, wagon.getYRot(), wagon.getXRot(), local);
+        return BlockPos.containing(nearest.x, nearest.y, nearest.z);
     }
 
     @Override

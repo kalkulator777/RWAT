@@ -17,7 +17,6 @@ import com.muzhik17.trainsmod.consist.WagonEntity;
 import com.muzhik17.trainsmod.convention.ControlValue;
 import com.muzhik17.trainsmod.convention.ObjectRole;
 import com.muzhik17.trainsmod.kinematics.HullCollision;
-import com.muzhik17.trainsmod.kinematics.PoseMath;
 import com.muzhik17.trainsmod.network.CabLeverPayload;
 import com.muzhik17.trainsmod.network.ControlGroupPayload;
 import com.muzhik17.trainsmod.network.HandbrakePayload;
@@ -64,11 +63,15 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * wagon; from outside, the nearby wagons' controls within reach. A nearer
  * door, block or entity keeps the click.
  *
- * <p>The ray is always taken at the <b>end of the tick</b> (eye and look at
- * partial tick 1), the moment the wagon's entity pose belongs to: clicks and
- * drags run in the tick, and an eye interpolated to the frame's partial tick
- * against the tick's wagon pose put the ray up to a tick's travel off on a
- * moving train — the dragged lever jumped between notches (play-test).
+ * <p>The ray is the <b>frame's</b>, against the wagon <b>as drawn</b> in that
+ * frame ({@link ClientWagonRay}): the hover and the drag are worked out once
+ * per frame, before the wagons are drawn, and a click takes the last frame's
+ * hover. Eye and wagon must be of the same moment: an eye interpolated to the
+ * frame against the tick's wagon pose put the ray a tick's travel off on a
+ * moving train (the dragged lever jumped between notches), and a ray at the
+ * end of the tick against the tick pose — the next fix — still put the hit
+ * boxes up to a tick ahead of the model for anyone not riding that wagon, as
+ * the model is drawn a tick behind the clock (play-tests).
  *
  * <p>The control under the crosshair is <b>hovered</b> (SPEC §9.3): the
  * renderer outlines it and {@link ClientCabHud} names it with its setting.
@@ -84,12 +87,10 @@ public final class ClientCabInteract {
     private static final int SEARCH_STEPS = 64;
     /** A dragged group control sends again only after moving this much. */
     private static final float SEND_STEP = 0.02F;
-    /** The pick ray's time: the end of the tick, when the wagon's entity pose is current. */
-    private static final float RAY_TIME = 1.0F;
 
     /** The control being dragged or held, or null. */
     private static Grab grab;
-    /** The control or chair under the crosshair (this tick), or null. */
+    /** The control or chair under the crosshair (the last frame), or null. */
     private static Pick hover;
     /** Why {@link #hover} can't be worked now (a translation key), null if it can. */
     private static String hoverRefusal;
@@ -232,8 +233,8 @@ public final class ClientCabInteract {
             }
             return;
         }
-        Pick pick = pick(mc, player);
-        if (pick == null) {
+        Pick pick = hover; // what the last frame showed under the crosshair
+        if (pick == null || pick.wagon.isRemoved()) {
             return; // nothing here, or a door in front of it takes the click
         }
         event.setCanceled(true);
@@ -282,32 +283,39 @@ public final class ClientCabInteract {
         LocalPlayer player = mc.player;
         Grab current = grab;
         if (current == null) {
-            hover = player != null && mc.level != null && mc.screen == null && !player.isSpectator()
-                    ? pick(mc, player) : null;
-            hoverRefusal = hover == null ? null : refusal(hover.wagon, hover.control);
             return;
         }
-        hover = null;
-        hoverRefusal = null;
         if (player == null || !held || current.wagon.isRemoved()) {
             if (current.control.role().press()) {
                 send(current.wagon, current.control, 0.0F);
             }
             grab = null;
+        }
+    }
+
+    /**
+     * This frame's hover — or, while a control is held, its drag — against
+     * the wagons as drawn ({@link ClientWagonRay}, after the doors' pick).
+     */
+    static void frame(Minecraft mc, LocalPlayer player, ClientWagonRay.Look look) {
+        Grab current = grab;
+        if (current == null) {
+            hover = mc.screen == null && !player.isSpectator() ? pick(mc, player, look) : null;
+            hoverRefusal = hover == null ? null : refusal(hover.wagon, hover.control);
             return;
         }
-        if (current.control.role().press()) {
-            return; // a button: just held down
+        hover = null;
+        hoverRefusal = null;
+        if (!current.wagon.isRemoved() && !current.control.role().press()) {
+            drag(current, look); // a button is just held down
         }
-        drag(player, current);
     }
 
     /** Follow the look ray: the travel whose grabbed point comes nearest it. */
-    private static void drag(LocalPlayer player, Grab current) {
-        Vec3 eye = player.getEyePosition(RAY_TIME);
-        Vec3 look = player.getViewVector(RAY_TIME);
-        Vec3 target = eye.add(look.scale(current.distance));
-        Vector3f t = toModel(current.wagon, target);
+    private static void drag(Grab current, ClientWagonRay.Look look) {
+        Vector3d target = ClientWagonRay.drawn(current.wagon, look.partialTick()).invertAffine()
+                .transformPosition(toVector(look.at(current.distance)));
+        Vector3f t = new Vector3f((float) target.x, (float) target.y, (float) target.z);
         ObjectRole.Control role = current.control.role();
         Matrix4f m = new Matrix4f();
         Vector3f p = new Vector3f();
@@ -405,13 +413,18 @@ public final class ClientCabInteract {
         return Math.round(position * 100.0F) + "%";
     }
 
-    /** A control's current raw position, as the renderer shows it. */
+    /** A control's current raw position, as the renderer shows it at the end of the tick. */
     private static float position(WagonEntity wagon, StockModel.Control control) {
+        return position(wagon, control, 1.0F);
+    }
+
+    /** A control's raw position as the renderer shows it at {@code partialTick} (the handbrake wheel winds). */
+    private static float position(WagonEntity wagon, StockModel.Control control, float partialTick) {
         Handles handles = ClientConsists.handles(wagon.getConsistId());
         return ControlValue.position(control.role(), handles,
                 handles.activeCab() == wagon.getWagonIndex(),
                 wagon.controlValue(control.role().group()),
-                new ControlValue.Readings(0.0, 0.0, 0.0F, 0.0F, wagon.handbrakeAnim(RAY_TIME)));
+                new ControlValue.Readings(0.0, 0.0, 0.0F, 0.0F, wagon.handbrakeAnim(partialTick)));
     }
 
     /** The hit point taken back to the control's rest pose (the point that moves with it). */
@@ -425,9 +438,8 @@ public final class ClientCabInteract {
      * and with no door, wall of the model ({@link ClientWagonRay}), block or
      * entity in front of it; null if none.
      */
-    private static Pick pick(Minecraft mc, LocalPlayer player) {
-        Vec3 eye = player.getEyePosition(RAY_TIME);
-        Vec3 look = player.getViewVector(RAY_TIME);
+    private static Pick pick(Minecraft mc, LocalPlayer player, ClientWagonRay.Look look) {
+        Vec3 eye = look.eye();
         double reach = Math.min(REACH, player.blockInteractionRange());
         List<WagonEntity> wagons = player.getVehicle() instanceof WagonEntity own
                 ? List.of(own)
@@ -440,8 +452,9 @@ public final class ClientCabInteract {
             if (model == null) {
                 continue;
             }
-            Vector3d o = new Vector3d(toModel(wagon, eye));
-            Vector3d dir = new Vector3d(toModel(wagon, eye.add(look))).sub(o);
+            ClientWagonRay.LocalRay ray = ClientWagonRay.inModel(wagon, look); // as drawn this frame
+            Vector3d o = ray.origin();
+            Vector3d dir = ray.dir();
             // nothing behind a wall of the model is reached (the desk, a partition, the hull)
             double wall = ClientWagonRay.wall(slot.type().id(), model, o, dir, reach) + ClientWagonRay.WALL_SLACK;
             // the driver's chairs nobody sits in, for a rider of this wagon who isn't in one
@@ -468,7 +481,7 @@ public final class ClientCabInteract {
                 if (role.noTouch() || role.kind().gauge()) {
                     continue;
                 }
-                float position = position(wagon, control);
+                float position = position(wagon, control, look.partialTick());
                 if (!ControlValue.visible(role, position)) {
                     continue;
                 }
@@ -494,7 +507,7 @@ public final class ClientCabInteract {
                 best = new Pick(wagon, control, hit, t, -1);
             }
         }
-        if (best == null || ClientDoorInteract.doorDistance(mc, player) < best.distance) {
+        if (best == null || ClientDoorInteract.doorDistance() < best.distance) {
             return null; // a door in front of it takes the click
         }
         // something else nearer under the crosshair keeps the click (the
@@ -537,16 +550,7 @@ public final class ClientCabInteract {
         return box;
     }
 
-    /**
-     * A world point in the wagon's <b>model</b> frame: the pose frame, turned
-     * 180° for a wagon running flipped (the renderer turns the model so).
-     */
-    private static Vector3f toModel(WagonEntity wagon, Vec3 world) {
-        Vector3d local = PoseMath.worldToLocal(new Vector3d(wagon.getX(), wagon.getY(), wagon.getZ()),
-                wagon.getYRot(), wagon.getXRot(), new Vector3d(world.x, world.y, world.z));
-        if (wagon.isFlipped()) {
-            local.set(-local.x, local.y, -local.z);
-        }
-        return new Vector3f((float) local.x, (float) local.y, (float) local.z);
+    private static Vector3d toVector(Vec3 v) {
+        return new Vector3d(v.x, v.y, v.z);
     }
 }

@@ -57,8 +57,10 @@ import net.minecraft.resources.ResourceLocation;
  *
  * <p>Textures come from the OBJ's {@code mtllib} ({@link MtlParser}): each
  * material's {@code map_Kd}, relative to the OBJ. Skipped at load: objects
- * whose name contains {@code HIDE} (shown only in coupled/special states the
- * mod doesn't model yet), the convention's marker prefixes
+ * whose name contains {@code HIDE} (shown only in special states the mod
+ * doesn't model yet) but for switch-driven widgets and the coupler heads
+ * ({@code COUPLED_FRONT/REAR_<n>}, one per coupled state, SPEC §6.12), the
+ * convention's marker prefixes
  * {@link #DEFAULT_SKIP_PREFIXES} plus the declaration's own {@code skip}, and
  * materials without a diffuse map. Groups listed under the declaration's
  * {@code animations} are animated from their IR {@code .anim} ({@link IrAnim});
@@ -115,7 +117,8 @@ public final class IrStockModel {
         StockModel.Door build(String id) {
             List<StockModel.Piece> pieces = new ArrayList<>();
             for (Map.Entry<String, Map<ResourceLocation, Mesh>> entry : meshes.entrySet()) {
-                pieces.add(new StockModel.Piece(entry.getValue(), frames.get(entry.getKey())));
+                pieces.add(new StockModel.Piece(entry.getValue(), frames.get(entry.getKey()),
+                        StockModel.outline(entry.getValue())));
             }
             return new StockModel.Door(id, pieces);
         }
@@ -182,7 +185,8 @@ public final class IrStockModel {
             }
             Vector3f slide = new Vector3f(role.slideZ(), role.slideY(), -role.slideX());
             return new StockModel.Control(role, meshes, interior, pivot, axis, degrees, slide,
-                    new Vector3f(box[0], box[1], box[2]), new Vector3f(box[3], box[4], box[5]));
+                    new Vector3f(box[0], box[1], box[2]), new Vector3f(box[3], box[4], box[5]),
+                    StockModel.outline(meshes));
         }
 
         /** One control's flags spread over its objects: IR reads them from any of them. */
@@ -198,6 +202,21 @@ public final class IrStockModel {
                     b.slideX() != 0.0F ? b.slideX() : a.slideX(),
                     b.slideY() != 0.0F ? b.slideY() : a.slideY(),
                     b.slideZ() != 0.0F ? b.slideZ() : a.slideZ());
+        }
+    }
+
+    /** Accumulates one coupler head state (SPEC §6.12): its meshes, model space, and their bounds. */
+    private static final class CouplerBuilder {
+        final Map<ResourceLocation, Mesh> meshes = new LinkedHashMap<>();
+        final float[] box = {Float.MAX_VALUE, Float.MAX_VALUE, Float.MAX_VALUE,
+                -Float.MAX_VALUE, -Float.MAX_VALUE, -Float.MAX_VALUE};
+
+        void bound(Mesh placed) {
+            float[] b = bounds(placed);
+            for (int i = 0; i < 3; i++) {
+                box[i] = Math.min(box[i], b[i]);
+                box[i + 3] = Math.max(box[i + 3], b[i + 3]);
+            }
         }
     }
 
@@ -304,26 +323,30 @@ public final class IrStockModel {
         // bogie pivots: front first, +forward = model +Z
         BogieBuilder front = new BogieBuilder(pivots[0]);
         BogieBuilder rear = new BogieBuilder(pivots[pivots.length - 1]);
+        Map<ObjectRole.Coupled, CouplerBuilder> couplers = new LinkedHashMap<>();
         int skipped = 0;
         for (ObjLoader.Part part : obj.parts()) {
             String object = part.object();
             ObjectRole role = ObjectRole.parse(object);
-            // a hidden switch-driven part (the ChME3 tail lamps) shows by its group;
-            // other HIDE objects stay out (coupled-state geometry isn't modelled)
+            // a hidden switch-driven part (the ChME3 tail lamps) shows by its group, a coupler
+            // head by its end's coupling (SPEC §6.12); other HIDE objects stay out
             boolean widget = role.control() != null && role.control().kind() == ObjectRole.Kind.WIDGET;
-            if ((object.contains("HIDE") && !widget) || startsWithAny(object, skipPrefixes)) {
+            ObjectRole.Coupled coupled = ObjectRole.coupled(object);
+            if ((object.contains("HIDE") && !widget && coupled == null) || startsWithAny(object, skipPrefixes)) {
                 skipped++;
                 continue;
             }
-            BogieBuilder bogie = object.startsWith("BOGEY_FRONT") ? front
+            BogieBuilder bogie = coupled != null ? null : object.startsWith("BOGEY_FRONT") ? front
                     : object.startsWith("BOGEY_REAR") ? rear : null;
+            CouplerBuilder coupler = coupled != null ? couplers.computeIfAbsent(coupled, c -> new CouplerBuilder())
+                    : null;
             if (bogie != null && object.contains("_WHEEL_")) {
                 bogie.wheels.computeIfAbsent(object, n -> new WheelBuilder()).add(part);
                 continue;
             }
-            AnimTrack track = bogie == null ? animated.get(object) : null;
+            AnimTrack track = bogie == null && coupler == null ? animated.get(object) : null;
             // a door leaf moved by name is built like a control (SPEC §9.5)
-            ObjectRole leafRole = bogie == null && track == null ? ObjectRole.door(object) : null;
+            ObjectRole leafRole = bogie == null && track == null && coupler == null ? ObjectRole.door(object) : null;
             if (leafRole != null && !movingDoors.contains(leafRole.control().key())) {
                 leafRole = null; // a door the asset doesn't move: part of the body
             }
@@ -361,6 +384,8 @@ public final class IrStockModel {
                 component = door.meshes.computeIfAbsent(object, n -> new LinkedHashMap<>());
             } else if (control != null) {
                 component = control.meshes;
+            } else if (coupler != null) {
+                component = coupler.meshes;
             } else {
                 component = bogie != null ? bogie.frame
                         : object.startsWith("INTERIOR") ? interior : body;
@@ -378,6 +403,9 @@ public final class IrStockModel {
             }
             if (control != null) {
                 control.bound(placed);
+            }
+            if (coupler != null) {
+                coupler.bound(placed);
             }
             if (bogie == null && track == null) {
                 if (role.headlight()) {
@@ -418,18 +446,51 @@ public final class IrStockModel {
         StockModel built = new StockModel(body, interior, builtDoors, List.copyOf(builtControls),
                 List.copyOf(builtLeaves), front.build(textures), rear.build(textures),
                 liveries(name, decl, objLocation, textures, access),
-                List.copyOf(lightGroups), List.copyOf(lamps), List.copyOf(headlights));
+                List.copyOf(lightGroups), List.copyOf(lamps), List.copyOf(headlights), buildCouplers(couplers));
         RailsWheelsAndTrains.LOGGER.info(
                 "Loaded {}: {} parts ({} skipped) — {} textures, interior {} quads,"
                         + " {} animated doors, {} door leaves, {} controls, light groups {},"
-                        + " {} cabin lamps, {} headlights, bogies with {}+{} wheelsets, {} liveries",
+                        + " {} cabin lamps, {} headlights, bogies with {}+{} wheelsets, {} liveries,"
+                        + " {} coupler heads",
                 name, obj.parts().size(), skipped, textures.size(),
                 interior.values().stream().mapToInt(m -> m.quads().size()).sum(),
                 builtDoors.size(), builtLeaves.size(), builtControls.size(), lightGroups, lamps.size(),
                 headlights.size(),
                 built.frontBogie().wheels().size(), built.rearBogie().wheels().size(),
-                built.liveries().size());
+                built.liveries().size(), built.couplers().size());
         return built;
+    }
+
+    /**
+     * The coupler heads (SPEC §6.12), each state of each end, all of an end
+     * turning on one pivot: on the centre line (the shank's), at mid-height
+     * of the end's heads, at their inner end — where the shank comes out of
+     * the frame.
+     */
+    private static List<StockModel.Coupler> buildCouplers(Map<ObjectRole.Coupled, CouplerBuilder> couplers) {
+        List<StockModel.Coupler> built = new ArrayList<>();
+        for (boolean front : new boolean[]{true, false}) {
+            float[] box = {Float.MAX_VALUE, Float.MAX_VALUE, Float.MAX_VALUE,
+                    -Float.MAX_VALUE, -Float.MAX_VALUE, -Float.MAX_VALUE};
+            couplers.forEach((coupled, coupler) -> {
+                if (coupled.front() == front && !coupler.meshes.isEmpty()) {
+                    for (int i = 0; i < 3; i++) {
+                        box[i] = Math.min(box[i], coupler.box[i]);
+                        box[i + 3] = Math.max(box[i + 3], coupler.box[i + 3]);
+                    }
+                }
+            });
+            if (box[0] > box[3]) {
+                continue; // no head at this end
+            }
+            Vector3f pivot = new Vector3f(0.0F, (box[1] + box[4]) * 0.5F, front ? box[2] : box[5]);
+            couplers.forEach((coupled, coupler) -> {
+                if (coupled.front() == front && !coupler.meshes.isEmpty()) {
+                    built.add(new StockModel.Coupler(front, coupled.shown(), coupler.meshes, pivot));
+                }
+            });
+        }
+        return List.copyOf(built);
     }
 
     /**

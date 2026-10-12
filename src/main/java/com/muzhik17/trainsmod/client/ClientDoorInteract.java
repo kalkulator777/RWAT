@@ -39,6 +39,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * leaf on the near face of the hull counts. A rider picks among their own
  * wagon's doors from inside, and the next car's gangway door across the
  * gangway. A nearer block or entity under the crosshair keeps the click.
+ * The door is picked once per frame, against the car as drawn in it
+ * ({@link ClientWagonRay}); a click takes what the last frame picked.
  *
  * <p>Holding the button doesn't flap the door: vanilla repeats the use action
  * every few ticks while held, so a door click is armed again only after the
@@ -63,8 +65,29 @@ public final class ClientDoorInteract {
 
     /** False after a door click until the use button is released. */
     private static boolean armed = true;
+    /** The door under the crosshair in the last frame ({@link ClientWagonRay}), or null. */
+    private static Pick framePick;
 
     private ClientDoorInteract() {
+    }
+
+    /** Pick the door under the crosshair for this frame (SPEC §9.3: as drawn, from the frame's eye). */
+    static void frame(Minecraft mc, LocalPlayer player, ClientWagonRay.Look look) {
+        framePick = pick(mc, player, look);
+    }
+
+    /** The door of this wagon under the crosshair (its index in the type's doors), −1 if none. */
+    public static int highlightedDoor(WagonEntity wagon) {
+        Pick pick = framePick;
+        return pick != null && pick.wagon() == wagon ? pick.door() : -1;
+    }
+
+    /** True if the door under the crosshair won't open for the player: a cab door, no driver's key (SPEC §9.2). */
+    public static boolean highlightLocked() {
+        Pick pick = framePick;
+        LocalPlayer player = Minecraft.getInstance().player;
+        return pick != null && player != null && pick.wagon().cabArea().cabDoor(pick.door())
+                && !CabAccess.mayWork(player);
     }
 
     @SubscribeEvent(priority = EventPriority.LOW) // after the cab's controls (ClientCabInteract)
@@ -77,8 +100,8 @@ public final class ClientDoorInteract {
         if (player == null || mc.level == null) {
             return;
         }
-        Pick pick = pick(mc, player);
-        if (pick == null) {
+        Pick pick = framePick;
+        if (pick == null || pick.wagon().isRemoved()) {
             return;
         }
         event.setCanceled(true); // the click belongs to the door, not an item or block
@@ -107,20 +130,19 @@ public final class ClientDoorInteract {
     }
 
     /** How far along the look the rider's own car has a wall (its model's body and interior), or +∞. */
-    private static double wallAhead(WagonEntity wagon, Vec3 eye, Vec3 look, double reach) {
+    private static double wallAhead(WagonEntity wagon, ClientWagonRay.Look look, double reach) {
         WagonType type = wagon.typeNow();
         StockModel model = type == null ? null : StockModels.model(type.id());
         if (model == null) {
             return Double.POSITIVE_INFINITY;
         }
-        Vector3d origin = ClientWagonRay.toModel(wagon, eye);
-        Vector3d dir = ClientWagonRay.toModel(wagon, eye.add(look)).sub(origin);
-        return ClientWagonRay.wall(type.id(), model, origin, dir, reach);
+        ClientWagonRay.LocalRay ray = ClientWagonRay.inModel(wagon, look);
+        return ClientWagonRay.wall(type.id(), model, ray.origin(), ray.dir(), reach);
     }
 
-    /** Distance to the door leaf under the crosshair, or +∞ — a cab control behind it yields. */
-    static double doorDistance(Minecraft mc, LocalPlayer player) {
-        Pick pick = pick(mc, player);
+    /** Distance to the door leaf under the crosshair this frame, or +∞ — a cab control behind it yields. */
+    static double doorDistance() {
+        Pick pick = framePick;
         return pick == null ? Double.POSITIVE_INFINITY : pick.distance();
     }
 
@@ -131,13 +153,12 @@ public final class ClientDoorInteract {
      * connecting door at the next car's shut one, the click is that one's —
      * a shut door of the next car is wall until they open it (SPEC §9.5).
      */
-    private static Pick pick(Minecraft mc, LocalPlayer player) {
-        float partialTick = mc.getTimer().getGameTimeDeltaPartialTick(true);
-        Vec3 eye = player.getEyePosition(partialTick);
-        Vec3 look = player.getViewVector(partialTick);
+    private static Pick pick(Minecraft mc, LocalPlayer player, ClientWagonRay.Look look) {
+        float partialTick = look.partialTick();
+        Vec3 eye = look.eye();
         double reach = player.blockInteractionRange();
         WagonEntity own = player.getVehicle() instanceof WagonEntity w ? w : null;
-        double ownWall = own == null ? Double.POSITIVE_INFINITY : wallAhead(own, eye, look, reach);
+        double ownWall = own == null ? Double.POSITIVE_INFINITY : wallAhead(own, look, reach);
         List<WagonEntity> wagons = mc.level.getEntitiesOfClass(WagonEntity.class,
                 player.getBoundingBox().inflate(reach + 16.0));
 
@@ -148,9 +169,10 @@ public final class ClientDoorInteract {
             if (type == null || type.doors().isEmpty()) {
                 continue;
             }
-            // the model frame: the doors' boxes, the leaves and the walls are all in it
-            Vector3d origin = ClientWagonRay.toModel(wagon, eye);
-            Vector3d dir = ClientWagonRay.toModel(wagon, eye.add(look)).sub(origin);
+            // the model frame as drawn this frame: the doors' boxes, the leaves and the walls are all in it
+            ClientWagonRay.LocalRay ray = ClientWagonRay.inModel(wagon, look);
+            Vector3d origin = ray.origin();
+            Vector3d dir = ray.dir();
             boolean inside = own == wagon;
             double hullT = 0.0;
             if (!inside) {

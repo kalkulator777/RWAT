@@ -41,11 +41,14 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * frame (bogies turn apart from the body through curves, SPEC §5.2), at the
  * pose drawn this frame, and is tested against the bogie's box — its model's
  * frame and wheels, or {@link BogieReach}'s default box without a model. The
- * car's body in front of the bogie (its model's walls, or the hull box) keeps
- * the blow: a blow at the body breaks nothing, so a stray click at the car
- * you walk about in never knocks it down. A nearer block or entity under the
- * crosshair keeps the click too; a rider never strikes (aboard, the world is
- * out of reach — {@code AboardGuard}).
+ * car's body in front of the bogie (its model's walls as drawn, or the hull
+ * box) keeps the blow: a blow at the body breaks nothing, so a stray click at
+ * the car you walk about in never knocks it down. A nearer block or entity
+ * under the crosshair keeps the click too; a rider never strikes (aboard, the
+ * world is out of reach — {@code AboardGuard}). The bogie is picked once per
+ * frame from the frame's eye ({@link ClientWagonRay}, SPEC §9.3); a click
+ * takes what the last frame picked — at click time the playback clock is
+ * already a tick on, so a pose computed then is not the one on screen.
  *
  * <p>One blow per click: holding the button doesn't keep striking (vanilla
  * attacks an entity once per click), nor mine the ground behind the bogie.
@@ -55,6 +58,8 @@ public final class ClientBogieHit {
 
     /** False after a blow until the attack button is released. */
     private static boolean armed = true;
+    /** The bogie under the crosshair in the last frame ({@link ClientWagonRay}), or null. */
+    private static Pick framePick;
 
     /** Bogie boxes of a type's model ({@code front}, {@code rear}: model frame), for the model they came from. */
     private record Boxes(StockModel model, double[] front, double[] rear) {
@@ -69,6 +74,12 @@ public final class ClientBogieHit {
     private ClientBogieHit() {
     }
 
+    /** Pick the bogie under the crosshair for this frame (SPEC §9.3: as drawn, from the frame's eye). */
+    static void frame(Minecraft mc, LocalPlayer player, ClientWagonRay.Look look) {
+        framePick = player.isSpectator() || player.getVehicle() instanceof WagonEntity ? null
+                : pick(mc, player, look);
+    }
+
     @SubscribeEvent(priority = EventPriority.HIGH)
     static void onAttack(InputEvent.InteractionKeyMappingTriggered event) {
         if (!event.isAttack()) {
@@ -80,8 +91,8 @@ public final class ClientBogieHit {
                 || player.getVehicle() instanceof WagonEntity) {
             return;
         }
-        Pick pick = pick(mc, player);
-        if (pick == null) {
+        Pick pick = framePick;
+        if (pick == null || pick.wagon().isRemoved()) {
             return;
         }
         event.setCanceled(true); // the blow is the bogie's, not the block's behind it
@@ -101,10 +112,10 @@ public final class ClientBogieHit {
     }
 
     /** The nearest bogie under the crosshair within entity reach, not behind its car's body, or null. */
-    private static Pick pick(Minecraft mc, LocalPlayer player) {
-        float partialTick = mc.getTimer().getGameTimeDeltaPartialTick(true);
-        Vec3 eye = player.getEyePosition(partialTick);
-        Vec3 look = player.getViewVector(partialTick);
+    private static Pick pick(Minecraft mc, LocalPlayer player, ClientWagonRay.Look look) {
+        float partialTick = look.partialTick();
+        Vec3 eye = look.eye();
+        Vec3 dirWorld = look.dir();
         double reach = player.entityInteractionRange();
         List<WagonEntity> wagons = mc.level.getEntitiesOfClass(WagonEntity.class,
                 player.getBoundingBox().inflate(reach + 16.0));
@@ -121,9 +132,10 @@ public final class ClientBogieHit {
             boolean flipped = slot.flipped();
             StockModel model = StockModels.model(type.id());
             boolean hasModel = model != null && !model.isEmpty();
-            // the body: its model's walls, or the hull box without one
-            Vector3d origin = toFrame(pose.body(), pose.yaw(), pose.pitch(), flipped, eye);
-            Vector3d dir = toFrame(pose.body(), pose.yaw(), pose.pitch(), flipped, eye.add(look)).sub(origin);
+            // the body as drawn (with its sway): its model's walls, or the hull box without one
+            ClientWagonRay.LocalRay ray = ClientWagonRay.inModel(wagon, look);
+            Vector3d origin = ray.origin();
+            Vector3d dir = ray.dir();
             double body;
             if (hasModel) {
                 body = ClientWagonRay.wall(type.id(), model, origin, dir, reach);
@@ -144,7 +156,8 @@ public final class ClientBogieHit {
                 }
                 WagonPose.BogiePose bogie = front ? pose.front() : pose.rear();
                 Vector3d o = toFrame(bogie.position(), bogie.yaw(), bogie.pitch(), flipped, eye);
-                Vector3d d = toFrame(bogie.position(), bogie.yaw(), bogie.pitch(), flipped, eye.add(look)).sub(o);
+                Vector3d d = toFrame(bogie.position(), bogie.yaw(), bogie.pitch(), flipped, eye.add(dirWorld))
+                        .sub(o);
                 double t = HullCollision.rayBox(o, d, box[0], box[1], box[2], box[3], box[4], box[5]);
                 if (t < 0.0 || t > reach || t > body + ClientWagonRay.WALL_SLACK) {
                     continue;
