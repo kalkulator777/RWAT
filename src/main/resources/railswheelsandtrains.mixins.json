@@ -5,15 +5,18 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "EntityHullCollisionMixin",
+    "PlayerWagonSneakMixin",
     "ServerEntityPassengerMixin",
     "ServerPlayerMountMixin"
   ],
   "client": [
     "ClientChunkCacheLightMixin",
     "ClientLevelSectionDirtyMixin",
+    "ClientMountMessageMixin",
     "EntityRendererCabinLightMixin",
     "LivingEntityRendererSeatMixin",
-    "LivingEntityWalkAnimationMixin"
+    "LivingEntityWalkAnimationMixin",
+    "LocalPlayerCrouchMixin"
   ],
   "injectors": {
     "defaultRequire": 1

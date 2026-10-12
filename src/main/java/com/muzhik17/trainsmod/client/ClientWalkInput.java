@@ -14,6 +14,7 @@ import com.muzhik17.trainsmod.stock.WagonType;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket;
 import net.minecraft.util.Mth;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -43,6 +44,12 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * toward the <b>direction of the floor walk</b> (vanilla's body-turn reads the
  * world delta, ≈0 for a rider, so strafing never turned the body), and gets a
  * <b>walk animation</b> from the local step distance.
+ *
+ * <p>Shift <b>crouches</b> (SPEC v1.5-б): the step is a creep and an open hull
+ * door doesn't let the rider out ({@code RiderWalk.exitDoor}) — the same
+ * rule the server runs on the sneak flag of the input. Sneaking never
+ * dismounts from a walkable car (a mixin on {@code wantsToStopRiding}); in
+ * the driver's chair it stands up.
  *
  * <p>Coupling can <b>turn</b> the wagon in its consist (SPEC §6.12: it joined
  * a train running the other way, its {@code flipped} flag toggles): the pose
@@ -74,6 +81,16 @@ public final class ClientWalkInput {
         Minecraft mc = Minecraft.getInstance();
         LocalPlayer player = mc.player;
         if (player == null || !(player.getVehicle() instanceof WagonEntity wagon)) {
+            if (player != null && walkedWagon != -1) {
+                // off a walkable car: aboard, the sneak key reached the server
+                // with the riding input, which stops with the ride, and vanilla
+                // sends it on foot only when it changes — say what it is now, or
+                // the server keeps the rider crouched (Shift-use, the pose) after
+                // they let go of the key at the door
+                player.connection.send(new ServerboundPlayerCommandPacket(player, player.isShiftKeyDown()
+                        ? ServerboundPlayerCommandPacket.Action.PRESS_SHIFT_KEY
+                        : ServerboundPlayerCommandPacket.Action.RELEASE_SHIFT_KEY));
+            }
             useWasDown = true;
             prevWagonYaw = null;
             prevFlipped = null;
@@ -177,6 +194,8 @@ public final class ClientWalkInput {
         float forward = (mc.options.keyUp.isDown() ? 1f : 0f) - (mc.options.keyDown.isDown() ? 1f : 0f);
         float strafe = (mc.options.keyLeft.isDown() ? 1f : 0f) - (mc.options.keyRight.isDown() ? 1f : 0f);
         float yaw = player.getYRot();
+        // read the key, not the player: crouched is what the server is told
+        boolean sneak = mc.options.keyShift.isDown();
 
         boolean useDown = mc.options.keyUse.isDown();
         boolean exit = useDown && !useWasDown && !doorsOnly(wagon);
@@ -192,7 +211,7 @@ public final class ClientWalkInput {
                     RiderWalk.PLAYER_HALF_WIDTH);
         }
         Vector3d next = RiderWalk.step(local, forward, strafe, yaw, wagonYaw, interior,
-                wagon.framedDoors(), wagon.doorMask());
+                wagon.framedDoors(), wagon.doorMask(), sneak);
         ClientWalk.put(player.getId(), wagonId, next);
 
         double dx = next.x - local.x;
@@ -209,7 +228,7 @@ public final class ClientWalkInput {
         // sees ≈0 world delta), scaled like vanilla's calculateEntityAnimation
         player.walkAnimation.update(Math.min((float) stepDist * 4.0f, 1.0f), 0.4f);
 
-        PacketDistributor.sendToServer(new WalkInputPayload(wagonId, forward, strafe, yaw, exit));
+        PacketDistributor.sendToServer(new WalkInputPayload(wagonId, forward, strafe, yaw, sneak, exit));
     }
 
     /**

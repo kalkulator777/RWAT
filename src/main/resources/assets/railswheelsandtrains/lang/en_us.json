@@ -21,7 +21,7 @@
   "message.railswheelsandtrains.drive_hint": "Throttle: W / S · Brake: D / A · Reverser: Space (at standstill) · L: driver's panel · Sneak to dismount",
   "message.railswheelsandtrains.controls_status": "[%s] Throttle %s/%s · Brake %s/%s · %s km/h",
   "message.railswheelsandtrains.board_hint": "Walk with WASD · Right-click to step off",
-  "message.railswheelsandtrains.board_hint_doors": "Walk with WASD · Right-click a door to open or close it · Walk out through an open door",
+  "message.railswheelsandtrains.board_hint_doors": "Walk with WASD · Right-click a door to open or close it · Walk out through an open door · Sneak: crouch, no stepping out",
   "item.railswheelsandtrains.rail.named": "Rails (%s)",
   "item.railswheelsandtrains.rolling_stock": "Rolling Stock",
   "item.railswheelsandtrains.rolling_stock.named": "Rolling Stock (%s)",

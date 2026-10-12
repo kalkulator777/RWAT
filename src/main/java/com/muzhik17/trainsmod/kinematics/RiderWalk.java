@@ -23,11 +23,19 @@ import com.muzhik17.trainsmod.stock.WagonType;
  * bridge through every open door between zones (SPEC §9.1). A step that would
  * leave the floor slides along the wall. Vertical movement (stairs, jumping
  * between decks) is out of v0: the feet take the floor height under them.
+ *
+ * <p>A <b>crouched</b> rider (Shift held) creeps at {@link #SNEAK_FACTOR} of
+ * the walk and keeps to the floor like vanilla's sneak at a block edge: an
+ * open hull door or opening doesn't let them out ({@link #exitDoor}), so
+ * nobody steps off a moving train by accident; gangways into the next car
+ * still pass — that is walking the train, not leaving it (SPEC §9.5).
  */
 public final class RiderWalk {
 
     /** Interior walking speed, blocks/tick (a stroll, slower than open-field running). */
     public static final double WALK_SPEED = 0.12;
+    /** Crouched walk as a share of {@link #WALK_SPEED} (vanilla's {@code sneaking_speed} default). */
+    public static final double SNEAK_FACTOR = 0.3;
     /** Player half-width kept off the walls when clamping. */
     public static final double PLAYER_HALF_WIDTH = 0.3;
     /**
@@ -60,6 +68,13 @@ public final class RiderWalk {
         return step(local, forward, strafe, playerYaw, wagonYaw, interior, List.of(), 0);
     }
 
+    /** A step at the full walking pace (not crouched). */
+    public static Vector3d step(Vector3d local, double forward, double strafe,
+            float playerYaw, float wagonYaw, WagonType.Interior interior,
+            List<WagonType.Door> doors, int openMask) {
+        return step(local, forward, strafe, playerYaw, wagonYaw, interior, doors, openMask, false);
+    }
+
     /**
      * @param local     current local feet position
      * @param forward   forward input (+1 = the player's look forward), [-1,1]
@@ -69,12 +84,13 @@ public final class RiderWalk {
      * @param interior  the walkable floor <b>in the pose frame</b>
      * @param doors     the type's doors <b>in the pose frame</b>
      * @param openMask  bit {@code i} set = door {@code i} open
+     * @param sneak     crouched: the step is {@link #SNEAK_FACTOR} of the walk
      * @return the new local feet position (on the floor)
      */
     public static Vector3d step(Vector3d local, double forward, double strafe,
             float playerYaw, float wagonYaw, WagonType.Interior interior,
-            List<WagonType.Door> doors, int openMask) {
-        Vector3d next = unclamped(local, forward, strafe, playerYaw, wagonYaw);
+            List<WagonType.Door> doors, int openMask, boolean sneak) {
+        Vector3d next = unclamped(local, forward, strafe, playerYaw, wagonYaw, speed(sneak));
         if (!onFloor(local.x, local.z, interior, doors, openMask)) {
             return interior.clampFeet(next, PLAYER_HALF_WIDTH); // lost the floor: nearest point
         }
@@ -195,11 +211,23 @@ public final class RiderWalk {
     public static int exitDoor(Vector3d local, double forward, double strafe,
             float playerYaw, float wagonYaw, WagonType.Interior interior,
             List<WagonType.Door> doors, int openMask) {
-        Vector3d next = unclamped(local, forward, strafe, playerYaw, wagonYaw);
+        return exitDoor(local, forward, strafe, playerYaw, wagonYaw, interior, doors, openMask, false);
+    }
+
+    /**
+     * {@link #exitDoor(Vector3d, double, double, float, float, WagonType.Interior, List, int)}
+     * for a rider who may be crouched: crouched ({@code sneak}), only a
+     * gangway door leads on — a hull door or opening is the floor's edge,
+     * as a block edge is to vanilla's sneak (the step keeps them at it).
+     */
+    public static int exitDoor(Vector3d local, double forward, double strafe,
+            float playerYaw, float wagonYaw, WagonType.Interior interior,
+            List<WagonType.Door> doors, int openMask, boolean sneak) {
+        Vector3d next = unclamped(local, forward, strafe, playerYaw, wagonYaw, speed(sneak));
         FloorRegion region = interior.region(PLAYER_HALF_WIDTH);
         for (int i = 0; i < doors.size() && i < 32; i++) {
             WagonType.Door door = doors.get(i);
-            if (door.inner() || !door.open(openMask, i)) {
+            if (door.inner() || !door.open(openMask, i) || (sneak && !keepsAboard(door))) {
                 continue;
             }
             int out = door.outward();
@@ -219,6 +247,15 @@ public final class RiderWalk {
             }
         }
         return -1;
+    }
+
+    /**
+     * True if walking out through this door keeps the rider on the train —
+     * a gangway door into the next car (SPEC §9.5) — rather than putting
+     * them on the ground; a crouched rider passes only these.
+     */
+    public static boolean keepsAboard(WagonType.Door door) {
+        return door.connecting();
     }
 
     /**
@@ -338,9 +375,14 @@ public final class RiderWalk {
         return new Vector3d(p.x, Double.isNaN(floor) ? currentY : floor, p.z);
     }
 
-    /** One walk step in the local floor plane, before the walls clamp it. */
+    /** The pace of a step, blocks/tick: the walk, or the creep while crouched. */
+    public static double speed(boolean sneak) {
+        return sneak ? WALK_SPEED * SNEAK_FACTOR : WALK_SPEED;
+    }
+
+    /** One walk step in the local floor plane at {@code speed}, before the walls clamp it. */
     private static Vector3d unclamped(Vector3d local, double forward, double strafe,
-            float playerYaw, float wagonYaw) {
+            float playerYaw, float wagonYaw, double speed) {
         Vector3d next = new Vector3d(local);
         double yr = Math.toRadians(playerYaw);
         double sin = Math.sin(yr);
@@ -351,7 +393,7 @@ public final class RiderWalk {
         double len = Math.hypot(wx, wz);
         if (len > 1.0e-4) {
             // cap magnitude at the walk speed (no faster diagonals)
-            double k = (Math.min(len, 1.0) * WALK_SPEED) / len;
+            double k = (Math.min(len, 1.0) * speed) / len;
             // world move → local horizontal: inverse of the body's yaw rotation
             // (bodyRotation uses Y(-yaw); ignore pitch so the floor stays flat)
             Vector3d localMove = new Quaterniond()

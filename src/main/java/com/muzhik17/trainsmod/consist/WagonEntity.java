@@ -765,10 +765,12 @@ public class WagonEntity extends Entity {
     /**
      * Apply one tick of walk input from a rider (server-authoritative, SPEC
      * v1.5-б): the exit edge dismounts; otherwise step the rider's local feet
-     * along the floor and clamp inside the interior walls.
+     * along the floor and clamp inside the interior walls. Crouched
+     * ({@code sneak}), the step is a creep and no hull door lets them out —
+     * only a gangway into the next car ({@link RiderWalk#exitDoor}).
      */
     public void setWalkInput(ServerPlayer player, float forward, float strafe, float yaw,
-            boolean exit) {
+            boolean sneak, boolean exit) {
         if (isSeated(player)) {
             return; // seated: the keys drive (DriveInputPayload), sneaking stands up
         }
@@ -793,7 +795,7 @@ public class WagonEntity extends Entity {
         List<WagonType.Door> doors = framedDoors();
         if (!doors.isEmpty()) {
             int door = RiderWalk.exitDoor(local, forward, strafe, yaw, getYRot(),
-                    interior, doors, doorMask());
+                    interior, doors, doorMask(), sneak);
             if (door >= 0) {
                 WagonType.Door through = doors.get(door);
                 if (!through.connecting()) {
@@ -807,7 +809,7 @@ public class WagonEntity extends Entity {
             }
         }
         riderLocal.put(player.getUUID(),
-                RiderWalk.step(local, forward, strafe, yaw, getYRot(), interior, doors, doorMask()));
+                RiderWalk.step(local, forward, strafe, yaw, getYRot(), interior, doors, doorMask(), sneak));
     }
 
     /**
