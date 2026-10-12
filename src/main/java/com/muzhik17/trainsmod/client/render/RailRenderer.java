@@ -438,10 +438,13 @@ public final class RailRenderer {
      * A blade found at sweep time: the rail on {@code side} of
      * {@code segmentId}'s end at {@code nodeId}, {@code length} long, in a
      * throat of co-directional legs ({@code groupIds}, sorted — a switch's
-     * diverging side); {@code separation} is how far its stock rail is from it.
+     * diverging side); {@code separation} is how far its stock rail is from
+     * it, {@code stretch} the stretch of the leg's sweep path it lies along
+     * (the one the static sweep leaves out, so the tiles line up), its tip
+     * first if {@code tipAtStart}.
      */
     private record BladeSpec(int nodeId, int segmentId, List<Integer> groupIds, int side, double length,
-            SwitchThroat.Separation separation) {
+            SwitchThroat.Separation separation, boolean tipAtStart, TrackPath stretch) {
     }
 
     /** Region buckets keyed by {@link ChunkPos#asLong} of the region coords. */
@@ -811,17 +814,34 @@ public final class RailRenderer {
                 for (int legId : cluster) {
                     int sides = throat.bladeSides(legId);
                     double length = throat.bladeLength(legId);
-                    ends.put(endKey(legId, throat.atStart(legId)), new ThroatEnd(length, legId == sleeperLeg, sides));
+                    boolean atStart = throat.atStart(legId);
+                    ends.put(endKey(legId, atStart), new ThroatEnd(length, legId == sleeperLeg, sides));
+                    TrackPath stretch = bladeStretch(graph, graph.segment(legId), atStart, length);
                     for (int side : new int[] {SwitchThroat.PLUS_Z, SwitchThroat.MINUS_Z}) {
                         if ((sides & side) != 0) {
                             bladeSpecs.add(new BladeSpec(node.id(), legId, cluster, side, length,
-                                    throat.separation(legId, side)));
+                                    throat.separation(legId, side), atStart, stretch));
                         }
                     }
                 }
             }
         }
         return ends;
+    }
+
+    /**
+     * The blade stretch of a leg's sweep path: {@code bladeLength} from its
+     * end at the node — past the overhang at an open toe, as
+     * {@link #sweepSegment} lays it.
+     */
+    private static TrackPath bladeStretch(RailGraph graph, RailSegment segment, boolean atStart,
+            double bladeLength) {
+        HermiteSegmentPath base = new HermiteSegmentPath(graph.hermite(segment));
+        boolean overhangA = graph.overhangAt(segment, segment.nodeA());
+        double startOver = overhangA ? TrackSweep.END_OVERHANG : 0.0;
+        TrackPath path = TrackSweep.path(base, overhangA, graph.overhangAt(segment, segment.nodeB()));
+        double tip = atStart ? startOver : startOver + base.length();
+        return atStart ? new SubPath(path, tip, tip + bladeLength) : new SubPath(path, tip - bladeLength, tip);
     }
 
     /** Whether every leg of a throat draws in a style with blades. */
@@ -956,13 +976,10 @@ public final class RailRenderer {
         dropBladeGeometry();
         for (BladeSpec spec : bladeSpecs) {
             RailSegment segment = graph.segment(spec.segmentId());
-            if (segment == null) {
-                continue;
+            StyleTemplates templates = segment == null ? NO_TEMPLATES : templatesFor(segment.style());
+            if (templates.blades() == null) {
+                continue; // gone or restyled under us; the next sync drops the spec
             }
-            HermiteSegmentPath base = new HermiteSegmentPath(graph.hermite(segment));
-            double length = base.length();
-            boolean tipAtStart = segment.nodeA() == spec.nodeId();
-
             List<Integer> ids = spec.groupIds();
             int current = graph.switchSelection(spec.nodeId());
             int previous = prevSelection.getOrDefault(spec.nodeId(), current);
@@ -977,20 +994,10 @@ public final class RailRenderer {
             double eased = progress * progress * (3.0 - 2.0 * progress);
             double open = from + (target - from) * eased;
 
-            // the same stretch the static sweep left out, so the tiles line up
-            boolean overhangA = graph.overhangAt(segment, segment.nodeA());
-            double startOver = overhangA ? TrackSweep.END_OVERHANG : 0.0;
-            TrackPath path = TrackSweep.path(base, overhangA, graph.overhangAt(segment, segment.nodeB()));
-            double tip = tipAtStart ? startOver : startOver + length;
-            double heel = tipAtStart ? tip + spec.length() : tip - spec.length();
-            StyleTemplates templates = templatesFor(segment.style());
-            if (templates.blades() == null) {
-                continue; // restyled under us; the next sync drops the spec
-            }
             BladeBend bend = new BladeBend(spec.side(), templates.blades().face(spec.side()), spec.length(),
-                    tipAtStart, spec.separation(), open);
+                    spec.tipAtStart(), spec.separation(), open);
             for (TileTemplate rail : templates.rails(spec.side())) {
-                sweep(rail, new SubPath(path, Math.min(tip, heel), Math.max(tip, heel)), bend, bladeTiles);
+                sweep(rail, spec.stretch(), bend, bladeTiles);
             }
         }
         for (Tile tile : bladeTiles) {
