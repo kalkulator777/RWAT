@@ -123,8 +123,11 @@ neoForge {
             // NOTE: Aikar requires Xms == Xmx. Sized here for a 32 GB machine
             // (12 GB heap = Aikar's "large heap" tier). On a smaller machine
             // drop both to e.g. 8G/8G and revert the 5 flags marked "(12 GB+)".
+            // `-PrunHeap=3G` overrides the heap (Xms = Xmx = 8G otherwise) — for
+            // smaller machines and the cloud agents, who share 15 GB between builds.
+            def runHeap = project.findProperty('runHeap')?.toString() ?: '8G'
             jvmArguments.addAll(
-                    '-Xms8G', '-Xmx8G',
+                    "-Xms${runHeap}".toString(), "-Xmx${runHeap}".toString(),
                     '-XX:+UseG1GC',
                     '-XX:+ParallelRefProcEnabled',
                     '-XX:MaxGCPauseMillis=200',
