@@ -72,6 +72,12 @@ public final class ClientDoorInteract {
         framePick = pick(mc, player, look);
     }
 
+    /** The door of this wagon under the crosshair (its index in the type's doors), −1 if none. */
+    public static int highlightedDoor(WagonEntity wagon) {
+        Pick pick = framePick;
+        return pick != null && pick.wagon() == wagon ? pick.door() : -1;
+    }
+
     @SubscribeEvent(priority = EventPriority.LOW) // after the cab's controls (ClientCabInteract)
     static void onUse(InputEvent.InteractionKeyMappingTriggered event) {
         if (!event.isUseItem() || event.getHand() != InteractionHand.MAIN_HAND) {

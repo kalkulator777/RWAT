@@ -7,6 +7,7 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
 import com.muzhik17.trainsmod.convention.ObjectRole;
+import com.muzhik17.trainsmod.kinematics.EdgeOutline;
 
 import net.minecraft.resources.ResourceLocation;
 
@@ -103,9 +104,10 @@ public record StockModel(
 
     /**
      * One animated object of a door, in model space at rest; {@code frames}
-     * are its model-space transforms over the animation (frame 0 = rest).
+     * are its model-space transforms over the animation (frame 0 = rest);
+     * {@code outline} its hover outline at rest (SPEC §9.3).
      */
-    public record Piece(Map<ResourceLocation, Mesh> meshes, Matrix4f[] frames) {
+    public record Piece(Map<ResourceLocation, Mesh> meshes, Matrix4f[] frames, EdgeOutline outline) {
     }
 
     /**
@@ -114,17 +116,18 @@ public record StockModel(
      * {@code value × degrees} about {@code axis} through {@code pivot} (none if
      * {@code pivot} is null) after a slide of {@code value × slide}. The rest
      * box ({@code boxMin}/{@code boxMax}) is what a click is tested against,
-     * moved with the control.
+     * moved with the control; {@code outline} is the hover outline of its
+     * meshes at rest, moved with it alike.
      *
      * @param interior inside the car: drawn only near, like the interior
      */
     public record Control(ObjectRole.Control role, Map<ResourceLocation, Mesh> meshes,
             boolean interior, Vector3f pivot, Vector3f axis, float degrees, Vector3f slide,
-            Vector3f boxMin, Vector3f boxMax) {
+            Vector3f boxMin, Vector3f boxMax, EdgeOutline outline) {
 
         /** The same control doing another job (a declared handbrake wheel). */
         public Control withRole(ObjectRole.Control newRole) {
-            return new Control(newRole, meshes, interior, pivot, axis, degrees, slide, boxMin, boxMax);
+            return new Control(newRole, meshes, interior, pivot, axis, degrees, slide, boxMin, boxMax, outline);
         }
 
         /** The model-space transform at animation value {@code value} (IR order: slide, then turn). */
@@ -163,6 +166,36 @@ public record StockModel(
     public record Wheel(float centerY, float centerZ, float radius,
             Map<ResourceLocation, Mesh> meshes) {
     }
+
+    /**
+     * The hover outline of a part's meshes (SPEC §9.3): its characteristic
+     * edges ({@link EdgeOutline}) — creases past {@link #OUTLINE_CREASE}°,
+     * the rest on the silhouette — corners within {@link #OUTLINE_WELD}
+     * taken as one.
+     */
+    public static EdgeOutline outline(Map<ResourceLocation, Mesh> meshes) {
+        int quads = 0;
+        for (Mesh mesh : meshes.values()) {
+            quads += mesh.quads().size();
+        }
+        float[] corners = new float[quads * 12];
+        int n = 0;
+        for (Mesh mesh : meshes.values()) {
+            for (Mesh.Quad q : mesh.quads()) {
+                for (Mesh.Vertex v : new Mesh.Vertex[]{q.v0(), q.v1(), q.v2(), q.v3()}) {
+                    corners[n++] = v.x();
+                    corners[n++] = v.y();
+                    corners[n++] = v.z();
+                }
+            }
+        }
+        return quads == 0 ? EdgeOutline.EMPTY : EdgeOutline.of(corners, OUTLINE_CREASE, OUTLINE_WELD);
+    }
+
+    /** Faces parting by more than this many degrees make a crease of the hover outline. */
+    public static final double OUTLINE_CREASE = 35.0;
+    /** Corners closer than this, blocks, are one corner for the hover outline. */
+    public static final double OUTLINE_WELD = 1.0e-3;
 
     /** A model with no geometry — the renderer falls back to the debug box. */
     public static StockModel empty() {

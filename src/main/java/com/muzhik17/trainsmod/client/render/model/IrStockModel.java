@@ -115,7 +115,8 @@ public final class IrStockModel {
         StockModel.Door build(String id) {
             List<StockModel.Piece> pieces = new ArrayList<>();
             for (Map.Entry<String, Map<ResourceLocation, Mesh>> entry : meshes.entrySet()) {
-                pieces.add(new StockModel.Piece(entry.getValue(), frames.get(entry.getKey())));
+                pieces.add(new StockModel.Piece(entry.getValue(), frames.get(entry.getKey()),
+                        StockModel.outline(entry.getValue())));
             }
             return new StockModel.Door(id, pieces);
         }
@@ -182,7 +183,8 @@ public final class IrStockModel {
             }
             Vector3f slide = new Vector3f(role.slideZ(), role.slideY(), -role.slideX());
             return new StockModel.Control(role, meshes, interior, pivot, axis, degrees, slide,
-                    new Vector3f(box[0], box[1], box[2]), new Vector3f(box[3], box[4], box[5]));
+                    new Vector3f(box[0], box[1], box[2]), new Vector3f(box[3], box[4], box[5]),
+                    StockModel.outline(meshes));
         }
 
         /** One control's flags spread over its objects: IR reads them from any of them. */

@@ -8,6 +8,7 @@ import org.joml.Matrix4f;
 
 import com.muzhik17.trainsmod.client.render.model.Mesh;
 import com.muzhik17.trainsmod.client.render.model.StockModel;
+import com.muzhik17.trainsmod.kinematics.EdgeOutline;
 
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.RenderType;
@@ -36,8 +37,8 @@ public final class BakedStockModel implements AutoCloseable {
     public record BakedBogie(List<GpuMesh> frame, List<BakedWheel> wheels) {
     }
 
-    /** One animated object of a door: its buffers and model-space frames (SPEC v1.5). */
-    public record BakedPiece(List<GpuMesh> meshes, Matrix4f[] frames) {
+    /** One animated object of a door: its buffers, model-space frames (SPEC v1.5) and hover outline (§9.3). */
+    public record BakedPiece(List<GpuMesh> meshes, Matrix4f[] frames, EdgeOutline outline) {
     }
 
     /** An animated door, by the id the wagon type declares it under. */
@@ -201,7 +202,7 @@ public final class BakedStockModel implements AutoCloseable {
             List<BakedPiece> pieces = new ArrayList<>(door.pieces().size());
             for (StockModel.Piece piece : door.pieces()) {
                 pieces.add(new BakedPiece(bakeBuckets(piece.meshes(), swaps, light),
-                        piece.frames()));
+                        piece.frames(), piece.outline()));
             }
             baked.add(new BakedDoor(door.id(), List.copyOf(pieces)));
         }
