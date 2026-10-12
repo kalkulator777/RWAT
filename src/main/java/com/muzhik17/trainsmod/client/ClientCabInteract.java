@@ -10,6 +10,7 @@ import org.joml.Vector3f;
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.client.render.model.StockModel;
 import com.muzhik17.trainsmod.client.render.model.StockModels;
+import com.muzhik17.trainsmod.consist.CabAccess;
 import com.muzhik17.trainsmod.consist.Consist;
 import com.muzhik17.trainsmod.consist.Handles;
 import com.muzhik17.trainsmod.consist.WagonEntity;
@@ -49,9 +50,13 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * distance it was grabbed at, so the lever follows the view. A handle lever
  * snaps to its notches and sends the notch when it changes
  * ({@link CabLeverPayload}); other controls send their group value
- * ({@link ControlGroupPayload}). Handle levers move only for the player at
- * the controls (SPEC §9.7: in the driver's chair); walking about the cab they
- * are named with a hint to sit down. Right-clicking the driver's chair sits down.
+ * ({@link ControlGroupPayload}). Handle levers move for the player at the
+ * controls (SPEC §9.7: in the driver's chair) and, while nobody sits at the
+ * controls of the train, for one standing in the cab (SPEC §9.2); elsewhere
+ * they are named with the reason. Right-clicking the driver's chair sits
+ * down. What the server would refuse isn't sent: a car with a cab wants the
+ * driver's key if the server says so — the label says it, and a click on
+ * the action bar.
  *
  * <p>Controls are picked like doors: the look ray goes into the wagon's local
  * frame (and the model's, for a turned wagon) and is tested against each
@@ -86,6 +91,10 @@ public final class ClientCabInteract {
     private static Grab grab;
     /** The control or chair under the crosshair (this tick), or null. */
     private static Pick hover;
+    /** Why {@link #hover} can't be worked now (a translation key), null if it can. */
+    private static String hoverRefusal;
+    /** The refusal that names the driver's key (SPEC §9.2). */
+    private static final String KEY_NEEDED = "message.railswheelsandtrains.need_key";
     /** False after a click until the use button is released (vanilla repeats use while held). */
     private static boolean armed = true;
 
@@ -129,8 +138,17 @@ public final class ClientCabInteract {
     }
 
     /**
+     * True if the control or chair under the crosshair can't be worked now
+     * (no driver's key, a lever not from here): the renderer outlines it red.
+     */
+    public static boolean highlightRefused() {
+        return grab == null && hover != null && hoverRefusal != null;
+    }
+
+    /**
      * The crosshair label (SPEC §9.3): what the hovered or held control does
-     * and its setting, or the chair's hint; empty when there's nothing.
+     * and its setting, or the chair's hint; empty when there's nothing. A
+     * control the player can't work now says why.
      */
     public static List<Component> hudLines() {
         Grab current = grab;
@@ -143,10 +161,11 @@ public final class ClientCabInteract {
         if (now == null) {
             return List.of();
         }
+        String refusal = hoverRefusal;
         if (now.seat >= 0) {
-            return List.of(Component.translatable("control.railswheelsandtrains.seat"),
-                    Component.translatable("control.railswheelsandtrains.seat_hint")
-                            .withStyle(ChatFormatting.GRAY));
+            return List.of(Component.translatable("control.railswheelsandtrains.seat"), refusal != null
+                    ? refusalLine(refusal)
+                    : Component.translatable("control.railswheelsandtrains.seat_hint").withStyle(ChatFormatting.GRAY));
         }
         ObjectRole.Control role = now.control.role();
         Component name = Component.literal(controlName(now.wagon, role));
@@ -155,26 +174,45 @@ public final class ClientCabInteract {
                 ? (ClientConsists.handbrake(now.wagon.getConsistId(), now.wagon.getWagonIndex()) ? 1.0F : 0.0F)
                 : position(now.wagon, now.control);
         Component value = Component.literal(setting(role, shown)).withStyle(ChatFormatting.GRAY);
-        if (!mayWork(now.wagon, now.control)) {
-            return List.of(name, value, Component.translatable("control.railswheelsandtrains.from_seat")
-                    .withStyle(ChatFormatting.GRAY));
+        if (refusal != null) {
+            return List.of(name, value, refusalLine(refusal));
         }
         return List.of(name, value);
     }
 
+    /** Why a control can't be worked: the key in red (the player can do something about it), the rest grey. */
+    private static Component refusalLine(String key) {
+        return Component.translatable(key).withStyle(KEY_NEEDED.equals(key) ? ChatFormatting.RED : ChatFormatting.GRAY);
+    }
+
     /**
-     * True if the local player may work this control: a handle lever only at
-     * the controls of its own wagon — in the driver's chair, or in a cab
-     * without a walkable interior (SPEC §9.7: the server takes handles from
-     * the driver only); switches, windows and the rest from anywhere in reach.
+     * Why the local player can't work this control or chair ({@code control}
+     * null) now, as a translation key; null if they can. Anything of a car
+     * with a cab wants the driver's key, if the server wants it (SPEC §9.2).
+     * A handle lever moves from the controls of its own wagon — the
+     * driver's chair, a cab without a walkable interior — or standing in its
+     * cab while nobody sits at any controls of the train (the server takes
+     * handles from its driver, SPEC §9.2, §9.7); switches, windows and the
+     * rest from anywhere in reach.
      */
-    private static boolean mayWork(WagonEntity wagon, StockModel.Control control) {
-        if (ControlValue.handle(control.role().kind()) == null) {
-            return true;
-        }
+    private static String refusal(WagonEntity wagon, StockModel.Control control) {
         LocalPlayer player = Minecraft.getInstance().player;
-        return player != null && player.getVehicle() == wagon
-                && ClientDriveInput.atControls(wagon, player);
+        if (player == null) {
+            return KEY_NEEDED;
+        }
+        ConsistComposition.Slot slot = ClientConsists.slot(wagon.getConsistId(), wagon.getWagonIndex());
+        if (slot != null && slot.type().drivable() && !CabAccess.mayWork(player)) {
+            return KEY_NEEDED;
+        }
+        if (control == null || ControlValue.handle(control.role().kind()) == null
+                || player.getVehicle() == wagon && ClientDriveInput.atControls(wagon, player)) {
+            return null;
+        }
+        if (player.getVehicle() != wagon || wagon.cabOf(player) < 0) {
+            return "control.railswheelsandtrains.from_cab";
+        }
+        return ClientDriveInput.anyoneAtControls(wagon.getConsistId())
+                ? "control.railswheelsandtrains.driver_seated" : null;
     }
 
     @SubscribeEvent
@@ -201,13 +239,18 @@ public final class ClientCabInteract {
         event.setCanceled(true);
         event.setSwingHand(false);
         armed = false;
+        StockModel.Control control = pick.control;
+        String refusal = refusal(pick.wagon, control);
+        if (refusal != null) {
+            // not sent, the server would refuse it; the label says why — the key on the action bar too
+            if (KEY_NEEDED.equals(refusal)) {
+                CabAccess.refuse(player);
+            }
+            return;
+        }
         if (pick.seat >= 0) {
             PacketDistributor.sendToServer(new SeatPayload(pick.wagon.getId(), true, pick.seat));
             return;
-        }
-        StockModel.Control control = pick.control;
-        if (!mayWork(pick.wagon, control)) {
-            return; // a handle lever, not from here: the label says to sit down
         }
         ObjectRole.Control role = control.role();
         if (role.kind() == ObjectRole.Kind.HANDBRAKE) {
@@ -241,9 +284,11 @@ public final class ClientCabInteract {
         if (current == null) {
             hover = player != null && mc.level != null && mc.screen == null && !player.isSpectator()
                     ? pick(mc, player) : null;
+            hoverRefusal = hover == null ? null : refusal(hover.wagon, hover.control);
             return;
         }
         hover = null;
+        hoverRefusal = null;
         if (player == null || !held || current.wagon.isRemoved()) {
             if (current.control.role().press()) {
                 send(current.wagon, current.control, 0.0F);

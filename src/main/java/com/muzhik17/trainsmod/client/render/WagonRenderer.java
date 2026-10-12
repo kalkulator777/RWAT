@@ -127,6 +127,10 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
     private static final float OUTLINE_G = 0.92F;
     private static final float OUTLINE_B = 0.7F;
     private static final float OUTLINE_A = 0.8F;
+    /** … and red round one the player can't work now (no driver's key, SPEC §9.2). */
+    private static final float REFUSED_R = 1.0F;
+    private static final float REFUSED_G = 0.25F;
+    private static final float REFUSED_B = 0.2F;
     /** Outline gap round a control's box, blocks. */
     private static final float OUTLINE_PAD = 0.01F;
 
@@ -222,9 +226,11 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
         int chair = ClientCabInteract.highlightedSeat(wagon);
         if (chair >= 0 && slot.type().cab() != null && chair < slot.type().cab().seats().size()) {
             double[] box = ClientCabInteract.seatBox(slot.type().cab().seats().get(chair));
+            boolean refused = ClientCabInteract.highlightRefused();
             LevelRenderer.renderLineBox(poseStack, buffers.getBuffer(RenderType.lines()),
                     box[0], box[1], box[2], box[3], box[4], box[5],
-                    OUTLINE_R, OUTLINE_G, OUTLINE_B, OUTLINE_A);
+                    refused ? REFUSED_R : OUTLINE_R, refused ? REFUSED_G : OUTLINE_G,
+                    refused ? REFUSED_B : OUTLINE_B, OUTLINE_A);
         }
         if (pose == null) {
             // no pose yet — ride the bogies rigidly at their pivots
@@ -450,10 +456,12 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
             if (ClientCabInteract.highlighted(wagon, control)) {
                 var lo = control.boxMin();
                 var hi = control.boxMax();
+                boolean refused = ClientCabInteract.highlightRefused();
                 LevelRenderer.renderLineBox(poseStack, buffers.getBuffer(RenderType.lines()),
                         lo.x - OUTLINE_PAD, lo.y - OUTLINE_PAD, lo.z - OUTLINE_PAD,
                         hi.x + OUTLINE_PAD, hi.y + OUTLINE_PAD, hi.z + OUTLINE_PAD,
-                        OUTLINE_R, OUTLINE_G, OUTLINE_B, OUTLINE_A);
+                        refused ? REFUSED_R : OUTLINE_R, refused ? REFUSED_G : OUTLINE_G,
+                        refused ? REFUSED_B : OUTLINE_B, OUTLINE_A);
             }
             poseStack.popPose();
         }

@@ -10,6 +10,7 @@ import com.mojang.logging.LogUtils;
 import com.mojang.serialization.Codec;
 
 import com.muzhik17.trainsmod.consist.CrowbarItem;
+import com.muzhik17.trainsmod.consist.DriverKeyItem;
 import com.muzhik17.trainsmod.consist.RollingStockItem;
 import com.muzhik17.trainsmod.consist.WagonEntity;
 import com.muzhik17.trainsmod.network.RwatNetwork;
@@ -153,6 +154,10 @@ public class RailsWheelsAndTrains {
     public static final DeferredItem<CrowbarItem> CROWBAR =
             ITEMS.registerItem("crowbar", CrowbarItem::new, new Item.Properties().stacksTo(1));
 
+    /** The driver's key: opens the cabs when the server locks them (SPEC §9.2, {@code cab_access}). */
+    public static final DeferredItem<DriverKeyItem> DRIVER_KEY =
+            ITEMS.registerItem("driver_key", DriverKeyItem::new, new Item.Properties().stacksTo(1));
+
     /** The mod's creative tab. Contents are added as content is registered. */
     public static final DeferredHolder<CreativeModeTab, CreativeModeTab> TRAINS_TAB = CREATIVE_MODE_TABS.register("trains_tab",
             () -> CreativeModeTab.builder()
@@ -165,6 +170,7 @@ public class RailsWheelsAndTrains {
                         output.accept(TRACK_BED_ITEM.get());
                         output.accept(ROLLING_STOCK_ITEM.get());
                         output.accept(CROWBAR.get());
+                        output.accept(DRIVER_KEY.get());
                     })
                     .build());
 

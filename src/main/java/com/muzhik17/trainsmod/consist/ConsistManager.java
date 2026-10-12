@@ -14,6 +14,7 @@ import org.joml.Vector3d;
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.ServerConfig;
 import com.muzhik17.trainsmod.kinematics.BogieReach;
+import com.muzhik17.trainsmod.kinematics.CabArea;
 import com.muzhik17.trainsmod.kinematics.ConsistKinematics;
 import com.muzhik17.trainsmod.kinematics.HullCollision;
 import com.muzhik17.trainsmod.kinematics.WagonPose;
@@ -167,11 +168,13 @@ public final class ConsistManager extends SavedData {
             // input only counts while a cab has a driver; the handles
             // themselves stay where they were left (a parked train keeps its
             // notch and brake — SPEC §5.3). The driver's cab sets which way
-            // "forward" is (SPEC §6.12: drive from any cab).
+            // "forward" is (SPEC §6.12: drive from any cab). A driver standing
+            // in the cab works the levers, not the keys (SPEC §9.2)
             Driver driver = driverOf(level, consist);
-            if (driver == null) {
+            if (driver == null || !driver.seated()) {
                 consist.setDriveInput(0, 0, false, 0);
-            } else {
+            }
+            if (driver != null) {
                 consist.takeControl(driver.cab().getUUID(), driver.facing());
             }
             // the handles reach the driver's panel with the snapshot (SPEC §9.7)
@@ -774,12 +777,21 @@ public final class ConsistManager extends SavedData {
     }
 
     /**
-     * Who drives a consist: the player seated in a cab, the cab wagon, and
-     * which way along the path the driver faces (+1 = +s; a cab in a flipped
-     * slot faces −s, and so does a chair looking to the model's rear — the
-     * other end's cab).
+     * Who drives a consist: the player at the controls of a cab, the cab
+     * wagon, and which way along the path the driver faces (+1 = +s; a cab
+     * in a flipped slot faces −s, and so does a chair looking to the model's
+     * rear — the other end's cab).
+     *
+     * @param standingCab the cab ({@link CabArea}) of a driver standing in
+     *                    it — the levers, not the keys (SPEC §9.2) — or −1
+     *                    for one sitting at the controls
      */
-    public record Driver(ServerPlayer player, WagonEntity cab, int facing) {
+    public record Driver(ServerPlayer player, WagonEntity cab, int facing, int standingCab) {
+
+        /** True if the driver sits at the controls: the keys drive and the panel is theirs. */
+        public boolean seated() {
+            return standingCab < 0;
+        }
     }
 
     /**
@@ -792,8 +804,22 @@ public final class ConsistManager extends SavedData {
      * riding a cab without a walkable interior: someone walking about a cab —
      * or the saloon of an EMU's head car — never drives, the chair decides,
      * not the kind of wagon. Null if no cab is manned.
+     *
+     * <p>With nobody at the controls anywhere, a player standing in a cab
+     * drives (SPEC §9.2, 2026-10-12): the levers of a cab are worked standing
+     * too. Again the front-most cab with one, the one nearest its first
+     * chair; they face as the chair nearest to them does. A seated driver
+     * anywhere comes first — standing in the other end's cab, nobody takes
+     * the train from the one sitting at the desk. Only players who may work
+     * a cab ({@link CabAccess}: the driver's key) count.
      */
     public static Driver driverOf(ServerLevel level, Consist consist) {
+        Driver seated = driverOf(level, consist, true);
+        return seated != null ? seated : driverOf(level, consist, false);
+    }
+
+    /** The front-most manned cab's driver: at its controls ({@code seated}), or standing in it. */
+    private static Driver driverOf(ServerLevel level, Consist consist, boolean seated) {
         List<UUID> ids = consist.wagonIds();
         ConsistComposition composition = consist.composition();
         for (int i = 0; i < ids.size() && i < composition.wagonCount(); i++) {
@@ -804,22 +830,53 @@ public final class ConsistManager extends SavedData {
             ServerPlayer driver = null;
             int driverChair = Integer.MAX_VALUE;
             for (Entity passenger : wagon.getPassengers()) {
-                if (passenger instanceof ServerPlayer player && atControls(wagon, player)) {
-                    int chair = Math.max(wagon.chairOf(player), 0); // a cab without chairs: its one rider
-                    if (chair < driverChair) {
-                        driver = player;
-                        driverChair = chair;
-                    }
+                if (!(passenger instanceof ServerPlayer player) || atControls(wagon, player) != seated
+                        || !CabAccess.mayWork(player)) {
+                    continue;
+                }
+                // a cab without chairs: its one rider; standing: the desk nearest them
+                int chair = seated ? Math.max(wagon.chairOf(player), 0) : wagon.deskOf(player);
+                if (chair >= 0 && chair < driverChair) {
+                    driver = player;
+                    driverChair = chair;
                 }
             }
             if (driver != null) {
                 List<WagonType.Seat> chairs = slot.type().cab().seats();
-                boolean back = wagon.isSeated(driver) && driverChair < chairs.size()
-                        && chairs.get(driverChair).facesBack();
-                return new Driver(driver, wagon, (slot.flipped() ? -1 : 1) * (back ? -1 : 1));
+                WagonType.Seat chair = (!seated || wagon.isSeated(driver)) && driverChair < chairs.size()
+                        ? chairs.get(driverChair) : null;
+                return new Driver(driver, wagon, CabArea.facing(slot.flipped(), chair),
+                        seated ? -1 : wagon.cabArea().cabOfChair(driverChair));
             }
         }
         return null;
+    }
+
+    /**
+     * True if {@code player} may move the consist's handles — a lever in a
+     * cab, a lamp of the driver's panel (SPEC §9.2, §9.7): its driver, or,
+     * while the driver stands in a cab rather than sits, anyone else with the
+     * key standing in that same cab. A second player at the desk of a seated
+     * driver doesn't fight them for the levers.
+     */
+    public static boolean mayMoveHandles(ServerLevel level, Consist consist, ServerPlayer player) {
+        Driver driver = driverOf(level, consist);
+        if (driver == null) {
+            return false;
+        }
+        return driver.player() == player
+                || !driver.seated() && player.getVehicle() == driver.cab() && !driver.cab().isSeated(player)
+                        && CabAccess.mayWork(player) && driver.cab().cabOf(player) == driver.standingCab();
+    }
+
+    /**
+     * True if {@code player} is at the driver's panel of the consist (SPEC
+     * §9.7): its driver, sitting at the controls — the lights and doors of
+     * the whole train are switched from there only.
+     */
+    public static boolean atPanel(ServerLevel level, Consist consist, ServerPlayer player) {
+        Driver driver = driverOf(level, consist);
+        return driver != null && driver.seated() && driver.player() == player;
     }
 
     /**

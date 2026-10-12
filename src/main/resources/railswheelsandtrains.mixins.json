@@ -14,6 +14,7 @@
     "ClientLevelSectionDirtyMixin",
     "ClientMountMessageMixin",
     "EntityRendererCabinLightMixin",
+    "KeyMappingDrivingMixin",
     "LivingEntityRendererSeatMixin",
     "LivingEntityWalkAnimationMixin",
     "LocalPlayerCrouchMixin",
