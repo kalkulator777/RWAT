@@ -1134,11 +1134,19 @@ public class WagonEntity extends Entity {
         return false;
     }
 
-    /** Long wagons get culled by their tight AABB otherwise (SPEC §2.4, 0.2). */
+    /**
+     * Long wagons get culled by their tight AABB otherwise (SPEC §2.4, 0.2).
+     * The box is round the entity, but the model is drawn up to a tick
+     * behind it (SPEC §2.1): a fast car's box reaches its run further.
+     */
     @Override
     public AABB getBoundingBoxForCulling() {
         // half the longest stock frame (platzkart ~12.6) plus curve slack
-        return getBoundingBox().inflate(16.0);
+        double reach = 16.0;
+        if (level().isClientSide) {
+            reach += Math.abs(ClientConsists.speed(getConsistId())) * 2.0;
+        }
+        return getBoundingBox().inflate(reach);
     }
 
     /** Server: open the doors a save had open, once this wagon's type is known (SPEC §9.8). */

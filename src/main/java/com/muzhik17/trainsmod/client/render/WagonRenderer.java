@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.joml.Matrix4f;
+import org.joml.Vector3d;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -20,17 +21,21 @@ import com.muzhik17.trainsmod.client.render.model.WagonModel;
 import com.muzhik17.trainsmod.consist.Handles;
 import com.muzhik17.trainsmod.consist.WagonEntity;
 import com.muzhik17.trainsmod.convention.ControlValue;
+import com.muzhik17.trainsmod.kinematics.PoseMath;
 import com.muzhik17.trainsmod.kinematics.Sway;
 import com.muzhik17.trainsmod.kinematics.WagonPose;
 import com.muzhik17.trainsmod.physics.TrainPhysics;
 import com.muzhik17.trainsmod.stock.ConsistComposition;
 import com.muzhik17.trainsmod.stock.WagonType;
 
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
+import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
@@ -495,6 +500,34 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
                 -BOGIE_MARK, -BOGIE_MARK, -BOGIE_MARK, BOGIE_MARK, BOGIE_MARK, BOGIE_MARK,
                 r, g, b, 1.0F);
         poseStack.popPose();
+    }
+
+    /**
+     * The block whose chunk section must be built for this car to be drawn
+     * (SPEC §2.4, {@code LevelRendererWagonSectionMixin}); null — draw it
+     * regardless — for a car of the train the local player rides. Vanilla
+     * asks about the entity's position, the centre of a car up to 26 blocks
+     * long: from its end, looking back on a fast train, that section is one
+     * never in view and never built. Any other car is asked about at its
+     * hull's point nearest the camera — the part of it the player sees first.
+     */
+    public static BlockPos testedSection(WagonEntity wagon, Vec3 camera) {
+        LocalPlayer player = Minecraft.getInstance().player;
+        if (player != null && player.getVehicle() instanceof WagonEntity ridden
+                && ridden.getConsistId() == wagon.getConsistId()) {
+            return null;
+        }
+        WagonType.Hull hull = wagon.collisionHull();
+        if (hull == null) {
+            return wagon.blockPosition();
+        }
+        Vector3d body = new Vector3d(wagon.getX(), wagon.getY(), wagon.getZ());
+        Vector3d local = PoseMath.worldToLocal(body, wagon.getYRot(), wagon.getXRot(),
+                new Vector3d(camera.x, camera.y, camera.z));
+        local.set(Math.clamp(local.x, hull.minX(), hull.maxX()), Math.clamp(local.y, hull.minY(), hull.maxY()),
+                Math.clamp(local.z, hull.minZ(), hull.maxZ()));
+        Vector3d nearest = PoseMath.localToWorld(body, wagon.getYRot(), wagon.getXRot(), local);
+        return BlockPos.containing(nearest.x, nearest.y, nearest.z);
     }
 
     @Override
