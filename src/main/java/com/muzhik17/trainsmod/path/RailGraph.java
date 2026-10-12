@@ -2,8 +2,8 @@ package com.muzhik17.trainsmod.path;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -408,55 +408,230 @@ public final class RailGraph {
     }
 
     /**
-     * Walk the path through {@code startSegmentId}: extend in both directions,
-     * at every node following {@link #continuation} — through plain joints
-     * unconditionally, through switches by their selection counter. Stops at
-     * dead ends, cusps and cycles. Re-walked whenever the graph (or a switch)
-     * changes, so routes always reflect the current network (SPEC §2.2 v1).
+     * Walk the path through {@code startSegmentId}: {@link #walkAround} that
+     * one segment, travelled A→B. The legs of a route placed on the track
+     * (spawn, rolling stock): where the start leg lands in it is
+     * {@link Walk#keptStart()} of {@link #walkAround}.
      */
     public List<RouteLeg> walkRoute(int startSegmentId) {
         RailSegment start = segment(startSegmentId);
         if (start == null) {
             return List.of();
         }
-        Set<Integer> visited = new LinkedHashSet<>();
-        visited.add(start.id());
-
-        List<RouteLeg> backward = walkFrom(start, start.nodeA(), visited);
-        List<RouteLeg> forward = walkFrom(start, start.nodeB(), visited);
-
-        List<RouteLeg> route = new ArrayList<>();
-        // backward legs were discovered moving away from the route start: flip them
-        for (int i = backward.size() - 1; i >= 0; i--) {
-            RouteLeg leg = backward.get(i);
-            route.add(new RouteLeg(leg.segmentId(), !leg.reversed()));
-        }
-        route.add(new RouteLeg(start.id(), false));
-        route.addAll(forward);
-        return route;
+        return walkAround(List.of(new RouteLeg(start.id(), false))).legs();
     }
 
-    /** Extend from {@code node} away from {@code from}; legs oriented in walk direction. */
-    private List<RouteLeg> walkFrom(RailSegment from, int nodeId, Set<Integer> visited) {
+    /**
+     * A walked route: its legs in +s order, and the index at which the legs
+     * it was walked around start.
+     */
+    public record Walk(List<RouteLeg> legs, int keptStart) {
+    }
+
+    /**
+     * Walk the route around {@code kept} — the legs a train stands on, in +s
+     * order (SPEC §2.2): the kept legs stay as they are, the route goes on
+     * from both of their ends. At every node it follows {@link #continuation}
+     * — plain joints unconditionally, a facing switch by its selection, a
+     * trailing switch onto its stem whatever the selection — and stops at a
+     * track end or a cusp.
+     *
+     * <p>Each direction is walked on its own and stops only when it would
+     * repeat one of <i>its own</i> directed legs (a cycle), so it may run
+     * over the kept legs once more, and over legs the other direction took.
+     * One visited set for both directions cut routes short in cycles: round
+     * a loop with a passing siding the backward walk took the main line, and
+     * the forward walk, coming off the siding against a switch set for the
+     * main, found the next segment taken and ended the route at the switch —
+     * the train stopped dead there; a balloon loop could not run back out
+     * over its stem either.
+     *
+     * <p>When both directions go round the same cycle through the kept legs
+     * (a plain loop, switches agreeing both ways) the route is that cycle
+     * once — a closed loop the consist circulates on ({@link #buildRoutePath}).
+     * Otherwise the route is open and may run over some track more than once
+     * (twice round a loop whose switches disagree, out and back through a
+     * balloon); the consist re-walks it as it moves on (SPEC §2.2), so it
+     * never reaches such an end.
+     */
+    public Walk walkAround(List<RouteLeg> kept) {
+        WalkSide forward = walkOn(kept.get(kept.size() - 1));
+        WalkSide backward = walkOn(flipped(kept.get(0)));
+        List<RouteLeg> keptBack = inverted(kept);
+        if (forward.closed() && backward.closed()
+                && endsWith(forward.legs(), kept) && endsWith(backward.legs(), keptBack)) {
+            List<RouteLeg> ahead = forward.legs().subList(0, forward.legs().size() - kept.size());
+            List<RouteLeg> behind = backward.legs().subList(0, backward.legs().size() - kept.size());
+            List<RouteLeg> loop = new ArrayList<>(kept);
+            loop.addAll(ahead);
+            if (ahead.equals(inverted(behind)) && closesLoop(loop)) {
+                return new Walk(List.copyOf(loop), 0);
+            }
+        }
+        List<RouteLeg> route = new ArrayList<>(inverted(backward.legs()));
+        int keptStart = route.size();
+        route.addAll(kept);
+        route.addAll(forward.legs());
+        return new Walk(List.copyOf(route), keptStart);
+    }
+
+    /**
+     * One direction of a walk: the legs in walk direction, and whether it
+     * stopped because the next leg would be its first again (it went round a
+     * cycle that starts right where the walk did).
+     */
+    private record WalkSide(List<RouteLeg> legs, boolean closed) {
+    }
+
+    /** Walk on from the end of {@code from} (in its travel direction), each directed leg at most once. */
+    private WalkSide walkOn(RouteLeg from) {
         List<RouteLeg> legs = new ArrayList<>();
-        RailSegment current = from;
-        int atNode = nodeId;
+        Set<RouteLeg> seen = new HashSet<>();
+        RailSegment current = segment(from.segmentId());
+        int atNode = from.reversed() ? current.nodeA() : current.nodeB();
         while (legs.size() < MAX_ROUTE_SEGMENTS) {
             if (node(atNode) == null) {
                 break;
             }
             RailSegment next = continuation(current, atNode);
-            if (next == null || visited.contains(next.id())) {
-                break; // track end / cusp, or cycle closed
+            if (next == null) {
+                break; // track end / cusp
             }
-            visited.add(next.id());
             // travelling away from atNode: reversed if we enter at its nodeB
-            boolean reversed = next.nodeB() == atNode;
-            legs.add(new RouteLeg(next.id(), reversed));
+            RouteLeg leg = new RouteLeg(next.id(), next.nodeB() == atNode);
+            if (!seen.add(leg)) {
+                return new WalkSide(legs, leg.equals(legs.get(0))); // went round a cycle
+            }
+            legs.add(leg);
             current = next;
             atNode = next.otherNode(atNode);
         }
-        return legs;
+        return new WalkSide(legs, false);
+    }
+
+    /** The same leg travelled the other way. */
+    private static RouteLeg flipped(RouteLeg leg) {
+        return new RouteLeg(leg.segmentId(), !leg.reversed());
+    }
+
+    /** The same track walked the other way: legs in reverse order, each flipped. */
+    public static List<RouteLeg> inverted(List<RouteLeg> legs) {
+        List<RouteLeg> out = new ArrayList<>(legs.size());
+        for (int i = legs.size() - 1; i >= 0; i--) {
+            out.add(flipped(legs.get(i)));
+        }
+        return out;
+    }
+
+    private static boolean endsWith(List<RouteLeg> legs, List<RouteLeg> tail) {
+        return legs.size() >= tail.size()
+                && legs.subList(legs.size() - tail.size(), legs.size()).equals(tail);
+    }
+
+    /**
+     * The legs of a route a train between route positions {@code lo} and
+     * {@code hi} stands on, in +s order, and the route {@code s} at which the
+     * first of them starts — unwrapped on a loop (in the same lap as
+     * {@code lo}), so it compares with the consist's own growing {@code s}.
+     */
+    public record Span(List<RouteLeg> legs, double startS) {
+    }
+
+    /**
+     * The {@link Span} of {@code [lo, hi]} on the route {@code legs}
+     * materialized as {@code path}: an open route clamps both into its
+     * range, a loop wraps them (a train longer than the loop spans all of
+     * it). A position exactly on a joint belongs to the leg it starts.
+     */
+    public static Span span(List<RouteLeg> legs, RoutePath path, double lo, double hi) {
+        double length = path.length();
+        double from = lo;
+        double to = Math.max(lo, hi);
+        double wrapped;
+        if (path.loop()) {
+            wrapped = from % length;
+            wrapped = wrapped < 0.0 ? wrapped + length : wrapped;
+        } else {
+            from = Math.clamp(from, 0.0, length);
+            to = Math.clamp(to, 0.0, length);
+            wrapped = from;
+        }
+        int first = path.partIndexAt(wrapped);
+        double startS = from - (wrapped - path.partStartS(first));
+        List<RouteLeg> covered = new ArrayList<>();
+        double end = startS;
+        int part = first;
+        while (true) {
+            covered.add(legs.get(part));
+            end += path.partLength(part);
+            part++;
+            if (part == legs.size()) {
+                if (!path.loop()) {
+                    break;
+                }
+                part = 0;
+            }
+            if (end >= to || covered.size() == legs.size()) {
+                break;
+            }
+        }
+        return new Span(List.copyOf(covered), startS);
+    }
+
+    /**
+     * A route re-walked around a train: the new legs, and the shift that
+     * carries the consist's old {@code s} into them ({@code s_new = s_old + shift}).
+     */
+    public record Rewalk(List<RouteLeg> legs, double shift) {
+    }
+
+    /**
+     * Re-walk the route {@code legs} (materialized as {@code path}) around
+     * the legs {@code span} of it a train stands on ({@link #walkAround}),
+     * keeping the train where it is. Null if the route stays as it is — the
+     * same legs at the same place, or the same loop entered elsewhere.
+     */
+    public Rewalk rewalk(List<RouteLeg> legs, RoutePath path, Span span) {
+        Walk walk = walkAround(span.legs());
+        double newStartS = 0.0;
+        for (int i = 0; i < walk.keptStart(); i++) {
+            newStartS += legLength(walk.legs().get(i));
+        }
+        double shift = newStartS - span.startS();
+        if (walk.legs().equals(legs) && Math.abs(shift) < 1.0e-9) {
+            return null;
+        }
+        if (path.loop() && walk.keptStart() == 0 && closesLoop(walk.legs())
+                && isRotation(walk.legs(), legs)) {
+            return null; // round the same loop: keep its numbering, s grows on
+        }
+        return new Rewalk(walk.legs(), shift);
+    }
+
+    /** Whether {@code a} is {@code b} started at another leg (same cycle). */
+    private static boolean isRotation(List<RouteLeg> a, List<RouteLeg> b) {
+        if (a.size() != b.size() || a.isEmpty()) {
+            return false;
+        }
+        int at = b.indexOf(a.get(0));
+        while (at >= 0) {
+            boolean same = true;
+            for (int i = 0; i < a.size() && same; i++) {
+                same = a.get(i).equals(b.get((at + i) % b.size()));
+            }
+            if (same) {
+                return true;
+            }
+            int next = b.subList(at + 1, b.size()).indexOf(a.get(0));
+            at = next < 0 ? -1 : at + 1 + next;
+        }
+        return false;
+    }
+
+    /** Arc length of a leg's segment (0 if it is gone). */
+    private double legLength(RouteLeg leg) {
+        RailSegment segment = segment(leg.segmentId());
+        return segment == null ? 0.0 : new HermiteSegmentPath(hermite(segment)).length();
     }
 
     /**
@@ -480,9 +655,23 @@ public final class RailGraph {
     }
 
     /**
-     * Materialize a route as a {@link TrackPath}. A route whose last leg ends
-     * at the node its first leg started from is a closed loop — the path then
-     * wraps instead of clamping, and consists circulate (SPEC §2.2).
+     * Route arc length of a point on leg {@code legIndex} ({@code segmentS}
+     * along its segment, A→B) — unambiguous where {@link #routeS} is not: a
+     * route may run over a segment more than once ({@link #walkAround}).
+     */
+    public double legS(List<RouteLeg> legs, int legIndex, double segmentS) {
+        double before = 0.0;
+        for (int i = 0; i < legIndex; i++) {
+            before += legLength(legs.get(i));
+        }
+        RouteLeg leg = legs.get(legIndex);
+        return before + (leg.reversed() ? legLength(leg) - segmentS : segmentS);
+    }
+
+    /**
+     * Materialize a route as a {@link TrackPath}. A route that closes on
+     * itself ({@link #closesLoop}) is a loop — the path then wraps instead of
+     * clamping, and consists circulate (SPEC §2.2).
      *
      * @return the path, or null if any segment is missing (stale route)
      */
@@ -500,8 +689,35 @@ public final class RailGraph {
             parts[i] = new HermiteSegmentPath(hermite(segment));
             reversed[i] = legs.get(i).reversed();
         }
-        boolean loop = legs.size() > 1 && legStartNode(legs.get(0)) == legEndNode(legs.get(legs.size() - 1));
-        return new RoutePath(parts, reversed, loop);
+        return new RoutePath(parts, reversed, closesLoop(legs));
+    }
+
+    /**
+     * Whether a route is a closed loop: its last leg ends where its first
+     * starts, runs on into it there (not a cusp), and no segment is used
+     * twice. Read off the legs alone — the client derives the same answer
+     * from the legs the server sends, whatever the switches say at the time.
+     * A route {@link #walkAround} unrolled round a cycle, or out and back
+     * through a balloon, repeats segments and stays open.
+     */
+    public boolean closesLoop(List<RouteLeg> legs) {
+        if (legs.size() < 2) {
+            return false;
+        }
+        RouteLeg first = legs.get(0);
+        RouteLeg last = legs.get(legs.size() - 1);
+        int node = legStartNode(first);
+        if (node != legEndNode(last)) {
+            return false;
+        }
+        Set<Integer> segmentIds = new HashSet<>();
+        for (RouteLeg leg : legs) {
+            if (!segmentIds.add(leg.segmentId())) {
+                return false;
+            }
+        }
+        Vector3d travel = departure(segment(last.segmentId()), node).negate();
+        return departure(segment(first.segmentId()), node).dot(travel) > CONTINUATION_DOT;
     }
 
     private int legStartNode(RouteLeg leg) {

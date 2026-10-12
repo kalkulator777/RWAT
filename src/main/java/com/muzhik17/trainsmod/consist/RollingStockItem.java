@@ -133,10 +133,10 @@ public class RollingStockItem extends Item {
         if (hit == null) {
             return Component.translatable("message.railswheelsandtrains.rolling_stock.not_on_track");
         }
-        List<RailGraph.RouteLeg> legs = graph.walkRoute(hit.segment().id());
-        TrackPathSpec.Route spec = TrackPathSpec.Route.of(legs);
+        RailGraph.Walk walk = graph.walkAround(List.of(new RailGraph.RouteLeg(hit.segment().id(), false)));
+        TrackPathSpec.Route spec = TrackPathSpec.Route.of(walk.legs());
         TrackPath path = spec.resolve(graph);
-        double centreS = graph.routeS(legs, hit.segment().id(), hit.s());
+        double centreS = graph.legS(walk.legs(), walk.keptStart(), hit.s());
         if (path == null || Double.isNaN(centreS)) {
             return Component.translatable("message.railswheelsandtrains.rolling_stock.not_on_track");
         }

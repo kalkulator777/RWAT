@@ -9,6 +9,7 @@ import java.util.UUID;
 import com.muzhik17.trainsmod.network.TrackPathSpec;
 import com.muzhik17.trainsmod.path.HermiteSegmentPath;
 import com.muzhik17.trainsmod.path.RailGraph;
+import com.muzhik17.trainsmod.path.RailSegment;
 import com.muzhik17.trainsmod.path.RoutePath;
 import com.muzhik17.trainsmod.physics.AutoHandbrake;
 import com.muzhik17.trainsmod.physics.ControlResponse;
@@ -69,6 +70,16 @@ public final class Consist {
     public static final double REVERSER_STOP_EPS = 1.0e-3;
     /** Type id given to wagons of a save from before compositions were stored. */
     private static final String LEGACY_TYPE_ID = "rwat:legacy";
+    /**
+     * The legs a route re-walk keeps (SPEC §2.2) reach this far past the
+     * train's coupler ends, blocks — plus {@link #KEEP_TICKS} of travel.
+     */
+    private static final double KEEP_MARGIN = 0.05;
+    /**
+     * Ticks of travel the kept legs reach past the train's ends: the clients'
+     * interpolation delay (2 ticks, {@code ClientConsists}) with a margin.
+     */
+    private static final double KEEP_TICKS = 4.0;
 
     private final int id;
     private TrackPathSpec pathSpec;
@@ -127,6 +138,8 @@ public final class Consist {
 
     private TrackPath cachedPath;
     private int cachedRevision = -1;
+    /** The legs the train stood on when its route was last re-walked (SPEC §2.2); transient. */
+    private transient List<RailGraph.RouteLeg> keptLegs;
 
     public Consist(int id, TrackPathSpec pathSpec, ConsistComposition composition,
             double s, double v) {
@@ -151,41 +164,100 @@ public final class Consist {
     }
 
     /**
-     * Materialize the path against the graph at {@code revision}; cached
-     * until the graph changes. A route is not a frozen leg list: on every
-     * graph change (new rails, demolition, a thrown switch) the consist
-     * re-anchors to the segment under its head and the route is re-walked
-     * from there through the current network (SPEC §2.2 v1) — so newly built
-     * track joins the route and demolishing track merely shortens it. Null
-     * only if nothing of the old route survived (the consist stays frozen
-     * until it is removed).
+     * Materialize the path against the graph at {@code revision}. A route is
+     * not a frozen leg list (SPEC §2.2): it is re-walked around the legs the
+     * train stands on whenever the train moves onto other legs and whenever
+     * the graph changes (new rails, demolition, a thrown switch) — so newly
+     * built track joins the route, demolishing track merely shortens it, a
+     * switch the train has cleared routes it by its current position, and a
+     * route round a cycle never runs out. The legs under the train never
+     * change while it stands on them. Null only if nothing of the old route
+     * survived (the consist stays frozen until it is removed).
      */
     public TrackPath resolvePath(RailGraph graph, int revision) {
         if (cachedRevision != revision) {
             if (pathSpec instanceof TrackPathSpec.Route route
                     && cachedPath instanceof RoutePath oldPath) {
-                reanchor(graph, route, oldPath);
+                RailGraph.Span span = spanUnderTrain(route, oldPath);
+                if (survives(graph, span)) {
+                    rewalk(graph, route, oldPath, span);
+                } else {
+                    reanchor(graph, route, oldPath);
+                }
             }
-            cachedPath = pathSpec.resolve(graph);
-            cachedRevision = revision;
-            // path may have changed shape/length under the consist: stay in range
-            // (a loop has no ends — sampling wraps, nothing to clamp to)
-            if (cachedPath != null && !cachedPath.loop()) {
-                s = Math.clamp(s, minHeadS(cachedPath.length()), cachedPath.length());
+            materialize(graph, revision);
+        }
+        if (pathSpec instanceof TrackPathSpec.Route route && cachedPath instanceof RoutePath path) {
+            RailGraph.Span span = spanUnderTrain(route, path);
+            if (!span.legs().equals(keptLegs) && survives(graph, span)
+                    && rewalk(graph, route, path, span)) {
+                materialize(graph, revision);
             }
         }
         return cachedPath;
     }
 
+    private void materialize(RailGraph graph, int revision) {
+        cachedPath = pathSpec.resolve(graph);
+        cachedRevision = revision;
+        // path may have changed shape/length under the consist: stay in range
+        // (a loop has no ends — sampling wraps, nothing to clamp to)
+        if (cachedPath != null && !cachedPath.loop()) {
+            s = Math.clamp(s, minHeadS(cachedPath.length()), cachedPath.length());
+        }
+    }
+
     /**
-     * Re-derive the route from the current head position against the changed
-     * graph: find the leg under the head (on the path materialized from the
-     * previous graph state), re-walk the route from that segment and remap
-     * {@code s} so the head stays at the same world position. If the head's
-     * segment was demolished, anchor to the nearest surviving leg of the old
-     * route (the head snaps onto its end — the train stands at the new track
-     * end instead of freezing). If nothing survived, leave the spec as is —
-     * {@code resolve} then returns null and the consist freezes.
+     * The legs of the route the train stands on. The span reaches past the
+     * coupler ends by {@link #KEEP_MARGIN} plus {@link #KEEP_TICKS} of travel:
+     * clients draw the train a couple of ticks in the past and must still
+     * find it on a re-walked route.
+     */
+    private RailGraph.Span spanUnderTrain(TrackPathSpec.Route route, RoutePath path) {
+        double margin = KEEP_MARGIN + Math.abs(v) * KEEP_TICKS;
+        return RailGraph.span(route.legs(), path,
+                Coupling.rearEndS(composition, s) - margin, Coupling.frontEndS(composition, s) + margin);
+    }
+
+    /** Whether every leg of the span still exists (none was demolished). */
+    private static boolean survives(RailGraph graph, RailGraph.Span span) {
+        for (RailGraph.RouteLeg leg : span.legs()) {
+            if (graph.segment(leg.segmentId()) == null) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Re-walk the route around the legs the train stands on (SPEC §2.2,
+     * {@link RailGraph#walkAround}): they are kept, the route beyond the
+     * train's ends is walked anew through the switches as they are now, and
+     * {@code s} is renumbered so the train stays put. Done when the train
+     * moved onto other legs and when the graph changed.
+     *
+     * @return true if the route changed
+     */
+    private boolean rewalk(RailGraph graph, TrackPathSpec.Route route, RoutePath path, RailGraph.Span span) {
+        keptLegs = span.legs();
+        RailGraph.Rewalk rewalk = graph.rewalk(route.legs(), path, span);
+        if (rewalk == null) {
+            return false;
+        }
+        pathSpec = TrackPathSpec.Route.of(rewalk.legs());
+        // same train, new numbering: clients shift their buffered s instead of sliding
+        shiftFrame(rewalk.shift());
+        s += rewalk.shift();
+        return true;
+    }
+
+    /**
+     * A leg under the train was demolished: anchor to the leg of the old
+     * route nearest the head that survived (the head's own if it did), re-walk
+     * the route around it and remap {@code s}. A head whose segment is gone
+     * snaps onto the end of the anchor facing it — the train stands at the new
+     * track end instead of freezing. If nothing survived, leave the spec as
+     * is — {@code resolve} then returns null and the consist freezes.
      */
     private void reanchor(RailGraph graph, TrackPathSpec.Route route, RoutePath oldPath) {
         double headS = oldPath.loop() ? wrapIntoLoop(oldPath)
@@ -214,37 +286,15 @@ public final class Consist {
             frac = anchor < headLeg ? 1.0 : 0.0;
         }
         RailGraph.RouteLeg anchorLeg = oldLegs.get(anchor);
+        // walked around the anchor as the train travelled it: orientation kept
+        RailGraph.Walk walk = graph.walkAround(List.of(anchorLeg));
+        RailSegment segment = graph.segment(anchorLeg.segmentId());
+        double segmentLength = new HermiteSegmentPath(graph.hermite(segment)).length();
+        double along = anchorLeg.reversed() ? (1.0 - frac) * segmentLength : frac * segmentLength;
+        double newS = graph.legS(walk.legs(), walk.keptStart(), along);
 
-        List<RailGraph.RouteLeg> newLegs = graph.walkRoute(anchorLeg.segmentId());
-        int at = -1;
-        for (int i = 0; i < newLegs.size(); i++) {
-            if (newLegs.get(i).segmentId() == anchorLeg.segmentId()) {
-                at = i;
-                break;
-            }
-        }
-        if (at < 0) {
-            return; // cannot happen (walkRoute always contains its start), stay safe
-        }
-        // keep the train's travel orientation: if the new walk traverses the
-        // anchor segment the other way round, flip the whole route
-        if (newLegs.get(at).reversed() != anchorLeg.reversed()) {
-            List<RailGraph.RouteLeg> flipped = new ArrayList<>(newLegs.size());
-            for (int i = newLegs.size() - 1; i >= 0; i--) {
-                RailGraph.RouteLeg leg = newLegs.get(i);
-                flipped.add(new RailGraph.RouteLeg(leg.segmentId(), !leg.reversed()));
-            }
-            newLegs = flipped;
-            at = newLegs.size() - 1 - at;
-        }
-
-        double newS = 0.0;
-        for (int i = 0; i < at; i++) {
-            newS += segmentLength(graph, newLegs.get(i).segmentId());
-        }
-        newS += frac * segmentLength(graph, newLegs.get(at).segmentId());
-
-        pathSpec = TrackPathSpec.Route.of(newLegs);
+        pathSpec = TrackPathSpec.Route.of(walk.legs());
+        keptLegs = null;
         // same head, new numbering: clients shift their buffered s instead of sliding
         shiftFrame(newS - s);
         s = newS;
@@ -254,10 +304,6 @@ public final class Consist {
     private double wrapIntoLoop(RoutePath oldPath) {
         double wrapped = s % oldPath.length();
         return wrapped < 0.0 ? wrapped + oldPath.length() : wrapped;
-    }
-
-    private static double segmentLength(RailGraph graph, int segmentId) {
-        return new HermiteSegmentPath(graph.hermite(graph.segment(segmentId))).length();
     }
 
     public double s() {
@@ -418,11 +464,12 @@ public final class Consist {
         if (shift == 0.0) {
             return;
         }
-        if (!frameUnsent || frameFrom != id) {
+        // a part just split off (frame not sent yet) still seeds from its
+        // parent: parent head + (inherited shift + this one) = our new head
+        if (!frameUnsent) {
             frame++;
             frameShift = 0.0;
             frameUnsent = true;
-            frameFrom = id;
         }
         frameShift += shift;
     }

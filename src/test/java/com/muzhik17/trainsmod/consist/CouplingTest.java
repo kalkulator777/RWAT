@@ -436,6 +436,44 @@ class CouplingTest {
     }
 
     @Test
+    void aRouteOverTheSameTrackTwice_couplesWhereTheyTouch() {
+        // a balloon loop: the stem walked in, round the balloon, and back out
+        // over the stem (SPEC §2.2) — the route runs over the stem twice
+        RailGraph graph = new RailGraph();
+        Vector3d x = new Vector3d(1, 0, 0);
+        RailSegment stem = graph.createSegment(new Vector3d(-60, 0, 0), x, new Vector3d(0, 0, 0), x);
+        graph.createSegment(new Vector3d(0, 0, 0), x, new Vector3d(30, 0, 15), x);
+        graph.createSegment(new Vector3d(0, 0, 0), x, new Vector3d(30, 0, -15), x);
+        graph.createSegment(new Vector3d(30, 0, 15), x, new Vector3d(60, 0, 0), new Vector3d(0, 0, 1));
+        graph.createSegment(new Vector3d(60, 0, 0), new Vector3d(0, 0, 1), new Vector3d(30, 0, -15), x);
+        List<RailGraph.RouteLeg> legs = routeOf(graph, stem.id());
+        assertEquals(new RailGraph.RouteLeg(stem.id(), false), legs.get(0));
+        assertEquals(new RailGraph.RouteLeg(stem.id(), true), legs.get(legs.size() - 1));
+        RoutePath path = graph.buildRoutePath(legs);
+        double outStart = path.partStartS(legs.size() - 1); // the stem, on the way out: s grows toward −X
+        ConsistComposition locoC = comp(slot(LOCO, false));
+        ConsistComposition carC = comp(slot(CAR, false));
+        // a car parked on the stem facing the switch, its front face at x = −25 (stem s = 35)
+        Coupling.Train car = train(graph, legs, carC, headForFront(carC, 35.0), 0.0);
+        // the loco comes back out of the balloon at it, front face just inside coupling reach
+        Coupling.Train loco = train(graph, legs, locoC,
+                headForFront(locoC, outStart + 25.0 - GAP + 0.5), 0.1);
+
+        Coupling.Merge merge = Coupling.tryCouple(loco, car);
+
+        assertNotNull(merge, "same leg list, different passes over the stem: they touch");
+        assertEquals(CAR, merge.composition().slot(0).type(), "the car is ahead of the loco");
+        assertTrue(merge.members().get(0).turned(), "and faces the other way on the outbound pass");
+        // the loco (kept) doesn't move; the car snaps to the coupler gap, half a block
+        assertEquals(0.0, at(path, locoC.bodyCenterS(loco.headS(), 0)).distance(
+                at(graph.buildRoutePath(merge.legs()), merge.composition().bodyCenterS(merge.headS(), 1))),
+                1.0e-6, "the loco stays put");
+        assertEquals(0.5, at(path, carC.bodyCenterS(car.headS(), 0)).distance(
+                at(graph.buildRoutePath(merge.legs()), merge.composition().bodyCenterS(merge.headS(), 0))),
+                1.0e-6, "the car is where it stood, closed up to the coupler gap");
+    }
+
+    @Test
     void negativeCouplerOffsets_coupleWithTheFramesOverlapping() {
         RailGraph graph = line();
         List<RailGraph.RouteLeg> legs = routeOf(graph, 1);
