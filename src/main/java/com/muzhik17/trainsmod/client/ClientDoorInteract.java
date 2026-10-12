@@ -7,6 +7,7 @@ import org.joml.Vector3d;
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.client.render.model.StockModel;
 import com.muzhik17.trainsmod.client.render.model.StockModels;
+import com.muzhik17.trainsmod.consist.CabAccess;
 import com.muzhik17.trainsmod.consist.WagonEntity;
 import com.muzhik17.trainsmod.kinematics.HullCollision;
 import com.muzhik17.trainsmod.network.DoorTogglePayload;
@@ -42,6 +43,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * <p>Holding the button doesn't flap the door: vanilla repeats the use action
  * every few ticks while held, so a door click is armed again only after the
  * button is released.
+ *
+ * <p>A door into a cab, on a server whose cabs want the driver's key (SPEC
+ * §9.2), isn't sent without one: the action bar says the key is needed.
  */
 @EventBusSubscriber(modid = RailsWheelsAndTrains.MODID, value = Dist.CLIENT)
 public final class ClientDoorInteract {
@@ -78,10 +82,16 @@ public final class ClientDoorInteract {
             return;
         }
         event.setCanceled(true); // the click belongs to the door, not an item or block
-        event.setSwingHand(armed);
+        // a door into a cab wants the driver's key, if the server wants it (SPEC §9.2): not sent
+        boolean locked = pick.wagon().cabArea().cabDoor(pick.door()) && !CabAccess.mayWork(player);
+        event.setSwingHand(armed && !locked);
         if (armed) {
             armed = false;
-            PacketDistributor.sendToServer(new DoorTogglePayload(pick.wagon().getId(), pick.door()));
+            if (locked) {
+                CabAccess.refuse(player);
+            } else {
+                PacketDistributor.sendToServer(new DoorTogglePayload(pick.wagon().getId(), pick.door()));
+            }
         }
     }
 

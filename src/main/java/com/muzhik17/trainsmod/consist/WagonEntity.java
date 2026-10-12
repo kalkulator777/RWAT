@@ -12,6 +12,7 @@ import org.joml.Vector3d;
 import com.muzhik17.trainsmod.client.ClientConsists;
 import com.muzhik17.trainsmod.client.ClientRide;
 import com.muzhik17.trainsmod.client.ClientWalk;
+import com.muzhik17.trainsmod.kinematics.CabArea;
 import com.muzhik17.trainsmod.kinematics.HullCollision;
 import com.muzhik17.trainsmod.kinematics.PoseMath;
 import com.muzhik17.trainsmod.kinematics.RiderWalk;
@@ -279,6 +280,9 @@ public class WagonEntity extends Entity {
             return InteractionResult.CONSUME;
         }
         if ((type == null || type.drivable()) && getPassengers().isEmpty()) {
+            if (type != null && !CabAccess.check(player)) {
+                return InteractionResult.CONSUME; // its seat is the controls (SPEC §9.2)
+            }
             player.startRiding(this);
             player.displayClientMessage(inControl(serverPlayer)
                     ? keysHint("message.railswheelsandtrains.drive_hint")
@@ -493,7 +497,8 @@ public class WagonEntity extends Entity {
         Vector3d local = riderLocal.get(player.getUUID());
         if (seat == null || local == null || player.getVehicle() != this || isSeated(player)
                 || occupied(chair)
-                || Math.hypot(local.x - seat.x(), local.z - seat.z()) > RiderWalk.SEAT_REACH) {
+                || Math.hypot(local.x - seat.x(), local.z - seat.z()) > RiderWalk.SEAT_REACH
+                || !CabAccess.check(player)) {
             return;
         }
         setSeated(chair, player.getId());
@@ -552,6 +557,56 @@ public class WagonEntity extends Entity {
         Vector3d from = satFrom != null ? satFrom
                 : interior.clampFeet(new Vector3d(seat.x(), seat.y(), seat.z()), RiderWalk.PLAYER_HALF_WIDTH);
         return RiderWalk.toward(from, seat.x(), seat.z(), interior, framedDoors(), doorMask());
+    }
+
+    /** The cabs of this wagon's type and the doors into them (SPEC §9.2); {@link CabArea#NONE} if none. */
+    public CabArea cabArea() {
+        return CabArea.of(typeNow());
+    }
+
+    /**
+     * The cab ({@link CabArea}) a passenger of this wagon is in, −1 if none
+     * (SPEC §9.2): the cab of the chair they sit in, else the one their feet
+     * stand in (the server's, or the client's predicted and synced). A rider
+     * of a cab without a walkable interior sits at its controls: cab 0.
+     */
+    public int cabOf(Entity passenger) {
+        WagonType type = typeNow();
+        if (type == null || type.cab() == null || !hasPassenger(passenger)) {
+            return -1;
+        }
+        if (type.interior() == null) {
+            return 0;
+        }
+        CabArea area = CabArea.of(type);
+        int chair = chairOf(passenger);
+        if (chair >= 0) {
+            return area.cabOfChair(chair);
+        }
+        Vector3d local = level().isClientSide ? ClientWalk.get(passenger.getId())
+                : riderLocal.get(passenger.getUUID());
+        if (local == null) {
+            return -1;
+        }
+        // feet in the pose frame: a flipped wagon's model is turned round in it
+        return isFlipped() ? area.cabAt(-local.x, -local.z) : area.cabAt(local.x, local.z);
+    }
+
+    /**
+     * The driver's chair whose desk a passenger standing in a cab works (SPEC
+     * §9.2): the nearest of that cab's chairs, by its index in {@code
+     * cab.seats}; −1 if they don't stand in a cab.
+     */
+    public int deskOf(Entity passenger) {
+        WagonType type = typeNow();
+        int cab = isSeated(passenger) ? -1 : cabOf(passenger);
+        Vector3d local = cab < 0 ? null : level().isClientSide ? ClientWalk.get(passenger.getId())
+                : riderLocal.get(passenger.getUUID());
+        if (type == null || local == null) {
+            return -1;
+        }
+        return isFlipped() ? CabArea.of(type).nearestChair(cab, -local.x, -local.z)
+                : CabArea.of(type).nearestChair(cab, local.x, local.z);
     }
 
     /**
@@ -621,6 +676,13 @@ public class WagonEntity extends Entity {
                 new Vector3d(player.getX(), player.getY(), player.getZ()));
         Vector3d clamped = type.interior().inFrame(isFlipped())
                 .clampFeet(localFeet, RiderWalk.PLAYER_HALF_WIDTH);
+        // a car boarded anywhere (no doors to it): not straight into its cab
+        // without the key (SPEC §9.2); an open door into a cab lets anyone in
+        CabArea cabs = CabArea.of(type);
+        int cab = isFlipped() ? cabs.cabAt(-clamped.x, -clamped.z) : cabs.cabAt(clamped.x, clamped.z);
+        if (cab >= 0 && !type.doorsOnly() && !CabAccess.check(player)) {
+            return;
+        }
         riderLocal.put(player.getUUID(), clamped);
         if (player.startRiding(this, true)) {
             repositionRiders();
@@ -844,7 +906,8 @@ public class WagonEntity extends Entity {
     /**
      * Open or close a door on a player's right-click (server): only within
      * reach of the leaf, with the door's sound. Anyone may operate any door —
-     * from the platform or from inside.
+     * from the platform or from inside — but a door into a cab, with the
+     * server's {@code cab_access = KEY}, only with the driver's key (SPEC §9.2).
      */
     public void toggleDoorBy(ServerPlayer player, int index) {
         List<WagonType.Door> doors = framedDoors();
@@ -860,6 +923,9 @@ public class WagonEntity extends Entity {
                         (door.minY() + door.maxY()) * 0.5, (door.minZ() + door.maxZ()) * 0.5));
         double reach = player.blockInteractionRange() + DOOR_REACH_SLACK;
         if (player.getEyePosition().distanceToSqr(centre.x, centre.y, centre.z) > reach * reach) {
+            return;
+        }
+        if (cabArea().cabDoor(index) && !CabAccess.check(player)) {
             return;
         }
         setDoorOpen(index, !isDoorOpen(index));

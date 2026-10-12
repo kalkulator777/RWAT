@@ -5,6 +5,7 @@ import com.muzhik17.trainsmod.client.ClientConsists;
 import com.muzhik17.trainsmod.client.ClientRailGraph;
 import com.muzhik17.trainsmod.client.ClientRiderSync;
 import com.muzhik17.trainsmod.client.ClientWalk;
+import com.muzhik17.trainsmod.consist.CabAccess;
 import com.muzhik17.trainsmod.consist.Consist;
 import com.muzhik17.trainsmod.consist.ConsistManager;
 import com.muzhik17.trainsmod.consist.RollingStockItem;
@@ -68,8 +69,10 @@ public final class RwatNetwork {
     /**
      * A cab lever dragged, or a handle set from the driver's panel, by a
      * player (SPEC §9, §9.7): only by the consist's driver — at the controls
-     * of its front-most manned cab — so a passenger, someone walking about
-     * the cab or a second cab can't fight the driver.
+     * of its front-most manned cab — so a passenger or a second cab can't
+     * fight the driver. With nobody at the controls, by anyone standing in
+     * the leading cab (SPEC §9.2: the levers are worked standing too); the
+     * driver's key, if the server wants it, either way.
      */
     private static void handleCabLever(CabLeverPayload payload, IPayloadContext context) {
         Consist.Handle handle = Consist.Handle.byOrdinal(payload.handle());
@@ -80,8 +83,7 @@ public final class RwatNetwork {
             return;
         }
         Consist consist = ConsistManager.get(level).byId(wagon.getConsistId());
-        ConsistManager.Driver driver = consist == null ? null : ConsistManager.driverOf(level, consist);
-        if (driver != null && driver.player() == player) {
+        if (consist != null && CabAccess.check(player) && ConsistManager.mayMoveHandles(level, consist, player)) {
             consist.setHandle(handle, payload.value());
         }
     }
@@ -89,8 +91,10 @@ public final class RwatNetwork {
     /**
      * A control group set by a player (SPEC §8–§9). A wagon's switch: the
      * player rides it or stands within reach of it; a {@code GLOBAL} one sets
-     * the group on every wagon of its train, as IR does. A light group for
-     * the whole train (the driver's panel): only by its driver (SPEC §9.7).
+     * the group on every wagon of its train, as IR does. A switch of a car
+     * with a cab wants the driver's key if the server wants it (SPEC §9.2).
+     * A light group for the whole train (the driver's panel): only by its
+     * driver at the controls (SPEC §9.7).
      */
     private static void handleControlGroup(ControlGroupPayload payload, IPayloadContext context) {
         if (!(context.player() instanceof ServerPlayer player)
@@ -103,6 +107,10 @@ public final class RwatNetwork {
                     || (player.getVehicle() != wagon && !wagon.withinReach(player))) {
                 return;
             }
+            WagonType type = wagon.typeNow();
+            if (type != null && type.drivable() && !CabAccess.check(player)) {
+                return;
+            }
             consist = payload.scope() == ControlGroupPayload.Scope.GLOBAL_SWITCH
                     ? ConsistManager.get(level).byId(wagon.getConsistId()) : null;
             if (consist == null) {
@@ -111,8 +119,7 @@ public final class RwatNetwork {
             }
         } else {
             consist = ConsistManager.get(level).byId(payload.targetId());
-            ConsistManager.Driver driver = consist == null ? null : ConsistManager.driverOf(level, consist);
-            if (driver == null || driver.player() != player) {
+            if (consist == null || !ConsistManager.atPanel(level, consist, player)) {
                 return;
             }
         }
@@ -193,13 +200,20 @@ public final class RwatNetwork {
 
     /**
      * Set or release a wagon's handbrake (SPEC §5.3) — the crowbar on its body
-     * from outside, or its handbrake wheel in the cab; either way the manager
-     * checks the reach.
+     * from outside, or its handbrake wheel in the cab (or the driving key for
+     * it); either way the manager checks the reach. The wheel of a car with a
+     * cab is a control of the cab: the driver's key if the server wants it
+     * (SPEC §9.2). The crowbar is a tool of its own and works any car's.
      */
     private static void handleHandbrake(HandbrakePayload payload, IPayloadContext context) {
         if (context.player() instanceof ServerPlayer player
                 && player.level() instanceof ServerLevel level
                 && level.getEntity(payload.wagonId()) instanceof WagonEntity wagon) {
+            WagonType type = wagon.typeNow();
+            if (!player.getMainHandItem().is(RailsWheelsAndTrains.CROWBAR.get())
+                    && type != null && type.drivable() && !CabAccess.check(player)) {
+                return;
+            }
             ConsistManager.get(level).toggleHandbrakeBy(player, wagon);
         }
     }
@@ -220,8 +234,10 @@ public final class RwatNetwork {
      * Apply a driver throttle on the server, but only if the sender is the
      * consist's driver — at the controls of its front-most manned cab (SPEC
      * §6.12: any cab wagon, not just the head; §9.7: in a walkable cab, the
-     * driver's chair) — basic anti-cheat so a client can't drive a train it
-     * isn't in, nor fight the driver from a second cab.
+     * driver's chair; a driver standing in the cab works the levers, the
+     * keys walk) — basic anti-cheat so a client can't drive a train it
+     * isn't in, nor fight the driver from a second cab. Who lacks the
+     * driver's key the server wants is no driver ({@code driverOf}).
      */
     private static void handleDriveInput(DriveInputPayload payload, IPayloadContext context) {
         if (!(context.player() instanceof ServerPlayer player)
@@ -232,7 +248,7 @@ public final class RwatNetwork {
         }
         Consist consist = ConsistManager.get(level).byId(payload.consistId());
         ConsistManager.Driver driver = consist == null ? null : ConsistManager.driverOf(level, consist);
-        if (driver != null && driver.player() == player) {
+        if (driver != null && driver.seated() && driver.player() == player) {
             consist.setDriveInput(payload.throttleDir(), payload.brakeDir(), payload.indBrakeDir(),
                     payload.reverserToggle(), payload.signals());
         }

@@ -184,7 +184,7 @@ public final class ClientAutoScene {
      * {@code walk} (SPEC §9): the driver's way in, played with the keys and
      * the packets the mouse would send — climb the front step from the
      * ground, walk the +X walkway to the cab, open its door, walk in (a
-     * lever pulled standing is refused), sit in the chair, pull the throttle;
+     * lever pulled standing is taken, SPEC §9.2), sit in the chair, pull the throttle;
      * where the player is gets logged at each step, with first- and
      * third-person shots and the driver's panel ({@code rwat-walk-*.png}).
      */
@@ -227,8 +227,8 @@ public final class ClientAutoScene {
                 mc.options.keyUp.setDown(false);
                 report(mc, "through the door");
             }
-            // walking, not seated: the throttle is named with "only from the driver's seat",
-            // and a lever sent anyway is refused (SPEC §9.7)
+            // standing in the cab with nobody at the controls: the throttle is worked
+            // standing too (SPEC §9.2, 2026-10-12 — before, it was refused)
             case 346 -> {
                 aimAt(mc, com.muzhik17.trainsmod.convention.ObjectRole.Kind.THROTTLE, null);
                 WagonEntity wagon = wagon(mc);
@@ -239,7 +239,7 @@ public final class ClientAutoScene {
             }
             case 349 -> {
                 shot(mc, "rwat-walk-walker-throttle.png");
-                report(mc, "walker's lever refused? " + com.muzhik17.trainsmod.client.ClientConsists
+                report(mc, "walker's lever taken (throttle 3)? " + com.muzhik17.trainsmod.client.ClientConsists
                         .handles(wagon(mc).getConsistId()));
             }
             case 350 -> {

@@ -13,6 +13,9 @@ import net.neoforged.neoforge.common.ModConfigSpec;
  * arcade — or {@code custom}, the only one that reads the values of the
  * {@code [physics.custom]} section. The loader's config API stays in this one
  * adapter (SPEC §7.3); the physics only ever sees a {@link PhysicsTuning}.
+ * Also who may drive ({@code [access]}, SPEC §9.2): the cabs open to anyone,
+ * or only to a player with the driver's key. The server's settings reach
+ * its clients, which predict the same.
  */
 public final class ServerConfig {
 
@@ -71,6 +74,29 @@ public final class ServerConfig {
         BUILDER.pop(2);
     }
 
+    /** Who may get into a cab and work it (SPEC §9.2). */
+    public enum CabAccess {
+        /** Anyone. */
+        OPEN,
+        /** A player carrying the driver's key; operators and creative players need none. */
+        KEY
+    }
+
+    static {
+        BUILDER.push("access");
+    }
+
+    private static final ModConfigSpec.EnumValue<CabAccess> CAB_ACCESS = BUILDER
+            .comment("Who may open the doors into a cab, sit in a driver's chair and work a cab's controls.",
+                    " OPEN - anyone, as in single player",
+                    " KEY  - only a player carrying a driver's key (anywhere in the inventory);",
+                    "        operators (permission level 2+) and creative players need none")
+            .defineEnum("cab_access", CabAccess.OPEN);
+
+    static {
+        BUILDER.pop();
+    }
+
     private static final ModConfigSpec SPEC = BUILDER.build();
 
     private ServerConfig() {
@@ -79,6 +105,15 @@ public final class ServerConfig {
     /** Mod construction (from the common mod class). */
     static void register(ModContainer container) {
         container.registerConfig(ModConfig.Type.SERVER, SPEC);
+    }
+
+    /**
+     * True if the cabs want the driver's key (SPEC §9.2); open until the
+     * world's config is loaded. Read on both sides: a client has the
+     * server's settings once it has joined.
+     */
+    public static boolean cabsLocked() {
+        return SPEC.isLoaded() && CAB_ACCESS.get() == CabAccess.KEY;
     }
 
     /** The physics tuning in force; the standard profile until the world's config is loaded. */

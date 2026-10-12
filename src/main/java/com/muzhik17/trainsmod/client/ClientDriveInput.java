@@ -13,6 +13,7 @@ import com.muzhik17.trainsmod.stock.ConsistComposition;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -164,5 +165,27 @@ public final class ClientDriveInput {
                 ClientConsists.slot(wagon.getConsistId(), wagon.getWagonIndex());
         return slot != null && slot.type().drivable()
                 && (!slot.type().boardable() || wagon.isSeated(player));
+    }
+
+    /**
+     * True if anyone this client sees sits at the controls of a cab of the
+     * consist — then the levers are theirs, not those of a player standing
+     * in a cab (SPEC §9.2; the server's {@code ConsistManager.driverOf}).
+     */
+    public static boolean anyoneAtControls(int consistId) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null) {
+            return false;
+        }
+        for (Entity entity : mc.level.entitiesForRendering()) {
+            if (entity instanceof WagonEntity wagon && wagon.getConsistId() == consistId) {
+                for (Entity passenger : wagon.getPassengers()) {
+                    if (passenger instanceof Player player && atControls(wagon, player)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 }
