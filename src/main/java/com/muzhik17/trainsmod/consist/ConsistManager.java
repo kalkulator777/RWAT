@@ -13,6 +13,7 @@ import org.joml.Vector3d;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.ServerConfig;
+import com.muzhik17.trainsmod.kinematics.BogieReach;
 import com.muzhik17.trainsmod.kinematics.ConsistKinematics;
 import com.muzhik17.trainsmod.kinematics.HullCollision;
 import com.muzhik17.trainsmod.kinematics.WagonPose;
@@ -42,8 +43,11 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
@@ -612,6 +616,101 @@ public final class ConsistManager extends SavedData {
                         ? "message.railswheelsandtrains.handbrake_set"
                         : "message.railswheelsandtrains.handbrake_released",
                 consist.handbrakesSet(), consist.wagonIds().size()), true);
+        setDirty();
+        return true;
+    }
+
+    /** Reach past the player's entity reach for a blow at a bogie (vanilla gives an entity attack +1). */
+    private static final double BOGIE_REACH_SLACK = 1.0;
+    /**
+     * Ticks the client's view of a moving train lags the server's pose by:
+     * the interpolation delay (2), the render window (1) and a packet (1).
+     */
+    private static final double VIEW_LAG_TICKS = 4.0;
+
+    /**
+     * A player struck a bogie of {@code wagon} (SPEC §6.11): the one ahead
+     * along the path ({@code front}) or behind. If the blow can be there —
+     * by the server's pose of that bogie ({@link BogieReach}) — and the
+     * player may break things here (not in adventure mode, not under spawn
+     * protection), the wagon takes it as the player's attack: a few blows
+     * wear it down in survival, one breaks it in creative
+     * ({@link WagonEntity#hurt}). A rider can't strike: aboard, the world is
+     * out of reach (SPEC v1.5-б).
+     *
+     * @return true if the blow landed
+     */
+    public boolean strikeBogie(ServerLevel level, ServerPlayer player, WagonEntity wagon, boolean front) {
+        if (player.isSpectator() || !player.isAlive() || player.getVehicle() instanceof WagonEntity
+                || !player.mayBuild()) {
+            return false;
+        }
+        Consist consist = byId(wagon.getConsistId());
+        int index = consist == null ? -1 : consist.wagonIds().indexOf(wagon.getUUID());
+        if (index < 0 || index >= consist.composition().wagonCount()) {
+            return false;
+        }
+        RailNetwork network = RailNetwork.get(level);
+        TrackPath path = consist.resolvePath(network.graph(), network.revision());
+        if (path == null) {
+            return false;
+        }
+        WagonPose pose = ConsistKinematics.wagonPose(path, consist.s(), index, consist.composition());
+        Vector3d bogie = (front ? pose.front() : pose.rear()).position();
+        if (!level.mayInteract(player, BlockPos.containing(bogie.x, bogie.y, bogie.z))) {
+            return false; // spawn protection
+        }
+        Vec3 eye = player.getEyePosition();
+        Vec3 look = player.getLookAngle();
+        double slack = BOGIE_REACH_SLACK + Math.abs(consist.speed()) * VIEW_LAG_TICKS;
+        if (!BogieReach.reaches(new Vector3d(eye.x, eye.y, eye.z), new Vector3d(look.x, look.y, look.z),
+                bogie, player.entityInteractionRange(), slack)) {
+            return false;
+        }
+        wagon.strikeBy(player);
+        return true;
+    }
+
+    /**
+     * A wagon broken by blows at its bogies (SPEC §6.11) leaves its train.
+     * Riders aboard are set down where they stand ({@link
+     * WagonEntity#setDownRiders}: the car is gone, from its floor it is a
+     * short drop to the track). The wagon is uncoupled at both ends — the
+     * crowbar's cut ({@link #split}), so the rest of the train stays where
+     * it is, one consist or two, with its handles and handbrakes — and the
+     * one-wagon consist left over goes with the entity. In survival its
+     * rolling stock item drops, with its type and livery, ready to be put
+     * back on the rails ({@code doEntityDrops} permitting).
+     *
+     * @return false if its train can't be cut (its wagon list out of step with the composition): nothing breaks
+     */
+    public boolean breakWagon(ServerLevel level, WagonEntity wagon, boolean drop) {
+        Consist consist = byId(wagon.getConsistId());
+        int index = consist == null ? -1 : consist.wagonIds().indexOf(wagon.getUUID());
+        int count = consist == null ? 0 : consist.composition().wagonCount();
+        if (consist != null && (index < 0 || consist.wagonIds().size() != count)) {
+            return false;
+        }
+        ConsistComposition.Slot slot = consist == null ? null : consist.composition().slot(index);
+        wagon.setDownRiders();
+        if (consist != null) {
+            if (index + 1 < count) {
+                split(level, consist, index + 1); // the cars behind run on as their own train
+            }
+            Consist alone = index > 0 ? split(level, consist, index) : consist;
+            if (alone != null) {
+                remove(alone.id());
+            }
+        }
+        if (drop && slot != null && level.getGameRules().getBoolean(GameRules.RULE_DOENTITYDROPS)) {
+            ItemStack stack = new ItemStack(RailsWheelsAndTrains.ROLLING_STOCK_ITEM.get());
+            stack.set(RailsWheelsAndTrains.STOCK_SELECTION.get(),
+                    new RollingStockItem.Selection(slot.type().id(), slot.livery()));
+            wagon.spawnAtLocation(stack, 1.0F);
+        }
+        level.playSound(null, wagon.getX(), wagon.getY() + 1.0, wagon.getZ(), SoundEvents.NETHERITE_BLOCK_BREAK,
+                SoundSource.NEUTRAL, 1.0F, 0.7F);
+        wagon.discard();
         setDirty();
         return true;
     }

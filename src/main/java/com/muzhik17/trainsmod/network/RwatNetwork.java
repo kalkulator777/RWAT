@@ -57,6 +57,8 @@ public final class RwatNetwork {
                 (payload, context) -> context.enqueueWork(() -> handleUncouple(payload, context)));
         registrar.playToServer(HandbrakePayload.TYPE, HandbrakePayload.STREAM_CODEC,
                 (payload, context) -> context.enqueueWork(() -> handleHandbrake(payload, context)));
+        registrar.playToServer(WagonStrikePayload.TYPE, WagonStrikePayload.STREAM_CODEC,
+                (payload, context) -> context.enqueueWork(() -> handleWagonStrike(payload, context)));
         registrar.playToServer(CabLeverPayload.TYPE, CabLeverPayload.STREAM_CODEC,
                 (payload, context) -> context.enqueueWork(() -> handleCabLever(payload, context)));
         registrar.playToServer(ControlGroupPayload.TYPE, ControlGroupPayload.STREAM_CODEC,
@@ -201,6 +203,19 @@ public final class RwatNetwork {
                 && player.level() instanceof ServerLevel level
                 && level.getEntity(payload.wagonId()) instanceof WagonEntity wagon) {
             ConsistManager.get(level).toggleHandbrakeBy(player, wagon);
+        }
+    }
+
+    /**
+     * A player struck a wagon's bogie (SPEC §6.11): the manager checks the
+     * blow can be there and that the player may break things here, then the
+     * wagon takes it as an attack.
+     */
+    private static void handleWagonStrike(WagonStrikePayload payload, IPayloadContext context) {
+        if (context.player() instanceof ServerPlayer player
+                && player.level() instanceof ServerLevel level
+                && level.getEntity(payload.wagonId()) instanceof WagonEntity wagon) {
+            ConsistManager.get(level).strikeBogie(level, player, wagon, payload.front());
         }
     }
 

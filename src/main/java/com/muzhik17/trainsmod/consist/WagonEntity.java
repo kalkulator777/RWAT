@@ -33,11 +33,13 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -103,6 +105,17 @@ public class WagonEntity extends Entity {
      */
     private static final EntityDataAccessor<CompoundTag> DATA_CONTROLS =
             SynchedEntityData.defineId(WagonEntity.class, EntityDataSerializers.COMPOUND_TAG);
+    /**
+     * Blows at its bogies (SPEC §6.11), as a minecart's: ticks left of the
+     * wobble, which way it rocks (±1), and the wear, which breaks it past
+     * {@link #BREAK_DAMAGE}; wobble and wear run down a tick at a time.
+     */
+    private static final EntityDataAccessor<Integer> DATA_HURT_TIME =
+            SynchedEntityData.defineId(WagonEntity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> DATA_HURT_DIR =
+            SynchedEntityData.defineId(WagonEntity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Float> DATA_DAMAGE =
+            SynchedEntityData.defineId(WagonEntity.class, EntityDataSerializers.FLOAT);
 
     /** Reach past the player's block reach for toggling a door (the leaf is big). */
     private static final double DOOR_REACH_SLACK = 1.5;
@@ -126,6 +139,18 @@ public class WagonEntity extends Entity {
      * the head no longer spins all the way round (play-test).
      */
     public static final float SEAT_LOOK = 105.0F;
+    /**
+     * Wear that breaks the wagon, a minecart's: a blow adds 10 × its damage
+     * and the wear runs down a point a tick — eight or nine punches in a row.
+     */
+    private static final float BREAK_DAMAGE = 40.0F;
+    /** How long a blow rocks the car, ticks (a minecart's). */
+    private static final int HURT_TICKS = 10;
+    /**
+     * The blow's rock as a share of a minecart's wobble: a car is long and
+     * heavy, the minecart's degrees would swing its roof a block.
+     */
+    private static final double KNOCK_SHARE = 0.1;
     /** Control groups a wagon keeps at most, and the longest group name (network sanity). */
     private static final int MAX_CONTROL_GROUPS = 64;
     private static final int MAX_CONTROL_NAME = 32;
@@ -134,6 +159,8 @@ public class WagonEntity extends Entity {
     private final Map<UUID, Vector3d> riderLocal = new HashMap<>();
     /** Set true only while {@link #exitRider} runs, so the dismount guard lets it through. */
     private boolean dismountAllowed;
+    /** Set true only while a blow at a bogie lands ({@link #strikeBy}): the body itself takes no harm. */
+    private boolean bogieStruck;
     /** Where the rider leaving through a door lands; read by the dismount, then cleared. */
     private Vec3 doorExit;
     /**
@@ -191,6 +218,9 @@ public class WagonEntity extends Entity {
         builder.define(DATA_DOORS, 0);
         builder.define(DATA_SEATED, new CompoundTag());
         builder.define(DATA_CONTROLS, new CompoundTag());
+        builder.define(DATA_HURT_TIME, 0);
+        builder.define(DATA_HURT_DIR, 1);
+        builder.define(DATA_DAMAGE, 0.0F);
     }
 
     @Override
@@ -198,6 +228,13 @@ public class WagonEntity extends Entity {
         super.tick();
         if (!level().isClientSide && savedOpenDoors != null) {
             reopenSavedDoors();
+        }
+        // a blow's wobble and wear run down (both sides, as a minecart's: no sync per tick needed)
+        if (getHurtTime() > 0) {
+            this.entityData.set(DATA_HURT_TIME, getHurtTime() - 1);
+        }
+        if (getDamage() > 0.0F) {
+            this.entityData.set(DATA_DAMAGE, Math.max(getDamage() - 1.0F, 0.0F));
         }
         if (level().isClientSide) {
             clientTick();
@@ -228,13 +265,104 @@ public class WagonEntity extends Entity {
             setPos(pose.body().x, pose.body().y, pose.body().z);
             setYRot(pose.yaw());
             setXRot(pose.pitch());
-            ClientRide.step(getId(), getConsistId(), pose); // the body on its springs (SPEC §10)
+            ClientRide.step(getId(), getConsistId(), pose, knockRoll()); // the body on its springs (SPEC §10)
             // do NOT reposition riders here: vanilla ticks a passenger right
             // after its vehicle (setOldPosAndRot → rideTick → positionRider),
             // so it picks this fresh pose up by itself. Doing it inside the
             // vehicle tick lands BEFORE the rider's old-pos snapshot, so
             // xo == x and the camera lerp collapses — a 20 Hz rider stutter
             // while the car itself (renderPose-interpolated) stays smooth.
+        }
+    }
+
+    // --- blows at the bogies (SPEC §6.11) ---
+
+    public int getHurtTime() {
+        return this.entityData.get(DATA_HURT_TIME);
+    }
+
+    public int getHurtDir() {
+        return this.entityData.get(DATA_HURT_DIR);
+    }
+
+    public float getDamage() {
+        return this.entityData.get(DATA_DAMAGE);
+    }
+
+    /**
+     * A player's blow at one of this wagon's bogies (server, SPEC §6.11; the
+     * manager has checked it can be there): taken as their attack on the
+     * wagon — vanilla works out its strength from the weapon and the
+     * cooldown, and lands it on {@link #hurt}.
+     */
+    void strikeBy(ServerPlayer player) {
+        bogieStruck = true;
+        try {
+            player.attack(this);
+        } finally {
+            bogieStruck = false;
+        }
+    }
+
+    /**
+     * Only a blow at a bogie ({@link #strikeBy}) harms the wagon — never one
+     * at its body (its small pick box sits under the floor in the middle):
+     * nobody knocks down the car they walk about in by a stray click. Like a
+     * minecart: each blow rocks it and adds ten times its damage to the wear;
+     * past {@link #BREAK_DAMAGE} — or at once by a player in creative — it
+     * breaks ({@link ConsistManager#breakWagon}), dropping its item unless in
+     * creative.
+     */
+    @Override
+    public boolean hurt(DamageSource source, float amount) {
+        if (!bogieStruck || level().isClientSide || isRemoved() || isInvulnerableTo(source)
+                || !(level() instanceof ServerLevel level)) {
+            return false;
+        }
+        this.entityData.set(DATA_HURT_DIR, -getHurtDir());
+        this.entityData.set(DATA_HURT_TIME, HURT_TICKS);
+        this.entityData.set(DATA_DAMAGE, getDamage() + amount * 10.0F);
+        gameEvent(GameEvent.ENTITY_DAMAGE, source.getEntity());
+        boolean creative = source.getEntity() instanceof Player player && player.getAbilities().instabuild;
+        if (creative || getDamage() > BREAK_DAMAGE) {
+            ConsistManager.get(level).breakWagon(level, this, !creative);
+        }
+        return true;
+    }
+
+    /**
+     * The blow's rock this tick, radians of roll (client): a minecart's
+     * wobble ({@code sin(t)·t·wear/10}, degrees, swinging as it fades) at
+     * {@link #KNOCK_SHARE} of its size.
+     */
+    private double knockRoll() {
+        int time = getHurtTime();
+        if (time <= 0) {
+            return 0.0;
+        }
+        double degrees = Mth.sin(time) * time * getDamage() / 10.0 * getHurtDir();
+        return Math.toRadians(degrees * KNOCK_SHARE);
+    }
+
+    /** A wagon isn't knocked about by blows or bumps: the consist alone moves it. */
+    @Override
+    public void push(double x, double y, double z) {
+    }
+
+    /**
+     * Set every rider down where they stand (server): the wagon is about to go
+     * ({@link ConsistManager#breakWagon}). From the floor it is a short drop
+     * to the track; a seated or cab driver gets off at their seat.
+     */
+    void setDownRiders() {
+        for (Entity passenger : List.copyOf(getPassengers())) {
+            if (passenger instanceof ServerPlayer player) {
+                doorExit = player.position();
+                exitRider(player);
+                doorExit = null;
+            } else {
+                passenger.stopRiding();
+            }
         }
     }
 
