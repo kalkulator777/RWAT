@@ -7,12 +7,12 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 import com.google.gson.JsonObject;
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.client.render.RailRenderer;
+import com.muzhik17.trainsmod.path.SwitchThroat;
 import com.muzhik17.trainsmod.path.TileFootprint;
 
 import net.minecraft.resources.FileToIdConverter;
@@ -42,6 +42,11 @@ import net.minecraft.util.profiling.ProfilerFiller;
  * models. Unlike stock, rail tiles are small (a few hundred KB for all of MVP)
  * and every segment needs one the moment it is seen, so they load here, off
  * thread with the rest of the reload, not lazily.
+ *
+ * <p>The tile is also kept split for switch throats (SPEC §2.2 v1): the rail
+ * objects by side, everything else apart — a leg bends one of its rails into
+ * a blade and nothing else. Only a style whose rail objects are its running
+ * rails gets blades ({@link SwitchThroat#gaugeFace}).
  *
  * <p>Applying swaps the registry and drops the rail renderer's caches, so
  * F3+T re-sweeps the network with the new tiles. The object rules (hidden
@@ -113,30 +118,74 @@ public final class RailModelReloadListener
                 IrStockModel.materialTextures(id.toString(), objLocation, obj, access);
         float[] stretch = TileFootprint.railStretch(railExtent(obj), tileLength);
         Map<ResourceLocation, Mesh> full = new LinkedHashMap<>();
-        Map<ResourceLocation, Mesh> railsOnly = new LinkedHashMap<>();
+        Map<ResourceLocation, Mesh> base = new LinkedHashMap<>();
+        Map<ResourceLocation, Mesh> plusRails = new LinkedHashMap<>();
+        Map<ResourceLocation, Mesh> minusRails = new LinkedHashMap<>();
+        Mesh plusAll = new Mesh();
+        Mesh minusAll = new Mesh();
         for (ObjLoader.Part part : obj.parts()) {
             ResourceLocation texture = textures.get(part.material());
             if (texture == null || TileFootprint.isHiddenObject(part.object())) {
                 continue;
             }
-            Mesh mesh = stretch != null && TileFootprint.isRailObject(part.object())
-                    ? stretched(part.mesh(), stretch)
-                    : part.mesh();
+            boolean rail = TileFootprint.isRailObject(part.object());
+            Mesh mesh = stretch != null && rail ? stretched(part.mesh(), stretch) : part.mesh();
             full.computeIfAbsent(texture, t -> new Mesh()).merge(mesh);
-            Mesh rails = railsOnly.computeIfAbsent(texture, t -> new Mesh());
-            if (!part.object().toUpperCase(Locale.ROOT).contains("BASE")) {
-                rails.merge(mesh);
+            Mesh plus = plusRails.computeIfAbsent(texture, t -> new Mesh());
+            Mesh minus = minusRails.computeIfAbsent(texture, t -> new Mesh());
+            Mesh rest = base.computeIfAbsent(texture, t -> new Mesh());
+            if (!rail) {
+                rest.merge(mesh);
+                continue;
+            }
+            // a rail object's faces by side (centroid z): one side of a leg is
+            // bent into a switch blade, the other stays put (SPEC §2.2 v1)
+            for (Mesh.Quad q : mesh.quads()) {
+                boolean plusSide = q.v0().z() + q.v1().z() + q.v2().z() + q.v3().z() >= 0.0F;
+                (plusSide ? plus : minus).add(q);
+                (plusSide ? plusAll : minusAll).add(q);
             }
         }
         List<RailStyle.Part> parts = new ArrayList<>();
         for (Map.Entry<ResourceLocation, Mesh> entry : full.entrySet()) {
-            parts.add(new RailStyle.Part(entry.getKey(), entry.getValue(), railsOnly.get(entry.getKey())));
+            ResourceLocation texture = entry.getKey();
+            parts.add(new RailStyle.Part(texture, entry.getValue(), base.get(texture),
+                    plusRails.get(texture), minusRails.get(texture)));
         }
         if (parts.isEmpty()) {
             RailsWheelsAndTrains.LOGGER.error("{}: rail model {} has no textured faces", id, objLocation);
             return null;
         }
-        return new RailStyle(id.toString(), List.copyOf(parts), tileLength);
+        RailStyle.Blades blades = blades(plusAll, minusAll);
+        if (blades == null) {
+            RailsWheelsAndTrains.LOGGER.info("{}: its rail objects are no running rails, "
+                    + "switches in it are drawn without blades", id);
+        }
+        return new RailStyle(id.toString(), List.copyOf(parts), tileLength, blades);
+    }
+
+    /**
+     * The style's switch blade profile from its rail faces on either side, or
+     * null unless both sides are running rails ({@link SwitchThroat#gaugeFace}).
+     */
+    private static RailStyle.Blades blades(Mesh plus, Mesh minus) {
+        double plusFace = gaugeFace(plus);
+        double minusFace = gaugeFace(minus);
+        return Double.isNaN(plusFace) || Double.isNaN(minusFace) ? null : new RailStyle.Blades(plusFace, minusFace);
+    }
+
+    private static double gaugeFace(Mesh rails) {
+        int count = rails.quads().size() * 4;
+        float[] across = new float[count];
+        float[] height = new float[count];
+        int i = 0;
+        for (Mesh.Quad q : rails.quads()) {
+            for (Mesh.Vertex v : new Mesh.Vertex[] {q.v0(), q.v1(), q.v2(), q.v3()}) {
+                across[i] = v.z();
+                height[i++] = v.y();
+            }
+        }
+        return SwitchThroat.gaugeFace(across, height);
     }
 
     /** Along-track (X) extent {min, max} of all rail objects; null if the model has none. */

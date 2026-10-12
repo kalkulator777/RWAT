@@ -25,7 +25,9 @@ import com.muzhik17.trainsmod.client.render.model.RailStyles;
 import com.muzhik17.trainsmod.path.HermiteSegment;
 import com.muzhik17.trainsmod.path.HermiteSegmentPath;
 import com.muzhik17.trainsmod.path.RailGraph;
+import com.muzhik17.trainsmod.path.RailNode;
 import com.muzhik17.trainsmod.path.RailSegment;
+import com.muzhik17.trainsmod.path.SwitchThroat;
 import com.muzhik17.trainsmod.path.TrackPath;
 import com.muzhik17.trainsmod.path.TrackSweep;
 
@@ -90,25 +92,17 @@ public final class RailRenderer {
     private static final int LIGHT_TILE_BUDGET = 2048;
 
     /**
-     * Switch point-blade rendering master switch (SPEC §2.2 v1). Off for now
-     * (2026-06-12): the blade throw reads as crossing rails in the throat
-     * without a proper frog, so the whole visual is shelved — segments render
-     * as plain swept track, no blade cut-out, deflection or animation. The
-     * switch <em>mechanics</em> (state, redstone toggle, routing, train
-     * re-anchor) are untouched; only the cosmetic blade is gated here. Flip
-     * back to {@code true} to resume the work.
+     * Switch point-blade rendering master switch (SPEC §2.2 v1). Off it drew
+     * every segment as plain swept track (2026-06-12: the old blade — a
+     * whole leg's rails shifted sideways — read as crossing rails); back on
+     * 2026-10-12 with real blades: a leg's inner rail planed to a point
+     * against the other leg's stock rail, thrown off it when the switch is
+     * set the other way ({@link SwitchThroat}). Cosmetic only — the switch
+     * mechanics (state, redstone toggle, routing, train re-anchor) and the
+     * track bed don't depend on it.
      */
-    private static final boolean SWITCH_BLADES = false;
+    private static final boolean SWITCH_BLADES = true;
 
-    /**
-     * Length of a switch's point blades (SPEC §2.2 v1): the first stretch of
-     * every diverging leg at a switch node is cut out of the static bake and
-     * drawn separately, laterally deflected by the switch state — tip at the
-     * node, pivot (heel) {@code BLADE_LENGTH} into the leg.
-     */
-    private static final double BLADE_LENGTH = 3.0;
-    /** How far a fully open blade's tip swings sideways (blocks). */
-    private static final double BLADE_TIP_OFFSET = 0.35;
     /** Blade throw animation duration, ms. */
     private static final long BLADE_ANIM_MS = 500;
 
@@ -225,14 +219,41 @@ public final class RailRenderer {
 
     /**
      * A rail style flattened for sweeping, one template per texture:
-     * {@code full} for track, {@code railsOnly} (no sleepers) for open switch
-     * blades. {@code styleId} is the style actually drawn ({@code ""} if not
-     * even the standard rail loaded — then there is nothing to draw).
+     * {@code full} for track; for a switch throat (SPEC §2.2 v1) the same
+     * tile apart — {@code base} (all but the rail objects) and the rail
+     * objects of either side, {@code plusRails}/{@code minusRails}.
+     * {@code styleId} is the style actually drawn ({@code ""} if not even the
+     * standard rail loaded — then there is nothing to draw); {@code blades}
+     * null if its switches draw as plain track.
      */
-    private record StyleTemplates(String styleId, List<TileTemplate> full, List<TileTemplate> railsOnly) {
+    private record StyleTemplates(String styleId, List<TileTemplate> full, List<TileTemplate> base,
+            List<TileTemplate> plusRails, List<TileTemplate> minusRails, RailStyle.Blades blades) {
+
+        /** The rail objects on {@code side} ({@link SwitchThroat#PLUS_Z}/{@link SwitchThroat#MINUS_Z}). */
+        List<TileTemplate> rails(int side) {
+            return side == SwitchThroat.PLUS_Z ? plusRails : minusRails;
+        }
+
+        /**
+         * What a leg's blade stretch draws statically: its sleepers if it
+         * keeps the throat's, and the rails that aren't blades.
+         */
+        List<TileTemplate> throat(ThroatEnd end) {
+            List<TileTemplate> out = new ArrayList<>();
+            if (end.sleepers()) {
+                out.addAll(base);
+            }
+            for (int side : new int[] {SwitchThroat.PLUS_Z, SwitchThroat.MINUS_Z}) {
+                if ((end.bladeSides() & side) == 0) {
+                    out.addAll(rails(side));
+                }
+            }
+            return out;
+        }
     }
 
-    private static final StyleTemplates NO_TEMPLATES = new StyleTemplates("", List.of(), List.of());
+    private static final StyleTemplates NO_TEMPLATES =
+            new StyleTemplates("", List.of(), List.of(), List.of(), List.of(), null);
     /** Templates per loaded style (identity: a resource reload brings new style objects and clears this). */
     private static final Map<RailStyle, StyleTemplates> styleTemplates = new IdentityHashMap<>();
 
@@ -244,14 +265,26 @@ public final class RailRenderer {
         }
         return styleTemplates.computeIfAbsent(railStyle, s -> {
             List<TileTemplate> full = new ArrayList<>();
-            List<TileTemplate> railsOnly = new ArrayList<>();
+            List<TileTemplate> base = new ArrayList<>();
+            List<TileTemplate> plusRails = new ArrayList<>();
+            List<TileTemplate> minusRails = new ArrayList<>();
             for (RailStyle.Part part : s.parts()) {
                 RenderType type = RwatRenderTypes.rails(part.texture());
-                full.add(new TileTemplate(part.full(), type, s.tileLength()));
-                railsOnly.add(new TileTemplate(part.railsOnly(), type, s.tileLength()));
+                addTemplate(full, part.full(), type, s.tileLength());
+                addTemplate(base, part.base(), type, s.tileLength());
+                addTemplate(plusRails, part.plusRails(), type, s.tileLength());
+                addTemplate(minusRails, part.minusRails(), type, s.tileLength());
             }
-            return new StyleTemplates(s.id(), List.copyOf(full), List.copyOf(railsOnly));
+            return new StyleTemplates(s.id(), List.copyOf(full), List.copyOf(base),
+                    List.copyOf(plusRails), List.copyOf(minusRails), s.blades());
         });
+    }
+
+    /** A template of the mesh, unless it has no faces (a texture only the other objects use). */
+    private static void addTemplate(List<TileTemplate> out, Mesh mesh, RenderType type, double tileLength) {
+        if (!mesh.quads().isEmpty()) {
+            out.add(new TileTemplate(mesh, type, tileLength));
+        }
     }
 
     /**
@@ -379,12 +412,22 @@ public final class RailRenderer {
 
     /**
      * What a segment's static sweep depends on: its curve and its end
-     * treatment (overhang at open ends, blade cut-outs at switches). Equal
-     * key → the cached tiles are still exactly right. Switch selection is
-     * deliberately not part of it — it moves only the blades.
+     * treatment (overhang at open ends, switch throats). Equal key → the
+     * cached tiles are still exactly right. Switch selection is deliberately
+     * not part of it — it moves only the blades.
      */
     private record SegmentKey(Vector3d p0, Vector3d m0, Vector3d p1, Vector3d m1,
-            boolean overhangA, boolean overhangB, boolean bladeA, boolean bladeB, String style) {
+            boolean overhangA, boolean overhangB, ThroatEnd throatA, ThroatEnd throatB, String style) {
+    }
+
+    /**
+     * A segment end in a switch throat, as its static sweep sees it (SPEC
+     * §2.2 v1): the first {@code bladeLength} from the node draws the sleepers
+     * only on the throat's sleeper leg ({@code sleepers}) and leaves out the
+     * blade rails ({@code bladeSides}, {@link SwitchThroat} side bits) —
+     * {@link #rebuildBlades} draws those.
+     */
+    private record ThroatEnd(double bladeLength, boolean sleepers, int bladeSides) {
     }
 
     /** A cached segment sweep: its key and the region buckets holding its tiles. */
@@ -392,11 +435,16 @@ public final class RailRenderer {
     }
 
     /**
-     * A blade end discovered at sweep time: {@code segmentId}'s end at
-     * {@code nodeId} belongs to a cluster of co-directional legs
-     * ({@code groupIds}, sorted) — a switch's diverging side.
+     * A blade found at sweep time: the rail on {@code side} of
+     * {@code segmentId}'s end at {@code nodeId}, {@code length} long, in a
+     * throat of co-directional legs ({@code groupIds}, sorted — a switch's
+     * diverging side); {@code separation} is how far its stock rail is from
+     * it, {@code stretch} the stretch of the leg's sweep path it lies along
+     * (the one the static sweep leaves out, so the tiles line up), its tip
+     * first if {@code tipAtStart}.
      */
-    private record BladeSpec(int nodeId, int segmentId, List<Integer> groupIds) {
+    private record BladeSpec(int nodeId, int segmentId, List<Integer> groupIds, int side, double length,
+            SwitchThroat.Separation separation, boolean tipAtStart, TrackPath stretch) {
     }
 
     /** Region buckets keyed by {@link ChunkPos#asLong} of the region coords. */
@@ -705,34 +753,26 @@ public final class RailRenderer {
      * Bring the cached segment sweeps in line with a new graph: segments
      * whose {@link SegmentKey} is unchanged keep their tiles (and their
      * regions' GPU meshes stay clean); changed and new segments are re-swept,
-     * removed ones dropped — only the regions they touch go dirty. The first
-     * {@link #BLADE_LENGTH} of every diverging leg at a switch node is left
-     * out of the static sweep and recorded as a {@link BladeSpec} —
-     * {@link #rebuildBlades} draws those stretches with the switch-state
-     * deflection.
+     * removed ones dropped — only the regions they touch go dirty. The
+     * switch throats are laid out first ({@link #throats}): their blade rails
+     * are left out of the static sweep and recorded as {@link BladeSpec}s —
+     * {@link #rebuildBlades} draws them as the switch is set.
      */
     private static void syncSegments(ClientLevel level, RailGraph graph) {
         bladeSpecs.clear();
         bladesDirty = true;
+        Map<Long, ThroatEnd> throats = SWITCH_BLADES ? throats(graph) : Map.of();
         Set<Integer> alive = new HashSet<>();
         for (RailSegment segment : graph.segments()) {
             alive.add(segment.id());
             HermiteSegment curve = graph.hermite(segment);
-            // blades shelved (2026-06-12): no cut-out, the whole segment sweeps
-            List<Integer> clusterA = SWITCH_BLADES ? bladeCluster(graph, segment, segment.nodeA()) : null;
-            List<Integer> clusterB = SWITCH_BLADES ? bladeCluster(graph, segment, segment.nodeB()) : null;
-            if (clusterA != null) {
-                bladeSpecs.add(new BladeSpec(segment.nodeA(), segment.id(), clusterA));
-            }
-            if (clusterB != null) {
-                bladeSpecs.add(new BladeSpec(segment.nodeB(), segment.id(), clusterB));
-            }
             StyleTemplates templates = templatesFor(segment.style());
             SegmentKey key = new SegmentKey(
                     curve.start(), curve.startTangent(), curve.end(), curve.endTangent(),
                     graph.overhangAt(segment, segment.nodeA()),
                     graph.overhangAt(segment, segment.nodeB()),
-                    clusterA != null, clusterB != null, templates.styleId());
+                    throats.get(endKey(segment.id(), true)), throats.get(endKey(segment.id(), false)),
+                    templates.styleId());
             SegmentEntry cached = segmentCache.get(segment.id());
             if (cached != null && cached.key().equals(key)) {
                 continue; // untouched by this edit
@@ -740,7 +780,7 @@ public final class RailRenderer {
             if (cached != null) {
                 evictSegment(segment.id(), cached);
             }
-            segmentCache.put(segment.id(), sweepSegment(segment.id(), curve, key, templates.full()));
+            segmentCache.put(segment.id(), sweepSegment(segment.id(), curve, key, templates));
         }
         segmentCache.entrySet().removeIf(entry -> {
             if (alive.contains(entry.getKey())) {
@@ -751,23 +791,103 @@ public final class RailRenderer {
         });
     }
 
-    /** Sweep one segment's static stretch and file its tiles into region buckets. */
+    /**
+     * Lay out the switch throats (SPEC §2.2 v1): every cluster of
+     * co-directional segment ends at a node ({@link #bladeCluster}) whose
+     * legs all draw in a style with blades gets its {@link SwitchThroat} —
+     * per leg end the static sweep's treatment (returned, by
+     * {@link #endKey}) and per blade a {@link BladeSpec}. A throat with a leg
+     * in a style without blades stays plain track: its rail objects aren't
+     * the running rails, and nothing else may be bent.
+     */
+    private static Map<Long, ThroatEnd> throats(RailGraph graph) {
+        Map<Long, ThroatEnd> ends = new HashMap<>();
+        for (RailNode node : graph.nodes()) {
+            Set<List<Integer>> seen = new HashSet<>();
+            for (int segmentId : node.segments()) {
+                List<Integer> cluster = bladeCluster(graph, graph.segment(segmentId), node.id());
+                if (cluster == null || !seen.add(cluster) || !bladed(graph, cluster)) {
+                    continue;
+                }
+                SwitchThroat throat = SwitchThroat.of(graph, node.id(), cluster);
+                int sleeperLeg = throat.sleeperLeg();
+                for (int legId : cluster) {
+                    int sides = throat.bladeSides(legId);
+                    double length = throat.bladeLength(legId);
+                    boolean atStart = throat.atStart(legId);
+                    ends.put(endKey(legId, atStart), new ThroatEnd(length, legId == sleeperLeg, sides));
+                    TrackPath stretch = bladeStretch(graph, graph.segment(legId), atStart, length);
+                    for (int side : new int[] {SwitchThroat.PLUS_Z, SwitchThroat.MINUS_Z}) {
+                        if ((sides & side) != 0) {
+                            bladeSpecs.add(new BladeSpec(node.id(), legId, cluster, side, length,
+                                    throat.separation(legId, side), atStart, stretch));
+                        }
+                    }
+                }
+            }
+        }
+        return ends;
+    }
+
+    /**
+     * The blade stretch of a leg's sweep path: {@code bladeLength} from its
+     * end at the node — past the overhang at an open toe, as
+     * {@link #sweepSegment} lays it.
+     */
+    private static TrackPath bladeStretch(RailGraph graph, RailSegment segment, boolean atStart,
+            double bladeLength) {
+        HermiteSegmentPath base = new HermiteSegmentPath(graph.hermite(segment));
+        boolean overhangA = graph.overhangAt(segment, segment.nodeA());
+        double startOver = overhangA ? TrackSweep.END_OVERHANG : 0.0;
+        TrackPath path = TrackSweep.path(base, overhangA, graph.overhangAt(segment, segment.nodeB()));
+        double tip = atStart ? startOver : startOver + base.length();
+        return atStart ? new SubPath(path, tip, tip + bladeLength) : new SubPath(path, tip - bladeLength, tip);
+    }
+
+    /** Whether every leg of a throat draws in a style with blades. */
+    private static boolean bladed(RailGraph graph, List<Integer> legIds) {
+        for (int id : legIds) {
+            if (templatesFor(graph.segment(id).style()).blades() == null) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Key of a segment's end: its start (node A) or its end (node B). */
+    private static long endKey(int segmentId, boolean atStart) {
+        return segmentId * 2L + (atStart ? 0 : 1);
+    }
+
+    /**
+     * Sweep one segment's static tiles and file them into region buckets. A
+     * throat end's blade stretch draws apart from the rest — without its
+     * blades, and without sleepers but on the sleeper leg; an open end's
+     * overhang at a Y's toe is plain track in front of it.
+     */
     private static SegmentEntry sweepSegment(int segmentId, HermiteSegment curve, SegmentKey key,
-            List<TileTemplate> templates) {
+            StyleTemplates templates) {
         HermiteSegmentPath base = new HermiteSegmentPath(curve);
         double length = base.length();
         double startOver = key.overhangA() ? TrackSweep.END_OVERHANG : 0.0;
         TrackPath path = TrackSweep.path(base, key.overhangA(), key.overhangB());
-        double zoneA = key.bladeA() ? Math.min(BLADE_LENGTH, length / 2.0) : 0.0;
-        double zoneB = key.bladeB() ? Math.min(BLADE_LENGTH, length / 2.0) : 0.0;
-        // the blade zones (and the overhang on a blade end — the tip carries
-        // it along) are drawn by rebuildBlades; trim them here
-        double from = zoneA > 0.0 ? startOver + zoneA : 0.0;
-        double to = zoneB > 0.0 ? startOver + length - zoneB : path.length();
+        double from = 0.0;
+        double to = path.length();
         List<Tile> swept = new ArrayList<>();
-        for (TileTemplate template : templates) {
-            sweep(template, new SubPath(path, from, to), swept);
+        if (key.throatA() != null) {
+            double heel = startOver + key.throatA().bladeLength();
+            sweepAll(templates.full(), new SubPath(path, 0.0, startOver), swept);
+            sweepAll(templates.throat(key.throatA()), new SubPath(path, startOver, heel), swept);
+            from = heel;
         }
+        if (key.throatB() != null) {
+            double tip = startOver + length;
+            double heel = tip - key.throatB().bladeLength();
+            sweepAll(templates.throat(key.throatB()), new SubPath(path, heel, tip), swept);
+            sweepAll(templates.full(), new SubPath(path, tip, path.length()), swept);
+            to = heel;
+        }
+        sweepAll(templates.full(), new SubPath(path, from, to), swept);
 
         Map<Long, List<Tile>> byBucket = new HashMap<>();
         for (Tile tile : swept) {
@@ -843,33 +963,23 @@ public final class RailRenderer {
         return cluster;
     }
 
-    /** A point {@code dist} along {@code segment} measured from its end at {@code nodeId}. */
-    private static Vector3d pointFromNode(RailGraph graph, RailSegment segment, int nodeId, double dist) {
-        HermiteSegmentPath p = new HermiteSegmentPath(graph.hermite(segment));
-        double d = Math.min(dist, p.length());
-        return segment.nodeA() == nodeId ? p.samplePosition(d) : p.samplePosition(p.length() - d);
-    }
-
     /**
      * Rebuild the blade tiles against the current switch states: every blade
-     * stretch is swept with a lateral tip deflection — 0 on the selected leg
-     * (closed, the route runs over it), {@link #BLADE_TIP_OFFSET} toward the
-     * selected leg on the others (open). A selection change lerps the
-     * deflections over {@link #BLADE_ANIM_MS} (smoothstep), so the blades
-     * visibly swing when the switch is thrown.
+     * rail is swept planed against its stock rail ({@link SwitchThroat}) —
+     * closed (pressed against it) on the selected leg, where the route runs,
+     * thrown {@link SwitchThroat#BLADE_THROW} off it at the tip on the
+     * others. A selection change lerps the throws over {@link #BLADE_ANIM_MS}
+     * (smoothstep), so the blades visibly move when the switch is thrown —
+     * all of a throat's blades together, like blades on one tie bar.
      */
     private static void rebuildBlades(ClientLevel level, RailGraph graph, long now) {
         dropBladeGeometry();
         for (BladeSpec spec : bladeSpecs) {
             RailSegment segment = graph.segment(spec.segmentId());
-            if (segment == null) {
-                continue;
+            StyleTemplates templates = segment == null ? NO_TEMPLATES : templatesFor(segment.style());
+            if (templates.blades() == null) {
+                continue; // gone or restyled under us; the next sync drops the spec
             }
-            HermiteSegmentPath base = new HermiteSegmentPath(graph.hermite(segment));
-            double length = base.length();
-            double zone = Math.min(BLADE_LENGTH, length / 2.0);
-            boolean tipAtStart = segment.nodeA() == spec.nodeId();
-
             List<Integer> ids = spec.groupIds();
             int current = graph.switchSelection(spec.nodeId());
             int previous = prevSelection.getOrDefault(spec.nodeId(), current);
@@ -882,40 +992,12 @@ public final class RailRenderer {
             double target = spec.segmentId() == selectedId ? 0.0 : 1.0;
             double from = spec.segmentId() == prevSelectedId ? 0.0 : 1.0;
             double eased = progress * progress * (3.0 - 2.0 * progress);
-            double amount = from + (target - from) * eased;
+            double open = from + (target - from) * eased;
 
-            // lateral deflection of the open blade. The legs are tangent at the
-            // tip (they share the node axis), so the tip directions can't tell
-            // the sides apart — take the side from where the legs have actually
-            // separated, a blade-length into each, and swing toward the leg the
-            // route is swapping with (a closing blade, amount→0, swings back).
-            int towardId = spec.segmentId() == selectedId ? prevSelectedId : selectedId;
-            Vector3d offset = new Vector3d();
-            if (towardId != spec.segmentId() && amount > 1.0e-3) {
-                Vector3d dThis = graph.departure(segment, spec.nodeId());
-                Vector3d right = new Vector3d(-dThis.z, 0.0, dThis.x);
-                if (right.lengthSquared() < 1.0e-8) {
-                    right.set(1, 0, 0);
-                } else {
-                    right.normalize();
-                }
-                Vector3d here = pointFromNode(graph, segment, spec.nodeId(), zone);
-                Vector3d there = pointFromNode(graph, graph.segment(towardId), spec.nodeId(), zone);
-                double side = new Vector3d(there).sub(here).dot(right);
-                offset = new Vector3d(right).mul(BLADE_TIP_OFFSET * amount * (side >= 0.0 ? 1.0 : -1.0));
-            }
-
-            boolean overhangA = graph.overhangAt(segment, segment.nodeA());
-            double startOver = overhangA ? TrackSweep.END_OVERHANG : 0.0;
-            TrackPath path = TrackSweep.path(base, overhangA, graph.overhangAt(segment, segment.nodeB()));
-            double from0 = tipAtStart ? 0.0 : startOver + length - zone;
-            double to0 = tipAtStart ? startOver + zone : path.length();
-            // the blade pressed against the stock rail (amount→0) carries the
-            // sleepers; an open one is bare rails, so the throat keeps a single
-            // set of ties instead of two doubling up
-            StyleTemplates templates = templatesFor(segment.style());
-            for (TileTemplate bladeTile : amount < 0.5 ? templates.full() : templates.railsOnly()) {
-                sweep(bladeTile, new BladePath(path, from0, to0, zone, tipAtStart, offset), bladeTiles);
+            BladeBend bend = new BladeBend(spec.side(), templates.blades().face(spec.side()), spec.length(),
+                    spec.tipAtStart(), spec.separation(), open);
+            for (TileTemplate rail : templates.rails(spec.side())) {
+                sweep(rail, spec.stretch(), bend, bladeTiles);
             }
         }
         for (Tile tile : bladeTiles) {
@@ -924,8 +1006,29 @@ public final class RailRenderer {
     }
 
     /**
+     * How a blade rail bends along its stretch (SPEC §2.2 v1, {@link SwitchThroat}):
+     * at each station, {@code d} from the tip, its section is cut back to
+     * clear the stock rail that is {@code separation} away, moved
+     * {@code open} × {@link SwitchThroat#BLADE_THROW} toward the track centre
+     * and lowered by {@link SwitchThroat#BLADE_TIP_DROP} — the latter two
+     * fading to nothing at the heel, where the blade joins its leg's rail.
+     */
+    private record BladeBend(int side, double gaugeFace, double length, boolean tipAtStart,
+            SwitchThroat.Separation separation, double open) {
+
+        /** Fill {separation, thrown, drop} at {@code s} into the stretch (tip first or last, as the leg runs). */
+        void station(double s, double[] out, int offset) {
+            double d = tipAtStart ? s : length - s;
+            double fade = SwitchThroat.fade(d, length);
+            out[offset] = separation.at(d);
+            out[offset + 1] = SwitchThroat.BLADE_THROW * open * fade;
+            out[offset + 2] = SwitchThroat.BLADE_TIP_DROP * fade;
+        }
+    }
+
+    /**
      * A contiguous stretch {@code [from, to]} of another path, re-parametrized
-     * from zero — lets the sweep skip the blade zones of the static bake.
+     * from zero — lets the sweep lay a switch throat's blade stretch apart.
      */
     private record SubPath(TrackPath inner, double from, double to) implements TrackPath {
 
@@ -937,34 +1040,6 @@ public final class RailRenderer {
         @Override
         public Vector3d samplePosition(double s) {
             return inner.samplePosition(from + s);
-        }
-
-        @Override
-        public Vector3d sampleTangent(double s) {
-            return inner.sampleTangent(from + s);
-        }
-    }
-
-    /**
-     * A blade stretch {@code [from, to]} of a leg's path, laterally deflected:
-     * the tip (at the switch node, including the end overhang if the leg
-     * carries one) gets the full {@code offset}, fading linearly to zero at
-     * the heel {@code zoneLen} into the leg. The tangent is left untouched —
-     * the deflection is small and a constant shear reads fine.
-     */
-    private record BladePath(TrackPath inner, double from, double to, double zoneLen,
-            boolean tipAtStart, Vector3d offset) implements TrackPath {
-
-        @Override
-        public double length() {
-            return to - from;
-        }
-
-        @Override
-        public Vector3d samplePosition(double s) {
-            double factor = tipAtStart ? (to - (from + s)) / zoneLen : s / zoneLen;
-            return inner.samplePosition(from + s)
-                    .add(offset.x * factor, offset.y * factor, offset.z * factor);
         }
 
         @Override
@@ -1059,6 +1134,11 @@ public final class RailRenderer {
      * by the {@link TrackSweep} rules the track bed rasterizes with.
      */
     private static void sweep(TileTemplate template, TrackPath path, List<Tile> out) {
+        sweep(template, path, null, out);
+    }
+
+    /** {@link #sweep(TileTemplate, TrackPath, List)} with every tile bent into a blade, unless {@code bend} is null. */
+    private static void sweep(TileTemplate template, TrackPath path, BladeBend bend, List<Tile> out) {
         double length = path.length();
         if (length < 1.0e-6) {
             return;
@@ -1067,7 +1147,14 @@ public final class RailRenderer {
         double tileLen = length / n;
         for (int i = 0; i < n; i++) {
             Vector3d centre = path.samplePosition((i + 0.5) * tileLen);
-            out.add(bendTile(template, i, tileLen, path, centre));
+            out.add(bendTile(template, i, tileLen, path, centre, bend));
+        }
+    }
+
+    /** Sweep every template along the path. */
+    private static void sweepAll(List<TileTemplate> templates, TrackPath path, List<Tile> out) {
+        for (TileTemplate template : templates) {
+            sweep(template, path, out);
         }
     }
 
@@ -1096,15 +1183,20 @@ public final class RailRenderer {
      * local Z rides the frame's right axis (gauge) and local Y its up axis;
      * the normal is rotated into the same frame (local X→forward, Z→right,
      * Y→up). Diffuse shade is taken from each quad's first corner, as the
-     * per-quad shading always was.
+     * per-quad shading always was. A {@code bend} (a switch blade's rail)
+     * reshapes each vertex's across and height at its station first.
      */
     private static Tile bendTile(TileTemplate t, int tileIndex, double tileLen, TrackPath path,
-            Vector3d centre) {
+            Vector3d centre, BladeBend bend) {
         int stations = t.stations.length;
         double[] frame = new double[stations * TrackSweep.FRAME_STRIDE]; // pos, fwd, right, up
+        double[] blade = bend == null ? null : new double[stations * 3]; // separation, thrown, drop
         for (int k = 0; k < stations; k++) {
-            TrackSweep.frame(path, (tileIndex + t.stations[k]) * tileLen, frame,
-                    k * TrackSweep.FRAME_STRIDE);
+            double s = (tileIndex + t.stations[k]) * tileLen;
+            TrackSweep.frame(path, s, frame, k * TrackSweep.FRAME_STRIDE);
+            if (bend != null) {
+                bend.station(s, blade, k * 3);
+            }
         }
         int n = t.vertexCount;
         float[] xyz = new float[n * 3];
@@ -1113,6 +1205,11 @@ public final class RailRenderer {
             int o = t.station[i] * TrackSweep.FRAME_STRIDE;
             double across = t.z[i]; // local Z is the cross-track (gauge) axis
             double height = t.y[i] + TrackSweep.RAIL_Y_OFFSET;
+            if (bend != null) {
+                int b = t.station[i] * 3;
+                across = SwitchThroat.bladeAcross(across, bend.side(), bend.gaugeFace(), blade[b], blade[b + 1]);
+                height -= blade[b + 2];
+            }
             xyz[i * 3] = (float) (frame[o] + frame[o + 6] * across + frame[o + 9] * height);
             xyz[i * 3 + 1] = (float) (frame[o + 1] + frame[o + 7] * across + frame[o + 10] * height);
             xyz[i * 3 + 2] = (float) (frame[o + 2] + frame[o + 8] * across + frame[o + 11] * height);

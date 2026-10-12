@@ -2,6 +2,8 @@ package com.muzhik17.trainsmod.client.render.model;
 
 import java.util.List;
 
+import com.muzhik17.trainsmod.path.SwitchThroat;
+
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -14,15 +16,33 @@ import net.minecraft.resources.ResourceLocation;
  * @param id         the style id ({@code <ns>:<name>} of its declaration)
  * @param parts      the tile, one mesh per texture
  * @param tileLength repeat distance along X, blocks
+ * @param blades     its switch blades' profile, or null if its rail objects
+ *                   are no running rails — its switches then draw as plain
+ *                   track (SPEC §2.2 v1)
  */
-public record RailStyle(String id, List<Part> parts, double tileLength) {
+public record RailStyle(String id, List<Part> parts, double tileLength, Blades blades) {
 
     /**
      * The tile's faces using one texture: {@code full} is everything,
-     * {@code railsOnly} drops the {@code RAIL_BASE} objects (sleepers,
-     * ballast) — switch blades sweep that, so a diverging leg reads as bare
-     * rails over the selected route's sleepers (SPEC §2.2 v1).
+     * {@code base} all but the rail objects ({@code RAIL_LEFT}/{@code RAIL_RIGHT}
+     * — sleepers, ballast, a bridge: what a switch blade never bends), and
+     * {@code plusRails}/{@code minusRails} the rail objects' faces at local
+     * z &gt; 0 / z &lt; 0 ({@link SwitchThroat#PLUS_Z}/{@link SwitchThroat#MINUS_Z}),
+     * which a switch throat draws apart — one side of a leg bent into a
+     * blade (SPEC §2.2 v1).
      */
-    public record Part(ResourceLocation texture, Mesh full, Mesh railsOnly) {
+    public record Part(ResourceLocation texture, Mesh full, Mesh base, Mesh plusRails, Mesh minusRails) {
+    }
+
+    /**
+     * The railhead gauge faces (|z| of the heads' inner edges) of the
+     * +z and −z running rails — where a blade lies against its stock rail
+     * ({@link SwitchThroat#gaugeFace}).
+     */
+    public record Blades(double plusFace, double minusFace) {
+
+        public double face(int side) {
+            return side == SwitchThroat.PLUS_Z ? plusFace : minusFace;
+        }
     }
 }
