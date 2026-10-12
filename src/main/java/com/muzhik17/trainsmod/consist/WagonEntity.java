@@ -16,6 +16,7 @@ import com.muzhik17.trainsmod.kinematics.CabArea;
 import com.muzhik17.trainsmod.kinematics.ClickReach;
 import com.muzhik17.trainsmod.kinematics.HullCollision;
 import com.muzhik17.trainsmod.kinematics.PoseMath;
+import com.muzhik17.trainsmod.kinematics.ReturnAboard;
 import com.muzhik17.trainsmod.kinematics.RiderWalk;
 import com.muzhik17.trainsmod.kinematics.WagonPose;
 import com.muzhik17.trainsmod.network.RiderPlacePayload;
@@ -1358,6 +1359,109 @@ public class WagonEntity extends Entity {
     /** True only while a sanctioned {@link #exitRider} is in progress. */
     public boolean dismountAllowed() {
         return dismountAllowed;
+    }
+
+    // --- logging out aboard (SPEC v1.5-б) ---
+
+    /**
+     * Never: a wagon belongs to its train, not to its rider. Vanilla takes a
+     * vehicle with exactly one player aboard out of the world with them when
+     * they log out ({@code PlayerList.remove}: {@code UNLOADED_WITH_PLAYER},
+     * the vehicle kept in the player's save as {@code RootVehicle}) and
+     * leaves it out of its chunk's save while they ride ({@code
+     * shouldBeSaved}) — the car vanished from its train for everyone until
+     * that player came back, and a train taken apart meanwhile got it back
+     * as an orphan. The car stays; its rider gets off as they go
+     * ({@code ConsistEvents} lets a disconnected player through) and is set
+     * back aboard on return ({@link RiderReturn}).
+     */
+    @Override
+    public boolean hasExactlyOnePlayerPassenger() {
+        return false;
+    }
+
+    /**
+     * Where a player logging out is aboard, to set them back on return
+     * (server, {@link RiderReturn}): this car and their local feet — a driver
+     * in a chair stands up first and comes back beside it — or, in a cab
+     * without a walkable floor, its seat; and where those feet are in the
+     * world ({@code WX/WY/WZ}): vanilla saves a passenger at its vehicle's
+     * centre line, not where they stood. Null if there is nothing to keep (a
+     * walking rider whose spot was lost).
+     */
+    CompoundTag leaveRecord(ServerPlayer player) {
+        CompoundTag tag = new CompoundTag();
+        tag.putUUID("Wagon", getUUID());
+        Vector3d world;
+        if (!walkable()) {
+            tag.putBoolean("Seat", true);
+            Vec3 seat = seatFeet(player);
+            world = new Vector3d(seat.x, seat.y, seat.z);
+        } else {
+            if (isSeated(player)) {
+                standDriver(player);
+            }
+            Vector3d local = riderLocal.get(player.getUUID());
+            if (local == null) {
+                return null;
+            }
+            tag.putDouble("X", local.x);
+            tag.putDouble("Y", local.y);
+            tag.putDouble("Z", local.z);
+            world = PoseMath.localToWorld(new Vector3d(getX(), getY(), getZ()), getYRot(), getXRot(), local);
+        }
+        tag.putDouble("WX", world.x);
+        tag.putDouble("WY", world.y);
+        tag.putDouble("WZ", world.z);
+        return tag;
+    }
+
+    /** Where a player's feet are on this car's vanilla seat. */
+    private Vec3 seatFeet(Entity passenger) {
+        return getPassengerRidingPosition(passenger).subtract(passenger.getVehicleAttachmentPoint(this));
+    }
+
+    /**
+     * Set a player back aboard who logged out here (server, {@link
+     * RiderReturn}) — only if the car is still where they left it: the spot
+     * they stood on, where the car stands now, is right by them ({@link
+     * ReturnAboard#near}; they may have dropped through the floor while the
+     * car loaded). On a walkable floor they walk again, on the floor as it is
+     * now (the nearest place a body fits — a pack may have changed the
+     * car); a cab's seat takes them only if it is free and they may work the
+     * cab. False if they stay where they are.
+     */
+    boolean welcomeBack(ServerPlayer player, CompoundTag record) {
+        WagonType type = typeNow();
+        if (type == null || player.isPassenger()) {
+            return false;
+        }
+        Vector3d at = new Vector3d(player.getX(), player.getY(), player.getZ());
+        Vector3d body = new Vector3d(getX(), getY(), getZ());
+        if (record.contains("X")) {
+            if (!type.boardable()) {
+                return false;
+            }
+            Vector3d local = new Vector3d(record.getDouble("X"), record.getDouble("Y"), record.getDouble("Z"));
+            if (!ReturnAboard.near(PoseMath.localToWorld(body, getYRot(), getXRot(), local), at)) {
+                return false;
+            }
+            Vector3d feet = type.interior().inFrame(isFlipped()).clampFeet(local, RiderWalk.PLAYER_HALF_WIDTH);
+            riderLocal.put(player.getUUID(), feet);
+            if (!player.startRiding(this, true)) {
+                riderLocal.remove(player.getUUID());
+                return false;
+            }
+            repositionRiders();
+            PacketDistributor.sendToPlayer(player, new RiderPlacePayload(getId(), feet.x, feet.y, feet.z));
+            return true;
+        }
+        if (!record.getBoolean("Seat") || type.boardable() || !type.drivable() || !getPassengers().isEmpty()
+                || !CabAccess.mayWork(player)) {
+            return false;
+        }
+        Vec3 seat = seatFeet(player);
+        return ReturnAboard.near(new Vector3d(seat.x, seat.y, seat.z), at) && player.startRiding(this);
     }
 
     /**
