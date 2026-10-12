@@ -13,8 +13,10 @@ import org.joml.Vector3d;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.ServerConfig;
+import com.muzhik17.trainsmod.kinematics.ClickReach;
 import com.muzhik17.trainsmod.kinematics.ConsistKinematics;
 import com.muzhik17.trainsmod.kinematics.HullCollision;
+import com.muzhik17.trainsmod.kinematics.PoseMath;
 import com.muzhik17.trainsmod.kinematics.WagonPose;
 import com.muzhik17.trainsmod.network.ConsistSnapshotPayload;
 import com.muzhik17.trainsmod.network.RiderLocal;
@@ -567,8 +569,13 @@ public final class ConsistManager extends SavedData {
         }
         Vector3d at = path.samplePosition(
                 Coupling.couplerS(consist.composition(), consist.s(), cut - 1));
+        // in the car's pose frame, the eye swept back to where the client drew it (SPEC §9.3)
+        Vector3d c = PoseMath.worldToLocal(new Vector3d(wagon.getX(), wagon.getY(), wagon.getZ()),
+                wagon.getYRot(), wagon.getXRot(), new Vector3d(at.x, at.y + 1.0, at.z));
+        Vector3d eye = wagon.localEye(player);
         double reach = player.blockInteractionRange() + COUPLER_REACH_SLACK;
-        if (player.getEyePosition().distanceToSqr(at.x, at.y + 1.0, at.z) > reach * reach) {
+        if (ClickReach.distanceSq(eye.x, eye.y, eye.z, wagon.clickSweep(player), c.x, c.y, c.z, c.x, c.y, c.z)
+                > reach * reach) {
             return false;
         }
         Consist rear = split(level, consist, cut);
@@ -596,7 +603,9 @@ public final class ConsistManager extends SavedData {
         }
         double reach = player.blockInteractionRange()
                 + consist.composition().slot(index).type().length() * 0.5 + 1.0;
-        if (player.getEyePosition().distanceToSqr(wagon.position()) > reach * reach) {
+        Vector3d eye = wagon.localEye(player); // the car as the player's client drew it (SPEC §9.3)
+        if (ClickReach.distanceSq(eye.x, eye.y, eye.z, wagon.clickSweep(player), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+                > reach * reach) {
             return false;
         }
         if (ServerConfig.tuning().autoHandbrake()) {

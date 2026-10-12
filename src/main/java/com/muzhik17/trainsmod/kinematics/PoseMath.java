@@ -1,5 +1,6 @@
 package com.muzhik17.trainsmod.kinematics;
 
+import org.joml.Matrix4d;
 import org.joml.Quaterniond;
 import org.joml.Vector3d;
 
@@ -49,6 +50,31 @@ public final class PoseMath {
             Vector3d world) {
         Vector3d rel = new Vector3d(world).sub(body);
         return bodyRotation(yawDeg, pitchDeg).conjugate().transform(rel);
+    }
+
+    /**
+     * A car body as drawn, model frame → world (SPEC §2.4, §10): the pose
+     * ({@link #localToWorld}), the body's sway on its springs in the pose
+     * frame ({@link Sway#apply}) and, for a car running turned, the model
+     * turned 180° about Y — the order the renderer stacks them in. The
+     * picking of doors and controls takes the look ray through its inverse,
+     * so a click lands on the part where it is drawn.
+     */
+    public static Matrix4d drawnBody(Vector3d body, float yawDeg, float pitchDeg, Sway sway,
+            boolean flipped) {
+        Matrix4d m = new Matrix4d().translation(body.x, body.y, body.z)
+                .rotateY(Math.toRadians(-yawDeg))
+                .rotateX(Math.toRadians(pitchDeg));
+        if (!sway.equals(Sway.ZERO)) {
+            m.translate(0.0, Sway.CENTRE_Y + sway.bounce(), 0.0)
+                    .rotateZ(sway.roll())
+                    .rotateX(sway.pitch())
+                    .translate(0.0, -Sway.CENTRE_Y, 0.0);
+        }
+        if (flipped) {
+            m.rotateY(Math.PI);
+        }
+        return m;
     }
 
     /**
