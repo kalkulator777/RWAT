@@ -13,32 +13,42 @@ import com.muzhik17.trainsmod.client.render.model.Mesh;
 import com.muzhik17.trainsmod.client.render.model.StockModel;
 import com.muzhik17.trainsmod.client.render.model.StockModels;
 import com.muzhik17.trainsmod.consist.Consist;
+import com.muzhik17.trainsmod.consist.RollingStockItem;
 import com.muzhik17.trainsmod.consist.WagonEntity;
 import com.muzhik17.trainsmod.convention.DriverReadout;
+import com.muzhik17.trainsmod.kinematics.CabArea;
 import com.muzhik17.trainsmod.network.CabLeverPayload;
+import com.muzhik17.trainsmod.network.CarControlPayload;
 import com.muzhik17.trainsmod.network.ControlGroupPayload;
 import com.muzhik17.trainsmod.stock.ConsistComposition;
+import com.muzhik17.trainsmod.stock.WagonType;
 
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.sounds.SoundEvents;
+import net.minecraft.util.Mth;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * The driver's panel (SPEC §8, §9.7), {@code L} at the controls: the
  * instruments ({@link DriverPanel}) on the left — click a notch lamp or a
- * reverser cell to set that handle, the wheel steps it — and every light
- * group of the train's models on the right, one button each with a lamp
- * that shows it on, switching that group on every wagon of the consist. Below, the switch for the instruments
- * on the HUD. Kept dumb on purpose (SPEC §7.3) — it shows and sends; the
- * server decides who may move a handle or switch the lights. The world stays
- * visible behind it (no blur): the train keeps running while it is open.
+ * reverser cell to set that handle, the wheel steps it — and two pages on
+ * the right. <b>Lights</b>: every light group of the train's models, one
+ * button each with a lamp that shows it on, switching that group on every
+ * wagon of the consist. <b>Train</b> (SPEC §9.7, 2026-10-12): the passengers'
+ * doors on each side and the lights inside, for the whole train at once and
+ * car by car — left and right as the driver sees them from this cab, the
+ * cars by number and name. Below, the switch for the instruments on the HUD.
+ * Kept dumb on purpose (SPEC §7.3) — it shows and sends; the server decides
+ * who may move a handle, switch the lights or work the doors. The world
+ * stays visible behind it (no blur): the train keeps running while it is open.
  */
 public final class DriverPanelScreen extends Screen {
 
@@ -51,15 +61,51 @@ public final class DriverPanelScreen extends Screen {
     private static final int TOP = 38;
     private static final int MARGIN = 10;
     private static final int FOOTER = 30;
+    /** The train page: its width bounds, the height of a car's row and the width of its switches. */
+    private static final int MIN_TRAIN_WIDTH = 210;
+    private static final int MAX_TRAIN_WIDTH = 300;
+    private static final int ROW = 18;
+    private static final int TOGGLE_W = 34;
+    private static final int TOGGLE_H = 16;
+    private static final int LAMP = 8;
+    private static final int LAMP_ON = 0xFFFFD24A;
+    private static final int LAMP_OFF = 0xFF3A3A3A;
+    private static final int DIM = 0xA0A0A0;
+
+    /** The page on the right; kept between openings. */
+    private enum Page { LIGHTS, TRAIN }
+
+    private static Page page = Page.LIGHTS;
 
     private final WagonEntity cab;
     /** Group → label, in the order the train's models list them. */
     private final Map<String, String> groups = new LinkedHashMap<>();
     /** Groups switched from this screen before the wagons' synced state catches up. */
     private final Map<String, Boolean> pending = new LinkedHashMap<>();
+    /** The cars of the train page, front first. */
+    private final List<Car> cars = new ArrayList<>();
+    private final List<CarToggle> carToggles = new ArrayList<>();
     private int panelX;
     private int lightsX;
     private int lightsWidth;
+    private int trainWidth;
+    /** Where the car rows start, how many fit, and how far the list is scrolled (rows). */
+    private int listTop;
+    private int listRows;
+    private int scroll;
+
+    /** The cars the train had when the page was made: a coupling or a cut while open remakes it. */
+    private int carsKnown;
+    /** The train page's buttons, active only while this cab drives. */
+    private final List<Button> trainButtons = new ArrayList<>();
+
+    /**
+     * A car of the train: its row on the page, entity, number in the train,
+     * name, the doors on the driver's sides and its lights.
+     */
+    private record Car(int row, WagonEntity wagon, int number, Component name, int leftDoors, int rightDoors,
+            List<String> lights) {
+    }
 
     public DriverPanelScreen(WagonEntity cab) {
         super(Component.translatable("screen.railswheelsandtrains.driver_panel"));
@@ -70,6 +116,9 @@ public final class DriverPanelScreen extends Screen {
     protected void init() {
         groups.clear();
         collectGroups();
+        collectCars();
+        carToggles.clear();
+        trainButtons.clear();
         int count = groups.size();
         int rowsFit = Math.max(1, (height - FOOTER - GAP - TOP + GAP) / (BUTTON_HEIGHT + GAP));
         int columns = Math.max(1, (count + rowsFit - 1) / rowsFit);
@@ -78,14 +127,24 @@ public final class DriverPanelScreen extends Screen {
         int buttonWidth = Math.clamp((room - (columns - 1) * GAP) / columns,
                 MIN_BUTTON_WIDTH, MAX_BUTTON_WIDTH);
         lightsWidth = count == 0 ? MAX_BUTTON_WIDTH : columns * buttonWidth + (columns - 1) * GAP;
-        panelX = Math.max(MARGIN, (width - DriverPanel.WIDTH - COLUMN_GAP - lightsWidth) / 2);
+        trainWidth = Math.clamp(room, MIN_TRAIN_WIDTH, MAX_TRAIN_WIDTH);
+        // the instruments stay put when the page changes
+        int rightWidth = Math.max(lightsWidth, trainWidth);
+        panelX = Math.max(MARGIN, (width - DriverPanel.WIDTH - COLUMN_GAP - rightWidth) / 2);
         lightsX = panelX + DriverPanel.WIDTH + COLUMN_GAP;
-        int i = 0;
-        for (String group : groups.keySet()) {
-            int x = lightsX + (i / rows) * (buttonWidth + GAP);
-            int y = TOP + (i % rows) * (BUTTON_HEIGHT + GAP);
-            addRenderableWidget(new LightButton(group, x, y, buttonWidth));
-            i++;
+        addPageTab(Page.LIGHTS, "screen.railswheelsandtrains.driver_panel.lights", lightsX);
+        addPageTab(Page.TRAIN, "screen.railswheelsandtrains.driver_panel.train",
+                lightsX + font.width(Component.translatable("screen.railswheelsandtrains.driver_panel.lights")) + 12);
+        if (page == Page.LIGHTS) {
+            int i = 0;
+            for (String group : groups.keySet()) {
+                int x = lightsX + (i / rows) * (buttonWidth + GAP);
+                int y = TOP + (i % rows) * (BUTTON_HEIGHT + GAP);
+                addRenderableWidget(new LightButton(group, x, y, buttonWidth));
+                i++;
+            }
+        } else {
+            initTrain();
         }
         int footerY = height - FOOTER + 4;
         addRenderableWidget(Button.builder(hudCaption(), b -> {
@@ -97,11 +156,87 @@ public final class DriverPanelScreen extends Screen {
                 .bounds(width / 2 + 4, footerY, 150, BUTTON_HEIGHT).build());
     }
 
+    /**
+     * The train page: three rows for the whole train — the doors on the
+     * left, on the right, the lights inside: on/off each — then a row per
+     * car with the same three as switches, scrolled if there are more cars
+     * than room.
+     */
+    private void initTrain() {
+        int labelWidth = 0;
+        for (String key : new String[]{"doors_left", "doors_right", "lights_inside"}) {
+            labelWidth = Math.max(labelWidth,
+                    font.width(Component.translatable("screen.railswheelsandtrains.driver_panel." + key)));
+        }
+        labelWidth += 8;
+        int buttonWidth = Math.min(80, (trainWidth - labelWidth - GAP) / 2);
+        int x = lightsX + labelWidth;
+        CarControlPayload.Target[] targets = {CarControlPayload.Target.DOORS_LEFT,
+            CarControlPayload.Target.DOORS_RIGHT, CarControlPayload.Target.LIGHTS};
+        for (int row = 0; row < 3; row++) {
+            CarControlPayload.Target target = targets[row];
+            int y = TOP + row * (BUTTON_HEIGHT + GAP);
+            boolean doors = target != CarControlPayload.Target.LIGHTS;
+            addTrainButton(x, y, buttonWidth, doors ? "open" : "on", target, true);
+            addTrainButton(x + buttonWidth + GAP, y, buttonWidth, doors ? "close" : "off", target, false);
+        }
+        listTop = TOP + 3 * (BUTTON_HEIGHT + GAP) + 18;
+        listRows = Math.max(1, (height - FOOTER - GAP - listTop) / ROW);
+        scroll = Mth.clamp(scroll, 0, Math.max(0, cars.size() - listRows));
+        for (Car car : cars) {
+            for (int column = 0; column < 3; column++) {
+                CarToggle toggle = new CarToggle(car, targets[column], toggleX(column));
+                carToggles.add(toggle);
+                trainButtons.add(toggle);
+                addRenderableWidget(toggle);
+            }
+        }
+        layOutCars();
+    }
+
+    private void addTrainButton(int x, int y, int width, String key, CarControlPayload.Target target, boolean on) {
+        Button button = Button.builder(Component.translatable("screen.railswheelsandtrains.driver_panel." + key),
+                b -> switchTrain(target, on)).bounds(x, y, width, BUTTON_HEIGHT).build();
+        trainButtons.add(button);
+        addRenderableWidget(button);
+    }
+
+    /** The left edge of a car row's switch column (doors left, doors right, lights). */
+    private int toggleX(int column) {
+        return lightsX + trainWidth - (3 - column) * TOGGLE_W - (2 - column) * GAP;
+    }
+
+    /** Put the car switches on their rows for the scroll; rows scrolled off hide. */
+    private void layOutCars() {
+        for (CarToggle toggle : carToggles) {
+            int row = toggle.car.row() - scroll;
+            toggle.visible = row >= 0 && row < listRows && toggle.has();
+            toggle.setY(listTop + row * ROW + (ROW - TOGGLE_H) / 2);
+        }
+    }
+
+    private void addPageTab(Page target, String key, int x) {
+        Component label = Component.translatable(key);
+        addRenderableWidget(new PageTab(target, label, x, TOP - 14, font.width(label)));
+    }
+
     @Override
     public void tick() {
         // left the cab, or stood up from the chair: nothing to drive from here
         if (minecraft != null && ClientDriverHud.cab(minecraft) != cab) {
             onClose();
+            return;
+        }
+        ConsistComposition composition = ClientConsists.composition(cab.getConsistId());
+        if (page == Page.TRAIN && composition != null && composition.wagonCount() != carsKnown) {
+            rebuildWidgets(); // coupled or cut while open
+            return;
+        }
+        // the doors and lights are switched by whoever drives: from another cab, look only
+        DriverReadout readout = DriverPanel.readout(cab);
+        boolean inControl = readout != null && readout.inControl();
+        for (Button button : trainButtons) {
+            button.active = inControl;
         }
     }
 
@@ -110,14 +245,15 @@ public final class DriverPanelScreen extends Screen {
         super.render(graphics, mouseX, mouseY, partialTick);
         graphics.drawCenteredString(font, title, width / 2, 12, 0xFFFFFF);
         graphics.drawString(font, Component.translatable("screen.railswheelsandtrains.driver_panel.instruments"),
-                panelX, TOP - 12, 0xA0A0A0);
-        graphics.drawString(font, Component.translatable("screen.railswheelsandtrains.driver_panel.lights"),
-                lightsX, TOP - 12, 0xA0A0A0);
-        if (groups.isEmpty()) {
-            graphics.drawWordWrap(font, Component.translatable("screen.railswheelsandtrains.lights.none"),
-                    lightsX, TOP + 6, lightsWidth, 0xA0A0A0);
-        }
+                panelX, TOP - 12, DIM);
         DriverReadout readout = DriverPanel.readout(cab);
+        if (page == Page.LIGHTS && groups.isEmpty()) {
+            graphics.drawWordWrap(font, Component.translatable("screen.railswheelsandtrains.lights.none"),
+                    lightsX, TOP + 6, lightsWidth, DIM);
+        }
+        if (page == Page.TRAIN) {
+            renderTrain(graphics, readout);
+        }
         if (readout == null) {
             return;
         }
@@ -125,6 +261,55 @@ public final class DriverPanelScreen extends Screen {
         DriverPanel.Target target = DriverPanel.targetAt(font, panelX, TOP, readout, mouseX, mouseY);
         if (target != null) {
             graphics.renderComponentTooltip(font, DriverPanel.describe(target, readout), mouseX, mouseY);
+        }
+    }
+
+    /** The train page's labels: the whole-train rows', the car list's heading and each car's name. */
+    private void renderTrain(GuiGraphics graphics, DriverReadout readout) {
+        String[] keys = {"doors_left", "doors_right", "lights_inside"};
+        for (int row = 0; row < 3; row++) {
+            graphics.drawString(font, Component.translatable("screen.railswheelsandtrains.driver_panel." + keys[row]),
+                    lightsX, TOP + row * (BUTTON_HEIGHT + GAP) + 6, 0xFFFFFF);
+        }
+        int headY = listTop - 11;
+        graphics.fill(lightsX, headY - 4, lightsX + trainWidth, headY - 3, 0x50FFFFFF);
+        graphics.drawString(font, Component.translatable("screen.railswheelsandtrains.driver_panel.cars"),
+                lightsX, headY, DIM);
+        String[] heads = {"left", "right", "light"};
+        for (int column = 0; column < 3; column++) {
+            Component head = Component.translatable("screen.railswheelsandtrains.driver_panel.column." + heads[column]);
+            graphics.drawString(font, head, toggleX(column) + (TOGGLE_W - font.width(head)) / 2, headY, DIM);
+        }
+        int nameWidth = toggleX(0) - GAP - lightsX;
+        for (int i = scroll; i < cars.size() && i < scroll + listRows; i++) {
+            Car car = cars.get(i);
+            int y = listTop + (i - scroll) * ROW + (ROW - font.lineHeight) / 2 + 1;
+            String text = car.number() + "  " + car.name().getString();
+            if (font.width(text) > nameWidth) {
+                text = font.plainSubstrByWidth(text, nameWidth - font.width("…")) + "…";
+            }
+            // the car this cab is: marked
+            graphics.drawString(font, text, lightsX, y, car.wagon() == cab ? 0xFFE8C860 : 0xFFFFFF);
+            for (int column = 0; column < 3; column++) {
+                CarToggle toggle = carToggles.get(i * 3 + column);
+                if (!toggle.has()) {
+                    graphics.drawString(font, "—", toggleX(column) + (TOGGLE_W - font.width("—")) / 2, y, 0x606060);
+                }
+            }
+        }
+        if (cars.size() > listRows) {
+            // a scroll bar along the list's right edge
+            int barTop = listTop;
+            int barHeight = listRows * ROW;
+            int thumb = Math.max(8, barHeight * listRows / cars.size());
+            int thumbY = barTop + (barHeight - thumb) * scroll / Math.max(1, cars.size() - listRows);
+            int barX = lightsX + trainWidth + 3;
+            graphics.fill(barX, barTop, barX + 2, barTop + barHeight, 0x40FFFFFF);
+            graphics.fill(barX, thumbY, barX + 2, thumbY + thumb, 0xC0FFFFFF);
+        }
+        if (readout != null && !readout.inControl()) {
+            graphics.drawString(font, Component.translatable("hud.railswheelsandtrains.other_cab"),
+                    lightsX, listTop + listRows * ROW + 2, DIM);
         }
     }
 
@@ -145,6 +330,12 @@ public final class DriverPanelScreen extends Screen {
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         if (scrollY != 0.0 && setHandle(mouseX, mouseY, scrollY > 0.0 ? 1 : -1)) {
+            return true;
+        }
+        if (page == Page.TRAIN && scrollY != 0.0 && mouseX >= lightsX && mouseY >= listTop
+                && mouseY < listTop + listRows * ROW && cars.size() > listRows) {
+            scroll = Mth.clamp(scroll - (int) Math.signum(scrollY), 0, cars.size() - listRows);
+            layOutCars();
             return true;
         }
         return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
@@ -193,6 +384,12 @@ public final class DriverPanelScreen extends Screen {
         return TOP;
     }
 
+    /** Show the lights page ({@code false}) or the train page (the debug scene turns the pages). */
+    public void showTrain(boolean train) {
+        page = train ? Page.TRAIN : Page.LIGHTS;
+        rebuildWidgets();
+    }
+
     private static Component hudCaption() {
         return Component.translatable("screen.railswheelsandtrains.driver_panel.hud",
                 state(ClientConfig.driverHud()));
@@ -206,6 +403,20 @@ public final class DriverPanelScreen extends Screen {
                 ControlGroupPayload.Scope.PANEL, group, on ? 1.0F : 0.0F));
     }
 
+    /** The whole train: open or close the doors on one side, or switch the lights inside every car. */
+    private void switchTrain(CarControlPayload.Target target, boolean on) {
+        if (target != CarControlPayload.Target.LIGHTS) {
+            PacketDistributor.sendToServer(new CarControlPayload(cab.getConsistId(), -1, target, on, List.of()));
+            return;
+        }
+        for (Car car : cars) {
+            if (!car.lights().isEmpty()) {
+                PacketDistributor.sendToServer(new CarControlPayload(cab.getConsistId(), car.wagon().getId(),
+                        target, on, car.lights()));
+            }
+        }
+    }
+
     private static Component state(boolean on) {
         return Component.translatable(on ? "control.railswheelsandtrains.on" : "control.railswheelsandtrains.off");
     }
@@ -215,10 +426,6 @@ public final class DriverPanelScreen extends Screen {
      * group is on — the name keeps the whole width that ": off" took.
      */
     private final class LightButton extends Button {
-
-        private static final int LAMP = 8;
-        private static final int LAMP_ON = 0xFFFFD24A;
-        private static final int LAMP_OFF = 0xFF3A3A3A;
 
         private final String group;
 
@@ -232,8 +439,7 @@ public final class DriverPanelScreen extends Screen {
         public void renderString(GuiGraphics graphics, Font font, int color) {
             int left = getX() + 5;
             int top = getY() + (getHeight() - LAMP) / 2;
-            graphics.fill(left, top, left + LAMP, top + LAMP, 0xFF101010);
-            graphics.fill(left + 1, top + 1, left + LAMP - 1, top + LAMP - 1, isOn(group) ? LAMP_ON : LAMP_OFF);
+            lamp(graphics, left, top, isOn(group));
             renderScrollingString(graphics, font, getMessage(), left + LAMP + 2, getY(),
                     getX() + getWidth() - 3, getY() + getHeight(), color);
         }
@@ -242,6 +448,109 @@ public final class DriverPanelScreen extends Screen {
         protected MutableComponent createNarrationMessage() {
             return wrapDefaultNarrationMessage(Component.empty().append(getMessage()).append(": ")
                     .append(state(isOn(group))));
+        }
+    }
+
+    private static void lamp(GuiGraphics graphics, int left, int top, boolean on) {
+        graphics.fill(left, top, left + LAMP, top + LAMP, 0xFF101010);
+        graphics.fill(left + 1, top + 1, left + LAMP - 1, top + LAMP - 1, on ? LAMP_ON : LAMP_OFF);
+    }
+
+    /**
+     * One car's doors on a side or its lights: a lamp lit while they are open
+     * (any of them) or on; a click switches them the other way.
+     */
+    private final class CarToggle extends Button {
+
+        private final Car car;
+        private final CarControlPayload.Target target;
+        /** The state the tooltip was made for (null: none yet). */
+        private Boolean described;
+
+        CarToggle(Car car, CarControlPayload.Target target, int x) {
+            super(x, 0, TOGGLE_W, TOGGLE_H, Component.translatable("screen.railswheelsandtrains.driver_panel.column."
+                    + switch (target) {
+                        case DOORS_LEFT -> "left";
+                        case DOORS_RIGHT -> "right";
+                        case LIGHTS -> "light";
+                    }), b -> { }, DEFAULT_NARRATION);
+            this.car = car;
+            this.target = target;
+        }
+
+        /** True if the car has anything here to switch. */
+        boolean has() {
+            return switch (target) {
+                case DOORS_LEFT -> car.leftDoors() != 0;
+                case DOORS_RIGHT -> car.rightDoors() != 0;
+                case LIGHTS -> !car.lights().isEmpty();
+            };
+        }
+
+        boolean on() {
+            return switch (target) {
+                case DOORS_LEFT -> (car.wagon().doorMask() & car.leftDoors()) != 0;
+                case DOORS_RIGHT -> (car.wagon().doorMask() & car.rightDoors()) != 0;
+                case LIGHTS -> car.lights().stream().anyMatch(group -> car.wagon().controlValue(group) > 0.0F);
+            };
+        }
+
+        @Override
+        public void onPress() {
+            PacketDistributor.sendToServer(new CarControlPayload(cab.getConsistId(), car.wagon().getId(), target,
+                    !on(), car.lights()));
+        }
+
+        @Override
+        public void renderString(GuiGraphics graphics, Font font, int color) {
+            boolean on = on();
+            lamp(graphics, getX() + (getWidth() - LAMP) / 2, getY() + (getHeight() - LAMP) / 2, on);
+            if (described == null || described != on) {
+                described = on;
+                boolean doors = target != CarControlPayload.Target.LIGHTS;
+                setTooltip(Tooltip.create(Component.translatable(doors
+                        ? (on ? "screen.railswheelsandtrains.driver_panel.doors_open"
+                                : "screen.railswheelsandtrains.driver_panel.doors_shut")
+                        : (on ? "screen.railswheelsandtrains.driver_panel.lights_on"
+                                : "screen.railswheelsandtrains.driver_panel.lights_off"),
+                        car.number(), car.name(), Component.translatable(
+                                target == CarControlPayload.Target.DOORS_LEFT
+                                        ? "screen.railswheelsandtrains.driver_panel.side.left"
+                                        : "screen.railswheelsandtrains.driver_panel.side.right"))));
+            }
+        }
+
+        @Override
+        protected MutableComponent createNarrationMessage() {
+            return wrapDefaultNarrationMessage(Component.empty().append(Integer.toString(car.number()))
+                    .append(" ").append(car.name()).append(", ").append(getMessage()).append(": ")
+                    .append(state(on())));
+        }
+    }
+
+    /** A page's name over the right half: click to show it; the page shown is white and underlined. */
+    private final class PageTab extends Button {
+
+        private final Page target;
+
+        PageTab(Page target, Component label, int x, int y, int width) {
+            super(x, y, width, 12, label, b -> {
+                if (page != target) {
+                    page = target;
+                    rebuildWidgets();
+                }
+            }, DEFAULT_NARRATION);
+            this.target = target;
+        }
+
+        @Override
+        protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+            boolean shown = page == target;
+            int color = shown || isHoveredOrFocused() ? 0xFFFFFF : DIM;
+            graphics.drawString(font, getMessage(), getX(), getY() + 2, color);
+            if (shown) {
+                graphics.fill(getX(), getY() + 11, getX() + getWidth(), getY() + 12, 0xFFFFFFFF);
+            }
         }
     }
 
@@ -271,6 +580,60 @@ public final class DriverPanelScreen extends Screen {
             }
         }
         return wagons;
+    }
+
+    /**
+     * The train's cars, front first: the doors on the driver's left and right
+     * — as seen from this cab (its chair's facing, the car's turn in the
+     * train) — and the groups of the lamps inside its model.
+     */
+    private void collectCars() {
+        cars.clear();
+        ConsistComposition composition = ClientConsists.composition(cab.getConsistId());
+        carsKnown = composition == null ? 0 : composition.wagonCount();
+        if (composition == null || minecraft == null || minecraft.player == null) {
+            return;
+        }
+        WagonEntity[] byIndex = new WagonEntity[composition.wagonCount()];
+        for (WagonEntity wagon : wagons()) {
+            int index = wagon.getWagonIndex();
+            if (index >= 0 && index < byIndex.length) {
+                byIndex[index] = wagon;
+            }
+        }
+        ConsistComposition.Slot cabSlot = ClientConsists.slot(cab.getConsistId(), cab.getWagonIndex());
+        int chair = cab.chairOf(minecraft.player);
+        WagonType.Seat seat = cabSlot != null && cabSlot.type().cab() != null && chair >= 0
+                && chair < cabSlot.type().cab().seats().size() ? cabSlot.type().cab().seats().get(chair) : null;
+        int facing = CabArea.facing(cab.isFlipped(), seat);
+        for (int i = 0; i < byIndex.length; i++) {
+            if (byIndex[i] == null) {
+                continue; // out of sight: not this client's to show
+            }
+            ConsistComposition.Slot slot = composition.slot(i);
+            WagonType type = slot.type();
+            int left = CabArea.leftSide(slot.flipped(), facing);
+            cars.add(new Car(cars.size(), byIndex[i], i + 1, RollingStockItem.stockName(type.id()),
+                    CabArea.passengerSideDoors(type, left), CabArea.passengerSideDoors(type, -left),
+                    cabinLights(StockModels.model(type.id()))));
+        }
+    }
+
+    /** The groups of a model's cabin lamps — the lights inside the car (SPEC §8). */
+    private static List<String> cabinLights(StockModel model) {
+        List<String> lights = new ArrayList<>();
+        if (model == null) {
+            return lights;
+        }
+        for (StockModel.Lamp lamp : model.lamps()) {
+            if (lamp.group() >= 0 && lamp.group() < model.lightGroups().size()) {
+                String group = model.lightGroups().get(lamp.group());
+                if (!lights.contains(group) && lights.size() < CarControlPayload.MAX_GROUPS) {
+                    lights.add(group);
+                }
+            }
+        }
+        return lights;
     }
 
     /**

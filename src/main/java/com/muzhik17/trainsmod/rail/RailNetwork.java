@@ -14,9 +14,11 @@ import java.util.Set;
 import java.util.function.Function;
 
 import org.joml.Vector3d;
+import org.joml.Vector3f;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.network.RailGraphSyncPayload;
+import com.muzhik17.trainsmod.path.BedClearing;
 import com.muzhik17.trainsmod.path.BedRaster;
 import com.muzhik17.trainsmod.path.HermiteSegment;
 import com.muzhik17.trainsmod.path.HermiteSegmentPath;
@@ -28,15 +30,21 @@ import com.muzhik17.trainsmod.path.TrackSweep;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.saveddata.SavedData;
+import net.neoforged.neoforge.common.CommonHooks;
+import net.neoforged.neoforge.event.level.BlockEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
@@ -89,56 +97,125 @@ public final class RailNetwork extends SavedData {
     // --- editing (always through here, so blocks and clients stay in sync) ---
 
     /**
-     * Create a segment between two marker points, tangents from the markers'
-     * directions, drawn in {@code look}'s rail style (SPEC §6.10) on its bed
-     * material (SPEC §2.2).
+     * One segment of a structure to build: from marker point {@code a} to
+     * {@code b}, tangent axes from the markers, with per-end axis forcing as
+     * in {@link RailGraph#createSegment(Vector3d, Vector3d, boolean, Vector3d, Vector3d, boolean)}
+     * (diamond crossings).
      */
-    public RailSegment createSegment(ServerLevel level, Vector3d a, Vector3d dirA,
-            Vector3d b, Vector3d dirB, RailSegment.Look look) {
-        return createSegment(level, a, dirA, false, b, dirB, false, look);
+    public record SegmentSpec(Vector3d a, Vector3d dirA, boolean forceA,
+            Vector3d b, Vector3d dirB, boolean forceB) {
+
+        public SegmentSpec(Vector3d a, Vector3d dirA, Vector3d b, Vector3d dirB) {
+            this(a, dirA, false, b, dirB, false);
+        }
     }
 
     /**
-     * Create a segment with per-end tangent forcing (diamond crossings — see
-     * {@link RailGraph#createSegment(Vector3d, Vector3d, boolean, Vector3d, Vector3d, boolean)}).
+     * Build what one click of the rails builds (SPEC §2.2): the segments in
+     * order — each end snapping to an existing node, as
+     * {@link RailGraph#createSegment} does — drawn in {@code look}'s rail style
+     * (SPEC §6.10) on its bed material, grouped into one structure if more
+     * than one, with the {@code consumed} marker blocks taken away. The bed
+     * clears its way on behalf of {@code player}: whatever stands where the
+     * bed goes, or where the rails reach above it, is broken without drops
+     * ({@link BedClearing}). If something there can't go — unbreakable, a
+     * container, or not the player's to break — nothing is built or changed,
+     * the player is told where, and null is returned.
      */
-    public RailSegment createSegment(ServerLevel level, Vector3d a, Vector3d dirA, boolean forceA,
-            Vector3d b, Vector3d dirB, boolean forceB, RailSegment.Look look) {
-        // the segments at the nodes the new one will snap to: their ends there stop being open
-        List<RailSegment> neighbours = segmentsAt(graph.nodeNear(a), graph.nodeNear(b));
+    public List<RailSegment> build(ServerLevel level, ServerPlayer player, List<SegmentSpec> specs,
+            RailSegment.Look look, Collection<BlockPos> consumed) {
+        // the segments at the nodes the new ones will snap to: their ends there stop being open
+        List<RailNode> snapped = new ArrayList<>();
+        for (SegmentSpec spec : specs) {
+            snapped.add(graph.nodeNear(spec.a()));
+            snapped.add(graph.nodeNear(spec.b()));
+        }
+        List<RailSegment> neighbours = segmentsAt(snapped.toArray(RailNode[]::new));
         Set<BlockPos> stale = laidBefore(neighbours);
-        RailSegment created = graph.createSegment(a, dirA, forceA, b, dirB, forceB);
-        graph.setSegmentLook(created.id(), look);
-        RailSegment segment = graph.segment(created.id());
+        List<Integer> created = new ArrayList<>();
+        for (SegmentSpec spec : specs) {
+            RailSegment segment = graph.createSegment(spec.a(), spec.dirA(), spec.forceA(),
+                    spec.b(), spec.dirB(), spec.forceB());
+            graph.setSegmentLook(segment.id(), look);
+            created.add(segment.id());
+        }
         List<RailSegment> relaid = current(neighbours);
-        relaid.add(segment);
-        layBed(level, stale, relaid);
+        for (int id : created) {
+            relaid.add(graph.segment(id));
+        }
+        BedLayout layout = layout(stale, relaid);
+        BedClearing.Plan clearing = planClearing(level, player, layout, new HashSet<>(consumed));
+        if (clearing.refused()) {
+            for (int i = created.size() - 1; i >= 0; i--) {
+                graph.removeSegment(created.get(i));
+            }
+            reportBlocked(level, player, clearing.blocked());
+            return null;
+        }
+        for (BlockPos marker : consumed) {
+            level.removeBlock(marker, false);
+        }
+        clearWay(level, player, clearing.removed());
+        layBed(level, layout);
+        List<RailSegment> built = new ArrayList<>();
+        for (int id : created) {
+            built.add(graph.segment(id));
+        }
+        if (built.size() > 1) {
+            int group = graph.newGroupId();
+            for (RailSegment segment : built) {
+                graph.setSegmentGroup(segment.id(), group);
+            }
+        }
         markChanged(level);
-        return segment;
+        return built;
     }
 
     /**
      * Redraw the structure whose bed occupies {@code cell} in {@code look}'s
      * rail style and bed material (the whole click-built structure, like
-     * demolition); returns the structure's segment count, 0 if the cell is no
-     * track. The bed is re-laid under the new style's tile, in the new material.
+     * demolition), on behalf of {@code player}: the bed is re-laid under the
+     * new style's tile, in the new material, clearing its way as a build does.
+     * Returns the structure's segment count; 0 if the cell is no track, −1 if
+     * the way can't be cleared (the player is told where; nothing changed).
      */
-    public int restyleStructureAt(ServerLevel level, BlockPos cell, RailSegment.Look look) {
+    public int restyleStructureAt(ServerLevel level, ServerPlayer player, BlockPos cell,
+            RailSegment.Look look) {
         RailSegment hit = segmentContaining(cell);
         if (hit == null) {
             return 0;
         }
         List<RailSegment> structure = graph.structureOf(hit);
-        relook(level, structure, segment -> look);
+        Set<BlockPos> stale = laidBefore(structure);
+        for (RailSegment segment : structure) {
+            graph.setSegmentLook(segment.id(), look);
+        }
+        BedLayout layout = layout(stale, current(structure));
+        BedClearing.Plan clearing = planClearing(level, player, layout, Set.of());
+        if (clearing.refused()) {
+            for (RailSegment segment : structure) {
+                graph.setSegmentLook(segment.id(), segment.look());
+            }
+            reportBlocked(level, player, clearing.blocked());
+            return -1;
+        }
+        clearWay(level, player, clearing.removed());
+        layBed(level, layout);
+        markChanged(level);
         return structure.size();
     }
 
-    /** Redraw every segment of this dimension in rail {@code style}, beds kept; returns the count. */
+    /**
+     * Redraw every segment of this dimension in rail {@code style}, beds kept;
+     * returns the count. An admin command, not a build: the bed goes only
+     * where it is free ({@link #layBed(ServerLevel, BedLayout)}) and nothing in
+     * its way is broken — a player clears it by repainting with the rails.
+     */
     public int restyleAll(ServerLevel level, String style) {
         return relookAll(level, segment -> new RailSegment.Look(style, segment.bed()));
     }
 
-    /** Re-lay the bed of every segment of this dimension in {@code material}, styles kept; returns the count. */
+    /** Re-lay the bed of every segment of this dimension in {@code material}, styles kept; returns the count. Breaks nothing, as {@link #restyleAll}. */
     public int rebedAll(ServerLevel level, BedMaterial material) {
         return relookAll(level, segment -> new RailSegment.Look(segment.style(), material.key()));
     }
@@ -166,27 +243,12 @@ public final class RailNetwork extends SavedData {
      * touches come out, missing ones go in — for worlds whose bed was laid
      * before it followed the rails (2026-10-09), or after a pack changed a
      * style's tile. Returns the segment count. Loads every chunk the network
-     * crosses.
+     * crosses. Breaks nothing, as {@link #restyleAll}.
      */
     public int rebed(ServerLevel level) {
         List<RailSegment> all = List.copyOf(graph.segments());
         layBed(level, laidBefore(all), all);
         return all.size();
-    }
-
-    /**
-     * Mark segments built by one click as one structure (a switch, a crossing):
-     * breaking any of its bed blocks demolishes the whole structure.
-     */
-    public void groupSegments(ServerLevel level, List<RailSegment> built) {
-        if (built.size() < 2) {
-            return;
-        }
-        int group = graph.newGroupId();
-        for (RailSegment segment : built) {
-            graph.setSegmentGroup(segment.id(), group);
-        }
-        markChanged(level);
     }
 
     /** Remove the structure nearest to {@code point}, or null if none in range. */
@@ -428,37 +490,181 @@ public final class RailNetwork extends SavedData {
     }
 
     /**
-     * Bring the bed in line with the graph after an edit: {@code segments} are
-     * those whose bed may have changed (as they are now), {@code stale} every
-     * block they — or the segments the edit removed — held bed in before. A
-     * cell gets the most layers any segment under it needs (other segments
-     * sharing the cells count too, so a joint or a crossing keeps what the
-     * neighbour needs), in the material of the segment that needs them
-     * ({@link Bed#stronger}); stale cells no segment wants any more lose
-     * their bed.
+     * What an edit does to the bed: {@code wanted} — the bed each cell gets;
+     * {@code stale} — the cells that held bed before; {@code headroom} — the
+     * cells above the edited segments' bed their rails reach into
+     * ({@link BedRaster.Raster#headroom}), bed cells excluded.
      */
-    private void layBed(ServerLevel level, Set<BlockPos> stale, Collection<RailSegment> segments) {
+    private record BedLayout(Map<BlockPos, Bed> wanted, Set<BlockPos> stale, Set<BlockPos> headroom) {
+    }
+
+    /**
+     * The bed after an edit: {@code segments} are those whose bed may have
+     * changed (as they are now), {@code stale} every block they — or the
+     * segments the edit removed — held bed in before. A cell gets the most
+     * layers any segment under it needs (other segments sharing the cells
+     * count too, so a joint or a crossing keeps what the neighbour needs), in
+     * the material of the segment that needs them ({@link Bed#stronger});
+     * stale cells no segment wants any more lose their bed.
+     */
+    private BedLayout layout(Set<BlockPos> stale, Collection<RailSegment> segments) {
         Map<BlockPos, Bed> wanted = new LinkedHashMap<>();
+        Set<BlockPos> headroom = new LinkedHashSet<>();
         Set<Integer> ids = new HashSet<>();
         for (RailSegment segment : segments) {
             ids.add(segment.id());
-            want(wanted, segment, null, null);
+            BedMaterial material = BedMaterial.of(segment.bed());
+            BedRaster.Raster raster = BedRaster.raster(TrackSweep.path(graph, segment),
+                    RailFootprints.forStyle(segment.style()), null);
+            raster.bed().forEach((cell, layers) ->
+                    wanted.merge(pos(cell), new Bed(layers, material, segment.id()), Bed::stronger));
+            raster.headroom().forEach(cell -> headroom.add(pos(cell)));
         }
         Set<BlockPos> affected = new HashSet<>(stale);
         affected.addAll(wanted.keySet());
         claims(affected, ids).forEach((cell, bed) -> wanted.merge(cell, bed, Bed::stronger));
-        for (BlockPos cell : stale) {
-            if (!wanted.containsKey(cell) && isBed(level.getBlockState(cell))) {
+        headroom.removeAll(wanted.keySet());
+        return new BedLayout(wanted, stale, headroom);
+    }
+
+    /** Bring the bed in line with the graph after an edit, without breaking anything ({@link #layout}). */
+    private void layBed(ServerLevel level, Set<BlockPos> stale, Collection<RailSegment> segments) {
+        layBed(level, layout(stale, segments));
+    }
+
+    /**
+     * Lay out the bed: stale bed no segment wants comes out, the wanted bed
+     * goes into cells that are free for it — air, replaceable (plants,
+     * fluids) or bed. Anything else stays: only a player's build clears the
+     * way ({@link #clearWay}).
+     */
+    private void layBed(ServerLevel level, BedLayout layout) {
+        for (BlockPos cell : layout.stale()) {
+            if (!layout.wanted().containsKey(cell) && isBed(level.getBlockState(cell))) {
                 level.removeBlock(cell, false);
             }
         }
-        for (Map.Entry<BlockPos, Bed> cell : wanted.entrySet()) {
+        for (Map.Entry<BlockPos, Bed> cell : layout.wanted().entrySet()) {
             BlockState existing = level.getBlockState(cell.getKey());
             BlockState laid = cell.getValue().state();
             if (existing != laid && (existing.isAir() || existing.canBeReplaced() || isBed(existing))) {
                 level.setBlock(cell.getKey(), laid, Block.UPDATE_ALL);
             }
         }
+    }
+
+    // --- clearing the way (SPEC §2.2): a player's build drills through what's in it ---
+
+    /** At most this many broken blocks show the break effect (particles, sound); the rest go quietly. */
+    private static final int BREAK_EFFECTS = 32;
+
+    /**
+     * Plan clearing the way for a layout on behalf of {@code player}
+     * ({@link BedClearing}): obstacles in the bed and its headroom are to be
+     * broken, plants in the headroom removed; unbreakable blocks, containers
+     * and blocks the player may not break there refuse. {@code consumed}
+     * cells (the build's own markers, removed by it) count as empty. Nothing
+     * changes yet — the protection check posts a {@link BlockEvent.BreakEvent}
+     * per block to be broken, as a pickaxe would.
+     */
+    private BedClearing.Plan planClearing(ServerLevel level, ServerPlayer player, BedLayout layout,
+            Set<BlockPos> consumed) {
+        Set<BedRaster.Cell> bed = new LinkedHashSet<>();
+        layout.wanted().keySet().forEach(pos -> bed.add(cell(pos)));
+        Set<BedRaster.Cell> headroom = new LinkedHashSet<>();
+        layout.headroom().forEach(pos -> headroom.add(cell(pos)));
+        return BedClearing.plan(bed, headroom,
+                cell -> {
+                    BlockPos pos = pos(cell);
+                    return consumed.contains(pos) ? BedClearing.Occupant.EMPTY
+                            : occupant(level, pos, level.getBlockState(pos));
+                },
+                cell -> mayBreak(level, player, pos(cell)));
+    }
+
+    /** What a block in the track's way is, as far as clearing it goes. */
+    private static BedClearing.Occupant occupant(ServerLevel level, BlockPos pos, BlockState state) {
+        if (state.isAir()) {
+            return BedClearing.Occupant.EMPTY;
+        }
+        if (isBed(state)) {
+            return BedClearing.Occupant.BED;
+        }
+        if (state.hasBlockEntity()) {
+            return BedClearing.Occupant.CONTAINER;
+        }
+        if (state.getDestroySpeed(level, pos) < 0.0F) {
+            return BedClearing.Occupant.UNBREAKABLE;
+        }
+        if (state.canBeReplaced()) {
+            return state.getFluidState().isEmpty() ? BedClearing.Occupant.SOFT : BedClearing.Occupant.FLUID;
+        }
+        return BedClearing.Occupant.SOLID;
+    }
+
+    /**
+     * Whether {@code player} may break the block at {@code pos}: the world lets
+     * them act there (spawn protection, world border) and no handler cancels
+     * the {@link BlockEvent.BreakEvent} (region protection) — the checks a
+     * pickaxe goes through.
+     */
+    private static boolean mayBreak(ServerLevel level, ServerPlayer player, BlockPos pos) {
+        if (!level.mayInteract(player, pos)) {
+            return false;
+        }
+        GameType mode = player.gameMode.getGameModeForPlayer();
+        return !CommonHooks.fireBlockBreak(level, mode, player, pos, level.getBlockState(pos)).isCanceled();
+    }
+
+    /**
+     * Break what the plan removes: no drops in any game mode (SPEC §2.2 — a
+     * free drill by the user's decision). A waterlogged block leaves its
+     * water. Up to {@link #BREAK_EFFECTS} blocks, spread over the way, show
+     * the break effect.
+     */
+    private static void clearWay(ServerLevel level, ServerPlayer player, List<BedRaster.Cell> removed) {
+        int every = Math.max(1, (removed.size() + BREAK_EFFECTS - 1) / BREAK_EFFECTS);
+        for (int i = 0; i < removed.size(); i++) {
+            BlockPos pos = pos(removed.get(i));
+            if (i % every == 0) {
+                level.destroyBlock(pos, false, player);
+            } else {
+                level.removeBlock(pos, false);
+            }
+        }
+    }
+
+    /**
+     * Tell the player why the way can't be cleared, at the blocking block —
+     * and mark it with a burst of red dust.
+     */
+    private static void reportBlocked(ServerLevel level, ServerPlayer player, BedClearing.Blocked blocked) {
+        BlockPos pos = pos(blocked.cell());
+        BlockState state = level.getBlockState(pos);
+        String key = switch (blocked.reason()) {
+            case UNBREAKABLE -> "message.railswheelsandtrains.rail.blocked.unbreakable";
+            case CONTAINER -> "message.railswheelsandtrains.rail.blocked.container";
+            case PROTECTED -> "message.railswheelsandtrains.rail.blocked.protected";
+        };
+        player.displayClientMessage(Component.translatable(key, state.getBlock().getName(),
+                pos.getX(), pos.getY(), pos.getZ()), false);
+        DustParticleOptions dust = new DustParticleOptions(new Vector3f(1.0F, 0.15F, 0.1F), 1.5F);
+        for (int corner = 0; corner < 8; corner++) {
+            level.sendParticles(player, dust, true,
+                    pos.getX() + ((corner & 1) == 0 ? -0.02 : 1.02),
+                    pos.getY() + ((corner & 2) == 0 ? -0.02 : 1.02),
+                    pos.getZ() + ((corner & 4) == 0 ? -0.02 : 1.02), 4, 0.03, 0.03, 0.03, 0.0);
+        }
+        level.sendParticles(player, dust, true, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5,
+                12, 0.35, 0.35, 0.35, 0.0);
+    }
+
+    private static BlockPos pos(BedRaster.Cell cell) {
+        return new BlockPos(cell.x(), cell.y(), cell.z());
+    }
+
+    private static BedRaster.Cell cell(BlockPos pos) {
+        return new BedRaster.Cell(pos.getX(), pos.getY(), pos.getZ());
     }
 
     private static boolean isBed(BlockState state) {

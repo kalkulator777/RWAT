@@ -40,6 +40,7 @@ public record RiderSyncPayload(int consistId, List<RiderLocal> riders) implement
         buf.writeVarInt(payload.riders.size());
         for (RiderLocal rider : payload.riders) {
             buf.writeVarInt(rider.entityId());
+            buf.writeVarInt(rider.wagonId());
             buf.writeDouble(rider.x());
             buf.writeDouble(rider.y());
             buf.writeDouble(rider.z());
@@ -51,8 +52,8 @@ public record RiderSyncPayload(int consistId, List<RiderLocal> riders) implement
         int count = buf.readVarInt();
         List<RiderLocal> riders = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
-            riders.add(new RiderLocal(buf.readVarInt(), buf.readDouble(), buf.readDouble(),
-                    buf.readDouble()));
+            riders.add(new RiderLocal(buf.readVarInt(), buf.readVarInt(), buf.readDouble(),
+                    buf.readDouble(), buf.readDouble()));
         }
         return new RiderSyncPayload(consistId, riders);
     }

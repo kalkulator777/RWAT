@@ -2,6 +2,7 @@ package com.muzhik17.trainsmod.consist;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -13,6 +14,8 @@ import org.joml.Vector3d;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.ServerConfig;
+import com.muzhik17.trainsmod.kinematics.BogieReach;
+import com.muzhik17.trainsmod.kinematics.CabArea;
 import com.muzhik17.trainsmod.kinematics.ConsistKinematics;
 import com.muzhik17.trainsmod.kinematics.HullCollision;
 import com.muzhik17.trainsmod.kinematics.WagonPose;
@@ -42,15 +45,21 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * Owns all consists of one server level: SavedData persistence + the per-tick
  * drive (SPEC §2.1, decision 0.2). The consist exists here always; whether it
- * ticks is the chunkloading stub's call: v0 rule — tick only if the
- * <b>head's chunk</b> is loaded, otherwise freeze in place.
+ * runs is chunk loading's call ({@link ConsistChunks}, decision 2026-10-12): a
+ * consist driven or on the move holds the chunks under its whole length and
+ * the way ahead loaded, and runs; one that holds nothing runs only while the
+ * world ticks under some part of it, otherwise it stands frozen in place —
+ * still synced to the players who see its loaded wagons.
  *
  * <p>Each tick, for every ticking consist: advance {@code s += v}, push the
  * resulting pose into the consist's wagon entities (re-attached by UUID), and
@@ -59,10 +68,11 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * <p><b>Coupling (SPEC §6.12):</b> before that, consists on one track whose
  * facing ends run into each other merge into one ({@link Coupling} decides,
  * this applies it to the consists and their wagon entities); a crowbar or
- * {@code /rwat uncouple} cuts one at a coupler ({@link #split}). The consist's
- * wagon list is authoritative over which wagon is which: every tick re-asserts
- * each loaded wagon's consist id and index, so a wagon that sat in an unloaded
- * chunk through a coupling is put right as soon as it loads.
+ * {@code /rwat uncouple} cuts one at a coupler ({@link #split}). Contact is
+ * decided on the track, wherever the consists stand, loaded chunks or not.
+ * The consist's wagon list is authoritative over which wagon is which: every
+ * tick re-asserts each loaded wagon's consist id and index, so a wagon that
+ * sat in an unloaded chunk through a coupling is put right as soon as it loads.
  */
 public final class ConsistManager extends SavedData {
 
@@ -72,6 +82,8 @@ public final class ConsistManager extends SavedData {
     private int nextId = 1;
     /** Consists that sent a non-empty rider sync last tick, so we send one empty packet when the last rider leaves. */
     private final Set<Integer> consistsWithRiders = new HashSet<>();
+    /** Who holds which chunks loaded (SPEC §2.1, 2026-10-12); not saved — leases are re-earned after a restart. */
+    private final ConsistChunks chunks = new ConsistChunks();
 
     public static ConsistManager get(ServerLevel level) {
         return level.getDataStorage().computeIfAbsent(
@@ -137,9 +149,21 @@ public final class ConsistManager extends SavedData {
         return null;
     }
 
+    /** A frozen consist's wagon farther than this (squared, blocks) from its pose is put right. */
+    private static final double FROZEN_REPOSE_SQ = 1.0e-4;
+    /** A consist standing frozen is synced to the players who see it this often, ticks. */
+    private static final int FROZEN_SNAPSHOT_TICKS = 10;
+
+    /** How many chunks a consist holds loaded now (SPEC §2.1, 2026-10-12; {@code /rwat list}). */
+    public int chunksHeld(int id) {
+        return chunks.heldCount(id);
+    }
+
     public void tick(ServerLevel level) {
         RailNetwork network = RailNetwork.get(level);
         PhysicsTuning tuning = ServerConfig.tuning();
+        ChunkLease.Policy chunkPolicy = ServerConfig.chunkLoading();
+        long now = level.getGameTime();
         boolean dirty = coupleTouching(level, network, tuning);
         // "last rider left" clears go out after every consist's rider list of
         // this tick: a rider whose wagon just changed consists (coupling,
@@ -155,32 +179,36 @@ public final class ConsistManager extends SavedData {
             if (path == null) {
                 continue; // nothing of the route survived — frozen (SPEC §2.1)
             }
-            Vector3d head = path.samplePosition(consist.s());
-            // chunkloading stub v0: head's chunk loaded or the consist freezes
-            if (!level.isPositionEntityTicking(BlockPos.containing(head.x, head.y, head.z))) {
-                continue;
-            }
-            // input only counts while a cab has a driver; the handles
-            // themselves stay where they were left (a parked train keeps its
-            // notch and brake — SPEC §5.3). The driver's cab sets which way
-            // "forward" is (SPEC §6.12: drive from any cab).
             Driver driver = driverOf(level, consist);
-            if (driver == null) {
-                consist.setDriveInput(0, 0, false, 0);
-            } else {
-                consist.takeControl(driver.cab().getUUID(), driver.facing());
-            }
-            // the handles reach the driver's panel with the snapshot (SPEC §9.7)
-            if (consist.advance(path, tuning)) {
-                dirty = true;
-            }
-            if (consist.endImpactKmh() > IMPACT_SOUND_KMH) {
-                // ran into the end of the track: the rail ends, the train stops dead
-                boolean front = consist.s() >= path.length() - 1.0e-6;
-                ConsistComposition composition = consist.composition();
-                impactSound(level, path.samplePosition(front
-                        ? Coupling.frontEndS(composition, consist.s())
-                        : Coupling.rearEndS(composition, consist.s())), consist.endImpactKmh());
+            // chunk loading (SPEC §2.1, 2026-10-12): driven or on the move, the
+            // consist holds its chunks and runs; otherwise it runs only where
+            // the world ticks under it, else it stands frozen (still synced
+            // below to the players who see its loaded wagons)
+            boolean running = chunks.runs(level, consist, path, driver != null, chunkPolicy, now);
+            if (running) {
+                // input only counts while a cab has a driver; the handles
+                // themselves stay where they were left (a parked train keeps its
+                // notch and brake — SPEC §5.3). The driver's cab sets which way
+                // "forward" is (SPEC §6.12: drive from any cab). A driver standing
+                // in the cab works the levers, not the keys (SPEC §9.2)
+                if (driver == null || !driver.seated()) {
+                    consist.setDriveInput(0, 0, false, 0);
+                }
+                if (driver != null) {
+                    consist.takeControl(driver.cab().getUUID(), driver.facing());
+                }
+                // the handles reach the driver's panel with the snapshot (SPEC §9.7)
+                if (consist.advance(path, tuning)) {
+                    dirty = true;
+                }
+                if (consist.endImpactKmh() > IMPACT_SOUND_KMH) {
+                    // ran into the end of the track: the rail ends, the train stops dead
+                    boolean front = consist.s() >= path.length() - 1.0e-6;
+                    ConsistComposition composition = consist.composition();
+                    impactSound(level, path.samplePosition(front
+                            ? Coupling.frontEndS(composition, consist.s())
+                            : Coupling.rearEndS(composition, consist.s())), consist.endImpactKmh());
+                }
             }
 
             List<WagonEntity> wagons = new ArrayList<>();
@@ -199,9 +227,20 @@ public final class ConsistManager extends SavedData {
                     wagons.add(wagon);
                     WagonPose pose = ConsistKinematics.wagonPose(
                             path, consist.s(), i, consist.composition());
-                    wagon.setPos(pose.body().x, pose.body().y, pose.body().z);
+                    // only a wagon that moved (or loaded stale) is set: the
+                    // server's setPos loads the chunk it sets to (NeoForge), so
+                    // setting a standing wagon every tick would keep its chunk
+                    // loaded for good (SPEC §2.1, 2026-10-12)
+                    if (wagon.position().distanceToSqr(pose.body().x, pose.body().y, pose.body().z)
+                            > (running ? 0.0 : FROZEN_REPOSE_SQ)) {
+                        wagon.setPos(pose.body().x, pose.body().y, pose.body().z);
+                    }
                     wagon.setYRot(pose.yaw());
                     wagon.setXRot(pose.pitch());
+                    if (!running) {
+                        // frozen where nothing ticks: no riders, nobody to shove
+                        continue;
+                    }
                     // the body pose is set after entity ticks, so re-place riders
                     // now or they trail a tick behind the car (SPEC v1.5-б)
                     wagon.repositionRiders();
@@ -214,7 +253,7 @@ public final class ConsistManager extends SavedData {
                     // catch, because here it's the wagon that moved)
                     shoveOutsiders(level, wagon);
                     wagon.walkingRiderLocals().forEach((id, local) ->
-                            riders.add(new RiderLocal(id, local.x, local.y, local.z)));
+                            riders.add(new RiderLocal(id, wagon.getId(), local.x, local.y, local.z)));
                 }
             }
 
@@ -224,13 +263,19 @@ public final class ConsistManager extends SavedData {
                 // and an observer can track the tail without the head (or vice
                 // versa); sending only via one wagon starved such observers of
                 // snapshots. A player tracking several wagons gets duplicates;
-                // the client drops them by gameTime (handleSnapshot).
-                ConsistSnapshotPayload snapshot =
-                        ConsistSnapshotPayload.of(consist, level.getGameTime(), entityIds);
-                for (WagonEntity wagon : wagons) {
-                    PacketDistributor.sendToPlayersTrackingEntity(wagon, snapshot);
+                // the client drops them by gameTime (handleSnapshot). A train
+                // standing frozen (SPEC §2.1, 2026-10-12) — seen from beyond the
+                // simulation distance — only needs keeping alive on the clients
+                // (STALE_DROP_TICKS): a snapshot every FROZEN_SNAPSHOT_TICKS.
+                if (running || consist.speed() != 0.0
+                        || (now + consist.id()) % FROZEN_SNAPSHOT_TICKS == 0) {
+                    ConsistSnapshotPayload snapshot =
+                            ConsistSnapshotPayload.of(consist, level.getGameTime(), entityIds);
+                    for (WagonEntity wagon : wagons) {
+                        PacketDistributor.sendToPlayersTrackingEntity(wagon, snapshot);
+                    }
+                    consist.frameSent();
                 }
-                consist.frameSent();
                 // walking-rider local feet (SPEC v1.5-б): sent while anyone is
                 // aboard so observers place them at their interior spot, not the
                 // cab seat. One empty packet the tick the last rider leaves clears
@@ -255,6 +300,7 @@ public final class ConsistManager extends SavedData {
             }
         }
         riderClears.forEach(Runnable::run);
+        chunks.sweep(level, now); // the tickets of consists gone this tick (coupled into another, removed)
         if (dirty) {
             setDirty();
         }
@@ -281,8 +327,12 @@ public final class ConsistManager extends SavedData {
     /**
      * Merge every pair of consists that ran into each other on one track
      * (SPEC §6.12). Only rail routes couple (the {@code Straight} debug path
-     * doesn't), and only ticking ones — a frozen consist's far wagons may not
-     * even be loaded.
+     * doesn't). Contact is decided on the track, not in the world (SPEC §2.1,
+     * 2026-10-12): a consist standing in unloaded chunks is met all the same —
+     * wagons of it that aren't loaded take their new id and index from the
+     * every-tick re-assertion once they load. Only a pair with a consist on
+     * the move can close, so standing consists are only ever met, never paired
+     * with each other.
      *
      * @return true if anything changed (needs saving)
      */
@@ -300,7 +350,8 @@ public final class ConsistManager extends SavedData {
         int couplings = 0;
         search:
         while (couplings < MAX_COUPLINGS_PER_TICK) {
-            for (int i = 0; i < candidates.size(); i++) {
+            int moving = movingFirst(candidates);
+            for (int i = 0; i < moving; i++) {
                 for (int j = i + 1; j < candidates.size(); j++) {
                     Candidate a = candidates.get(i);
                     Candidate b = candidates.get(j);
@@ -321,11 +372,14 @@ public final class ConsistManager extends SavedData {
                     dirty = true;
                     if (contact instanceof Coupling.Bump bump) {
                         bump(level, network, kept, absorbed, bump, tuning);
+                        chunks.thaw(kept.consist().id()); // both are set moving now
+                        chunks.thaw(absorbed.consist().id());
                         refresh(level, network, candidates, kept);
                         refresh(level, network, candidates, absorbed);
                         continue search;
                     }
                     merge(level, network, kept.consist(), absorbed.consist(), (Coupling.Merge) contact);
+                    chunks.thaw(kept.consist().id());
                     candidates.remove(absorbed);
                     refresh(level, network, candidates, kept);
                     continue search; // the grown consist may touch a third one
@@ -336,8 +390,28 @@ public final class ConsistManager extends SavedData {
         return dirty;
     }
 
+    /**
+     * Order the candidates on the move first (stable) and count them: two
+     * consists close no faster than {@code |v₁| + |v₂|}, so a pair of which
+     * neither moves faster than half {@link Coupling#MIN_CLOSING_SPEED} can't
+     * touch — the pairing runs over the movers × all, not all × all (a yard
+     * of parked wagons costs a pass, not a square).
+     */
+    private static int movingFirst(List<Candidate> candidates) {
+        candidates.sort(Comparator.comparing(candidate -> !mayClose(candidate)));
+        int moving = 0;
+        while (moving < candidates.size() && mayClose(candidates.get(moving))) {
+            moving++;
+        }
+        return moving;
+    }
+
+    private static boolean mayClose(Candidate candidate) {
+        return Math.abs(candidate.train().v()) > Coupling.MIN_CLOSING_SPEED * 0.5;
+    }
+
     /** Re-read a candidate after its consist changed (or drop it if it can't couple now). */
-    private static void refresh(ServerLevel level, RailNetwork network, List<Candidate> candidates,
+    private void refresh(ServerLevel level, RailNetwork network, List<Candidate> candidates,
             Candidate stale) {
         int at = candidates.indexOf(stale);
         if (at < 0) {
@@ -386,8 +460,14 @@ public final class ConsistManager extends SavedData {
                 SoundSource.NEUTRAL, volume, 0.6F);
     }
 
-    /** The consist as a coupling candidate, or null if it can't couple now. */
-    private static Candidate candidate(ServerLevel level, RailNetwork network, Consist consist) {
+    /**
+     * The consist as a coupling candidate, or null if it can't couple now.
+     * Loaded or not makes no difference (SPEC §2.1, 2026-10-12): the consist
+     * is on the track either way. One that stood frozen last tick counts as
+     * standing, whatever speed it froze with — it isn't moving, and running
+     * into it must not pass through as if it were pulling away.
+     */
+    private Candidate candidate(ServerLevel level, RailNetwork network, Consist consist) {
         if (!(consist.pathSpec() instanceof TrackPathSpec.Route)) {
             return null; // the v0 straight debug path doesn't couple
         }
@@ -397,13 +477,10 @@ public final class ConsistManager extends SavedData {
                 || consist.wagonIds().size() != consist.composition().wagonCount()) {
             return null;
         }
-        Vector3d head = path.samplePosition(consist.s());
-        if (!level.isPositionEntityTicking(BlockPos.containing(head.x, head.y, head.z))) {
-            return null; // frozen by the chunkloading stub
-        }
         ConsistComposition composition = consist.composition();
+        double v = chunks.frozen(consist.id()) ? 0.0 : consist.speed();
         return new Candidate(consist,
-                new Coupling.Train(route.legs(), routePath, composition, consist.s(), consist.speed()),
+                new Coupling.Train(route.legs(), routePath, composition, consist.s(), v),
                 path.samplePosition(Coupling.frontEndS(composition, consist.s())),
                 path.samplePosition(Coupling.rearEndS(composition, consist.s())));
     }
@@ -616,6 +693,101 @@ public final class ConsistManager extends SavedData {
         return true;
     }
 
+    /** Reach past the player's entity reach for a blow at a bogie (vanilla gives an entity attack +1). */
+    private static final double BOGIE_REACH_SLACK = 1.0;
+    /**
+     * Ticks the client's view of a moving train lags the server's pose by:
+     * the interpolation delay (2), the render window (1) and a packet (1).
+     */
+    private static final double VIEW_LAG_TICKS = 4.0;
+
+    /**
+     * A player struck a bogie of {@code wagon} (SPEC §6.11): the one ahead
+     * along the path ({@code front}) or behind. If the blow can be there —
+     * by the server's pose of that bogie ({@link BogieReach}) — and the
+     * player may break things here (not in adventure mode, not under spawn
+     * protection), the wagon takes it as the player's attack: a few blows
+     * wear it down in survival, one breaks it in creative
+     * ({@link WagonEntity#hurt}). A rider can't strike: aboard, the world is
+     * out of reach (SPEC v1.5-б).
+     *
+     * @return true if the blow landed
+     */
+    public boolean strikeBogie(ServerLevel level, ServerPlayer player, WagonEntity wagon, boolean front) {
+        if (player.isSpectator() || !player.isAlive() || player.getVehicle() instanceof WagonEntity
+                || !player.mayBuild()) {
+            return false;
+        }
+        Consist consist = byId(wagon.getConsistId());
+        int index = consist == null ? -1 : consist.wagonIds().indexOf(wagon.getUUID());
+        if (index < 0 || index >= consist.composition().wagonCount()) {
+            return false;
+        }
+        RailNetwork network = RailNetwork.get(level);
+        TrackPath path = consist.resolvePath(network.graph(), network.revision());
+        if (path == null) {
+            return false;
+        }
+        WagonPose pose = ConsistKinematics.wagonPose(path, consist.s(), index, consist.composition());
+        Vector3d bogie = (front ? pose.front() : pose.rear()).position();
+        if (!level.mayInteract(player, BlockPos.containing(bogie.x, bogie.y, bogie.z))) {
+            return false; // spawn protection
+        }
+        Vec3 eye = player.getEyePosition();
+        Vec3 look = player.getLookAngle();
+        double slack = BOGIE_REACH_SLACK + Math.abs(consist.speed()) * VIEW_LAG_TICKS;
+        if (!BogieReach.reaches(new Vector3d(eye.x, eye.y, eye.z), new Vector3d(look.x, look.y, look.z),
+                bogie, player.entityInteractionRange(), slack)) {
+            return false;
+        }
+        wagon.strikeBy(player);
+        return true;
+    }
+
+    /**
+     * A wagon broken by blows at its bogies (SPEC §6.11) leaves its train.
+     * Riders aboard are set down where they stand ({@link
+     * WagonEntity#setDownRiders}: the car is gone, from its floor it is a
+     * short drop to the track). The wagon is uncoupled at both ends — the
+     * crowbar's cut ({@link #split}), so the rest of the train stays where
+     * it is, one consist or two, with its handles and handbrakes — and the
+     * one-wagon consist left over goes with the entity. In survival its
+     * rolling stock item drops, with its type and livery, ready to be put
+     * back on the rails ({@code doEntityDrops} permitting).
+     *
+     * @return false if its train can't be cut (its wagon list out of step with the composition): nothing breaks
+     */
+    public boolean breakWagon(ServerLevel level, WagonEntity wagon, boolean drop) {
+        Consist consist = byId(wagon.getConsistId());
+        int index = consist == null ? -1 : consist.wagonIds().indexOf(wagon.getUUID());
+        int count = consist == null ? 0 : consist.composition().wagonCount();
+        if (consist != null && (index < 0 || consist.wagonIds().size() != count)) {
+            return false;
+        }
+        ConsistComposition.Slot slot = consist == null ? null : consist.composition().slot(index);
+        wagon.setDownRiders();
+        if (consist != null) {
+            if (index + 1 < count) {
+                split(level, consist, index + 1); // the cars behind run on as their own train
+            }
+            Consist alone = index > 0 ? split(level, consist, index) : consist;
+            if (alone != null) {
+                remove(alone.id());
+            }
+        }
+        if (drop && slot != null && level.getGameRules().getBoolean(GameRules.RULE_DOENTITYDROPS)) {
+            ItemStack stack = new ItemStack(RailsWheelsAndTrains.ROLLING_STOCK_ITEM.get());
+            stack.set(RailsWheelsAndTrains.STOCK_SELECTION.get(),
+                    new RollingStockItem.Selection(slot.type().id(), slot.livery()));
+            wagon.spawnAtLocation(stack, 1.0F);
+        }
+        level.playSound(null, wagon.getX(), wagon.getY() + 1.0, wagon.getZ(), SoundEvents.NETHERITE_BLOCK_BREAK,
+                SoundSource.NEUTRAL, 1.0F, 0.7F);
+        wagon.discard();
+        setDirty();
+        return true;
+    }
+
     /** Inflate the wagon AABB by the longest stock half-length when looking for entities to shove. */
     private static final double SHOVE_REACH = 14.0;
     /** Cap a player's per-tick shove so a deep overlap ejects over a few ticks, not a launch. */
@@ -675,12 +847,21 @@ public final class ConsistManager extends SavedData {
     }
 
     /**
-     * Who drives a consist: the player seated in a cab, the cab wagon, and
-     * which way along the path the driver faces (+1 = +s; a cab in a flipped
-     * slot faces −s, and so does a chair looking to the model's rear — the
-     * other end's cab).
+     * Who drives a consist: the player at the controls of a cab, the cab
+     * wagon, and which way along the path the driver faces (+1 = +s; a cab
+     * in a flipped slot faces −s, and so does a chair looking to the model's
+     * rear — the other end's cab).
+     *
+     * @param standingCab the cab ({@link CabArea}) of a driver standing in
+     *                    it — the levers, not the keys (SPEC §9.2) — or −1
+     *                    for one sitting at the controls
      */
-    public record Driver(ServerPlayer player, WagonEntity cab, int facing) {
+    public record Driver(ServerPlayer player, WagonEntity cab, int facing, int standingCab) {
+
+        /** True if the driver sits at the controls: the keys drive and the panel is theirs. */
+        public boolean seated() {
+            return standingCab < 0;
+        }
     }
 
     /**
@@ -693,8 +874,22 @@ public final class ConsistManager extends SavedData {
      * riding a cab without a walkable interior: someone walking about a cab —
      * or the saloon of an EMU's head car — never drives, the chair decides,
      * not the kind of wagon. Null if no cab is manned.
+     *
+     * <p>With nobody at the controls anywhere, a player standing in a cab
+     * drives (SPEC §9.2, 2026-10-12): the levers of a cab are worked standing
+     * too. Again the front-most cab with one, the one nearest its first
+     * chair; they face as the chair nearest to them does. A seated driver
+     * anywhere comes first — standing in the other end's cab, nobody takes
+     * the train from the one sitting at the desk. Only players who may work
+     * a cab ({@link CabAccess}: the driver's key) count.
      */
     public static Driver driverOf(ServerLevel level, Consist consist) {
+        Driver seated = driverOf(level, consist, true);
+        return seated != null ? seated : driverOf(level, consist, false);
+    }
+
+    /** The front-most manned cab's driver: at its controls ({@code seated}), or standing in it. */
+    private static Driver driverOf(ServerLevel level, Consist consist, boolean seated) {
         List<UUID> ids = consist.wagonIds();
         ConsistComposition composition = consist.composition();
         for (int i = 0; i < ids.size() && i < composition.wagonCount(); i++) {
@@ -705,22 +900,53 @@ public final class ConsistManager extends SavedData {
             ServerPlayer driver = null;
             int driverChair = Integer.MAX_VALUE;
             for (Entity passenger : wagon.getPassengers()) {
-                if (passenger instanceof ServerPlayer player && atControls(wagon, player)) {
-                    int chair = Math.max(wagon.chairOf(player), 0); // a cab without chairs: its one rider
-                    if (chair < driverChair) {
-                        driver = player;
-                        driverChair = chair;
-                    }
+                if (!(passenger instanceof ServerPlayer player) || atControls(wagon, player) != seated
+                        || !CabAccess.mayWork(player)) {
+                    continue;
+                }
+                // a cab without chairs: its one rider; standing: the desk nearest them
+                int chair = seated ? Math.max(wagon.chairOf(player), 0) : wagon.deskOf(player);
+                if (chair >= 0 && chair < driverChair) {
+                    driver = player;
+                    driverChair = chair;
                 }
             }
             if (driver != null) {
                 List<WagonType.Seat> chairs = slot.type().cab().seats();
-                boolean back = wagon.isSeated(driver) && driverChair < chairs.size()
-                        && chairs.get(driverChair).facesBack();
-                return new Driver(driver, wagon, (slot.flipped() ? -1 : 1) * (back ? -1 : 1));
+                WagonType.Seat chair = (!seated || wagon.isSeated(driver)) && driverChair < chairs.size()
+                        ? chairs.get(driverChair) : null;
+                return new Driver(driver, wagon, CabArea.facing(slot.flipped(), chair),
+                        seated ? -1 : wagon.cabArea().cabOfChair(driverChair));
             }
         }
         return null;
+    }
+
+    /**
+     * True if {@code player} may move the consist's handles — a lever in a
+     * cab, a lamp of the driver's panel (SPEC §9.2, §9.7): its driver, or,
+     * while the driver stands in a cab rather than sits, anyone else with the
+     * key standing in that same cab. A second player at the desk of a seated
+     * driver doesn't fight them for the levers.
+     */
+    public static boolean mayMoveHandles(ServerLevel level, Consist consist, ServerPlayer player) {
+        Driver driver = driverOf(level, consist);
+        if (driver == null) {
+            return false;
+        }
+        return driver.player() == player
+                || !driver.seated() && player.getVehicle() == driver.cab() && !driver.cab().isSeated(player)
+                        && CabAccess.mayWork(player) && driver.cab().cabOf(player) == driver.standingCab();
+    }
+
+    /**
+     * True if {@code player} is at the driver's panel of the consist (SPEC
+     * §9.7): its driver, sitting at the controls — the lights and doors of
+     * the whole train are switched from there only.
+     */
+    public static boolean atPanel(ServerLevel level, Consist consist, ServerPlayer player) {
+        Driver driver = driverOf(level, consist);
+        return driver != null && driver.seated() && driver.player() == player;
     }
 
     /**

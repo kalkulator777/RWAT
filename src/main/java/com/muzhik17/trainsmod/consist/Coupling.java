@@ -159,9 +159,29 @@ public final class Coupling {
      * Its own route maps by identity.
      */
     public static Placement place(Train train, List<RailGraph.RouteLeg> legs, RoutePath path) {
+        List<Placement> all = placements(train, legs, path);
+        return all.isEmpty() ? null : all.get(0);
+    }
+
+    /**
+     * Every {@link #place placement} of {@code train} on the route, in route
+     * order. A route may run over the same track more than once — twice round
+     * a loop whose switches disagree, out and back through a balloon (SPEC
+     * §2.2) — and then the train sits on it at each pass.
+     */
+    static List<Placement> placements(Train train, List<RailGraph.RouteLeg> legs, RoutePath path) {
+        List<Placement> found = passes(train, legs, path);
         if (train.legs().equals(legs)) {
-            return new Placement(0.0, 1);
+            // its own route maps by identity first; other passes over its track follow
+            Placement identity = new Placement(0.0, 1);
+            found.removeIf(p -> samePlacement(p, identity, path));
+            found.add(0, identity);
         }
+        return found;
+    }
+
+    /** {@link #placements} found leg by leg (mutable). */
+    private static List<Placement> passes(Train train, List<RailGraph.RouteLeg> legs, RoutePath path) {
         RoutePath own = train.path();
         double lo = rearEndS(train.composition(), train.headS());
         double hi = frontEndS(train.composition(), train.headS());
@@ -170,32 +190,34 @@ public final class Coupling {
             lo = Math.clamp(lo, 0.0, own.length());
             hi = Math.clamp(hi, 0.0, own.length());
         }
-        Placement found = null;
+        List<Placement> found = null;
         double x = lo;
         for (int guard = 0; guard <= own.partCount() + 1; guard++) {
             int part = own.partIndexAt(x);
             double legStart = x - (wrap(own, x) - own.partStartS(part));
-            Placement leg = placeLeg(train.legs().get(part), legStart, legs, path);
-            if (leg == null) {
-                return null;
-            }
+            List<Placement> leg = placeLeg(train.legs().get(part), legStart, legs, path);
             if (found == null) {
                 found = leg;
-            } else if (!samePlacement(found, leg, path)) {
-                return null; // the span leaves the route and rejoins it elsewhere
+            } else {
+                // the span must not leave the route and rejoin it elsewhere
+                found.removeIf(p -> leg.stream().noneMatch(q -> samePlacement(p, q, path)));
+            }
+            if (found.isEmpty()) {
+                return new ArrayList<>();
             }
             double legEnd = legStart + own.partLength(part);
             if (legEnd >= hi - PLACE_EPS) {
-                return found;
+                break;
             }
             x = legEnd + PLACE_EPS; // nudge into the next leg (loop wrap rounding)
         }
-        return found;
+        return found == null ? new ArrayList<>() : found;
     }
 
-    /** The placement implied by one leg of the train starting at own {@code legStart}, or null. */
-    private static Placement placeLeg(RailGraph.RouteLeg leg, double legStart,
+    /** The placements implied by one leg of the train starting at own {@code legStart}: one per pass of the route over it. */
+    private static List<Placement> placeLeg(RailGraph.RouteLeg leg, double legStart,
             List<RailGraph.RouteLeg> legs, RoutePath path) {
+        List<Placement> found = new ArrayList<>();
         for (int j = 0; j < legs.size(); j++) {
             RailGraph.RouteLeg other = legs.get(j);
             if (other.segmentId() != leg.segmentId()) {
@@ -203,12 +225,13 @@ public final class Coupling {
             }
             double start = path.partStartS(j);
             if (other.reversed() == leg.reversed()) {
-                return new Placement(start - legStart, 1);
+                found.add(new Placement(start - legStart, 1));
+            } else {
+                // walked the other way: own distance u into the leg sits at start + len − u
+                found.add(new Placement(start + path.partLength(j) + legStart, -1));
             }
-            // walked the other way: own distance u into the leg sits at start + len − u
-            return new Placement(start + path.partLength(j) + legStart, -1);
         }
-        return null;
+        return found;
     }
 
     private static boolean samePlacement(Placement a, Placement b, RoutePath path) {
@@ -261,13 +284,22 @@ public final class Coupling {
         return contact;
     }
 
+    /** The contact of the two on the route {@code legs}, at whichever passes of it they touch. */
     private static Contact contactOn(List<RailGraph.RouteLeg> legs, RoutePath path,
             Train kept, Train absorbed, double maxCouplingClosing) {
-        Placement pk = place(kept, legs, path);
-        Placement pa = pk == null ? null : place(absorbed, legs, path);
-        if (pa == null) {
-            return null;
+        for (Placement pk : placements(kept, legs, path)) {
+            for (Placement pa : placements(absorbed, legs, path)) {
+                Contact contact = contactAt(legs, path, pk, pa, kept, absorbed, maxCouplingClosing);
+                if (contact != null) {
+                    return contact;
+                }
+            }
         }
+        return null;
+    }
+
+    private static Contact contactAt(List<RailGraph.RouteLeg> legs, RoutePath path,
+            Placement pk, Placement pa, Train kept, Train absorbed, double maxCouplingClosing) {
         double length = path.length();
 
         // orient the merged route so the kept consist keeps running +s:
@@ -383,12 +415,7 @@ public final class Coupling {
      * backwards) — the leg-list twin of {@code TrackPathSpec.Route.inverted()}.
      */
     public static List<RailGraph.RouteLeg> inverted(List<RailGraph.RouteLeg> legs) {
-        List<RailGraph.RouteLeg> out = new ArrayList<>(legs.size());
-        for (int i = legs.size() - 1; i >= 0; i--) {
-            RailGraph.RouteLeg leg = legs.get(i);
-            out.add(new RailGraph.RouteLeg(leg.segmentId(), !leg.reversed()));
-        }
-        return out;
+        return RailGraph.inverted(legs);
     }
 
     // --- uncoupling ---

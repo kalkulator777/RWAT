@@ -178,7 +178,7 @@ public final class FloorCheck {
     }
 
     /** The piece of the region a rider walks through {@code door} from (see {@link #walkableThrough}), −1 if none. */
-    private static int walkablePiece(WagonType.Door door, FloorRegion region) {
+    static int walkablePiece(WagonType.Door door, FloorRegion region) {
         boolean side = door.axis() == 0;
         int out = door.outward();
         double lo = door.spanMin() + RiderWalk.DOOR_SPAN_INSET;
@@ -206,7 +206,7 @@ public final class FloorCheck {
     }
 
     /** Where a rider's centre may be in an open inner door, as {@link RiderWalk} bridges it: {minX, minZ, maxX, maxZ}. */
-    private static double[] bridge(WagonType.Door door) {
+    static double[] bridge(WagonType.Door door) {
         double lo = door.spanMin() + RiderWalk.DOOR_SPAN_INSET;
         double hi = door.spanMax() - RiderWalk.DOOR_SPAN_INSET;
         return door.axis() == 0
@@ -214,7 +214,7 @@ public final class FloorCheck {
                 : new double[]{lo, door.minZ() - RiderWalk.BRIDGE_REACH, hi, door.maxZ() + RiderWalk.BRIDGE_REACH};
     }
 
-    private static int find(int[] parent, int i) {
+    static int find(int[] parent, int i) {
         while (parent[i] != i) {
             parent[i] = parent[parent[i]];
             i = parent[i];
@@ -222,7 +222,7 @@ public final class FloorCheck {
         return i;
     }
 
-    private static void union(int[] parent, int a, int b) {
+    static void union(int[] parent, int a, int b) {
         parent[find(parent, a)] = find(parent, b);
     }
 }

@@ -22,6 +22,10 @@ import com.muzhik17.trainsmod.path.TrackPath;
  * type's own factor ({@code "sway"} in the pack's model declaration), handed
  * over by the model reload ({@link #typeSway}).
  *
+ * <p>A blow at a bogie (SPEC §6.11) rocks the body too: the wagon's wobble,
+ * a roll, rides on top of the springs — not scaled by {@code swayStrength},
+ * which is the track's doing; it is the feedback of a hit.
+ *
  * <p>Nothing here is synced: each client steps its own copy from the same
  * snapshots. Deliberately free of client-only MC classes so the common
  * {@code WagonEntity} can call it.
@@ -36,6 +40,11 @@ public final class ClientRide {
         final RideMotion motion = new RideMotion();
         Sway previous = Sway.ZERO;
         Sway current = Sway.ZERO;
+        /** A blow's rock, radians of roll, last tick and this one. */
+        double knockPrevious;
+        double knock;
+        /** The wagon type's own sway factor. */
+        double typeFactor = 1.0;
         TrackPath path;
         double frontS;
         double rearS;
@@ -45,14 +54,12 @@ public final class ClientRide {
         int frontCrossed;
         int rearCrossed;
         long lastTick;
-        /** The wagon type's own sway factor. */
-        double typeFactor = 1.0;
     }
 
     private static final Map<Integer, Ride> RIDES = new HashMap<>();
+    private static long ticks;
     /** Sway factor by wagon type id, the types the packs scale (the rest rock at 1). */
     private static Map<String, Double> typeSway = Map.of();
-    private static long ticks;
 
     private ClientRide() {
     }
@@ -73,8 +80,9 @@ public final class ClientRide {
      *
      * @param typeId the wagon's type, for its sway factor; null = unknown yet
      * @param pose   the wagon's tick pose
+     * @param knock  a blow's rock this tick, radians of roll (0: none)
      */
-    public static void step(int entityId, int consistId, String typeId, WagonPose pose) {
+    public static void step(int entityId, int consistId, String typeId, WagonPose pose, double knock) {
         Ride ride = RIDES.computeIfAbsent(entityId, id -> new Ride());
         if (ride.lastTick == ticks) {
             return; // ticked twice in one client tick — never step twice
@@ -113,6 +121,8 @@ public final class ClientRide {
                 continuous ? accel : 0.0, curvature, ride.frontCrossed, ride.rearCrossed));
         ride.previous = ride.current;
         ride.current = ride.motion.sway();
+        ride.knockPrevious = ride.knock;
+        ride.knock = knock;
     }
 
     /**
@@ -121,21 +131,28 @@ public final class ClientRide {
      */
     public static Sway sway(int entityId, float partialTick) {
         Ride ride = RIDES.get(entityId);
-        double strength = ride == null ? 0.0 : ClientConfig.swayStrength() * ride.typeFactor;
-        if (strength <= 0.0) {
+        if (ride == null) {
             return Sway.ZERO;
         }
-        return Sway.lerp(ride.previous, ride.current, partialTick).scaled(strength);
+        double strength = ClientConfig.swayStrength() * ride.typeFactor;
+        Sway springs = strength <= 0.0 ? Sway.ZERO
+                : Sway.lerp(ride.previous, ride.current, partialTick).scaled(strength);
+        return knocked(springs, ride.knockPrevious + (ride.knock - ride.knockPrevious) * partialTick);
     }
 
     /** The body's sway at the current tick, where riders are placed (scaled like {@link #sway}). */
     public static Sway current(int entityId) {
         Ride ride = RIDES.get(entityId);
-        double strength = ride == null ? 0.0 : ClientConfig.swayStrength() * ride.typeFactor;
-        if (strength <= 0.0) {
+        if (ride == null) {
             return Sway.ZERO;
         }
-        return ride.current.scaled(strength);
+        double strength = ClientConfig.swayStrength() * ride.typeFactor;
+        return knocked(strength <= 0.0 ? Sway.ZERO : ride.current.scaled(strength), ride.knock);
+    }
+
+    /** The body's sway with a blow's rock added to its roll. */
+    private static Sway knocked(Sway sway, double knock) {
+        return knock == 0.0 ? sway : new Sway(sway.bounce(), sway.pitch(), sway.roll() + knock);
     }
 
     /**

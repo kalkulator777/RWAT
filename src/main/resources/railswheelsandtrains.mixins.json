@@ -4,14 +4,20 @@
   "package": "com.muzhik17.trainsmod.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "EntityHullCollisionMixin"
+    "EntityHullCollisionMixin",
+    "PlayerWagonSneakMixin",
+    "ServerEntityPassengerMixin",
+    "ServerPlayerMountMixin"
   ],
   "client": [
     "ClientChunkCacheLightMixin",
     "ClientLevelSectionDirtyMixin",
+    "ClientMountMessageMixin",
     "EntityRendererCabinLightMixin",
+    "KeyMappingDrivingMixin",
     "LivingEntityRendererSeatMixin",
     "LivingEntityWalkAnimationMixin",
+    "LocalPlayerCrouchMixin",
     "SoundManagerFilesMixin"
   ],
   "injectors": {

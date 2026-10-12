@@ -1,5 +1,6 @@
 package com.muzhik17.trainsmod;
 
+import com.muzhik17.trainsmod.consist.ChunkLease;
 import com.muzhik17.trainsmod.physics.PhysicsTuning;
 
 import net.neoforged.fml.ModContainer;
@@ -11,8 +12,14 @@ import net.neoforged.neoforge.common.ModConfigSpec;
  * overridden per world by a copy in {@code <world>/serverconfig/} (SPEC §5.6):
  * how the physics plays. One profile — realistic, standard,
  * arcade — or {@code custom}, the only one that reads the values of the
- * {@code [physics.custom]} section. The loader's config API stays in this one
- * adapter (SPEC §7.3); the physics only ever sees a {@link PhysicsTuning}.
+ * {@code [physics.custom]} section. And which trains keep the world loaded
+ * around them ({@code [chunk_loading]}, SPEC §2.1). The loader's config API
+ * stays in this one adapter (SPEC §7.3); the physics only ever sees a
+ * {@link PhysicsTuning}, the consists a {@link ChunkLease.Policy}.
+ * {@code [rails]}: how far a rail marker reaches for its partner (SPEC §2.2).
+ * Also who may drive ({@code [access]}, SPEC §9.2): the cabs open to anyone,
+ * or only to a player with the driver's key. The server's settings reach
+ * its clients, which predict the same.
  */
 public final class ServerConfig {
 
@@ -69,6 +76,69 @@ public final class ServerConfig {
 
     static {
         BUILDER.pop(2);
+        BUILDER.push("rails");
+    }
+
+    private static final ModConfigSpec.IntValue MAX_MARKER_DISTANCE = BUILDER
+            .comment("How far a rail marker looks for the marker it connects to, in blocks - the longest",
+                    " segment one click of the rails builds. A longer segment costs more to build: its",
+                    " track bed is rasterized all along it, and every chunk it crosses is loaded")
+            .defineInRange("max_marker_distance", 512, 16, 2048);
+
+    static {
+        BUILDER.pop();
+    }
+
+    /** Who may get into a cab and work it (SPEC §9.2). */
+    public enum CabAccess {
+        /** Anyone. */
+        OPEN,
+        /** A player carrying the driver's key; operators and creative players need none. */
+        KEY
+    }
+
+    static {
+        BUILDER.push("access");
+    }
+
+    private static final ModConfigSpec.EnumValue<CabAccess> CAB_ACCESS = BUILDER
+            .comment("Who may open the doors into a cab, sit in a driver's chair and work a cab's controls.",
+                    " OPEN - anyone, as in single player",
+                    " KEY  - only a player carrying a driver's key (anywhere in the inventory);",
+                    "        operators (permission level 2+) and creative players need none")
+            .defineEnum("cab_access", CabAccess.OPEN);
+
+    static {
+        BUILDER.pop();
+    }
+
+    static {
+        BUILDER.comment("Which trains keep the world loaded around them (SPEC 2.1). Coupling never",
+                        " depends on it: a train meets standing wagons wherever they are.")
+                .push("chunk_loading");
+    }
+
+    private static final ChunkLease.Policy CHUNK_BASE = ChunkLease.Policy.DEFAULT;
+
+    private static final ModConfigSpec.EnumValue<ChunkLease.Mode> CHUNK_MODE = BUILDER
+            .comment("Which trains keep the chunks under their whole length and the way ahead loaded.",
+                    " MOVING - driven trains and any train on the move (rolled away, coasting)",
+                    " DRIVEN - only trains with a player at the controls",
+                    " OFF    - none: a train runs only where the world ticks anyway (near players)")
+            .defineEnum("mode", CHUNK_BASE.mode());
+    private static final ModConfigSpec.IntValue CHUNK_LINGER_SECONDS = BUILDER
+            .comment("A train left standing with nobody at the controls lets its chunks go after this many seconds")
+            .defineInRange("linger_seconds", CHUNK_BASE.lingerTicks() / 20, 0, 3600);
+    private static final ModConfigSpec.IntValue CHUNK_UNMANNED_SECONDS = BUILDER
+            .comment("A train running with nobody at the controls keeps its chunks for at most this many",
+                    " seconds of the run, then stands frozen until someone comes near; 0 = for as long as it runs")
+            .defineInRange("unmanned_seconds", CHUNK_BASE.unmannedTicks() / 20, 0, 86400);
+    private static final ModConfigSpec.IntValue CHUNK_MAX = BUILDER
+            .comment("Most chunks one train keeps loaded (the way ahead and its leading end first)")
+            .defineInRange("max_chunks", CHUNK_BASE.maxChunks(), 1, 4096);
+
+    static {
+        BUILDER.pop();
     }
 
     private static final ModConfigSpec SPEC = BUILDER.build();
@@ -81,6 +151,15 @@ public final class ServerConfig {
         container.registerConfig(ModConfig.Type.SERVER, SPEC);
     }
 
+    /**
+     * True if the cabs want the driver's key (SPEC §9.2); open until the
+     * world's config is loaded. Read on both sides: a client has the
+     * server's settings once it has joined.
+     */
+    public static boolean cabsLocked() {
+        return SPEC.isLoaded() && CAB_ACCESS.get() == CabAccess.KEY;
+    }
+
     /** The physics tuning in force; the standard profile until the world's config is loaded. */
     public static PhysicsTuning tuning() {
         if (!SPEC.isLoaded()) {
@@ -90,5 +169,22 @@ public final class ServerConfig {
                 TRACTION_SCALE.get(), BRAKE_SCALE.get(), RESISTANCE_SCALE.get(),
                 RESPONSE_SCALE.get(), ADHESION_LIMIT.get(), ADHESION_SCALE.get(),
                 AUTO_HANDBRAKE.get(), HARD_SPEED_LIMIT.get(), COUPLING_MAX_SPEED_KMH.get()));
+    }
+
+    /**
+     * How far a rail marker looks for its partner, in blocks (SPEC §2.2) — the
+     * default until the world's config is loaded.
+     */
+    public static int maxMarkerDistance() {
+        return SPEC.isLoaded() ? MAX_MARKER_DISTANCE.get() : MAX_MARKER_DISTANCE.getDefault();
+    }
+
+    /** The chunk-loading policy in force (SPEC §2.1); the default one until the world's config is loaded. */
+    public static ChunkLease.Policy chunkLoading() {
+        if (!SPEC.isLoaded()) {
+            return ChunkLease.Policy.DEFAULT;
+        }
+        return new ChunkLease.Policy(CHUNK_MODE.get(), CHUNK_LINGER_SECONDS.get() * 20,
+                CHUNK_UNMANNED_SECONDS.get() * 20, CHUNK_MAX.get());
     }
 }
