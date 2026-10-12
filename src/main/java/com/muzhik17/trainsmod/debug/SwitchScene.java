@@ -39,14 +39,16 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
  * {@code mvp:rail_bridge} ({@code switch:<style>,<style>…} for others,
  * {@code standard} = the mod's) — 24 blocks apart, 4000 blocks east of the
  * player. Every switch is shot set straight and set diverging, from above
- * ({@code rwat-switch-<style>-top-0/1.png}), close to the blade tips
- * ({@code -toe-}) and from aside ({@code -view-}), and the throw in between
- * frame by frame ({@code -throw-<n>.png}). The redstone throws it as a player
- * would: a block under the switch stand. Then a TGM23 runs from the trunk
- * through the first {@code mvp:rail} switch (or the first one) in either
- * setting; the log tells which leg its head took ({@code [switch]} lines,
+ * ({@code rwat-switch-<style>-top-0/1.png}), straight down onto the blade
+ * tips ({@code -tip-}), low behind the toe ({@code -toe-}) and from aside
+ * ({@code -view-}), and the throw in between tick by tick from above the
+ * tips ({@code -throw-<n>.png}). The redstone throws it as a player would: a
+ * block under the switch stand. Then a TGM23 runs from the trunk through the
+ * first {@code mvp:rail} switch (or the first one) in either setting; the log
+ * tells which leg its head took ({@code [switch] set … OK/WRONG},
  * {@code rwat-switch-train-0/1.png}) — the route must follow the blades.
- * Quits the game at the end.
+ * Quits the game at the end. A 1920×1080 window (the shots' size) is
+ * {@code earlyWindowWidth/Height} in {@code run/config/fml.toml}.
  */
 @EventBusSubscriber(modid = RailsWheelsAndTrains.MODID, value = Dist.CLIENT)
 public final class SwitchScene {
@@ -204,8 +206,10 @@ public final class SwitchScene {
             case 0 -> command(mc, String.format(Locale.ROOT, "tp @s %.1f %d %.1f 0 0",
                     toe.getX() + 0.5, toe.getY(), toe.getZ() - 17.5));
             case 20 -> command(mc, "rwat spawn with mvp:tgm23");
-            // behind the switch, above the trunk: the blades in front, the train going through
-            case 40 -> camera(mc, toe.getX() + 0.5, toe.getY() + 5.0, toe.getZ() - 6.0, -8.0F, 32.0F);
+            // aside the throat, on the straight side: the train going through
+            case 40 -> camera(mc, toe.getX() - 6.5, toe.getY() + 5.0, toe.getZ() + 1.0, -90.0F, 35.0F);
+            // high above: trunk, throat and both legs, the train on the one it took
+            case 180 -> camera(mc, toe.getX() + 2.5, toe.getY() + 14.0, toe.getZ() + 4.5, 0.0F, 90.0F);
             default -> {
             }
         }
