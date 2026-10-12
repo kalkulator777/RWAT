@@ -280,12 +280,31 @@ public class WagonEntity extends Entity {
         }
         if ((type == null || type.drivable()) && getPassengers().isEmpty()) {
             player.startRiding(this);
-            player.displayClientMessage(Component.translatable(inControl(serverPlayer)
-                    ? "message.railswheelsandtrains.drive_hint"
-                    : "message.railswheelsandtrains.drive_other_cab"), true);
+            player.displayClientMessage(inControl(serverPlayer)
+                    ? keysHint("message.railswheelsandtrains.drive_hint")
+                    : Component.translatable("message.railswheelsandtrains.drive_other_cab"), true);
             return InteractionResult.CONSUME;
         }
         return InteractionResult.PASS;
+    }
+
+    /**
+     * A hint naming the driving keys as the player has them bound (SPEC
+     * §9.7): keybind components resolve on the client. Arguments, in order:
+     * throttle up, down, train brake apply, release, reverser, horn, whistle,
+     * the driver's panel, sneak.
+     */
+    private static Component keysHint(String translationKey) {
+        return Component.translatable(translationKey,
+                Component.keybind("key.railswheelsandtrains.throttle_up"),
+                Component.keybind("key.railswheelsandtrains.throttle_down"),
+                Component.keybind("key.railswheelsandtrains.brake_apply"),
+                Component.keybind("key.railswheelsandtrains.brake_release"),
+                Component.keybind("key.railswheelsandtrains.reverser"),
+                Component.keybind("key.railswheelsandtrains.horn"),
+                Component.keybind("key.railswheelsandtrains.whistle"),
+                Component.keybind("key.railswheelsandtrains.lights"),
+                Component.keybind("key.sneak"));
     }
 
     /** True if this player, seated here, is the one driving the consist (no manned cab ahead). */
@@ -478,9 +497,9 @@ public class WagonEntity extends Entity {
             return;
         }
         setSeated(chair, player.getId());
-        player.displayClientMessage(Component.translatable(inControl(player)
-                ? "message.railswheelsandtrains.seat_hint"
-                : "message.railswheelsandtrains.drive_other_cab_seated"), true);
+        player.displayClientMessage(inControl(player)
+                ? keysHint("message.railswheelsandtrains.seat_hint")
+                : Component.translatable("message.railswheelsandtrains.drive_other_cab_seated"), true);
     }
 
     /** True if someone aboard sits in chair {@code chair} (the id of a rider long gone doesn't count). */

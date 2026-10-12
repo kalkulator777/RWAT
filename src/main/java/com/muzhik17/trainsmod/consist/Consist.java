@@ -118,11 +118,13 @@ public final class Consist {
     // transient input state: held key directions from the latest DriveInputPayload
     private transient int throttleDir;
     private transient int brakeDir;
+    private transient int indBrakeDir;
     private transient boolean reverserToggle;
     /** Held signals from the driver (SPEC §10): {@link #HORN}, {@link #BELL}. */
     private transient int signals;
     private transient int throttleHeldTicks;
     private transient int brakeHeldTicks;
+    private transient int indBrakeHeldTicks;
     private transient boolean controlsChanged;
 
     private TrackPath cachedPath;
@@ -479,15 +481,23 @@ public final class Consist {
 
     /**
      * Driver input for the next tick (SPEC §5.3): held key directions for the
-     * throttle and train-brake handles (+1 up / −1 down / 0 idle), a
-     * reverser-toggle edge and the held signals (SPEC §10). No driver → call
-     * with all zeros so stale held keys don't keep notching (or sounding).
+     * throttle, train-brake and independent-brake handles (+1 up / −1 down /
+     * 0 idle), a reverser-toggle edge and the held signals (SPEC §10). No
+     * driver → call with all zeros so stale held keys don't keep notching
+     * (or sounding).
      */
-    public void setDriveInput(int throttleDir, int brakeDir, boolean reverserToggle, int signals) {
+    public void setDriveInput(int throttleDir, int brakeDir, int indBrakeDir, boolean reverserToggle,
+            int signals) {
         this.throttleDir = Integer.signum(throttleDir);
         this.brakeDir = Integer.signum(brakeDir);
+        this.indBrakeDir = Integer.signum(indBrakeDir);
         this.reverserToggle |= reverserToggle;
         this.signals = signals & (HORN | BELL);
+    }
+
+    /** {@link #setDriveInput(int, int, int, boolean, int)} without the independent brake. */
+    public void setDriveInput(int throttleDir, int brakeDir, boolean reverserToggle, int signals) {
+        setDriveInput(throttleDir, brakeDir, 0, reverserToggle, signals);
     }
 
     /** The signals the driver holds now ({@link #HORN}, {@link #BELL}); transient, rides the snapshot. */
@@ -664,6 +674,7 @@ public final class Consist {
     private void applyDriveInput() {
         throttleHeldTicks = throttleDir != 0 ? throttleHeldTicks + 1 : 0;
         brakeHeldTicks = brakeDir != 0 ? brakeHeldTicks + 1 : 0;
+        indBrakeHeldTicks = indBrakeDir != 0 ? indBrakeHeldTicks + 1 : 0;
 
         if (throttleDir != 0 && (throttleHeldTicks - 1) % NOTCH_REPEAT_TICKS == 0) {
             int next = Math.clamp(throttleNotch + throttleDir, 0, NOTCHES);
@@ -674,6 +685,11 @@ public final class Consist {
             int next = Math.clamp(brakeNotch + brakeDir, 0, NOTCHES);
             controlsChanged |= next != brakeNotch;
             brakeNotch = next;
+        }
+        if (indBrakeDir != 0 && (indBrakeHeldTicks - 1) % NOTCH_REPEAT_TICKS == 0) {
+            int next = Math.clamp(indBrakeNotch + indBrakeDir, 0, NOTCHES);
+            controlsChanged |= next != indBrakeNotch;
+            indBrakeNotch = next;
         }
         // the reverser only throws at a standstill with the throttle shut;
         // the key flips forward/reverse (neutral, set by the cab lever, → forward)

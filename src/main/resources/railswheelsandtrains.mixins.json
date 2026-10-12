@@ -10,6 +10,7 @@
     "ClientChunkCacheLightMixin",
     "ClientLevelSectionDirtyMixin",
     "EntityRendererCabinLightMixin",
+    "KeyMappingDrivingMixin",
     "LivingEntityRendererSeatMixin",
     "LivingEntityWalkAnimationMixin"
   ],

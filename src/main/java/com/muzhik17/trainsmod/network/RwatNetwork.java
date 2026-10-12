@@ -233,7 +233,7 @@ public final class RwatNetwork {
         Consist consist = ConsistManager.get(level).byId(payload.consistId());
         ConsistManager.Driver driver = consist == null ? null : ConsistManager.driverOf(level, consist);
         if (driver != null && driver.player() == player) {
-            consist.setDriveInput(payload.throttleDir(), payload.brakeDir(),
+            consist.setDriveInput(payload.throttleDir(), payload.brakeDir(), payload.indBrakeDir(),
                     payload.reverserToggle(), payload.signals());
         }
     }
