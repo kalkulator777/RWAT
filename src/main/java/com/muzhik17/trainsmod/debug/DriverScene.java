@@ -14,6 +14,7 @@ import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.ServerConfig;
 import com.muzhik17.trainsmod.client.ClientCabInteract;
 import com.muzhik17.trainsmod.client.ClientConsists;
+import com.muzhik17.trainsmod.client.ClientDoorInteract;
 import com.muzhik17.trainsmod.client.ClientDriveInput;
 import com.muzhik17.trainsmod.client.ClientWalk;
 import com.muzhik17.trainsmod.client.gui.DriverPanelScreen;
@@ -103,13 +104,12 @@ public final class DriverScene {
         }
     }
 
-    /** What the door handler picks now (its private pick, by reflection): "wagon/door" or "none". */
+    /** What the door handler picked in the last frame (its private pick, by reflection): "wagon/door" or "none". */
     private static String doorPick(Minecraft mc) {
         try {
-            var pick = com.muzhik17.trainsmod.client.ClientDoorInteract.class.getDeclaredMethod("pick",
-                    Minecraft.class, net.minecraft.client.player.LocalPlayer.class);
+            var pick = ClientDoorInteract.class.getDeclaredField("framePick");
             pick.setAccessible(true);
-            Object result = pick.invoke(null, mc, mc.player);
+            Object result = pick.get(null);
             return result == null ? "none" : result.toString();
         } catch (ReflectiveOperationException e) {
             return "?";
@@ -382,11 +382,13 @@ public final class DriverScene {
                 moveTo(mc, loco, 0.35, 7.6);
             }
             case 640 -> logWalk(mc, loco, "by the cab door");
+            // aimed a few ticks before the click: a click takes what the last frame picked (SPEC §9.3)
+            case 672 -> aimAtModel(mc, loco, 0.35, 3.29, 6.94);
+            case 679 -> shot(mc, "rwat-driver-nokey-door.png"); // the door under the crosshair: red
             case 680 -> {
                 logWalk(mc, loco, "by the cab door, later");
-                aimAtModel(mc, loco, 0.35, 3.29, 6.94);
                 log(mc, "before the click: key " + CabAccess.holdsKey(mc.player) + ", may work "
-                        + CabAccess.mayWork(mc.player));
+                        + CabAccess.mayWork(mc.player) + ", door red " + ClientDoorInteract.highlightLocked());
                 pressUse = true;
             }
             case 682 -> log(mc, "clicked the cab door without the key, at once: action bar '"
@@ -394,10 +396,8 @@ public final class DriverScene {
             case 700 -> log(mc, "clicked the cab door without the key: open " + loco.isDoorOpen(0)
                     + ", action bar '" + actionBar(mc) + "'");
             case 702 -> command(mc, "give @s railswheelsandtrains:driver_key");
-            case 720 -> {
-                aimAtModel(mc, loco, 0.35, 3.29, 6.94);
-                pressUse = true;
-            }
+            case 712 -> aimAtModel(mc, loco, 0.35, 3.29, 6.94);
+            case 720 -> pressUse = true;
             case 740 -> log(mc, "clicked the cab door with the key: open " + loco.isDoorOpen(0));
             case 745 -> setCabAccess(mc, ServerConfig.CabAccess.OPEN);
             case 755 -> mc.stop();
