@@ -11,6 +11,7 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.client.ClientCabInteract;
+import com.muzhik17.trainsmod.client.ClientConfig;
 import com.muzhik17.trainsmod.client.ClientConsists;
 import com.muzhik17.trainsmod.client.ClientFloorDebug;
 import com.muzhik17.trainsmod.client.ClientRide;
@@ -50,7 +51,8 @@ import net.neoforged.neoforge.client.event.RenderFrameEvent;
  * model never leads or trails the driver in the seat (SPEC §2.1, 0.2).
  *
  * <p>A wagon's parts are queued into a {@link GpuMesh.Batch} and issued grouped
- * by texture; the interior is skipped beyond {@link #INTERIOR_DRAW_DISTANCE}.
+ * by texture; the interior is skipped beyond the client's
+ * {@link ClientConfig#interiorDrawDistance}.
  * Doors swing with their IR animation, keyed by each door's open progress
  * ({@link WagonEntity#doorAnim}).
  */
@@ -69,15 +71,6 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
     private static final boolean DEBUG_BOGIES = false;
     /** Half-extent of a bogie marker box, blocks. */
     private static final float BOGIE_MARK = 0.35F;
-
-    /**
-     * Interior (the {@code INTERIOR*} objects — over a third of a passenger
-     * car's geometry) is drawn only while the camera is within this many
-     * blocks of the body centre; further out it is a few pixels behind
-     * window glass. Covers riding: a camera inside the car is at most half a
-     * car length (~12.6) from the centre.
-     */
-    private static final double INTERIOR_DRAW_DISTANCE = 32.0;
 
     /**
      * Placeholder box (SPEC §6.5) for a type no installed pack has a model
@@ -200,8 +193,11 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
         // which of the model's light groups are on (SPEC §8): part of the bake
         long litMask = model.litMask(wagon::controlValue);
         BakedStockModel baked = bakedAt(model, slot.livery(), packedLight, litMask);
-        boolean drawInterior = entityRenderDispatcher.distanceToSqr(bodyX, bodyY, bodyZ)
-                <= INTERIOR_DRAW_DISTANCE * INTERIOR_DRAW_DISTANCE;
+        // the interior (the INTERIOR* objects — over a third of a passenger car's
+        // geometry) only near: further out it is a few pixels behind window glass
+        double interior = ClientConfig.interiorDrawDistance(); // 0 = always
+        boolean drawInterior = interior <= 0.0
+                || entityRenderDispatcher.distanceToSqr(bodyX, bodyY, bodyZ) <= interior * interior;
 
         // the body, oriented by the chord between the two bogies (SPEC §2.4);
         // a flipped wagon turns its model 180° in its own local frame (§5.5 step 3)

@@ -28,6 +28,12 @@ public final class ClientConfig {
             .comment("Volume of trains (engines, wheels, horns, controls) on top of the 'Friendly Creatures' slider")
             .defineInRange("trainVolume", 1.0, 0.0, 2.0);
 
+    /** The interior distance by default (SPEC §2.4): covers riding — a camera inside a car is at most ~13 from its centre. */
+    private static final int INTERIOR_DISTANCE_DEFAULT = 32;
+    private static final ModConfigSpec.IntValue INTERIOR_DISTANCE = BUILDER
+            .comment("How near a car you must be, in blocks, to see its interior (seats, partitions, cab fittings) through the windows; 0 = always drawn")
+            .defineInRange("interiorDrawDistance", INTERIOR_DISTANCE_DEFAULT, 0, 256);
+
     private static final ModConfigSpec SPEC = BUILDER.build();
 
     private ClientConfig() {
@@ -64,5 +70,10 @@ public final class ClientConfig {
     /** Train sound volume, 0..2 (SPEC §10). */
     public static double trainVolume() {
         return SPEC.isLoaded() ? VOLUME.get() : 1.0;
+    }
+
+    /** How near a car its interior is drawn, blocks; 0 = always (SPEC §2.4). */
+    public static int interiorDrawDistance() {
+        return SPEC.isLoaded() ? INTERIOR_DISTANCE.get() : INTERIOR_DISTANCE_DEFAULT;
     }
 }
