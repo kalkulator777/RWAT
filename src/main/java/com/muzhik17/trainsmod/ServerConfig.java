@@ -1,5 +1,6 @@
 package com.muzhik17.trainsmod;
 
+import com.muzhik17.trainsmod.consist.ChunkLease;
 import com.muzhik17.trainsmod.physics.PhysicsTuning;
 
 import net.neoforged.fml.ModContainer;
@@ -11,8 +12,10 @@ import net.neoforged.neoforge.common.ModConfigSpec;
  * overridden per world by a copy in {@code <world>/serverconfig/} (SPEC §5.6):
  * how the physics plays. One profile — realistic, standard,
  * arcade — or {@code custom}, the only one that reads the values of the
- * {@code [physics.custom]} section. The loader's config API stays in this one
- * adapter (SPEC §7.3); the physics only ever sees a {@link PhysicsTuning}.
+ * {@code [physics.custom]} section. And which trains keep the world loaded
+ * around them ({@code [chunk_loading]}, SPEC §2.1). The loader's config API
+ * stays in this one adapter (SPEC §7.3); the physics only ever sees a
+ * {@link PhysicsTuning}, the consists a {@link ChunkLease.Policy}.
  */
 public final class ServerConfig {
 
@@ -71,6 +74,35 @@ public final class ServerConfig {
         BUILDER.pop(2);
     }
 
+    static {
+        BUILDER.comment("Which trains keep the world loaded around them (SPEC 2.1). Coupling never",
+                        " depends on it: a train meets standing wagons wherever they are.")
+                .push("chunk_loading");
+    }
+
+    private static final ChunkLease.Policy CHUNK_BASE = ChunkLease.Policy.DEFAULT;
+
+    private static final ModConfigSpec.EnumValue<ChunkLease.Mode> CHUNK_MODE = BUILDER
+            .comment("Which trains keep the chunks under their whole length and the way ahead loaded.",
+                    " MOVING - driven trains and any train on the move (rolled away, coasting)",
+                    " DRIVEN - only trains with a player at the controls",
+                    " OFF    - none: a train runs only where the world ticks anyway (near players)")
+            .defineEnum("mode", CHUNK_BASE.mode());
+    private static final ModConfigSpec.IntValue CHUNK_LINGER_SECONDS = BUILDER
+            .comment("A train left standing with nobody at the controls lets its chunks go after this many seconds")
+            .defineInRange("linger_seconds", CHUNK_BASE.lingerTicks() / 20, 0, 3600);
+    private static final ModConfigSpec.IntValue CHUNK_UNMANNED_SECONDS = BUILDER
+            .comment("A train running with nobody at the controls keeps its chunks for at most this many",
+                    " seconds of the run, then stands frozen until someone comes near; 0 = for as long as it runs")
+            .defineInRange("unmanned_seconds", CHUNK_BASE.unmannedTicks() / 20, 0, 86400);
+    private static final ModConfigSpec.IntValue CHUNK_MAX = BUILDER
+            .comment("Most chunks one train keeps loaded (the way ahead and its leading end first)")
+            .defineInRange("max_chunks", CHUNK_BASE.maxChunks(), 1, 4096);
+
+    static {
+        BUILDER.pop();
+    }
+
     private static final ModConfigSpec SPEC = BUILDER.build();
 
     private ServerConfig() {
@@ -90,5 +122,14 @@ public final class ServerConfig {
                 TRACTION_SCALE.get(), BRAKE_SCALE.get(), RESISTANCE_SCALE.get(),
                 RESPONSE_SCALE.get(), ADHESION_LIMIT.get(), ADHESION_SCALE.get(),
                 AUTO_HANDBRAKE.get(), HARD_SPEED_LIMIT.get(), COUPLING_MAX_SPEED_KMH.get()));
+    }
+
+    /** The chunk-loading policy in force (SPEC §2.1); the default one until the world's config is loaded. */
+    public static ChunkLease.Policy chunkLoading() {
+        if (!SPEC.isLoaded()) {
+            return ChunkLease.Policy.DEFAULT;
+        }
+        return new ChunkLease.Policy(CHUNK_MODE.get(), CHUNK_LINGER_SECONDS.get() * 20,
+                CHUNK_UNMANNED_SECONDS.get() * 20, CHUNK_MAX.get());
     }
 }

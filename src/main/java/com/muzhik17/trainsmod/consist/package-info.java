@@ -14,9 +14,12 @@
  * debug implementation; Layer 1 substitutes the real graph later.
  *
  * <p>Also owns persistence (consists in SavedData, wagon entities in chunks)
- * and the interface describing "who ticks a consist and when" — a v0 stub
- * (tick only if the head's chunk is loaded) swappable later without
- * restructuring (SPEC §2.1).
+ * and "who ticks a consist and when" (SPEC §2.1): the v0 stub (tick only if
+ * the head's chunk is loaded) is replaced by chunk loading (2026-10-12) — a
+ * consist driven or on the move holds the chunks under it and the way ahead
+ * with tickets ({@code ConsistChunks}; which chunks and when, the pure
+ * {@code ChunkCover} and {@code ChunkLease}), and coupling is decided on the
+ * track whether the chunks are loaded or not.
  *
  * <p>Only {@code s} and {@code v} are synchronized; clients deterministically
  * unroll everything else (see {@code kinematics} and {@code network}).
