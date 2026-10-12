@@ -28,9 +28,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
 /**
  * Dev tool (SPEC §2.4a, §10): {@code -Pautoscene=ride} on a throwaway save
  * copy — a ChS4T with two coaches on a 1500-block straight, the player in
- * the driver's chair: full throttle, the horn, then the whistle, screenshots ahead, out
- * of the side window and from behind at speed, braking to a stop, standing
- * up from the chair. Every second the log gets the speed, how the loco and the first coach
+ * the driver's chair: a coach door opened and shut, full throttle, the horn, then the
+ * whistle, screenshots ahead, out of the side window and from behind at speed, braking
+ * to a stop, standing up from the chair. Every second the log gets the speed, how the loco and the first coach
  * rock ({@code [ride]} lines) and what is sounding ({@link TrainSounds#describe}).
  * Quits the game at the end.
  */
@@ -72,6 +72,9 @@ public final class RideScene {
                 command(mc, "time set noon");
                 command(mc, "weather clear");
             }
+            // the first coach's door nearest the cab: open, then shut — each sounds (SPEC §10)
+            case 230 -> coachDoor(mc, true);
+            case 250 -> coachDoor(mc, false);
             case 270 -> {
                 RailsWheelsAndTrains.LOGGER.info("[ride] riding {}", mc.player.getVehicle());
                 command(mc, "rwat handle reverser 1");
@@ -170,6 +173,56 @@ public final class RideScene {
             }
             loco.sitDriver(player, 0);
             RailsWheelsAndTrains.LOGGER.info("[ride] seated: {}", loco.isSeated(player));
+        });
+    }
+
+    /**
+     * Open or shut the door of the first coach nearest the player (server; a
+     * dev shortcut past the reach check of a click — reflection, like {@code board}).
+     */
+    private static void coachDoor(Minecraft mc, boolean open) {
+        WagonEntity coach = wagonAt(mc, 1);
+        var server = mc.getSingleplayerServer();
+        if (coach == null || server == null) {
+            return;
+        }
+        java.util.UUID coachId = coach.getUUID();
+        Vec3 eye = mc.player.getEyePosition();
+        server.execute(() -> {
+            if (!(server.overworld().getEntity(coachId) instanceof WagonEntity wagon)) {
+                return;
+            }
+            int nearest = -1;
+            double best = Double.MAX_VALUE;
+            var doors = wagon.framedDoors();
+            for (int i = 0; i < doors.size() && i < 32; i++) {
+                WagonType.Door door = doors.get(i);
+                if (door.fixed()) {
+                    continue;
+                }
+                Vector3d centre = PoseMath.localToWorld(new Vector3d(wagon.getX(), wagon.getY(), wagon.getZ()),
+                        wagon.getYRot(), wagon.getXRot(), new Vector3d((door.minX() + door.maxX()) * 0.5,
+                                (door.minY() + door.maxY()) * 0.5, (door.minZ() + door.maxZ()) * 0.5));
+                double distance = eye.distanceToSqr(centre.x, centre.y, centre.z);
+                if (distance < best) {
+                    best = distance;
+                    nearest = i;
+                }
+            }
+            if (nearest < 0) {
+                return;
+            }
+            try {
+                var set = WagonEntity.class.getDeclaredMethod("setDoorOpen", int.class, boolean.class);
+                set.setAccessible(true);
+                set.invoke(wagon, nearest, open);
+            } catch (ReflectiveOperationException e) {
+                RailsWheelsAndTrains.LOGGER.warn("[ride] can't work the door", e);
+                return;
+            }
+            RailsWheelsAndTrains.LOGGER.info("[ride] coach door {} ({}) {}, {} blocks away", nearest,
+                    doors.get(nearest).id(), open ? "open" : "shut",
+                    String.format(Locale.ROOT, "%.1f", Math.sqrt(best)));
         });
     }
 

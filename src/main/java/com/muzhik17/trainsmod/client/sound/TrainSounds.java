@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.joml.Vector3d;
 
@@ -36,6 +37,8 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
+import net.neoforged.neoforge.client.event.sound.PlaySoundSourceEvent;
+import net.neoforged.neoforge.client.event.sound.PlayStreamingSourceEvent;
 
 /**
  * Trains you can hear (SPEC §10), worked out on each client from what it
@@ -83,12 +86,21 @@ public final class TrainSounds {
     private static final String DOOR_OPEN = "minecraft:block.iron_door.open";
     private static final String DOOR_CLOSE = "minecraft:block.iron_door.close";
 
-    /** Default ranges when a declaration gives none: wheels by speed, engine by throttle. */
+    /**
+     * Default ranges when a declaration gives none: wheels by speed, engine by
+     * throttle. The rolling loop is a bed under the rail joints' knock: at
+     * full level MVP's recordings (the freight one runs at −14 dBFS RMS) buried
+     * the knock (−19 dBFS at its loudest) — measured in a capture of the ride
+     * scene, SPEC §10.3.
+     */
     private static final float[] WHEELS_PITCH = {0.7F, 1.3F};
-    private static final float[] WHEELS_VOLUME = {0.25F, 1.0F};
+    private static final float[] WHEELS_VOLUME = {0.15F, 0.6F};
     private static final float[] ENGINE_PITCH = {1.0F, 1.3F};
     private static final float[] ENGINE_VOLUME = {0.6F, 1.0F};
 
+    /** A rail joint knocks at this level at walking pace, and at full level from {@link #CLACK_FULL_KMH}. */
+    private static final double CLACK_LEVEL = 0.35;
+    private static final double CLACK_FULL_KMH = 40.0;
     /** Speed at the top of the wheels' range, km/h. */
     private static final double WHEELS_FULL_KMH = 100.0;
     /** Below this the wheels fade out, km/h. */
@@ -123,6 +135,13 @@ public final class TrainSounds {
     private static int clacksPlayed;
     private static int doorsPlayed;
     private static int controlsPlayed;
+    /**
+     * Train sounds handed to the sound engine since the last {@link #describe},
+     * and those it started (debug): a file that fails to load never starts —
+     * and the engine says nothing about it.
+     */
+    private static int asked;
+    private static final AtomicInteger STARTED = new AtomicInteger();
 
     private TrainSounds() {
     }
@@ -202,7 +221,7 @@ public final class TrainSounds {
             } else {
                 ClientRide.takeJoints(wagon.getId()); // out of earshot: let them pass
             }
-            doors(audio, wagon, slot.type(), distance, volume);
+            doors(audio, wagon, ear, volume);
         }
         WAGONS.entrySet().removeIf(entry -> {
             if (heard.contains(entry.getKey())) {
@@ -279,7 +298,7 @@ public final class TrainSounds {
         if (pose == null) {
             return;
         }
-        float level = (float) (Math.clamp(0.25 + kmh / 80.0, 0.25, 1.0) * volume);
+        float level = (float) (Math.min(CLACK_LEVEL + (1.0 - CLACK_LEVEL) * kmh / CLACK_FULL_KMH, 1.0) * volume);
         float pitch = (float) (0.9 + 0.25 * Math.min(kmh / 120.0, 1.0));
         if (crossed[0] > 0) {
             oneShot(audio.sounds.clack(), CLACK_DISTANCE, pose.front().position(), level, pitch);
@@ -291,13 +310,16 @@ public final class TrainSounds {
         }
     }
 
-    /** A door that opened or closed since the last tick sounds at its doorway. */
-    private static void doors(WagonAudio audio, WagonEntity wagon, WagonType type, double distance,
-            double volume) {
+    /**
+     * A door that opened or closed since the last tick sounds at its doorway
+     * — if that is in hearing (the far door of a long coach may be, while its
+     * centre is not).
+     */
+    private static void doors(WagonAudio audio, WagonEntity wagon, Vec3 ear, double volume) {
         int mask = wagon.doorMask();
         int changed = audio.doorMask < 0 ? 0 : mask ^ audio.doorMask;
         audio.doorMask = mask; // the state first seen is no event
-        if (changed == 0 || distance > DOOR_DISTANCE) {
+        if (changed == 0) {
             return;
         }
         List<WagonType.Door> doors = wagon.framedDoors();
@@ -314,6 +336,9 @@ public final class TrainSounds {
             Vector3d centre = PoseMath.localToWorld(new Vector3d(wagon.getX(), wagon.getY(), wagon.getZ()),
                     wagon.getYRot(), wagon.getXRot(), new Vector3d((door.minX() + door.maxX()) * 0.5,
                             (door.minY() + door.maxY()) * 0.5, (door.minZ() + door.maxZ()) * 0.5));
+            if (ear.distanceToSqr(centre.x, centre.y, centre.z) > DOOR_DISTANCE * DOOR_DISTANCE) {
+                continue;
+            }
             oneShot(ref, DOOR_DISTANCE, centre, (float) volume, 1.0F);
             doorsPlayed++;
         }
@@ -401,9 +426,30 @@ public final class TrainSounds {
         if (sound != null) {
             sound.moveTo(at.x, at.y, at.z);
             sound.set(volume, pitch);
-            Minecraft.getInstance().getSoundManager().play(sound);
+            play(sound);
         }
         return sound;
+    }
+
+    /** Hand a sound to the sound engine (counted for {@link #describe}). */
+    static void play(TrainSound sound) {
+        asked++;
+        Minecraft.getInstance().getSoundManager().play(sound);
+    }
+
+    /** The engine started a sound — its file loaded (sound thread). */
+    @SubscribeEvent
+    static void onSourceStarted(PlaySoundSourceEvent event) {
+        if (event.getSound() instanceof TrainSound) {
+            STARTED.incrementAndGet();
+        }
+    }
+
+    @SubscribeEvent
+    static void onStreamStarted(PlayStreamingSourceEvent event) {
+        if (event.getSound() instanceof TrainSound) {
+            STARTED.incrementAndGet();
+        }
     }
 
     private static float lerp(float[] range, float t) {
@@ -430,7 +476,8 @@ public final class TrainSounds {
 
     /**
      * What is sounding now (debug, {@code /rwatc sounds} and the scenes): the
-     * loops by wagon and the one-shots played since the last call.
+     * loops by wagon, the one-shots played since the last call, and how many
+     * of the sounds handed to the engine since then it really started.
      */
     public static String describe() {
         StringBuilder out = new StringBuilder();
@@ -455,11 +502,14 @@ public final class TrainSounds {
                 out.append(" WHISTLE");
             }
         }
-        String line = String.format(Locale.ROOT, "%d wagons heard, %d rolling, %d engines; joints %d, doors %d, controls %d;%s",
-                WAGONS.size(), wheels, engines, clacksPlayed, doorsPlayed, controlsPlayed, out);
+        String line = String.format(Locale.ROOT,
+                "%d wagons heard, %d rolling, %d engines; joints %d, doors %d, controls %d; started %d of %d;%s",
+                WAGONS.size(), wheels, engines, clacksPlayed, doorsPlayed, controlsPlayed,
+                STARTED.getAndSet(0), asked, out);
         clacksPlayed = 0;
         doorsPlayed = 0;
         controlsPlayed = 0;
+        asked = 0;
         return line;
     }
 

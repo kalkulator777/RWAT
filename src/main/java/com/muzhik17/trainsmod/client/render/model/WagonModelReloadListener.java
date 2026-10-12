@@ -7,6 +7,7 @@ import java.util.Map;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.client.render.WagonRenderer;
+import com.muzhik17.trainsmod.client.sound.PackSoundFiles;
 import com.muzhik17.trainsmod.client.sound.TrainSounds;
 
 import net.minecraft.resources.FileToIdConverter;
@@ -54,5 +55,7 @@ public final class WagonModelReloadListener
         StockModels.reset(decls);
         WagonRenderer.clearBaked();
         TrainSounds.clearAll(); // the packs' sounds may have changed (SPEC §10)
+        // the sound engine opens only indexed files (SPEC §10.3); the sound manager re-indexed just before
+        PackSoundFiles.register(resources, decls.values().stream().map(WagonModelDecl::sounds).toList());
     }
 }
