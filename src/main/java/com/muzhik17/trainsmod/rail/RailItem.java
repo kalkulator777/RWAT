@@ -6,6 +6,7 @@ import java.util.List;
 import org.joml.Vector3d;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
+import com.muzhik17.trainsmod.ServerConfig;
 import com.muzhik17.trainsmod.client.ClientItemScreens;
 import com.muzhik17.trainsmod.path.RailSegment;
 
@@ -46,7 +47,6 @@ import net.minecraft.world.level.block.state.BlockState;
 public class RailItem extends Item {
 
     private static final double MIN_SEGMENT_LENGTH = 2.0;
-    private static final double MAX_SEGMENT_LENGTH = 512.0;
     /**
      * Min |cos| between a flat-crossing chord and its end markers' axes: the
      * markers must face each other along the chord. 8 marker rotations put the
@@ -125,10 +125,10 @@ public class RailItem extends Item {
             BlockPos posA, BlockState stateA) {
         RailNetwork network = RailNetwork.get(level);
         Vector3d dirA = RailMarkerBlock.direction(stateA.getValue(RailMarkerBlock.ROTATION));
-        List<BlockPos> nearest = network.nearestMarkers(level, posA, MAX_SEGMENT_LENGTH, false, 3);
+        List<BlockPos> nearest = network.nearestMarkers(level, posA, ServerConfig.maxMarkerDistance(), false, 3);
         if (nearest.isEmpty()) {
             player.displayClientMessage(Component.literal(
-                    "Rails: no second marker within " + (int) MAX_SEGMENT_LENGTH + " blocks."), true);
+                    "Rails: no second marker within " + ServerConfig.maxMarkerDistance() + " blocks."), true);
             return;
         }
         if (nearest.size() == 3 && buildFlatCrossing(level, player, look, network, posA, dirA, nearest)) {
@@ -243,7 +243,7 @@ public class RailItem extends Item {
         Vector3d a = cellCentre(posA);
         Vector3d dirA = RailMarkerBlock.direction(stateA.getValue(RailMarkerBlock.ROTATION));
 
-        List<BlockPos> switchMates = network.nearestMarkers(level, posA, MAX_SEGMENT_LENGTH, true, 3);
+        List<BlockPos> switchMates = network.nearestMarkers(level, posA, ServerConfig.maxMarkerDistance(), true, 3);
         if (switchMates.size() == 3) {
             buildCrossing(level, player, look, network, posA, a, dirA, switchMates);
             return;
@@ -259,7 +259,7 @@ public class RailItem extends Item {
             return;
         }
 
-        List<BlockPos> branches = network.nearestMarkers(level, posA, MAX_SEGMENT_LENGTH, false, 2);
+        List<BlockPos> branches = network.nearestMarkers(level, posA, ServerConfig.maxMarkerDistance(), false, 2);
         if (branches.size() < 2) {
             player.displayClientMessage(Component.literal(
                     "Switch: needs two rail markers (branch ends) in range — or more"
@@ -309,7 +309,7 @@ public class RailItem extends Item {
         Vector3d c = cellCentre(posC);
         Vector3d dirC = markerDirection(level, posC);
 
-        List<BlockPos> plains = network.nearestMarkers(level, posA, MAX_SEGMENT_LENGTH, false, 8);
+        List<BlockPos> plains = network.nearestMarkers(level, posA, ServerConfig.maxMarkerDistance(), false, 8);
         if (plains.size() < 2) {
             player.displayClientMessage(Component.literal(
                     "Crossover: needs two rail markers (the tracks' continuations) in range."), true);

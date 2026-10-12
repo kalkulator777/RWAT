@@ -13,6 +13,7 @@ import net.neoforged.neoforge.common.ModConfigSpec;
  * arcade — or {@code custom}, the only one that reads the values of the
  * {@code [physics.custom]} section. The loader's config API stays in this one
  * adapter (SPEC §7.3); the physics only ever sees a {@link PhysicsTuning}.
+ * {@code [rails]}: how far a rail marker reaches for its partner (SPEC §2.2).
  */
 public final class ServerConfig {
 
@@ -69,6 +70,17 @@ public final class ServerConfig {
 
     static {
         BUILDER.pop(2);
+        BUILDER.push("rails");
+    }
+
+    private static final ModConfigSpec.IntValue MAX_MARKER_DISTANCE = BUILDER
+            .comment("How far a rail marker looks for the marker it connects to, in blocks - the longest",
+                    " segment one click of the rails builds. A longer segment costs more to build: its",
+                    " track bed is rasterized all along it, and every chunk it crosses is loaded")
+            .defineInRange("max_marker_distance", 512, 16, 2048);
+
+    static {
+        BUILDER.pop();
     }
 
     private static final ModConfigSpec SPEC = BUILDER.build();
@@ -90,5 +102,13 @@ public final class ServerConfig {
                 TRACTION_SCALE.get(), BRAKE_SCALE.get(), RESISTANCE_SCALE.get(),
                 RESPONSE_SCALE.get(), ADHESION_LIMIT.get(), ADHESION_SCALE.get(),
                 AUTO_HANDBRAKE.get(), HARD_SPEED_LIMIT.get(), COUPLING_MAX_SPEED_KMH.get()));
+    }
+
+    /**
+     * How far a rail marker looks for its partner, in blocks (SPEC §2.2) — the
+     * default until the world's config is loaded.
+     */
+    public static int maxMarkerDistance() {
+        return SPEC.isLoaded() ? MAX_MARKER_DISTANCE.get() : MAX_MARKER_DISTANCE.getDefault();
     }
 }
