@@ -530,9 +530,9 @@ public final class RwatCommands {
                         consist.id(), consist.wagonIds().size());
             } else {
                 Vector3d pos = path.samplePosition(consist.s());
-                line = String.format("#%d  s=%.1f/%.1f  v=%.2f  at [%.0f %.0f %.0f]  wagons=%d",
+                line = String.format("#%d  s=%.1f/%.1f  v=%.2f  at [%.0f %.0f %.0f]  wagons=%d  chunks=%d",
                         consist.id(), consist.s(), path.length(), consist.speed(),
-                        pos.x, pos.y, pos.z, consist.wagonIds().size());
+                        pos.x, pos.y, pos.z, consist.wagonIds().size(), manager.chunksHeld(consist.id()));
             }
             ctx.getSource().sendSuccess(() -> Component.literal(line), false);
         }
