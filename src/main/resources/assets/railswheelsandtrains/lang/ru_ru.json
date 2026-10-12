@@ -59,7 +59,7 @@
   "message.railswheelsandtrains.uncoupled": "Расцеплено · %s + %s ваг.",
   "message.railswheelsandtrains.crowbar_hint": "Монтировка: ПКМ по сцепке между вагонами — расцепить, по кузову вагона — ручник",
   "message.railswheelsandtrains.board_hint_cab": "Ходьба — WASD · ПКМ по двери — открыть · ПКМ по рычагу или тумблеру — работать · ПКМ по креслу — сесть за пульт",
-  "message.railswheelsandtrains.seat_hint": "Тяга: %1$s / %2$s · Тормоз: %3$s / %4$s · Реверс: %5$s · %6$s — тифон · %7$s — свисток · Рычаги: ПКМ и тянуть · %8$s — пульт и свет · %9$s — встать",
+  "message.railswheelsandtrains.seat_hint": "Тяга: %1$s / %2$s · Тормоз: %3$s / %4$s · Реверс: %5$s · %8$s — пульт · %9$s — встать",
   "message.railswheelsandtrains.drive_other_cab_seated": "Поездом управляют из другой кабины · Shift — встать",
   "key.categories.railswheelsandtrains": "Rails, Wheels & Trains",
   "key.railswheelsandtrains.lights": "Пульт машиниста (приборы и свет)",

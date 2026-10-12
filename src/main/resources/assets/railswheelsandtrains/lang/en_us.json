@@ -59,7 +59,7 @@
   "message.railswheelsandtrains.uncoupled": "Uncoupled · %s + %s wagons",
   "message.railswheelsandtrains.crowbar_hint": "Crowbar: right-click the coupler between two wagons to uncouple them, a wagon's body to turn its handbrake",
   "message.railswheelsandtrains.board_hint_cab": "Walk with WASD · Right-click a door to open it · Right-click a lever or switch to work it · Right-click the chair to sit at the controls",
-  "message.railswheelsandtrains.seat_hint": "Throttle: %1$s / %2$s · Brake: %3$s / %4$s · Reverser: %5$s · %6$s: horn · %7$s: whistle · Levers: right-click and drag · %8$s: panel and lights · %9$s: stand up",
+  "message.railswheelsandtrains.seat_hint": "Throttle: %1$s / %2$s · Brake: %3$s / %4$s · Reverser: %5$s · %8$s: panel · %9$s: stand up",
   "message.railswheelsandtrains.drive_other_cab_seated": "Another cab of this train is in control · Sneak to stand up",
   "key.categories.railswheelsandtrains": "Rails, Wheels & Trains",
   "key.railswheelsandtrains.lights": "Driver's panel (instruments and lights)",
