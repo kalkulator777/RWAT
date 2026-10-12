@@ -132,6 +132,15 @@ public final class ClientCabInteract {
         return now != null && now.wagon == wagon && now.control == control;
     }
 
+    /**
+     * True if a control or chair is under the crosshair or held: the click is
+     * the cab's, so a door further along the ray isn't outlined (the hover is
+     * only taken when nothing nearer, a door included, is in front of it).
+     */
+    public static boolean takesClick() {
+        return grab != null || hover != null;
+    }
+
     /** The driver's chair of this wagon under the crosshair (its index in {@code cab.seats}), −1 if none. */
     public static int highlightedSeat(WagonEntity wagon) {
         Pick now = hover;

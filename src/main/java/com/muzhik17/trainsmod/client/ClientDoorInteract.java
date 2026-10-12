@@ -76,10 +76,15 @@ public final class ClientDoorInteract {
         framePick = pick(mc, player, look);
     }
 
-    /** The door of this wagon under the crosshair (its index in the type's doors), −1 if none. */
+    /**
+     * The door of this wagon under the crosshair (its index in the type's
+     * doors), −1 if none — or if a control or chair in front of it takes the
+     * click ({@link ClientCabInteract#takesClick}): the outline shows what a
+     * click works, never two things at once.
+     */
     public static int highlightedDoor(WagonEntity wagon) {
         Pick pick = framePick;
-        return pick != null && pick.wagon() == wagon ? pick.door() : -1;
+        return pick != null && pick.wagon() == wagon && !ClientCabInteract.takesClick() ? pick.door() : -1;
     }
 
     /** True if the door under the crosshair won't open for the player: a cab door, no driver's key (SPEC §9.2). */
