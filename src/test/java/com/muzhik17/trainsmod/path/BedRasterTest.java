@@ -191,6 +191,46 @@ class BedRasterTest {
     }
 
     @Test
+    void levelTrackNeedsNoHeadroom() throws IOException {
+        RailGraph graph = new RailGraph();
+        RailSegment segment = connect(graph, new Vector3d(0.5, 64, 0.5), X, new Vector3d(12.5, 64, 12.5), Z);
+        // an embankment tile reaching a block below the foot: ground, not headroom
+        TileFootprint embankment = TileFootprint.ofBoxes(1.625,
+                new float[] {-0.81F, -1.0F, -2.44F, 0.81F, 0.344F, 2.44F},
+                new float[] {-0.81F, 0.156F, 0.72F, 0.81F, 0.406F, 0.91F});
+        for (TileFootprint tile : new TileFootprint[] {standardTile(), embankment}) {
+            BedRaster.Raster raster = BedRaster.raster(TrackSweep.path(graph, segment), tile, null);
+            assertFalse(raster.bed().isEmpty());
+            assertTrue(raster.headroom().isEmpty(), "the rails stand in the bed's own blocks");
+        }
+    }
+
+    @Test
+    void onASlopeTheRailHeadsReachIntoTheBlockAboveTheBed() throws IOException {
+        RailGraph graph = new RailGraph();
+        Vector3d chord = new Vector3d(16, 2, 0);
+        RailSegment ramp = connect(graph, new Vector3d(0.5, 64, 0.5), chord, new Vector3d(16.5, 66, 0.5), chord);
+
+        BedRaster.Raster raster = BedRaster.raster(TrackSweep.path(graph, ramp), standardTile(), null);
+
+        Map<Long, Integer> topBed = new HashMap<>();
+        raster.bed().keySet().forEach(c -> topBed.merge(BedRaster.column(c.x(), c.z()), c.y(), Math::max));
+        for (BedRaster.Cell c : raster.headroom()) {
+            assertEquals(topBed.get(BedRaster.column(c.x(), c.z())) + 1, c.y(),
+                    "headroom sits right on the bed's top block: " + c);
+        }
+        // the foot climbs 1/8 per block from 64 at x = 0.5; the rail heads stand 0.41 over it,
+        // the sleepers 0.16: in block 5 the foot reaches 64.69 — the heads poke into y 65
+        assertTrue(raster.headroom().contains(new BedRaster.Cell(5, 65, 1)), "left rail head");
+        assertTrue(raster.headroom().contains(new BedRaster.Cell(5, 65, -1)), "right rail head");
+        assertFalse(raster.headroom().contains(new BedRaster.Cell(5, 65, 0)), "the sleeper stays below");
+        assertTrue(raster.headroom().contains(new BedRaster.Cell(7, 65, 0)), "higher up the sleeper too");
+        assertFalse(raster.headroom().contains(new BedRaster.Cell(4, 65, 1)), "lower down the heads stay in");
+        assertFalse(raster.headroom().contains(new BedRaster.Cell(8, 66, 1)),
+                "where the bed itself steps up into y 65, the heads stay in it");
+    }
+
+    @Test
     void areaLimitedRasterIsExactInsideTheArea() throws IOException {
         RailGraph graph = new RailGraph();
         RailSegment curve = connect(graph, new Vector3d(0.5, 64, 0.5), X, new Vector3d(12.5, 64, 12.5), Z);
