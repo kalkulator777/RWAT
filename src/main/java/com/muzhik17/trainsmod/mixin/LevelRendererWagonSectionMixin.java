@@ -21,11 +21,11 @@ import net.minecraft.world.entity.Entity;
  * once it has been in view: riding a fast train at the rear end of a car,
  * looking back, the car's centre runs ahead into sections the player has
  * never looked at, and the car vanished round them (play-test, 2026-10-12).
- * For a car the section asked about is {@link WagonRenderer#testedSection}'s
- * instead — none for the train the player rides (always drawn, as vanilla
- * always lets the vehicle carrying the player past the frustum), the one at
- * the car's point nearest the camera for any other. Other entities keep
- * vanilla's.
+ * For a car {@link WagonRenderer#testedSection} is asked too — none for the
+ * train the player rides (always drawn, as vanilla always lets the vehicle
+ * carrying the player past the frustum), the one at the car's point nearest
+ * the camera for any other — and either section built draws the car, so it
+ * never hides a car vanilla would draw. Other entities keep vanilla's.
  */
 @Mixin(LevelRenderer.class)
 public abstract class LevelRendererWagonSectionMixin {
@@ -36,7 +36,7 @@ public abstract class LevelRendererWagonSectionMixin {
             @Local Entity entity, @Local(argsOnly = true) Camera camera) {
         if (entity instanceof WagonEntity wagon) {
             BlockPos tested = WagonRenderer.testedSection(wagon, camera.getPosition());
-            return tested == null || original.call(renderer, tested);
+            return tested == null || original.call(renderer, tested) || original.call(renderer, pos);
         }
         return original.call(renderer, pos);
     }
