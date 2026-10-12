@@ -60,6 +60,12 @@ public final class SwitchThroat {
     public static final double WHEEL_LINE = 0.8125;
     /** Vertices within this of a side's top count as its railhead. */
     private static final double HEAD_BAND = 0.02;
+    /**
+     * How far inside the railhead's gauge face the rail's own foot may reach
+     * (MVP 0.031, the standard rail 0.04); a vertex further in belongs to
+     * something else in the rail object — the guard rail of {@code ct_rail}.
+     */
+    private static final double FOOT_REACH = 0.1;
     /** Spacing of the separation samples along a blade, blocks. */
     private static final double SAMPLE_STEP = 0.125;
 
@@ -283,13 +289,23 @@ public final class SwitchThroat {
     }
 
     /**
-     * A blade vertex's local z: clipped to {@code cut} on the stock side,
-     * then moved {@code thrown} toward the track centre (an open blade).
+     * A blade vertex's local z: clipped to {@link #cut} on the stock side,
+     * then moved {@code thrown} toward the track centre (an open blade). The
+     * rail's foot, wider than its head on the gauge side too, is drawn in
+     * toward the gauge face as much ({@link #FOOT_REACH}) — so at the tip the
+     * whole section meets in one edge, a point in plan, not a stub of foot.
+     * Anything further in (a guard rail sharing the object) is left alone.
      *
      * @param side {@link #PLUS_Z} or {@link #MINUS_Z}, the blade's side
      */
-    public static double bladeAcross(double across, int side, double cut, double thrown) {
+    public static double bladeAcross(double across, int side, double gaugeFace, double separation,
+            double thrown) {
         double sign = side == PLUS_Z ? 1.0 : -1.0;
-        return sign * (Math.min(sign * across, cut) - thrown);
+        double u = sign * across;
+        double cut = cut(gaugeFace, separation);
+        if (u > gaugeFace - FOOT_REACH) {
+            u = Math.max(u, Math.min(cut, gaugeFace - separation - BLADE_CLEARANCE));
+        }
+        return sign * (Math.min(u, cut) - thrown);
     }
 }

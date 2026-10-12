@@ -1009,11 +1009,11 @@ public final class RailRenderer {
     private record BladeBend(int side, double gaugeFace, double length, boolean tipAtStart,
             SwitchThroat.Separation separation, double open) {
 
-        /** Fill {cut, thrown, drop} at {@code s} into the stretch (tip first or last, as the leg runs). */
+        /** Fill {separation, thrown, drop} at {@code s} into the stretch (tip first or last, as the leg runs). */
         void station(double s, double[] out, int offset) {
             double d = tipAtStart ? s : length - s;
             double fade = SwitchThroat.fade(d, length);
-            out[offset] = SwitchThroat.cut(gaugeFace, separation.at(d));
+            out[offset] = separation.at(d);
             out[offset + 1] = SwitchThroat.BLADE_THROW * open * fade;
             out[offset + 2] = SwitchThroat.BLADE_TIP_DROP * fade;
         }
@@ -1183,7 +1183,7 @@ public final class RailRenderer {
             Vector3d centre, BladeBend bend) {
         int stations = t.stations.length;
         double[] frame = new double[stations * TrackSweep.FRAME_STRIDE]; // pos, fwd, right, up
-        double[] blade = bend == null ? null : new double[stations * 3]; // cut, thrown, drop
+        double[] blade = bend == null ? null : new double[stations * 3]; // separation, thrown, drop
         for (int k = 0; k < stations; k++) {
             double s = (tileIndex + t.stations[k]) * tileLen;
             TrackSweep.frame(path, s, frame, k * TrackSweep.FRAME_STRIDE);
@@ -1200,7 +1200,7 @@ public final class RailRenderer {
             double height = t.y[i] + TrackSweep.RAIL_Y_OFFSET;
             if (bend != null) {
                 int b = t.station[i] * 3;
-                across = SwitchThroat.bladeAcross(across, bend.side(), blade[b], blade[b + 1]);
+                across = SwitchThroat.bladeAcross(across, bend.side(), bend.gaugeFace(), blade[b], blade[b + 1]);
                 height -= blade[b + 2];
             }
             xyz[i * 3] = (float) (frame[o] + frame[o + 6] * across + frame[o + 9] * height);

@@ -115,21 +115,26 @@ class SwitchThroatTest {
     @Test
     void theBladeIsPlanedToTheStockRailAndThrownInward() {
         double face = 0.7675;
-        // at the node: the head collapses onto its gauge face (less the clearance)
-        double cutAtTip = SwitchThroat.cut(face, 0.0);
-        assertEquals(face - SwitchThroat.BLADE_CLEARANCE,
-                SwitchThroat.bladeAcross(0.8575, SwitchThroat.PLUS_Z, cutAtTip, 0.0), 1.0e-9);
-        assertEquals(-(face - SwitchThroat.BLADE_CLEARANCE),
-                SwitchThroat.bladeAcross(-0.8575, SwitchThroat.MINUS_Z, cutAtTip, 0.0), 1.0e-9);
-        // the gauge side is untouched
-        assertEquals(0.7275, SwitchThroat.bladeAcross(0.7275, SwitchThroat.PLUS_Z, cutAtTip, 0.0), 1.0e-9);
+        double edge = face - SwitchThroat.BLADE_CLEARANCE;
+        // at the node the whole section — head, and foot on either side — meets in one edge
+        for (double z : new double[] {0.7275, 0.7675, 0.8575, 0.8975}) {
+            assertEquals(edge, SwitchThroat.bladeAcross(z, SwitchThroat.PLUS_Z, face, 0.0, 0.0), 1.0e-9);
+            assertEquals(-edge, SwitchThroat.bladeAcross(-z, SwitchThroat.MINUS_Z, face, 0.0, 0.0), 1.0e-9);
+        }
+        // a little apart: the head is a sliver as wide as the gap, the foot half grown back
+        assertEquals(face + 0.02 - SwitchThroat.BLADE_CLEARANCE,
+                SwitchThroat.bladeAcross(0.8575, SwitchThroat.PLUS_Z, face, 0.02, 0.0), 1.0e-9);
+        assertEquals(face - 0.02 - SwitchThroat.BLADE_CLEARANCE,
+                SwitchThroat.bladeAcross(0.7275, SwitchThroat.PLUS_Z, face, 0.02, 0.0), 1.0e-9);
+        // a guard rail inside the gauge in the same object is not drawn in
+        assertEquals(0.5, SwitchThroat.bladeAcross(0.5, SwitchThroat.PLUS_Z, face, 0.0, 0.0), 1.0e-9);
         // once the legs have parted by more than a section, the full section
-        double cutApart = SwitchThroat.cut(face, 0.3);
-        assertEquals(0.8975, SwitchThroat.bladeAcross(0.8975, SwitchThroat.PLUS_Z, cutApart, 0.0), 1.0e-9);
+        assertEquals(0.8975, SwitchThroat.bladeAcross(0.8975, SwitchThroat.PLUS_Z, face, 0.3, 0.0), 1.0e-9);
+        assertEquals(0.7275, SwitchThroat.bladeAcross(0.7275, SwitchThroat.PLUS_Z, face, 0.3, 0.0), 1.0e-9);
         // thrown: toward the track centre on either side
-        assertEquals(0.8975 - 0.12, SwitchThroat.bladeAcross(0.8975, SwitchThroat.PLUS_Z, cutApart, 0.12),
+        assertEquals(0.8975 - 0.12, SwitchThroat.bladeAcross(0.8975, SwitchThroat.PLUS_Z, face, 0.3, 0.12),
                 1.0e-9);
-        assertEquals(-0.8975 + 0.12, SwitchThroat.bladeAcross(-0.8975, SwitchThroat.MINUS_Z, cutApart, 0.12),
+        assertEquals(-0.8975 + 0.12, SwitchThroat.bladeAcross(-0.8975, SwitchThroat.MINUS_Z, face, 0.3, 0.12),
                 1.0e-9);
         assertEquals(1.0, SwitchThroat.fade(0.0, 3.0), 1.0e-9);
         assertEquals(0.5, SwitchThroat.fade(1.5, 3.0), 1.0e-9);
