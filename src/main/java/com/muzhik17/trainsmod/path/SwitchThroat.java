@@ -23,6 +23,8 @@ import org.joml.Vector3d;
  * Only the rail objects bend — the sleepers and whatever else a style
  * carries ({@code RAIL_BASE}, a bridge) are never touched; the throat
  * carries one set of them, the straightest leg's ({@link #sleeperLeg}).
+ * Further on, where the legs' inner rails meet, lies the frog
+ * ({@link #frog}, {@link SwitchFrog}).
  *
  * <p>Sides are the tile's: {@link #PLUS_Z} is the rail at local z &gt; 0,
  * which {@link TrackSweep#frame} lays along the frame's {@code right} axis
@@ -65,9 +67,13 @@ public final class SwitchThroat {
      * (MVP 0.031, the standard rail 0.04); a vertex further in belongs to
      * something else in the rail object — the guard rail of {@code ct_rail}.
      */
-    private static final double FOOT_REACH = 0.1;
+    static final double FOOT_REACH = 0.1;
     /** Spacing of the separation samples along a blade, blocks. */
     private static final double SAMPLE_STEP = 0.125;
+    /** Plain rail a frog leaves before the far end of its leg, at least, blocks. */
+    public static final double FROG_END_MARGIN = 0.25;
+    /** Spacing of the first look for where a frog lies, blocks; then {@link SwitchFrog#STEP}. */
+    private static final double FROG_COARSE_STEP = 0.5;
 
     /** Side bit: the rail at local z &gt; 0. */
     public static final int PLUS_Z = 1;
@@ -129,6 +135,11 @@ public final class SwitchThroat {
         return leg(legId).bladeLength();
     }
 
+    /** Leg {@code legId}'s length, node to node. */
+    public double legLength(int legId) {
+        return leg(legId).path().length();
+    }
+
     /** Whether leg {@code legId} starts (its node A) at the throat's node. */
     public boolean atStart(int legId) {
         return leg(legId).atStart();
@@ -158,9 +169,14 @@ public final class SwitchThroat {
      * legs diverge. Infinite where no leg lies on that side.
      */
     public Separation separation(int legId, int side) {
+        return separation(legId, side, leg(legId).bladeLength());
+    }
+
+    /** {@link #separation(int, int)} sampled over {@code length} from the node (a blade shortened by a frog). */
+    public Separation separation(int legId, int side, double length) {
         Leg self = leg(legId);
-        int count = Math.max(1, (int) Math.ceil(self.bladeLength() / SAMPLE_STEP));
-        double step = self.bladeLength() / count;
+        int count = Math.max(1, (int) Math.ceil(length / SAMPLE_STEP));
+        double step = length / count;
         double[] values = new double[count + 1];
         double sign = side == PLUS_Z ? 1.0 : -1.0;
         double[] frame = new double[TrackSweep.FRAME_STRIDE];
@@ -201,6 +217,117 @@ public final class SwitchThroat {
             }
         }
         return best.segment().id();
+    }
+
+    /**
+     * The frog of a two-legged throat as leg {@code legId} sees it, or null
+     * if there is none to draw: a three-way throat, legs that never part by
+     * a gauge, or a frog that doesn't fit in this leg (short of
+     * {@link #FROG_END_MARGIN} before its far end) or in the other leg (the
+     * crossing lies past where the segments end; what lies at the far end —
+     * another switch — is the caller's to weigh). The
+     * other leg's rail lines are found where they cross this leg's normal
+     * at each sample — exactly, not at the same distance from the node — so
+     * the two legs' frog parts meet without gaps or overlaps at any angle.
+     *
+     * @param own   this leg's inner rail section
+     * @param other the other leg's inner rail section
+     * @param owner whether this leg's point rail makes the tip of the nose
+     *              ({@link SwitchFrog}); exactly one of the two legs owns it
+     */
+    public SwitchFrog frog(int legId, Profile own, Profile other, boolean owner) {
+        if (legs.size() != 2) {
+            return null;
+        }
+        Leg self = leg(legId);
+        Leg mate = legs.get(0) == self ? legs.get(1) : legs.get(0);
+        int side = sideOf(self, mate);
+        double sign = side == PLUS_Z ? 1.0 : -1.0;
+        double mateSign = sideOf(mate, self) == PLUS_Z ? 1.0 : -1.0;
+        double reach = self.path().length() - FROG_END_MARGIN;
+        double[] frame = new double[TrackSweep.FRAME_STRIDE];
+        double[] mateFrame = new double[TrackSweep.FRAME_STRIDE];
+        // coarse: where the other leg's gauge line comes within reach of the frog
+        double origin = Double.NaN;
+        double guess = 0.0;
+        for (double d = 0.0; d <= reach; d += FROG_COARSE_STEP) {
+            TrackSweep.frame(self.path(), self.s(d), frame, 0);
+            double[] hit = crossing(frame, mate, mateSign * other.gaugeFace(), guess, mateFrame);
+            if (hit == null) {
+                return null; // the other leg ran out before its rails got near
+            }
+            guess = hit[0];
+            if (own.gaugeFace() - sign * hit[1] <= SwitchFrog.FLANGEWAY + SwitchFrog.FOOT_GAP + FROG_COARSE_STEP) {
+                origin = Math.max(0.0, d - FROG_COARSE_STEP);
+                break;
+            }
+        }
+        if (Double.isNaN(origin)) {
+            return null;
+        }
+        // fine: the three lines through the frog, until the rails have cleared each other and the wing ended
+        int count = (int) Math.ceil((reach - origin) / SwitchFrog.STEP);
+        double[][] lines = new double[3][];
+        double[] offsets = {other.gaugeFace(), other.headOuter(), other.outer()};
+        int used = count + 1;
+        double clearAt = Double.NaN;
+        double[][] samples = new double[3][count + 1];
+        double[] guesses = {guess, guess, guess};
+        for (int i = 0; i <= count && i < used; i++) {
+            double d = Math.min(origin + i * SwitchFrog.STEP, reach);
+            TrackSweep.frame(self.path(), self.s(d), frame, 0);
+            for (int k = 0; k < 3; k++) {
+                double[] hit = crossing(frame, mate, mateSign * offsets[k], guesses[k], mateFrame);
+                if (hit == null) {
+                    samples[k][i] = Double.NaN;
+                    continue;
+                }
+                guesses[k] = hit[0];
+                samples[k][i] = sign * hit[1];
+            }
+            if (Double.isNaN(clearAt) && samples[2][i] >= own.outer()) {
+                clearAt = d;
+                used = Math.min(count + 1, i + 2 + (int) Math.ceil(SwitchFrog.WING_TAIL / SwitchFrog.STEP));
+            }
+        }
+        for (int k = 0; k < 3; k++) {
+            lines[k] = java.util.Arrays.copyOf(samples[k], Math.min(used, count + 1));
+        }
+        return SwitchFrog.of(side, owner, own, origin, SwitchFrog.STEP, lines[0], lines[1], lines[2], reach);
+    }
+
+    /**
+     * Where the line {@code offset} off {@code mate}'s axis (along its frame's
+     * right) crosses the normal of the frame in {@code frame}: {distance
+     * into the mate from the node, offset along the frame's right}, or null
+     * if it doesn't within the mate. Newton on the mate's distance, from
+     * {@code guess}.
+     */
+    private static double[] crossing(double[] frame, Leg mate, double offset, double guess, double[] mateFrame) {
+        double t = guess;
+        double length = mate.path().length();
+        for (int iteration = 0; iteration < 12; iteration++) {
+            TrackSweep.frame(mate.path(), mate.s(t), mateFrame, 0);
+            double qx = mateFrame[0] + mateFrame[6] * offset - frame[0];
+            double qy = mateFrame[1] + mateFrame[7] * offset - frame[1];
+            double qz = mateFrame[2] + mateFrame[8] * offset - frame[2];
+            double along = qx * frame[3] + qy * frame[4] + qz * frame[5];
+            if (Math.abs(along) < 1.0e-7) {
+                return new double[] {t, qx * frame[6] + qy * frame[7] + qz * frame[8]};
+            }
+            // d(along)/dt: the mate's direction away from the node, onto this frame's forward
+            double towardNode = mate.atStart() ? 1.0 : -1.0;
+            double slope = towardNode * (mateFrame[3] * frame[3] + mateFrame[4] * frame[4] + mateFrame[5] * frame[5]);
+            if (Math.abs(slope) < 1.0e-3) {
+                return null; // running across this leg: no crossing to speak of
+            }
+            double next = t - along / slope;
+            if (next < 0.0 || next > length) {
+                return null;
+            }
+            t = next;
+        }
+        return null;
     }
 
     /** Which side of {@code self} {@code other} lies on, judged where the legs have parted (a blade length in). */
@@ -255,8 +382,20 @@ public final class SwitchThroat {
      * @param height per vertex: local y
      */
     public static double gaugeFace(float[] across, float[] height) {
+        Profile profile = profile(across, height);
+        return profile == null ? Double.NaN : profile.gaugeFace();
+    }
+
+    /**
+     * One side's running rail across (|z|, see {@link #gaugeFace}), or null
+     * if the side's rail objects are no running rail.
+     *
+     * @param across per vertex: local z, all on one side
+     * @param height per vertex: local y
+     */
+    public static Profile profile(float[] across, float[] height) {
         if (across.length == 0) {
-            return Double.NaN;
+            return null;
         }
         float top = Float.NEGATIVE_INFINITY;
         for (float y : height) {
@@ -264,13 +403,23 @@ public final class SwitchThroat {
         }
         double inner = Double.POSITIVE_INFINITY;
         double outer = Double.NEGATIVE_INFINITY;
+        double extent = Double.NEGATIVE_INFINITY;
         for (int i = 0; i < across.length; i++) {
+            extent = Math.max(extent, Math.abs(across[i]));
             if (height[i] >= top - HEAD_BAND) {
                 inner = Math.min(inner, Math.abs(across[i]));
                 outer = Math.max(outer, Math.abs(across[i]));
             }
         }
-        return inner <= WHEEL_LINE && WHEEL_LINE <= outer ? inner : Double.NaN;
+        return inner <= WHEEL_LINE && WHEEL_LINE <= outer ? new Profile(inner, outer, extent) : null;
+    }
+
+    /**
+     * A running rail across, |z| in the tile: the railhead's gauge face (its
+     * inner edge, where the wheels' flanges run) and outer face, and the
+     * farthest out the rail reaches (the foot's outer edge).
+     */
+    public record Profile(double gaugeFace, double headOuter, double outer) {
     }
 
     /**
@@ -300,12 +449,30 @@ public final class SwitchThroat {
      */
     public static double bladeAcross(double across, int side, double gaugeFace, double separation,
             double thrown) {
+        return bend(across, side, gaugeFace, bladeFloor(gaugeFace, separation), cut(gaugeFace, separation),
+                -thrown);
+    }
+
+    /** How far in (|z|) a blade's foot reaches where its stock rail is {@code separation} away. */
+    public static double bladeFloor(double gaugeFace, double separation) {
+        return Math.min(cut(gaugeFace, separation), gaugeFace - separation - BLADE_CLEARANCE);
+    }
+
+    /**
+     * A vertex of a bent rail (a blade, a frog's wing or point rail), its
+     * local z: drawn in to {@code floor} if it's the rail's own foot (within
+     * {@link #FOOT_REACH} inside the gauge face — not a guard rail sharing
+     * the object), clipped to {@code cut} on the outer side, then moved
+     * {@code shift} outward (negative: toward the track centre).
+     *
+     * @param side {@link #PLUS_Z} or {@link #MINUS_Z}, the rail's side
+     */
+    public static double bend(double across, int side, double gaugeFace, double floor, double cut, double shift) {
         double sign = side == PLUS_Z ? 1.0 : -1.0;
         double u = sign * across;
-        double cut = cut(gaugeFace, separation);
         if (u > gaugeFace - FOOT_REACH) {
-            u = Math.max(u, Math.min(cut, gaugeFace - separation - BLADE_CLEARANCE));
+            u = Math.max(u, floor);
         }
-        return sign * (Math.min(u, cut) - thrown);
+        return sign * (Math.min(u, cut) + shift);
     }
 }

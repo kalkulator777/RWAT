@@ -27,6 +27,7 @@ import com.muzhik17.trainsmod.path.HermiteSegmentPath;
 import com.muzhik17.trainsmod.path.RailGraph;
 import com.muzhik17.trainsmod.path.RailNode;
 import com.muzhik17.trainsmod.path.RailSegment;
+import com.muzhik17.trainsmod.path.SwitchFrog;
 import com.muzhik17.trainsmod.path.SwitchThroat;
 import com.muzhik17.trainsmod.path.TrackPath;
 import com.muzhik17.trainsmod.path.TrackSweep;
@@ -97,7 +98,8 @@ public final class RailRenderer {
      * whole leg's rails shifted sideways — read as crossing rails); back on
      * 2026-10-12 with real blades: a leg's inner rail planed to a point
      * against the other leg's stock rail, thrown off it when the switch is
-     * set the other way ({@link SwitchThroat}). Cosmetic only — the switch
+     * set the other way ({@link SwitchThroat}); and since 2026-10-13 the frog
+     * where the legs' inner rails meet ({@link SwitchFrog}). Cosmetic only — the switch
      * mechanics (state, redstone toggle, routing, train re-anchor) and the
      * track bed don't depend on it.
      */
@@ -105,6 +107,10 @@ public final class RailRenderer {
 
     /** Blade throw animation duration, ms. */
     private static final long BLADE_ANIM_MS = 500;
+    /** Plain rail kept between a blade's heel and the frog's wing rails, blocks. */
+    private static final double FROG_CLEARANCE = 0.5;
+    /** The shortest blade a frog may leave a sharp switch; closer to the toe, no frog. */
+    private static final double MIN_BLADE = 1.0;
 
     /**
      * Region bucket edge as a power of two (1 << 6 = 64 blocks, 4×4 chunks).
@@ -221,17 +227,25 @@ public final class RailRenderer {
      * A rail style flattened for sweeping, one template per texture:
      * {@code full} for track; for a switch throat (SPEC §2.2 v1) the same
      * tile apart — {@code base} (all but the rail objects) and the rail
-     * objects of either side, {@code plusRails}/{@code minusRails}.
-     * {@code styleId} is the style actually drawn ({@code ""} if not even the
-     * standard rail loaded — then there is nothing to draw); {@code blades}
-     * null if its switches draw as plain track.
+     * objects of either side, {@code plusRails}/{@code minusRails}, plus
+     * those cut finer along the track ({@code plusBent}/{@code minusBent},
+     * {@link #BENT_STATIONS}) for the rails a throat bends. {@code styleId}
+     * is the style actually drawn ({@code ""} if not even the standard rail
+     * loaded — then there is nothing to draw); {@code blades} null if its
+     * switches draw as plain track.
      */
     private record StyleTemplates(String styleId, List<TileTemplate> full, List<TileTemplate> base,
-            List<TileTemplate> plusRails, List<TileTemplate> minusRails, RailStyle.Blades blades) {
+            List<TileTemplate> plusRails, List<TileTemplate> minusRails,
+            List<TileTemplate> plusBent, List<TileTemplate> minusBent, RailStyle.Blades blades) {
 
         /** The rail objects on {@code side} ({@link SwitchThroat#PLUS_Z}/{@link SwitchThroat#MINUS_Z}). */
         List<TileTemplate> rails(int side) {
             return side == SwitchThroat.PLUS_Z ? plusRails : minusRails;
+        }
+
+        /** The rail objects on {@code side}, cut finer to bend into a blade or a frog's rail. */
+        List<TileTemplate> bent(int side) {
+            return side == SwitchThroat.PLUS_Z ? plusBent : minusBent;
         }
 
         /**
@@ -253,7 +267,14 @@ public final class RailRenderer {
     }
 
     private static final StyleTemplates NO_TEMPLATES =
-            new StyleTemplates("", List.of(), List.of(), List.of(), List.of(), null);
+            new StyleTemplates("", List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), null);
+    /**
+     * Stations per tile a bent rail is cut into, at least: a blade's point
+     * and a frog's nose and wings take shape over fractions of a block, and
+     * a rail modelled as a plain box (the mod's own) has stations only at
+     * the tile's ends.
+     */
+    private static final int BENT_STATIONS = 8;
     /** Templates per loaded style (identity: a resource reload brings new style objects and clears this). */
     private static final Map<RailStyle, StyleTemplates> styleTemplates = new IdentityHashMap<>();
 
@@ -268,15 +289,24 @@ public final class RailRenderer {
             List<TileTemplate> base = new ArrayList<>();
             List<TileTemplate> plusRails = new ArrayList<>();
             List<TileTemplate> minusRails = new ArrayList<>();
+            List<TileTemplate> plusBent = new ArrayList<>();
+            List<TileTemplate> minusBent = new ArrayList<>();
+            float[] planes = new float[BENT_STATIONS - 1];
+            for (int k = 1; k < BENT_STATIONS; k++) {
+                planes[k - 1] = (float) (s.tileLength() * (k / (double) BENT_STATIONS - 0.5));
+            }
             for (RailStyle.Part part : s.parts()) {
                 RenderType type = RwatRenderTypes.rails(part.texture());
                 addTemplate(full, part.full(), type, s.tileLength());
                 addTemplate(base, part.base(), type, s.tileLength());
                 addTemplate(plusRails, part.plusRails(), type, s.tileLength());
                 addTemplate(minusRails, part.minusRails(), type, s.tileLength());
+                addTemplate(plusBent, part.plusRails().slicedAlongX(planes), type, s.tileLength());
+                addTemplate(minusBent, part.minusRails().slicedAlongX(planes), type, s.tileLength());
             }
             return new StyleTemplates(s.id(), List.copyOf(full), List.copyOf(base),
-                    List.copyOf(plusRails), List.copyOf(minusRails), s.blades());
+                    List.copyOf(plusRails), List.copyOf(minusRails), List.copyOf(plusBent),
+                    List.copyOf(minusBent), s.blades());
         });
     }
 
@@ -425,9 +455,10 @@ public final class RailRenderer {
      * §2.2 v1): the first {@code bladeLength} from the node draws the sleepers
      * only on the throat's sleeper leg ({@code sleepers}) and leaves out the
      * blade rails ({@code bladeSides}, {@link SwitchThroat} side bits) —
-     * {@link #rebuildBlades} draws those.
+     * {@link #rebuildBlades} draws those; further in, the {@code frog} (null
+     * if none) bends the inner rail into a wing rail and a point rail.
      */
-    private record ThroatEnd(double bladeLength, boolean sleepers, int bladeSides) {
+    private record ThroatEnd(double bladeLength, boolean sleepers, int bladeSides, SwitchFrog frog) {
     }
 
     /** A cached segment sweep: its key and the region buckets holding its tiles. */
@@ -447,6 +478,10 @@ public final class RailRenderer {
             SwitchThroat.Separation separation, boolean tipAtStart, TrackPath stretch) {
     }
 
+    /** Throat geometry of the last graph revision, by what it depends on — a switch throw reuses it all. */
+    private static final Map<ThroatKey, ThroatGeometry> throatCache = new HashMap<>();
+    /** Scratch: the throats of the revision being laid out. */
+    private static final Map<ThroatKey, ThroatGeometry> liveThroats = new HashMap<>();
     /** Region buckets keyed by {@link ChunkPos#asLong} of the region coords. */
     private static final Map<Long, Bucket> buckets = new HashMap<>();
     /** Segment id → its cached sweep (the tiles live in {@link #buckets}). */
@@ -713,6 +748,7 @@ public final class RailRenderer {
         dropGeometry();
         dropBladeGeometry();
         styleTemplates.clear();
+        throatCache.clear();
         bladeSpecs.clear();
         shownSelection.clear();
         prevSelection.clear();
@@ -798,10 +834,13 @@ public final class RailRenderer {
      * per leg end the static sweep's treatment (returned, by
      * {@link #endKey}) and per blade a {@link BladeSpec}. A throat with a leg
      * in a style without blades stays plain track: its rail objects aren't
-     * the running rails, and nothing else may be bent.
+     * the running rails, and nothing else may be bent. A two-legged throat
+     * gets its frog too, unless that runs into what the legs' far ends hold
+     * (another switch's blades or frog).
      */
     private static Map<Long, ThroatEnd> throats(RailGraph graph) {
-        Map<Long, ThroatEnd> ends = new HashMap<>();
+        List<ThroatPlan> plans = new ArrayList<>();
+        Map<Long, ThroatPlan> planOfEnd = new HashMap<>();
         for (RailNode node : graph.nodes()) {
             Set<List<Integer>> seen = new HashSet<>();
             for (int segmentId : node.segments()) {
@@ -809,24 +848,135 @@ public final class RailRenderer {
                 if (cluster == null || !seen.add(cluster) || !bladed(graph, cluster)) {
                     continue;
                 }
-                SwitchThroat throat = SwitchThroat.of(graph, node.id(), cluster);
-                int sleeperLeg = throat.sleeperLeg();
+                ThroatKey throatKey = ThroatKey.of(graph, node.id(), cluster);
+                ThroatGeometry geometry = throatCache.get(throatKey);
+                if (geometry == null) {
+                    SwitchThroat throat = SwitchThroat.of(graph, node.id(), cluster);
+                    int sleeperLeg = throat.sleeperLeg();
+                    geometry = new ThroatGeometry(throat, sleeperLeg, frogs(graph, throat, sleeperLeg),
+                            new HashMap<>());
+                }
+                liveThroats.put(throatKey, geometry);
+                SwitchThroat throat = geometry.throat();
+                ThroatPlan plan = new ThroatPlan(node.id(), cluster, throat, geometry.sleeperLeg(),
+                        new HashMap<>(geometry.frogs()), geometry);
+                plans.add(plan);
                 for (int legId : cluster) {
-                    int sides = throat.bladeSides(legId);
-                    double length = throat.bladeLength(legId);
-                    boolean atStart = throat.atStart(legId);
-                    ends.put(endKey(legId, atStart), new ThroatEnd(length, legId == sleeperLeg, sides));
-                    TrackPath stretch = bladeStretch(graph, graph.segment(legId), atStart, length);
-                    for (int side : new int[] {SwitchThroat.PLUS_Z, SwitchThroat.MINUS_Z}) {
-                        if ((sides & side) != 0) {
-                            bladeSpecs.add(new BladeSpec(node.id(), legId, cluster, side, length,
-                                    throat.separation(legId, side), atStart, stretch));
-                        }
+                    planOfEnd.put(endKey(legId, throat.atStart(legId)), plan);
+                }
+            }
+        }
+        // a leg with a switch at either end: what each end draws must not meet
+        boolean dropped = true;
+        while (dropped) {
+            dropped = false;
+            for (ThroatPlan plan : plans) {
+                if (plan.frogs().isEmpty()) {
+                    continue;
+                }
+                for (int legId : plan.cluster()) {
+                    ThroatPlan far = planOfEnd.get(endKey(legId, !plan.throat().atStart(legId)));
+                    if (far != null && plan.extent(legId) + far.extent(legId)
+                            > plan.throat().legLength(legId) - FROG_CLEARANCE) {
+                        plan.frogs().clear();
+                        dropped = true;
+                        break;
                     }
                 }
             }
         }
+        Map<Long, ThroatEnd> ends = new HashMap<>();
+        for (ThroatPlan plan : plans) {
+            SwitchThroat throat = plan.throat();
+            for (int legId : plan.cluster()) {
+                int sides = throat.bladeSides(legId);
+                SwitchFrog frog = plan.frogs().get(legId);
+                double length = frog == null ? throat.bladeLength(legId)
+                        : Math.min(throat.bladeLength(legId), frog.start() - FROG_CLEARANCE);
+                boolean atStart = throat.atStart(legId);
+                ends.put(endKey(legId, atStart), new ThroatEnd(length, legId == plan.sleeperLeg(), sides, frog));
+                TrackPath stretch = bladeStretch(graph, graph.segment(legId), atStart, length);
+                for (int side : new int[] {SwitchThroat.PLUS_Z, SwitchThroat.MINUS_Z}) {
+                    if ((sides & side) != 0) {
+                        bladeSpecs.add(new BladeSpec(plan.nodeId(), legId, plan.cluster(), side, length,
+                                plan.geometry().separation(legId, side, length), atStart, stretch));
+                    }
+                }
+            }
+        }
+        throatCache.clear();
+        throatCache.putAll(liveThroats);
+        liveThroats.clear();
         return ends;
+    }
+
+    /**
+     * What a throat's geometry depends on: its node, and its legs' curves and
+     * styles. The same key on the next graph revision (a switch thrown,
+     * track built elsewhere) reuses the computed {@link ThroatGeometry}.
+     */
+    private record ThroatKey(int nodeId, List<Object> legs) {
+
+        static ThroatKey of(RailGraph graph, int nodeId, List<Integer> cluster) {
+            List<Object> legs = new ArrayList<>();
+            for (int legId : cluster) {
+                RailSegment segment = graph.segment(legId);
+                HermiteSegment curve = graph.hermite(segment);
+                legs.add(List.of(legId, curve.start(), curve.startTangent(), curve.end(), curve.endTangent(),
+                        segment.style()));
+            }
+            return new ThroatKey(nodeId, legs);
+        }
+    }
+
+    /** A throat's computed geometry: the throat, its sleeper leg, its frogs, its blades' separations. */
+    private record ThroatGeometry(SwitchThroat throat, int sleeperLeg, Map<Integer, SwitchFrog> frogs,
+            Map<List<Object>, SwitchThroat.Separation> separations) {
+
+        SwitchThroat.Separation separation(int legId, int side, double length) {
+            return separations.computeIfAbsent(List.of(legId, side, length),
+                    k -> throat.separation(legId, side, length));
+        }
+    }
+
+    /** A throat as laid out, before its ends are settled: its frogs by leg (empty: none). */
+    private record ThroatPlan(int nodeId, List<Integer> cluster, SwitchThroat throat, int sleeperLeg,
+            Map<Integer, SwitchFrog> frogs, ThroatGeometry geometry) {
+
+        /** How far into leg {@code legId} from the node this throat draws its own way. */
+        double extent(int legId) {
+            SwitchFrog frog = frogs.get(legId);
+            return frog != null ? frog.end() : throat.bladeLength(legId);
+        }
+    }
+
+    /**
+     * The frogs of a two-legged throat, by leg (empty if it has none): both
+     * legs' or neither — one leg alone can't draw half a frog. The sleeper
+     * leg's point rail makes the nose's tip. Blades end
+     * {@link #FROG_CLEARANCE} before a frog's wing rails start; a frog that
+     * leaves less than {@link #MIN_BLADE} of blade isn't drawn.
+     */
+    private static Map<Integer, SwitchFrog> frogs(RailGraph graph, SwitchThroat throat, int sleeperLeg) {
+        List<Integer> legs = throat.legIds();
+        if (legs.size() != 2) {
+            return Map.of();
+        }
+        Map<Integer, SwitchFrog> frogs = new HashMap<>();
+        for (int i = 0; i < 2; i++) {
+            int legId = legs.get(i);
+            int mateId = legs.get(1 - i);
+            RailStyle.Blades own = templatesFor(graph.segment(legId).style()).blades();
+            RailStyle.Blades mate = templatesFor(graph.segment(mateId).style()).blades();
+            int side = throat.bladeSides(legId);
+            int mateSide = throat.bladeSides(mateId);
+            SwitchFrog frog = throat.frog(legId, own.profile(side), mate.profile(mateSide), legId == sleeperLeg);
+            if (frog == null || frog.start() - FROG_CLEARANCE < MIN_BLADE) {
+                return Map.of();
+            }
+            frogs.put(legId, frog);
+        }
+        return frogs;
     }
 
     /**
@@ -887,7 +1037,7 @@ public final class RailRenderer {
             sweepAll(templates.full(), new SubPath(path, tip, path.length()), swept);
             to = heel;
         }
-        sweepAll(templates.full(), new SubPath(path, from, to), swept);
+        sweepMiddle(templates, path, from, to, startOver, length, key, swept);
 
         Map<Long, List<Tile>> byBucket = new HashMap<>();
         for (Tile tile : swept) {
@@ -899,6 +1049,58 @@ public final class RailRenderer {
                     .put(segmentId, entry.getValue());
         }
         return new SegmentEntry(key, byBucket.keySet());
+    }
+
+    /**
+     * The middle of a segment, {@code [from, to]} of its sweep path: plain
+     * track — but where a throat's frog bends this leg's inner rail (SPEC
+     * §2.2 v1), that rail is laid apart: plain up to the frog, the wing rail
+     * and the point rail bent through it ({@link SwitchFrog}), plain again
+     * after. The sleepers and the other rail stay one plain sweep, so they
+     * look as they always did.
+     */
+    private static void sweepMiddle(StyleTemplates templates, TrackPath path, double from, double to,
+            double startOver, double length, SegmentKey key, List<Tile> out) {
+        SwitchFrog frogA = key.throatA() == null ? null : key.throatA().frog();
+        SwitchFrog frogB = key.throatB() == null ? null : key.throatB().frog();
+        if (frogA == null && frogB == null) {
+            sweepAll(templates.full(), new SubPath(path, from, to), out);
+            return;
+        }
+        sweepAll(templates.base(), new SubPath(path, from, to), out);
+        for (int side : new int[] {SwitchThroat.PLUS_Z, SwitchThroat.MINUS_Z}) {
+            double plainFrom = from;
+            List<double[]> plain = new ArrayList<>();
+            List<FrogBend> bends = new ArrayList<>();
+            List<SubPath> bent = new ArrayList<>();
+            // the frog at node A comes first along the path, node B's last (throats() keeps them apart)
+            if (frogA != null && frogA.side() == side) {
+                plain.add(new double[] {plainFrom, startOver + frogA.start()});
+                plainFrom = startOver + frogA.pointEnd(); // the rail runs on past the V, beside the wing
+                bent.add(new SubPath(path, startOver + frogA.wingStart(), startOver + frogA.wingEnd()));
+                bends.add(new FrogBend(frogA, true, frogA.wingStart(), 1.0));
+                bent.add(new SubPath(path, startOver + frogA.noseStart(), startOver + frogA.pointEnd()));
+                bends.add(new FrogBend(frogA, false, frogA.noseStart(), 1.0));
+            }
+            if (frogB != null && frogB.side() == side) {
+                double node = startOver + length;
+                plain.add(new double[] {plainFrom, node - frogB.pointEnd()});
+                plainFrom = node - frogB.start();
+                bent.add(new SubPath(path, node - frogB.wingEnd(), node - frogB.wingStart()));
+                bends.add(new FrogBend(frogB, true, frogB.wingEnd(), -1.0));
+                bent.add(new SubPath(path, node - frogB.pointEnd(), node - frogB.noseStart()));
+                bends.add(new FrogBend(frogB, false, frogB.pointEnd(), -1.0));
+            }
+            plain.add(new double[] {plainFrom, to});
+            for (double[] piece : plain) {
+                sweepAll(templates.rails(side), new SubPath(path, piece[0], piece[1]), out);
+            }
+            for (int i = 0; i < bent.size(); i++) {
+                for (TileTemplate rail : templates.bent(side)) {
+                    sweep(rail, bent.get(i), bends.get(i), out);
+                }
+            }
+        }
     }
 
     /**
@@ -996,7 +1198,7 @@ public final class RailRenderer {
 
             BladeBend bend = new BladeBend(spec.side(), templates.blades().face(spec.side()), spec.length(),
                     spec.tipAtStart(), spec.separation(), open);
-            for (TileTemplate rail : templates.rails(spec.side())) {
+            for (TileTemplate rail : templates.bent(spec.side())) {
                 sweep(rail, spec.stretch(), bend, bladeTiles);
             }
         }
@@ -1014,16 +1216,63 @@ public final class RailRenderer {
      * fading to nothing at the heel, where the blade joins its leg's rail.
      */
     private record BladeBend(int side, double gaugeFace, double length, boolean tipAtStart,
-            SwitchThroat.Separation separation, double open) {
+            SwitchThroat.Separation separation, double open) implements RailBend {
 
-        /** Fill {separation, thrown, drop} at {@code s} into the stretch (tip first or last, as the leg runs). */
-        void station(double s, double[] out, int offset) {
+        @Override
+        public void station(double s, double[] out, int offset) {
             double d = tipAtStart ? s : length - s;
             double fade = SwitchThroat.fade(d, length);
-            out[offset] = separation.at(d);
-            out[offset + 1] = SwitchThroat.BLADE_THROW * open * fade;
-            out[offset + 2] = SwitchThroat.BLADE_TIP_DROP * fade;
+            double gap = separation.at(d);
+            out[offset] = SwitchThroat.bladeFloor(gaugeFace, gap);
+            out[offset + 1] = SwitchThroat.cut(gaugeFace, gap);
+            out[offset + 2] = -SwitchThroat.BLADE_THROW * open * fade;
+            out[offset + 3] = SwitchThroat.BLADE_TIP_DROP * fade;
         }
+    }
+
+    /**
+     * How a frog's wing rail ({@code wing}) or point rail bends along its
+     * stretch (SPEC §2.2 v1, {@link SwitchFrog}); the stretch starts
+     * {@code dStart} from the node and runs away from it ({@code dir} 1) or
+     * toward it (−1, a leg ending at the node).
+     */
+    private record FrogBend(SwitchFrog frog, boolean wing, double dStart, double dir) implements RailBend {
+
+        @Override
+        public int side() {
+            return frog.side();
+        }
+
+        @Override
+        public double gaugeFace() {
+            return frog.rail().gaugeFace();
+        }
+
+        @Override
+        public void station(double s, double[] out, int offset) {
+            double d = dStart + dir * s;
+            if (wing) {
+                frog.wing(d, out, offset);
+            } else {
+                frog.point(d, out, offset);
+            }
+            out[offset + 3] = 0.0;
+        }
+    }
+
+    /**
+     * A rail of a switch bent along its stretch, station by station: the
+     * side it's on, its gauge face, and per station {floor, cut, shift,
+     * drop} for {@link SwitchThroat#bend} (and the height).
+     */
+    private interface RailBend {
+
+        int side();
+
+        double gaugeFace();
+
+        /** Fill {floor, cut, shift, drop} at {@code s} into the stretch. */
+        void station(double s, double[] out, int offset);
     }
 
     /**
@@ -1137,8 +1386,8 @@ public final class RailRenderer {
         sweep(template, path, null, out);
     }
 
-    /** {@link #sweep(TileTemplate, TrackPath, List)} with every tile bent into a blade, unless {@code bend} is null. */
-    private static void sweep(TileTemplate template, TrackPath path, BladeBend bend, List<Tile> out) {
+    /** {@link #sweep(TileTemplate, TrackPath, List)} with every tile bent (a blade, a frog rail) unless null. */
+    private static void sweep(TileTemplate template, TrackPath path, RailBend bend, List<Tile> out) {
         double length = path.length();
         if (length < 1.0e-6) {
             return;
@@ -1183,19 +1432,19 @@ public final class RailRenderer {
      * local Z rides the frame's right axis (gauge) and local Y its up axis;
      * the normal is rotated into the same frame (local X→forward, Z→right,
      * Y→up). Diffuse shade is taken from each quad's first corner, as the
-     * per-quad shading always was. A {@code bend} (a switch blade's rail)
+     * per-quad shading always was. A {@code bend} (a switch blade or frog rail)
      * reshapes each vertex's across and height at its station first.
      */
     private static Tile bendTile(TileTemplate t, int tileIndex, double tileLen, TrackPath path,
-            Vector3d centre, BladeBend bend) {
+            Vector3d centre, RailBend bend) {
         int stations = t.stations.length;
         double[] frame = new double[stations * TrackSweep.FRAME_STRIDE]; // pos, fwd, right, up
-        double[] blade = bend == null ? null : new double[stations * 3]; // separation, thrown, drop
+        double[] bent = bend == null ? null : new double[stations * 4]; // floor, cut, shift, drop
         for (int k = 0; k < stations; k++) {
             double s = (tileIndex + t.stations[k]) * tileLen;
             TrackSweep.frame(path, s, frame, k * TrackSweep.FRAME_STRIDE);
             if (bend != null) {
-                bend.station(s, blade, k * 3);
+                bend.station(s, bent, k * 4);
             }
         }
         int n = t.vertexCount;
@@ -1206,9 +1455,9 @@ public final class RailRenderer {
             double across = t.z[i]; // local Z is the cross-track (gauge) axis
             double height = t.y[i] + TrackSweep.RAIL_Y_OFFSET;
             if (bend != null) {
-                int b = t.station[i] * 3;
-                across = SwitchThroat.bladeAcross(across, bend.side(), bend.gaugeFace(), blade[b], blade[b + 1]);
-                height -= blade[b + 2];
+                int b = t.station[i] * 4;
+                across = SwitchThroat.bend(across, bend.side(), bend.gaugeFace(), bent[b], bent[b + 1], bent[b + 2]);
+                height -= bent[b + 3];
             }
             xyz[i * 3] = (float) (frame[o] + frame[o + 6] * across + frame[o + 9] * height);
             xyz[i * 3 + 1] = (float) (frame[o + 1] + frame[o + 7] * across + frame[o + 10] * height);

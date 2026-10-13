@@ -46,7 +46,7 @@ import net.minecraft.util.profiling.ProfilerFiller;
  * <p>The tile is also kept split for switch throats (SPEC §2.2 v1): the rail
  * objects by side, everything else apart — a leg bends one of its rails into
  * a blade and nothing else. Only a style whose rail objects are its running
- * rails gets blades ({@link SwitchThroat#gaugeFace}).
+ * rails gets blades and frogs ({@link SwitchThroat#profile}).
  *
  * <p>Applying swaps the registry and drops the rail renderer's caches, so
  * F3+T re-sweeps the network with the new tiles. The object rules (hidden
@@ -166,15 +166,15 @@ public final class RailModelReloadListener
 
     /**
      * The style's switch blade profile from its rail faces on either side, or
-     * null unless both sides are running rails ({@link SwitchThroat#gaugeFace}).
+     * null unless both sides are running rails ({@link SwitchThroat#profile}).
      */
     private static RailStyle.Blades blades(Mesh plus, Mesh minus) {
-        double plusFace = gaugeFace(plus);
-        double minusFace = gaugeFace(minus);
-        return Double.isNaN(plusFace) || Double.isNaN(minusFace) ? null : new RailStyle.Blades(plusFace, minusFace);
+        SwitchThroat.Profile plusRail = profile(plus);
+        SwitchThroat.Profile minusRail = profile(minus);
+        return plusRail == null || minusRail == null ? null : new RailStyle.Blades(plusRail, minusRail);
     }
 
-    private static double gaugeFace(Mesh rails) {
+    private static SwitchThroat.Profile profile(Mesh rails) {
         int count = rails.quads().size() * 4;
         float[] across = new float[count];
         float[] height = new float[count];
@@ -185,7 +185,7 @@ public final class RailModelReloadListener
                 height[i++] = v.y();
             }
         }
-        return SwitchThroat.gaugeFace(across, height);
+        return SwitchThroat.profile(across, height);
     }
 
     /** Along-track (X) extent {min, max} of all rail objects; null if the model has none. */

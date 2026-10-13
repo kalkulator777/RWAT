@@ -35,14 +35,18 @@ public record RailStyle(String id, List<Part> parts, double tileLength, Blades b
     }
 
     /**
-     * The railhead gauge faces (|z| of the heads' inner edges) of the
-     * +z and −z running rails — where a blade lies against its stock rail
-     * ({@link SwitchThroat#gaugeFace}).
+     * The +z and −z running rails across ({@link SwitchThroat#profile}):
+     * where a blade lies against its stock rail, where a frog cuts.
      */
-    public record Blades(double plusFace, double minusFace) {
+    public record Blades(SwitchThroat.Profile plus, SwitchThroat.Profile minus) {
 
+        public SwitchThroat.Profile profile(int side) {
+            return side == SwitchThroat.PLUS_Z ? plus : minus;
+        }
+
+        /** The railhead gauge face (|z| of its inner edge) on {@code side}. */
         public double face(int side) {
-            return side == SwitchThroat.PLUS_Z ? plusFace : minusFace;
+            return profile(side).gaugeFace();
         }
     }
 }
