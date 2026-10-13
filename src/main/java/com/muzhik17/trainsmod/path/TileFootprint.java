@@ -202,6 +202,15 @@ public final class TileFootprint {
         return extent;
     }
 
+    /** Highest any part of the tile stands over the rail foot, blocks — the rail head (0 if empty). */
+    public double top() {
+        double top = 0.0;
+        for (float height : y) {
+            top = Math.max(top, height);
+        }
+        return top;
+    }
+
     // --- the tile conventions shared with the client's rail model loader (SPEC §6.10) ---
 
     /** A rail object: {@code RAIL_LEFT*}/{@code RAIL_RIGHT*} — not the {@code RAIL_BASE} sleepers. */

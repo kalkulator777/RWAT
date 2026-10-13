@@ -157,6 +157,84 @@ public final class BedRaster {
         return new Raster(levels(touched), headroom(touched));
     }
 
+    /** Step the gauge band is swept in along the path: a chord this short strays under 1/1000 block on track curves. */
+    private static final double GAUGE_STEP = 0.25;
+
+    /**
+     * The loading gauge over the track (SPEC §2.2): the blocks a train running
+     * along {@code path} may reach into. Its profile is a band
+     * ±{@code halfWidth} across the track — horizontal, normal to the path,
+     * so on curves it follows the track like the bed — extruded straight up
+     * from {@code floor} to {@code height} over the rail foot. The band is
+     * swept in short chords and clipped against the block grid like the
+     * bed's tiles: a column is in once the band covers at least
+     * {@link #MIN_TOUCH} of it, and a block once the gauge reaches into it by
+     * more than that. Bed cells come out too where the gauge spans them —
+     * the caller keeps the bed apart.
+     *
+     * @param floor  where the gauge starts over the foot: blocks the foot
+     *               merely grazes from below stay (they'd leave pits beside the track)
+     * @param height where it ends over the foot
+     */
+    public static Set<Cell> gauge(TrackPath path, double halfWidth, double floor, double height) {
+        Map<Long, Touch> touched = new LinkedHashMap<>();
+        double length = path.length();
+        if (length >= 1.0e-6 && halfWidth > 0.0 && height > floor) {
+            int steps = Math.max(1, (int) Math.ceil(length / GAUGE_STEP));
+            double[] frame = new double[TrackSweep.FRAME_STRIDE];
+            double[] previous = new double[5];
+            double[] current = new double[5];
+            Scratch s = new Scratch();
+            for (int i = 0; i <= steps; i++) {
+                TrackSweep.frame(path, length * i / steps, frame, 0);
+                // left x, z; right x, z; foot y
+                current[0] = frame[0] - frame[6] * halfWidth;
+                current[1] = frame[2] - frame[8] * halfWidth;
+                current[2] = frame[0] + frame[6] * halfWidth;
+                current[3] = frame[2] + frame[8] * halfWidth;
+                current[4] = frame[1];
+                if (i > 0) {
+                    bandTriangle(s, previous, 0, previous, 2, current, 2, floor, height, touched);
+                    bandTriangle(s, previous, 0, current, 2, current, 0, floor, height, touched);
+                }
+                double[] swap = previous;
+                previous = current;
+                current = swap;
+            }
+        }
+        Set<Cell> cells = new LinkedHashSet<>();
+        for (Map.Entry<Long, Touch> entry : touched.entrySet()) {
+            Touch touch = entry.getValue();
+            if (!touch.shown) {
+                continue;
+            }
+            int x = (int) (entry.getKey() >> 32);
+            int z = (int) entry.getKey().longValue();
+            for (int cy = (int) Math.floor(touch.minY + LEVEL_EPSILON); touch.topY > cy + MIN_TOUCH; cy++) {
+                cells.add(new Cell(x, cy, z));
+            }
+        }
+        return cells;
+    }
+
+    /**
+     * One triangle of the gauge band, corners given as (x, z) at offsets of
+     * band edge arrays whose foot height is element 4; the foot carried is the
+     * gauge's floor, the model height its top.
+     */
+    private static void bandTriangle(Scratch s, double[] a, int ao, double[] b, int bo, double[] c, int co,
+            double floor, double height, Map<Long, Touch> touched) {
+        double[][] corners = {a, b, c};
+        int[] offsets = {ao, bo, co};
+        for (int k = 0; k < 3; k++) {
+            s.tx[k] = corners[k][offsets[k]];
+            s.tz[k] = corners[k][offsets[k] + 1];
+            s.ty[k] = corners[k][4] + floor;
+            s.tm[k] = corners[k][4] + height;
+        }
+        rasterizeTriangle(s, touched);
+    }
+
     /** A block column's key, as {@link Area#columns} takes them. */
     public static long column(int x, int z) {
         return ((long) x << 32) | (z & 0xFFFFFFFFL);
