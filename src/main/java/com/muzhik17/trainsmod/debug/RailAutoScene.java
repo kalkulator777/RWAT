@@ -10,6 +10,7 @@ import java.util.function.BiConsumer;
 import org.joml.Vector3d;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
+import com.muzhik17.trainsmod.ServerConfig;
 import com.muzhik17.trainsmod.consist.Consist;
 import com.muzhik17.trainsmod.consist.ConsistManager;
 import com.muzhik17.trainsmod.network.TrackPathSpec;
@@ -54,7 +55,10 @@ import net.neoforged.neoforge.event.level.BlockEvent;
  * heads reach above the bed), a switch through foliage; then refused at a
  * chest, at bedrock and at a block a break-event handler protects, and built
  * once the protection is off. Every built segment is checked against its
- * raster: bed under every piece of the model, headroom clear.
+ * raster: bed under every piece of the model, headroom clear — and, in a
+ * world whose server config has {@code clear_gauge} on, the loading gauge
+ * clear too ({@code rwat-rail-portal*.png} look along the track into the
+ * hills: a slot for the bed with the option off, the gauge with it on).
  *
  * <p>{@code trailing}: a loop with a passing siding, its entry switch set
  * for the siding and its exit switch for the main line; a train runs three
@@ -119,7 +123,7 @@ public final class RailAutoScene {
             }
             case 130 -> {
                 // track 1 (z): a stone hill, a water patch, grass, foliage
-                command(mc, at("fill %d %d %d %d %d %d stone", x + 8, y, z - 5, x + 18, y + 4, z + 5));
+                command(mc, at("fill %d %d %d %d %d %d stone", x + 8, y, z - 5, x + 18, y + 8, z + 5));
                 // water in a glass basin (loose, it would wash the marker away)
                 command(mc, at("fill %d %d %d %d %d %d glass", x + 2, y, z - 2, x + 6, y, z + 2));
                 command(mc, at("fill %d %d %d %d %d %d water", x + 3, y, z - 1, x + 5, y, z + 1));
@@ -149,47 +153,55 @@ public final class RailAutoScene {
             }
             case 175 -> click(mc, x, y, z + 30);
             case 180 -> verify(mc, "switch through foliage");
+            // the portals, looked at along the track: a slot for the bed, or the gauge cleared
+            case 182 -> {
+                mc.options.hideGui = true;
+                flyTo(mc, x - 1.5, y + 4.0, z + 0.5, -90.0F, 8.0F);
+            }
+            case 200 -> shot(mc, "rwat-rail-portal.png");
+            case 202 -> flyTo(mc, x - 3.5, y + 3.5, z + 15.5, -90.0F, 6.0F);
+            case 220 -> shot(mc, "rwat-rail-portal-slope.png");
             // cut the hills open to look at the bed inside
-            case 185 -> {
-                command(mc, at("fill %d %d %d %d %d %d air", x + 8, y, z - 5, x + 18, y + 4, z - 2));
+            case 225 -> {
+                command(mc, at("fill %d %d %d %d %d %d air", x + 8, y, z - 5, x + 18, y + 8, z - 3));
                 command(mc, at("fill %d %d %d %d %d %d air", x + 4, y, z + 10, x + 30, y + 6, z + 13));
             }
-            case 190 -> {
+            case 230 -> {
                 mc.options.hideGui = true;
-                flyTo(mc, x + 13.5, y + 3.5, z - 7.0, 0.0F, 25.0F);
+                flyTo(mc, x + 13.5, y + 4.5, z - 9.0, 0.0F, 15.0F);
             }
-            case 215 -> shot(mc, "rwat-rail-hill.png");
-            case 220 -> flyTo(mc, x + 17.5, y + 4.5, z + 6.0, 0.0F, 22.0F);
-            case 245 -> shot(mc, "rwat-rail-slope.png");
-            case 250 -> flyTo(mc, x + 20.0, y + 28.0, z + 14.0, 0.0F, 80.0F);
-            case 275 -> shot(mc, "rwat-rail-overview.png");
+            case 255 -> shot(mc, "rwat-rail-hill.png");
+            case 260 -> flyTo(mc, x + 17.5, y + 4.5, z + 6.0, 0.0F, 22.0F);
+            case 285 -> shot(mc, "rwat-rail-slope.png");
+            case 290 -> flyTo(mc, x + 20.0, y + 28.0, z + 14.0, 0.0F, 80.0F);
+            case 315 -> shot(mc, "rwat-rail-overview.png");
             // a chest in the way: refused, nothing changes
-            case 280 -> {
+            case 320 -> {
                 marker(mc, x, y, z + 48, false);
                 marker(mc, x + 20, y, z + 48, false);
                 command(mc, at("setblock %d %d %d chest", x + 10, y, z + 48));
             }
-            case 285 -> click(mc, x, y, z + 48);
-            case 290 -> refused(mc, "chest", x, y, z + 48, x + 20, y, z + 48);
-            case 291 -> {
+            case 325 -> click(mc, x, y, z + 48);
+            case 330 -> refused(mc, "chest", x, y, z + 48, x + 20, y, z + 48);
+            case 331 -> {
                 mc.options.hideGui = false;
                 flyTo(mc, x + 10.5, y + 3.0, z + 43.0, 0.0F, 25.0F);
             }
-            case 292 -> click(mc, x, y, z + 48); // again, for the shot: message and red dust
-            case 300 -> shot(mc, "rwat-rail-chest.png");
-            case 305 -> command(mc, at("setblock %d %d %d bedrock", x + 10, y, z + 48));
-            case 310 -> click(mc, x, y, z + 48);
-            case 315 -> refused(mc, "bedrock", x, y, z + 48, x + 20, y, z + 48);
-            case 320 -> {
+            case 332 -> click(mc, x, y, z + 48); // again, for the shot: message and red dust
+            case 340 -> shot(mc, "rwat-rail-chest.png");
+            case 345 -> command(mc, at("setblock %d %d %d bedrock", x + 10, y, z + 48));
+            case 350 -> click(mc, x, y, z + 48);
+            case 355 -> refused(mc, "bedrock", x, y, z + 48, x + 20, y, z + 48);
+            case 360 -> {
                 command(mc, at("setblock %d %d %d stone", x + 10, y, z + 48));
                 protectedBlock = new BlockPos(x + 10, y, z + 48);
             }
-            case 325 -> click(mc, x, y, z + 48);
-            case 330 -> refused(mc, "protected stone", x, y, z + 48, x + 20, y, z + 48);
-            case 335 -> protectedBlock = null;
-            case 340 -> click(mc, x, y, z + 48);
-            case 345 -> verify(mc, "stone, protection off");
-            case 360 -> mc.stop();
+            case 365 -> click(mc, x, y, z + 48);
+            case 370 -> refused(mc, "protected stone", x, y, z + 48, x + 20, y, z + 48);
+            case 375 -> protectedBlock = null;
+            case 380 -> click(mc, x, y, z + 48);
+            case 385 -> verify(mc, "stone, protection off");
+            case 400 -> mc.stop();
             default -> {
             }
         }
@@ -266,8 +278,28 @@ public final class RailAutoScene {
                     }
                 }
             }
-            RailsWheelsAndTrains.LOGGER.info("[railscene] {}: {} segment(s) built, bed {}/{} laid, headroom {}/{} clear{}",
-                    what, built.size(), laid, bed, clear, headroom, problems.isEmpty() ? "" : " " + problems);
+            String gaugeReport = "";
+            ServerConfig.Gauge clearance = ServerConfig.clearedGauge();
+            if (clearance != null) {
+                int gauge = 0;
+                int open = 0;
+                for (RailSegment segment : built) {
+                    double top = RailFootprints.forStyle(segment.style()).top() + clearance.height();
+                    for (BedRaster.Cell cell : BedRaster.gauge(TrackSweep.path(graph, segment),
+                            clearance.halfWidth(), RailNetwork.GAUGE_FLOOR, top)) {
+                        BlockState state = level.getBlockState(new BlockPos(cell.x(), cell.y(), cell.z()));
+                        gauge++;
+                        if (state.isAir() || !state.getFluidState().isEmpty() || state.getBlock() instanceof TrackBedBlock) {
+                            open++;
+                        } else if (problems.size() < 8) {
+                            problems.add("gauge blocked at " + cell + ": " + state);
+                        }
+                    }
+                }
+                gaugeReport = String.format(Locale.ROOT, ", gauge %d/%d clear", open, gauge);
+            }
+            RailsWheelsAndTrains.LOGGER.info("[railscene] {}: {} segment(s) built, bed {}/{} laid, headroom {}/{} clear{}{}",
+                    what, built.size(), laid, bed, clear, headroom, gaugeReport, problems.isEmpty() ? "" : " " + problems);
         });
     }
 
