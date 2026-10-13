@@ -16,7 +16,8 @@ import net.neoforged.neoforge.common.ModConfigSpec;
  * around them ({@code [chunk_loading]}, SPEC §2.1). The loader's config API
  * stays in this one adapter (SPEC §7.3); the physics only ever sees a
  * {@link PhysicsTuning}, the consists a {@link ChunkLease.Policy}.
- * {@code [rails]}: how far a rail marker reaches for its partner (SPEC §2.2).
+ * {@code [rails]}: how far a rail marker reaches for its partner, and whether a
+ * build clears the loading gauge over the track (SPEC §2.2).
  * Also who may drive ({@code [access]}, SPEC §9.2): the cabs open to anyone,
  * or only to a player with the driver's key. The server's settings reach
  * its clients, which predict the same.
@@ -84,6 +85,18 @@ public final class ServerConfig {
                     " segment one click of the rails builds. A longer segment costs more to build: its",
                     " track bed is rasterized all along it, and every chunk it crosses is loaded")
             .defineInRange("max_marker_distance", 512, 16, 2048);
+    private static final ModConfigSpec.BooleanValue CLEAR_GAUGE = BUILDER
+            .comment("Building rails also clears the loading gauge over the new track: everything in it is",
+                    " broken without drops (fluids stay), so a hill gets a tunnel or a cutting a train fits,",
+                    " not just a slot for the track bed. Refused like the bed: unbreakable blocks, blocks",
+                    " with contents, blocks the builder may not break")
+            .define("clear_gauge", false);
+    private static final ModConfigSpec.DoubleValue GAUGE_HALF_WIDTH = BUILDER
+            .comment("The gauge's half-width either side of the track centre, blocks (the widest MVP stock: 1.87)")
+            .defineInRange("gauge_half_width", 1.9, 0.5, 4.0);
+    private static final ModConfigSpec.DoubleValue GAUGE_HEIGHT = BUILDER
+            .comment("The gauge's height over the rail head, blocks (MVP stock reaches up to about 5.3)")
+            .defineInRange("gauge_height", 5.5, 1.0, 16.0);
 
     static {
         BUILDER.pop();
@@ -177,6 +190,18 @@ public final class ServerConfig {
      */
     public static int maxMarkerDistance() {
         return SPEC.isLoaded() ? MAX_MARKER_DISTANCE.get() : MAX_MARKER_DISTANCE.getDefault();
+    }
+
+    /** The loading gauge a build clears over the track (SPEC §2.2): half-width and height over the rail head, blocks. */
+    public record Gauge(double halfWidth, double height) {
+    }
+
+    /** The gauge a player's build clears, or null if the option is off (the default, and until the config is loaded). */
+    public static Gauge clearedGauge() {
+        if (!SPEC.isLoaded() || !CLEAR_GAUGE.get()) {
+            return null;
+        }
+        return new Gauge(GAUGE_HALF_WIDTH.get(), GAUGE_HEIGHT.get());
     }
 
     /** The chunk-loading policy in force (SPEC §2.1); the default one until the world's config is loaded. */

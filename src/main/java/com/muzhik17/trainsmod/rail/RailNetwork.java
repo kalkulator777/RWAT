@@ -17,6 +17,7 @@ import org.joml.Vector3d;
 import org.joml.Vector3f;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
+import com.muzhik17.trainsmod.ServerConfig;
 import com.muzhik17.trainsmod.network.RailGraphSyncPayload;
 import com.muzhik17.trainsmod.path.BedClearing;
 import com.muzhik17.trainsmod.path.BedRaster;
@@ -118,7 +119,9 @@ public final class RailNetwork extends SavedData {
      * than one, with the {@code consumed} marker blocks taken away. The bed
      * clears its way on behalf of {@code player}: whatever stands where the
      * bed goes, or where the rails reach above it, is broken without drops
-     * ({@link BedClearing}). If something there can't go — unbreakable, a
+     * ({@link BedClearing}) — and, with the server's {@code clear_gauge} on,
+     * everything in the loading gauge over the new segments, so a train
+     * fits through a hill ({@link #gaugeCells}). If something there can't go — unbreakable, a
      * container, or not the player's to break — nothing is built or changed,
      * the player is told where, and null is returned.
      */
@@ -144,7 +147,9 @@ public final class RailNetwork extends SavedData {
             relaid.add(graph.segment(id));
         }
         BedLayout layout = layout(stale, relaid);
-        BedClearing.Plan clearing = planClearing(level, player, layout, new HashSet<>(consumed));
+        ServerConfig.Gauge gauge = ServerConfig.clearedGauge();
+        Set<BlockPos> gaugeCells = gauge == null ? Set.of() : gaugeCells(created, gauge, layout);
+        BedClearing.Plan clearing = planClearing(level, player, layout, new HashSet<>(consumed), gaugeCells);
         if (clearing.refused()) {
             for (int i = created.size() - 1; i >= 0; i--) {
                 graph.removeSegment(created.get(i));
@@ -191,7 +196,7 @@ public final class RailNetwork extends SavedData {
             graph.setSegmentLook(segment.id(), look);
         }
         BedLayout layout = layout(stale, current(structure));
-        BedClearing.Plan clearing = planClearing(level, player, layout, Set.of());
+        BedClearing.Plan clearing = planClearing(level, player, layout, Set.of(), Set.of());
         if (clearing.refused()) {
             for (RailSegment segment : structure) {
                 graph.setSegmentLook(segment.id(), segment.look());
@@ -560,26 +565,52 @@ public final class RailNetwork extends SavedData {
 
     /**
      * Plan clearing the way for a layout on behalf of {@code player}
-     * ({@link BedClearing}): obstacles in the bed and its headroom are to be
-     * broken, plants in the headroom removed; unbreakable blocks, containers
-     * and blocks the player may not break there refuse. {@code consumed}
-     * cells (the build's own markers, removed by it) count as empty. Nothing
-     * changes yet — the protection check posts a {@link BlockEvent.BreakEvent}
-     * per block to be broken, as a pickaxe would.
+     * ({@link BedClearing}): obstacles in the bed and above it — its
+     * headroom, and the {@code gauge} cells if the build clears the loading
+     * gauge — are to be broken, plants above it removed; unbreakable blocks,
+     * containers and blocks the player may not break there refuse.
+     * {@code consumed} cells (the build's own markers, removed by it) count
+     * as empty. Nothing changes yet — the protection check posts a
+     * {@link BlockEvent.BreakEvent} per block to be broken, as a pickaxe would.
      */
     private BedClearing.Plan planClearing(ServerLevel level, ServerPlayer player, BedLayout layout,
-            Set<BlockPos> consumed) {
+            Set<BlockPos> consumed, Set<BlockPos> gauge) {
         Set<BedRaster.Cell> bed = new LinkedHashSet<>();
         layout.wanted().keySet().forEach(pos -> bed.add(cell(pos)));
-        Set<BedRaster.Cell> headroom = new LinkedHashSet<>();
-        layout.headroom().forEach(pos -> headroom.add(cell(pos)));
-        return BedClearing.plan(bed, headroom,
+        Set<BedRaster.Cell> above = new LinkedHashSet<>();
+        layout.headroom().forEach(pos -> above.add(cell(pos)));
+        gauge.forEach(pos -> above.add(cell(pos)));
+        return BedClearing.plan(bed, above,
                 cell -> {
                     BlockPos pos = pos(cell);
                     return consumed.contains(pos) ? BedClearing.Occupant.EMPTY
                             : occupant(level, pos, level.getBlockState(pos));
                 },
                 cell -> mayBreak(level, player, pos(cell)));
+    }
+
+    /**
+     * The loading gauge starts this far over the rail foot, blocks: a block the
+     * foot merely grazes from below stays (no pits beside the track on a grade).
+     */
+    public static final double GAUGE_FLOOR = 0.25;
+
+    /**
+     * The loading gauge over newly built segments (SPEC §2.2, option
+     * {@code clear_gauge}): {@link BedRaster#gauge} up to {@code gauge}'s
+     * height over each segment's rail head, along the path its tile is swept
+     * on — bed cells left to the bed.
+     */
+    private Set<BlockPos> gaugeCells(List<Integer> segments, ServerConfig.Gauge gauge, BedLayout layout) {
+        Set<BlockPos> cells = new LinkedHashSet<>();
+        for (int id : segments) {
+            RailSegment segment = graph.segment(id);
+            double top = RailFootprints.forStyle(segment.style()).top() + gauge.height();
+            BedRaster.gauge(TrackSweep.path(graph, segment), gauge.halfWidth(), GAUGE_FLOOR, top)
+                    .forEach(cell -> cells.add(pos(cell)));
+        }
+        cells.removeAll(layout.wanted().keySet());
+        return cells;
     }
 
     /** What a block in the track's way is, as far as clearing it goes. */

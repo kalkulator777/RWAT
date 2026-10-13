@@ -118,6 +118,28 @@ class BedClearingTest {
     }
 
     @Test
+    void theLoadingGaugeIsClearedByTheSameRulesAndRefusesTheSame() {
+        // a tunnel through a wooded hillside by a pond: stone and a tree go, the pond stays, a chest refuses
+        World world = new World()
+                .with(cell(0, 65), Occupant.SOLID)   // stone over the bed
+                .with(cell(0, 66), Occupant.SOLID)   // a log
+                .with(cell(0, 67), Occupant.SOLID)   // leaves (not replaceable)
+                .with(cell(0, 68), Occupant.SOFT)    // a vine
+                .with(cell(1, 65), Occupant.FLUID);  // the pond's edge: water stays, as a pickaxe leaves it
+        Set<BedRaster.Cell> gauge = cells(cell(0, 65), cell(0, 66), cell(0, 67), cell(0, 68), cell(1, 65));
+
+        BedClearing.Plan plan = world.plan(cells(cell(0, 64)), gauge);
+        assertFalse(plan.refused());
+        assertEquals(List.of(cell(0, 65), cell(0, 66), cell(0, 67), cell(0, 68)), plan.removed());
+
+        world.with(cell(0, 69), Occupant.CONTAINER); // a chest in a cellar the tunnel runs into
+        gauge.add(cell(0, 69));
+        plan = world.plan(cells(cell(0, 64)), gauge);
+        assertEquals(new BedClearing.Blocked(cell(0, 69), BedClearing.Reason.CONTAINER), plan.blocked(),
+                "refused, not skipped: nothing is left standing inside the gauge unannounced");
+    }
+
+    @Test
     void anEmptyWayNeedsNothing() {
         World world = new World();
         BedClearing.Plan plan = world.plan(cells(cell(0, 64)), cells(cell(0, 65)));

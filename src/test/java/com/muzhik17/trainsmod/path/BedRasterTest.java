@@ -231,6 +231,67 @@ class BedRasterTest {
     }
 
     @Test
+    void gaugeOverAStraightIsABoxFiveWideFromTheFootUp() {
+        RailGraph graph = new RailGraph();
+        RailSegment segment = connect(graph, new Vector3d(0.5, 64, 0.5), X, new Vector3d(10.5, 64, 0.5), X);
+
+        Set<BedRaster.Cell> gauge = BedRaster.gauge(new HermiteSegmentPath(graph.hermite(segment)), 1.9, 0.25, 5.9);
+
+        Set<BedRaster.Cell> box = new HashSet<>();
+        for (int x = 0; x <= 10; x++) {
+            for (int y = 64; y <= 69; y++) {
+                for (int z = -2; z <= 2; z++) {
+                    box.add(new BedRaster.Cell(x, y, z));
+                }
+            }
+        }
+        // ±1.9 around the centre line z = 0.5 spans -1.4..2.4: five columns; 64 + 5.9 reaches into y 69
+        assertEquals(box, gauge);
+    }
+
+    @Test
+    void gaugeFollowsACurveAndASlope() {
+        RailGraph graph = new RailGraph();
+        RailSegment curve = connect(graph, new Vector3d(0.5, 64, 0.5), X, new Vector3d(16.5, 67, 16.5), Z);
+        TrackPath path = new HermiteSegmentPath(graph.hermite(curve));
+        double halfWidth = 1.9;
+        double floor = 0.25;
+        double height = 5.9;
+
+        Set<BedRaster.Cell> gauge = BedRaster.gauge(path, halfWidth, floor, height);
+
+        // complete: every point of the profile, swept along, lies in a gauge block
+        for (double s = 0.0; s <= path.length(); s += 0.05) {
+            Vector3d pos = path.samplePosition(s);
+            Vector3d tangent = path.sampleTangent(s);
+            Vector3d right = new Vector3d(-tangent.z, 0.0, tangent.x).normalize();
+            for (double across = -halfWidth + 0.01; across <= halfWidth - 0.01; across += 0.1) {
+                for (double up = floor + 0.01; up <= height - 0.01; up += 0.25) {
+                    BedRaster.Cell cell = new BedRaster.Cell(
+                            (int) Math.floor(pos.x + right.x * across), (int) Math.floor(pos.y + up),
+                            (int) Math.floor(pos.z + right.z * across));
+                    assertTrue(gauge.contains(cell), "profile point in a gauge block: " + cell);
+                }
+            }
+        }
+        // tight: every block is near the track, and none under the foot
+        for (BedRaster.Cell cell : gauge) {
+            double nearest = Double.MAX_VALUE;
+            double footThere = Double.MAX_VALUE;
+            for (double s = 0.0; s <= path.length(); s += 0.05) {
+                Vector3d pos = path.samplePosition(s);
+                double d = Math.hypot(pos.x - (cell.x() + 0.5), pos.z - (cell.z() + 0.5));
+                if (d < nearest) {
+                    nearest = d;
+                    footThere = pos.y;
+                }
+            }
+            assertTrue(nearest <= halfWidth + 0.75, "a gauge block beside the track: " + cell);
+            assertTrue(cell.y() >= Math.floor(footThere) - 1, "no gauge block under the track: " + cell);
+        }
+    }
+
+    @Test
     void areaLimitedRasterIsExactInsideTheArea() throws IOException {
         RailGraph graph = new RailGraph();
         RailSegment curve = connect(graph, new Vector3d(0.5, 64, 0.5), X, new Vector3d(12.5, 64, 12.5), Z);
