@@ -62,6 +62,66 @@ public final class Mesh {
     }
 
     /**
+     * This mesh cut across X at {@code planes} (ascending): every face is
+     * split where it crosses a plane, its attributes interpolated, and comes
+     * out as triangles (quads with the last corner repeated) — more stations
+     * for a sweep that bends the tile finer than its own vertices are spaced
+     * (a switch's blades and frog, SPEC §2.2 v1).
+     */
+    public Mesh slicedAlongX(float[] planes) {
+        Mesh out = new Mesh();
+        for (Quad q : quads) {
+            boolean triangle = q.v2().equals(q.v3());
+            slice(out, q, List.of(q.v0(), q.v1(), q.v2()), planes);
+            if (!triangle) {
+                slice(out, q, List.of(q.v2(), q.v3(), q.v0()), planes);
+            }
+        }
+        return out;
+    }
+
+    /** One triangle of {@code owner}, clipped to each slab between the planes, fanned into triangles. */
+    private static void slice(Mesh out, Quad owner, List<Vertex> triangle, float[] planes) {
+        for (int k = 0; k <= planes.length; k++) {
+            float lo = k == 0 ? Float.NEGATIVE_INFINITY : planes[k - 1];
+            float hi = k == planes.length ? Float.POSITIVE_INFINITY : planes[k];
+            List<Vertex> piece = clip(clip(triangle, lo, true), hi, false);
+            for (int i = 1; i + 1 < piece.size(); i++) {
+                out.add(new Quad(piece.get(0), piece.get(i), piece.get(i + 1), piece.get(i + 1),
+                        owner.r(), owner.g(), owner.b(), owner.a(), owner.tag()));
+            }
+        }
+    }
+
+    /** The polygon's part with x ≥ {@code plane} ({@code above}) or x ≤ it (Sutherland–Hodgman). */
+    private static List<Vertex> clip(List<Vertex> polygon, float plane, boolean above) {
+        if (polygon.isEmpty() || Float.isInfinite(plane)) {
+            return polygon;
+        }
+        List<Vertex> out = new ArrayList<>();
+        for (int i = 0; i < polygon.size(); i++) {
+            Vertex a = polygon.get(i);
+            Vertex b = polygon.get((i + 1) % polygon.size());
+            boolean aIn = above ? a.x() >= plane : a.x() <= plane;
+            boolean bIn = above ? b.x() >= plane : b.x() <= plane;
+            if (aIn) {
+                out.add(a);
+            }
+            if (aIn != bIn) {
+                float t = (plane - a.x()) / (b.x() - a.x());
+                out.add(new Vertex(plane, lerp(a.y(), b.y(), t), lerp(a.z(), b.z(), t),
+                        lerp(a.u(), b.u(), t), lerp(a.v(), b.v(), t),
+                        lerp(a.nx(), b.nx(), t), lerp(a.ny(), b.ny(), t), lerp(a.nz(), b.nz(), t)));
+            }
+        }
+        return out.size() >= 3 ? out : List.of();
+    }
+
+    private static float lerp(float a, float b, float t) {
+        return a + (b - a) * t;
+    }
+
+    /**
      * Append a quad from four corners (any winding — the wagon render type is
      * no-cull) with a shared normal and colour. UVs map the corners to the unit
      * square; with the white wagon texture that just samples white, so the face

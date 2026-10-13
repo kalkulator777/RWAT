@@ -33,37 +33,71 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 
 /**
  * Dev tool (SPEC §2.2 v1, §2.4a): {@code -Pautoscene=switch} on a throwaway
- * flat save copy — the switch blades' visual regression check. Builds a
- * Y-switch with a trunk, the way a player does (markers + a rails click), in
- * each rail style — the mod's standard rail, {@code mvp:rail} and
- * {@code mvp:rail_bridge} ({@code switch:<style>,<style>…} for others,
- * {@code standard} = the mod's) — 24 blocks apart, 4000 blocks east of the
- * player. Every switch is shot set straight and set diverging, from above
- * ({@code rwat-switch-<style>-top-0/1.png}), straight down onto the blade
+ * flat save copy — the switch blades' and frogs' visual regression check.
+ * Builds switches the way a player does (markers + a rails click), one per
+ * column, 24 blocks apart, 4000 blocks east of the player: a Y-switch with a
+ * trunk, its legs 17 blocks to a parallel track 4 over, in the mod's
+ * standard rail, {@code mvp:rail} and {@code mvp:rail_bridge}; a gentle Y,
+ * 33 blocks long ({@code long:mvp:rail}); and an N-crossover whose diagonal
+ * goes 4 over in 8 ({@code n:mvp:rail}, the sharpest frog). Other columns:
+ * {@code switch:<column>,<column>…}, a column being a style id
+ * ({@code standard} = the mod's) with an optional {@code long:}/{@code n:}.
+ * Every switch is shot set straight and set diverging, from above
+ * ({@code rwat-switch-<column>-top-0/1.png}), straight down onto the blade
  * tips ({@code -tip-}), low behind the toe ({@code -toe-}) and from aside
- * ({@code -view-}), and the throw in between tick by tick from above the
- * tips ({@code -throw-<n>.png}). The redstone throws it as a player would: a
- * block under the switch stand. Then a TGM23 runs from the trunk through the
- * first {@code mvp:rail} switch (or the first one) in either setting; the log
- * tells which leg its head took ({@code [switch] set … OK/WRONG},
- * {@code rwat-switch-train-0/1.png}) — the route must follow the blades.
- * Quits the game at the end. A 1920×1080 window (the shots' size) is
- * {@code earlyWindowWidth/Height} in {@code run/config/fml.toml}.
+ * ({@code -view-}); its frog from above and low ({@code -frog-0},
+ * {@code -froglow-0} — the frog doesn't move); and the throw in between
+ * tick by tick from above the tips ({@code -throw-<n>.png}). The redstone
+ * throws it as a player would: a block under the switch stand. Then a TGM23
+ * runs from the trunk through the first {@code mvp:rail} Y (or the first
+ * column) in either setting; the log tells which leg its head took
+ * ({@code [switch] set … OK/WRONG}, {@code rwat-switch-train-0/1.png}) — the
+ * route must follow the blades. Quits the game at the end. A 1920×1080
+ * window (the shots' size) is {@code earlyWindowWidth/Height} in
+ * {@code run/config/fml.toml}.
  */
 @EventBusSubscriber(modid = RailsWheelsAndTrains.MODID, value = Dist.CLIENT)
 public final class SwitchScene {
 
-    private static final String[] STYLES = {"standard", "mvp:rail", "mvp:rail_bridge"};
-    /** Ticks for one style's shots. */
-    private static final int PER_STYLE = 320;
-    /** First tick of the shots. */
-    private static final int SHOTS = 260;
+    private static final String[] COLUMNS = {"standard", "mvp:rail", "mvp:rail_bridge", "long:mvp:rail",
+            "n:mvp:rail"};
+    /** Ticks for one column's shots. */
+    private static final int PER_COLUMN = 400;
     /** Columns apart, blocks. */
     private static final int SPACING = 24;
 
+    /**
+     * One switch of the scene: a Y ({@code length} ahead to a track 4 over,
+     * with a trunk) or an N-crossover ({@code crossover}: the diagonal
+     * {@code length} long, no trunk); {@code frog} is roughly how far ahead
+     * of the toe cell its frog lies — where the frog shots look.
+     */
+    private record Column(String name, String style, boolean crossover, int length, double frog) {
+
+        static Column parse(String token) {
+            String name = token.replace(':', '_');
+            if (token.startsWith("long:")) {
+                return new Column(name, styleOf(token.substring(5)), false, 33, 14.6);
+            }
+            if (token.startsWith("n:")) {
+                return new Column(name, styleOf(token.substring(2)), true, 8, 4.4);
+            }
+            return new Column(name, styleOf(token), false, 17, 8.1);
+        }
+
+        private static String styleOf(String id) {
+            return id.equals("standard") ? "" : id;
+        }
+
+        /** The switch stand: the cell the clicked switch marker stood in. */
+        BlockPos stand(BlockPos toe) {
+            return crossover ? toe : toe.offset(0, 0, 1);
+        }
+    }
+
     private static int ticks;
-    private static String[] styles;
-    /** The trunk's end at the toe — the marker block cell of switch 0. */
+    private static List<Column> columns;
+    /** The toe cell of column 0: the trunk's end marker of a Y, the switch marker of an N. */
     private static BlockPos base;
     /** The toe node's segments of the switch the train runs: straight leg, diverging leg. */
     private static int straightLeg = -1;
@@ -83,7 +117,11 @@ public final class SwitchScene {
         }
         ticks++;
         if (ticks == 100) {
-            styles = scene.startsWith("switch:") ? scene.substring("switch:".length()).split(",") : STYLES;
+            columns = new ArrayList<>();
+            for (String token : scene.startsWith("switch:") ? scene.substring("switch:".length()).split(",")
+                    : COLUMNS) {
+                columns.add(Column.parse(token));
+            }
             Vec3 origin = mc.player.position().add(4000.0, 0.0, 0.0);
             base = BlockPos.containing(origin);
             command(mc, "gamemode creative");
@@ -94,86 +132,126 @@ public final class SwitchScene {
             command(mc, "difficulty peaceful"); // no slimes of the flat world in the shots
             return;
         }
-        if (styles == null) {
+        if (columns == null) {
             return;
         }
-        // build one switch every 20 ticks: its trunk, then the Y onto the trunk's end
+        // build one switch every 20 ticks
         int build = ticks - 160;
-        if (build >= 0 && build < styles.length * 20) {
-            int i = build / 20;
-            BlockPos toe = column(i);
-            String style = styles[i].equals("standard") ? "" : styles[i];
-            switch (build % 20) {
+        if (build >= 0 && build < columns.size() * 20) {
+            build(mc, build / 20, build % 20);
+            return;
+        }
+        int built = 160 + columns.size() * 20;
+        if (ticks == built + 20) {
+            command(mc, "gamemode spectator");
+            mc.options.hideGui = true;
+        }
+        int shot = ticks - (built + 40);
+        if (shot < 0) {
+            return;
+        }
+        if (shot < columns.size() * PER_COLUMN) {
+            columnShots(mc, shot / PER_COLUMN, shot % PER_COLUMN);
+            return;
+        }
+        train(mc, shot - columns.size() * PER_COLUMN);
+    }
+
+    /** Build column {@code i}, {@code t} ticks in. */
+    private static void build(Minecraft mc, int i, int t) {
+        Column column = columns.get(i);
+        BlockPos toe = column(i);
+        int length = column.length();
+        if (column.crossover()) {
+            // two switch markers looking along their parallel tracks, two plain ones beyond
+            switch (t) {
                 case 0 -> {
-                    marker(mc, toe.offset(0, 0, -20), false);
-                    marker(mc, toe, false);
+                    marker(mc, toe, true);
+                    marker(mc, toe.offset(4, 0, length), true);
+                    marker(mc, toe.offset(0, 0, length + 12), false);
+                    marker(mc, toe.offset(4, 0, length + 20), false);
                 }
-                case 4 -> useRails(mc, toe.offset(0, 0, -20), style);
-                case 8 -> {
-                    // one block past the trunk's end: the switch snaps onto its node
-                    marker(mc, toe.offset(0, 0, 1), true);
-                    marker(mc, toe.offset(0, 0, 17), false);
-                    marker(mc, toe.offset(4, 0, 17), false);
-                }
-                case 12 -> useRails(mc, toe.offset(0, 0, 1), style);
+                case 4 -> useRails(mc, toe, column.style());
                 case 16 -> logGraph(mc, i);
                 default -> {
                 }
             }
             return;
         }
-        if (ticks == 240) {
-            command(mc, "gamemode spectator");
-            mc.options.hideGui = true;
+        // a trunk, then the Y onto its end
+        switch (t) {
+            case 0 -> {
+                marker(mc, toe.offset(0, 0, -20), false);
+                marker(mc, toe, false);
+            }
+            case 4 -> useRails(mc, toe.offset(0, 0, -20), column.style());
+            case 8 -> {
+                // one block past the trunk's end: the switch snaps onto its node
+                marker(mc, toe.offset(0, 0, 1), true);
+                marker(mc, toe.offset(0, 0, length), false);
+                marker(mc, toe.offset(4, 0, length), false);
+            }
+            case 12 -> useRails(mc, toe.offset(0, 0, 1), column.style());
+            case 16 -> logGraph(mc, i);
+            default -> {
+            }
         }
-        int shot = ticks - SHOTS;
-        if (shot >= 0 && shot < styles.length * PER_STYLE) {
-            styleShots(mc, shot / PER_STYLE, shot % PER_STYLE);
-            return;
-        }
-        train(mc, shot - styles.length * PER_STYLE);
     }
 
-    /** The shots of switch {@code i}, {@code t} ticks in: set straight, the throw, set diverging. */
-    private static void styleShots(Minecraft mc, int i, int t) {
-        String name = "rwat-switch-" + styles[i].replace(':', '_');
+    /** The shots of column {@code i}, {@code t} ticks in: set straight, the throw, set diverging. */
+    private static void columnShots(Minecraft mc, int i, int t) {
+        Column column = columns.get(i);
+        String name = "rwat-switch-" + column.name();
         BlockPos toe = column(i);
-        if (t < 140) {
-            views(mc, toe, name + "-%s-0.png", t);
+        if (t < 210) {
+            views(mc, column, toe, name + "-%s-0.png", t, true);
             return;
         }
-        if (t >= 170 && t < 310) {
-            views(mc, toe, name + "-%s-1.png", t - 170);
+        if (t >= 240 && t < 380) {
+            views(mc, column, toe, name + "-%s-1.png", t - 240, false);
             return;
         }
-        if (t > 150 && t < 166) {
-            shot(mc, name + "-throw-" + (t - 150) + ".png"); // the throw, tick by tick
+        if (t > 220 && t < 236) {
+            shot(mc, name + "-throw-" + (t - 220) + ".png"); // the throw, tick by tick
         }
         switch (t) {
-            case 140 -> tip(mc, toe);
-            case 150 -> throwSwitch(mc, toe, true);
-            case 166 -> throwSwitch(mc, toe, false);
+            case 210 -> tip(mc, toe);
+            case 220 -> throwSwitch(mc, column, toe, true);
+            case 236 -> throwSwitch(mc, column, toe, false);
             // back to straight for the train run
-            case 310 -> throwSwitch(mc, toe, true);
-            case 316 -> throwSwitch(mc, toe, false);
+            case 380 -> throwSwitch(mc, column, toe, true);
+            case 386 -> throwSwitch(mc, column, toe, false);
             default -> {
             }
         }
     }
 
-    /** The four views of a switch as it is set, {@code t} ticks in (0–139). */
-    private static void views(Minecraft mc, BlockPos toe, String name, int t) {
-        switch (t) {
+    /**
+     * The views of a switch as it is set, {@code t} ticks in, 35 apart: the
+     * four of the throat, and with {@code frog} the two of the frog.
+     */
+    private static void views(Minecraft mc, Column column, BlockPos toe, String name, int t, boolean frog) {
+        String[] names = {"top", "tip", "toe", "view", "frog", "froglow"};
+        int view = t / 35;
+        if (view >= (frog ? 6 : 4)) {
+            return;
+        }
+        if (t % 35 == 30) {
+            shot(mc, String.format(Locale.ROOT, name, names[view]));
+            return;
+        }
+        if (t % 35 != 0) {
+            return;
+        }
+        switch (view) {
             case 0 -> top(mc, toe);
-            case 30 -> shot(mc, String.format(Locale.ROOT, name, "top"));
-            case 35 -> tip(mc, toe);
-            case 65 -> shot(mc, String.format(Locale.ROOT, name, "tip"));
-            case 70 -> toeView(mc, toe);
-            case 100 -> shot(mc, String.format(Locale.ROOT, name, "toe"));
-            case 105 -> sideView(mc, toe);
-            case 135 -> shot(mc, String.format(Locale.ROOT, name, "view"));
-            default -> {
-            }
+            case 1 -> tip(mc, toe);
+            case 2 -> toeView(mc, toe);
+            case 3 -> sideView(mc, toe);
+            // the frog lies on the straight track's inner rail, +X of its axis
+            case 4 -> camera(mc, toe.getX() + 1.3, toe.getY() + 1.8, toe.getZ() + column.frog(), 0.0F, 90.0F);
+            default -> camera(mc, toe.getX() + 0.7, toe.getY() + 0.6, toe.getZ() + column.frog() - 2.4,
+                    -10.0F, 15.0F);
         }
     }
 
@@ -184,12 +262,13 @@ public final class SwitchScene {
      */
     private static void train(Minecraft mc, int t) {
         int i = 0;
-        for (int k = 0; k < styles.length; k++) {
-            if (styles[k].equals("mvp:rail")) {
+        for (int k = columns.size() - 1; k >= 0; k--) {
+            Column candidate = columns.get(k);
+            if (candidate.style().equals("mvp:rail") && candidate.length() == 17 && !candidate.crossover()) {
                 i = k;
-                break;
             }
         }
+        Column column = columns.get(i);
         BlockPos toe = column(i);
         int run = t % 300;
         int setting = t / 300;
@@ -226,11 +305,11 @@ public final class SwitchScene {
         if (run == 280) {
             removeTrain(mc);
             if (setting == 0) {
-                throwSwitch(mc, toe, true);
+                throwSwitch(mc, column, toe, true);
             }
         }
         if (run == 286 && setting == 0) {
-            throwSwitch(mc, toe, false);
+            throwSwitch(mc, column, toe, false);
         }
     }
 
@@ -264,12 +343,12 @@ public final class SwitchScene {
     }
 
     /**
-     * Pulse the switch stand — the cell the switch marker stood in, one past
-     * the toe — through a redstone block two below it: on (a rising edge
-     * throws the switch), or back to dirt.
+     * Pulse the switch stand — the cell the clicked switch marker stood in —
+     * through a redstone block two below it: on (a rising edge throws the
+     * switch), or back to dirt.
      */
-    private static void throwSwitch(Minecraft mc, BlockPos toe, boolean on) {
-        BlockPos under = toe.offset(0, -2, 1);
+    private static void throwSwitch(Minecraft mc, Column column, BlockPos toe, boolean on) {
+        BlockPos under = column.stand(toe).below(2);
         command(mc, String.format(Locale.ROOT, "setblock %d %d %d %s", under.getX(), under.getY(), under.getZ(),
                 on ? "minecraft:redstone_block" : "minecraft:dirt"));
     }
@@ -296,7 +375,7 @@ public final class SwitchScene {
             RailGraph graph = RailNetwork.get(level).graph();
             RailNode node = graph.nodeNear(new Vector3d(toe.getX() + 0.5, toe.getY(), toe.getZ() + 0.5));
             if (node == null) {
-                RailsWheelsAndTrains.LOGGER.warn("[switch] {}: no node at the toe", styles[i]);
+                RailsWheelsAndTrains.LOGGER.warn("[switch] {}: no node at the toe", columns.get(i).name());
                 return;
             }
             List<String> legs = new ArrayList<>();
@@ -305,7 +384,7 @@ public final class SwitchScene {
                 legs.add("#" + id + " " + (segment.style().isEmpty() ? "standard" : segment.style()));
             }
             RailsWheelsAndTrains.LOGGER.info("[switch] {}: toe node #{} with segments {}, selection {}",
-                    styles[i], node.id(), legs, graph.switchSelection(node.id()));
+                    columns.get(i).name(), node.id(), legs, graph.switchSelection(node.id()));
         });
     }
 
