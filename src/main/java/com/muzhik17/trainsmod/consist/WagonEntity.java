@@ -4,11 +4,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
 import org.joml.Vector3d;
 
+import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.client.ClientConsists;
 import com.muzhik17.trainsmod.client.ClientRide;
 import com.muzhik17.trainsmod.client.ClientWalk;
@@ -638,6 +640,14 @@ public class WagonEntity extends Entity {
     public void sitDriver(ServerPlayer player, int chair) {
         WagonType.Seat seat = seat(chair);
         Vector3d local = riderLocal.get(player.getUUID());
+        if (seat != null && local != null && player.getVehicle() == this && !isSeated(player)
+                && Math.hypot(local.x - seat.x(), local.z - seat.z()) > RiderWalk.SEAT_REACH) {
+            // the client offered the chair in reach: the two disagree where the rider stands
+            RailsWheelsAndTrains.LOGGER.info(
+                    "[ride-debug] chair {} of wagon {} out of {}'s reach on the server: feet {} {}, chair {} {}",
+                    chair, getId(), player.getGameProfile().getName(), fmt(local.x), fmt(local.z),
+                    fmt(seat.x()), fmt(seat.z()));
+        }
         if (seat == null || local == null || player.getVehicle() != this || isSeated(player)
                 || occupied(chair)
                 || Math.hypot(local.x - seat.x(), local.z - seat.z()) > RiderWalk.SEAT_REACH
@@ -769,6 +779,11 @@ public class WagonEntity extends Entity {
                 hull.minX(), hull.minY(), hull.minZ(), hull.maxX(), hull.maxY(), hull.maxZ()) <= reach * reach;
     }
 
+    /** A coordinate for the debug log, two decimals. */
+    private static String fmt(double v) {
+        return String.format(Locale.ROOT, "%.2f", v);
+    }
+
     /** The player's eye in this car's pose frame (server). */
     public Vector3d localEye(ServerPlayer player) {
         Vec3 eye = player.getEyePosition();
@@ -874,8 +889,10 @@ public class WagonEntity extends Entity {
      * along the floor and clamp inside the interior walls. Crouched
      * ({@code sneak}), the step is a creep and no hull door lets them out —
      * only a gangway into the next car ({@link RiderWalk#exitDoor}).
+     * {@code relativeYaw} is the look relative to the car as the client drew
+     * it, so the step here is the client's own ({@code WalkInputPayload}).
      */
-    public void setWalkInput(ServerPlayer player, float forward, float strafe, float yaw,
+    public void setWalkInput(ServerPlayer player, float forward, float strafe, float relativeYaw,
             boolean sneak, boolean exit) {
         if (isSeated(player)) {
             return; // seated: the keys drive (DriveInputPayload), sneaking stands up
@@ -900,7 +917,7 @@ public class WagonEntity extends Entity {
         }
         List<WagonType.Door> doors = framedDoors();
         if (!doors.isEmpty()) {
-            int door = RiderWalk.exitDoor(local, forward, strafe, yaw, getYRot(),
+            int door = RiderWalk.exitDoor(local, forward, strafe, relativeYaw, 0.0F,
                     interior, doors, doorMask(), sneak);
             if (door >= 0) {
                 WagonType.Door through = doors.get(door);
@@ -915,7 +932,7 @@ public class WagonEntity extends Entity {
             }
         }
         riderLocal.put(player.getUUID(),
-                RiderWalk.step(local, forward, strafe, yaw, getYRot(), interior, doors, doorMask(), sneak));
+                RiderWalk.step(local, forward, strafe, relativeYaw, 0.0F, interior, doors, doorMask(), sneak));
     }
 
     /**
@@ -1099,6 +1116,13 @@ public class WagonEntity extends Entity {
         double reach = player.blockInteractionRange() + DOOR_REACH_SLACK;
         if (ClickReach.distanceSq(eye.x, eye.y, eye.z, clickSweep(player), cx, cy, cz, cx, cy, cz)
                 > reach * reach) {
+            // the client drew the door in reach: the two disagree where the player is
+            RailsWheelsAndTrains.LOGGER.info(
+                    "[ride-debug] door {} of wagon {} out of {}'s reach on the server: eye {} {} {}, door {} {} {}"
+                            + " (car frame), riding {}",
+                    index, getId(), player.getGameProfile().getName(), fmt(eye.x), fmt(eye.y), fmt(eye.z),
+                    fmt(cx), fmt(cy), fmt(cz),
+                    player.getVehicle() == null ? "nothing" : "wagon " + player.getVehicle().getId());
             return;
         }
         if (cabArea().cabDoor(index) && !CabAccess.check(player)) {

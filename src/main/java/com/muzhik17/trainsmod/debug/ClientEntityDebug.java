@@ -3,11 +3,13 @@ package com.muzhik17.trainsmod.debug;
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.consist.WagonEntity;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent;
 
@@ -24,7 +26,35 @@ import net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent;
 @EventBusSubscriber(modid = RailsWheelsAndTrains.MODID, value = Dist.CLIENT)
 public final class ClientEntityDebug {
 
+    /**
+     * The entity the local player rode at the end of the last tick, −1 if
+     * none: a wagon leaving the client takes its riders off before the
+     * leave event, so this is how a leave tells it carried the player.
+     */
+    private static int ridden = -1;
+
     private ClientEntityDebug() {
+    }
+
+    /**
+     * The local player's ride as the client has it, logged when it changes
+     * ({@code [ride-debug]}, 2026-10-14): a ride lost on the client alone
+     * leaves the server walking them on a car the client doesn't — doors,
+     * chairs and the way out stop answering.
+     */
+    @SubscribeEvent
+    static void onClientTick(ClientTickEvent.Post event) {
+        Minecraft mc = Minecraft.getInstance();
+        Entity vehicle = mc.player == null ? null : mc.player.getVehicle();
+        int now = vehicle == null ? -1 : vehicle.getId();
+        if (now != ridden && mc.player != null) {
+            RailsWheelsAndTrains.LOGGER.info("[ride-debug] client: {} now {}", mc.player.getGameProfile().getName(),
+                    vehicle instanceof WagonEntity wagon
+                            ? "rides wagon " + wagon.getId() + " consist#" + wagon.getConsistId()
+                                    + "[" + wagon.getWagonIndex() + "]"
+                            : vehicle == null ? "rides nothing" : "rides entity " + now);
+        }
+        ridden = now;
     }
 
     @SubscribeEvent
@@ -37,7 +67,8 @@ public final class ClientEntityDebug {
     @SubscribeEvent
     static void onLeave(EntityLeaveLevelEvent event) {
         if (event.getLevel().isClientSide()) {
-            log("LEAVE", event.getEntity());
+            log(event.getEntity().getId() == ridden ? "LEAVE (the local player aboard!)" : "LEAVE",
+                    event.getEntity());
         }
     }
 

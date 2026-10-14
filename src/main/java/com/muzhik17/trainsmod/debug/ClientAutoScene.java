@@ -659,6 +659,12 @@ public final class ClientAutoScene {
      * with the floor wireframes on ({@code rwat-gangway-*.png}).
      */
     private static void gangway(Minecraft mc) {
+        // the cars spawn where chunks are still being made: hold the script till
+        // the client has both (it ran ahead of them and died on a null car)
+        if (ticks == 179 && (carAt(mc, 0) == null || carAt(mc, 1) == null)) {
+            ticks--;
+            return;
+        }
         if (ticks > 200 && ticks < 240 && ticks % 10 == 0 && mc.player.getVehicle() == null) {
             placeOn(mc, carAt(mc, 1), 1.3, 0.0, 11.28, -90.0F, 0.0F); // stay in the doorway till boarded
         }

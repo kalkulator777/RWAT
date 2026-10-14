@@ -10,8 +10,10 @@ import net.minecraft.resources.ResourceLocation;
 /**
  * Client→server walk input for a wagon-bound rider (SPEC v1.5-б): the player's
  * look-relative move ({@code forward}/{@code strafe}, vanilla impulse signs)
- * and look {@code yaw}, whether they are crouched ({@code sneak}: a creep that
- * keeps to the floor), plus an {@code exit} edge (right-click) requesting
+ * and the look's yaw <b>relative to the car</b> as the client drew it
+ * ({@code relativeYaw}: the player's yaw less the car's), whether they are
+ * crouched ({@code sneak}: a creep that keeps to the floor), plus an
+ * {@code exit} edge (right-click) requesting
  * dismount. Sent every client tick while riding a boardable interior so the
  * server has a continuous signal; the server validates the sender actually
  * rides a boardable wagon and is authoritative over the resulting local
@@ -23,8 +25,16 @@ import net.minecraft.resources.ResourceLocation;
  * still walks the last car until the passenger change reaches it, and those
  * steps, read in the next car's frame, would put the server ahead of the
  * client's prediction for good.
+ *
+ * <p>The yaw is the car's-frame one so that the server steps exactly the
+ * client's step: with the world yaw, each side turned it into the car's frame
+ * by its own yaw of the car — the client's drawn a few ticks behind the
+ * server's, so on a curve every step went a little elsewhere on each side
+ * and the feet drifted apart for good: the server had the rider out of reach
+ * of the door they clicked, away from the doorway they walked out of
+ * (play-test 2026-10-14).
  */
-public record WalkInputPayload(int wagonId, float forward, float strafe, float yaw, boolean sneak,
+public record WalkInputPayload(int wagonId, float forward, float strafe, float relativeYaw, boolean sneak,
         boolean exit) implements CustomPacketPayload {
 
     public static final CustomPacketPayload.Type<WalkInputPayload> TYPE =
@@ -38,7 +48,7 @@ public record WalkInputPayload(int wagonId, float forward, float strafe, float y
         buf.writeVarInt(payload.wagonId);
         buf.writeFloat(payload.forward);
         buf.writeFloat(payload.strafe);
-        buf.writeFloat(payload.yaw);
+        buf.writeFloat(payload.relativeYaw);
         buf.writeBoolean(payload.sneak);
         buf.writeBoolean(payload.exit);
     }

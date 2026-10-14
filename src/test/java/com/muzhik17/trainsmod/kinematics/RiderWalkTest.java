@@ -66,6 +66,30 @@ class RiderWalkTest {
     }
 
     @Test
+    void walk_theLookInTheCarsFrame_stepsAsTheWorldLookLessTheCar() {
+        // what WalkInputPayload carries: the look relative to the car, the car at 0
+        Vector3d start = new Vector3d(0.3, BOX.floorY(), 2.0);
+        Vector3d world = RiderWalk.step(start, 1.0, 0.4, 37.0f, 12.0f, BOX);
+        Vector3d relative = RiderWalk.step(start, 1.0, 0.4, 25.0f, 0.0f, BOX);
+        assertEquals(world.x, relative.x, 1.0e-6);
+        assertEquals(world.z, relative.z, 1.0e-6);
+    }
+
+    @Test
+    void walk_twoYawsOfOneCar_driftApart() {
+        // the play-test of 2026-10-14: client and server each turned the world
+        // look into the car's frame by their own yaw of the car — on a curve the
+        // drawn car is a few ticks (a degree or two) behind the server's
+        Vector3d client = new Vector3d(0.0, BOX.floorY(), -10.0);
+        Vector3d server = new Vector3d(client);
+        for (int i = 0; i < 100; i++) {
+            client = RiderWalk.step(client, 1.0, 0.0, 30.0f, 28.5f, BOX);
+            server = RiderWalk.step(server, 1.0, 0.0, 30.0f, 30.0f, BOX);
+        }
+        assertTrue(client.distance(server) > 0.2, "no drift: " + client.distance(server));
+    }
+
+    @Test
     void walk_diagonalIsNotFasterThanStraight() {
         Vector3d start = new Vector3d(0.0, BOX.floorY(), 0.0);
         Vector3d next = RiderWalk.step(start, 1.0, 1.0, 0.0f, 0.0f, BOX);

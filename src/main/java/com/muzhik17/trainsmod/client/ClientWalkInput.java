@@ -1,5 +1,7 @@
 package com.muzhik17.trainsmod.client;
 
+import java.util.Locale;
+
 import org.joml.Vector3d;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
@@ -72,6 +74,23 @@ public final class ClientWalkInput {
     private static boolean sneakWasDown = true;
     /** Entity id of the wagon the predicted feet belong to, or -1 when not walking one. */
     private static int walkedWagon = -1;
+    /** Ticks the walking rider has stood still (no key held), to check the feet against the server's. */
+    private static int stillTicks;
+
+    /**
+     * Standing still this long, the server has run every step the rider took
+     * (a round trip under half a second), so its feet and the prediction must
+     * be the same — or they drifted apart.
+     */
+    private static final int RESYNC_STILL_TICKS = 10;
+    /** How far the prediction may be off the server's feet, standing, before it is put right, blocks. */
+    private static final double RESYNC_TOLERANCE = 0.05;
+    /**
+     * The most a car turns in a tick, degrees: well past a train's (300 km/h
+     * on the tightest curve ≈ 16°). A bigger jump of its yaw is its pose frame
+     * turned (a coupling) or a glitch — the car didn't turn, so the view isn't carried.
+     */
+    private static final float MAX_CAR_TURN = 30.0F;
 
     private ClientWalkInput() {
     }
@@ -96,6 +115,8 @@ public final class ClientWalkInput {
             prevFlipped = null;
             prevSeat = null;
             walkedWagon = -1;
+            stillTicks = 0;
+            ClientWalk.takeServerFeet();
             ClientWalk.clearLocalOwner();
             ClientRiderSteps.resetLocal();
             if (player != null) {
@@ -110,6 +131,8 @@ public final class ClientWalkInput {
             prevWagonYaw = null;
             prevFlipped = null;
             walkedWagon = -1;
+            stillTicks = 0;
+            ClientWalk.takeServerFeet();
             ClientWalk.clearLocalOwner();
             ClientRiderSteps.resetLocal();
             ClientWalk.remove(player.getId());
@@ -124,6 +147,7 @@ public final class ClientWalkInput {
             walkedWagon = wagonId;
             prevWagonYaw = null;
             prevFlipped = null;
+            stillTicks = 0;
             Vector3d synced = ClientWalk.on(player.getId(), wagonId);
             if (synced != null) {
                 ClientWalk.put(player.getId(), wagonId, synced);
@@ -149,6 +173,9 @@ public final class ClientWalkInput {
         boolean turned = prevFlipped != null && flipped != prevFlipped;
         if (turned) {
             // a coupling turned the car in its consist: same spot, mirrored frame
+            RailsWheelsAndTrains.LOGGER.info("[ride-debug] wagon {} (consist #{}[{}]) turned round in its consist,"
+                    + " yaw {} -> {}: feet mirrored", wagonId, wagon.getConsistId(), wagon.getWagonIndex(),
+                    prevWagonYaw, wagonYaw);
             Vector3d feet = ClientWalk.get(player.getId());
             if (feet != null) {
                 ClientWalk.put(player.getId(), wagonId, new Vector3d(-feet.x, feet.y, -feet.z));
@@ -157,7 +184,13 @@ public final class ClientWalkInput {
         prevFlipped = flipped;
         if (prevWagonYaw != null) {
             float dYaw = Mth.wrapDegrees(wagonYaw - prevWagonYaw - (turned ? 180.0f : 0.0f));
-            if (dYaw != 0.0f) {
+            if (Math.abs(dYaw) > MAX_CAR_TURN) {
+                // not the car turning: its frame or its pose jumped — the view stays (2026-10-14)
+                RailsWheelsAndTrains.LOGGER.info(
+                        "[ride-debug] wagon {} (consist #{}[{}]) yaw jumped {} -> {}{}: view not carried",
+                        wagonId, wagon.getConsistId(), wagon.getWagonIndex(), prevWagonYaw, wagonYaw,
+                        turned ? " as it turned round" : "");
+            } else if (dYaw != 0.0f) {
                 player.setYRot(player.getYRot() + dYaw);
             }
         }
@@ -181,6 +214,8 @@ public final class ClientWalkInput {
             sneakWasDown = sneak;
             prevSeat = seat;
             useWasDown = true;
+            stillTicks = 0; // the chair's feet aren't walked
+            ClientWalk.takeServerFeet();
             return;
         }
         if (prevSeat != null) {
@@ -195,7 +230,9 @@ public final class ClientWalkInput {
 
         float forward = (mc.options.keyUp.isDown() ? 1f : 0f) - (mc.options.keyDown.isDown() ? 1f : 0f);
         float strafe = (mc.options.keyLeft.isDown() ? 1f : 0f) - (mc.options.keyRight.isDown() ? 1f : 0f);
-        float yaw = player.getYRot();
+        // the look in the car's frame as drawn: the server steps with this very
+        // number, not with its own (a few ticks newer) yaw of the car
+        float relativeYaw = Mth.wrapDegrees(player.getYRot() - wagonYaw);
         // read the key, not the player: crouched is what the server is told
         boolean sneak = mc.options.keyShift.isDown();
 
@@ -212,7 +249,20 @@ public final class ClientWalkInput {
                             new Vector3d(player.getX(), player.getY(), player.getZ())),
                     RiderWalk.PLAYER_HALF_WIDTH);
         }
-        Vector3d next = RiderWalk.step(local, forward, strafe, yaw, wagonYaw, interior,
+        // standing still, the prediction must match the server's feet; if it
+        // drifted off, the server's win — else the server keeps the rider where
+        // the client isn't: doors out of reach, the doorway never reached
+        stillTicks = forward == 0.0f && strafe == 0.0f ? stillTicks + 1 : 0;
+        ClientWalk.Feet server = ClientWalk.takeServerFeet();
+        if (server != null && stillTicks >= RESYNC_STILL_TICKS && server.wagonId() == wagonId
+                && server.local().distance(local) > RESYNC_TOLERANCE) {
+            RailsWheelsAndTrains.LOGGER.info(
+                    "[ride-debug] feet on wagon {} re-synced from the server, off by {}: client {} server {}",
+                    wagonId, String.format(Locale.ROOT, "%.2f", server.local().distance(local)),
+                    fmt(local), fmt(server.local()));
+            local = new Vector3d(server.local());
+        }
+        Vector3d next = RiderWalk.step(local, forward, strafe, relativeYaw, 0.0F, interior,
                 wagon.framedDoors(), wagon.doorMask(), sneak);
         ClientWalk.put(player.getId(), wagonId, next);
 
@@ -221,7 +271,12 @@ public final class ClientWalkInput {
         ClientRiderSteps.localStep(player, wagon, next.x - local.x, next.z - local.z, sneak);
         player.setYHeadRot(player.getYRot());
 
-        PacketDistributor.sendToServer(new WalkInputPayload(wagonId, forward, strafe, yaw, sneak, exit));
+        PacketDistributor.sendToServer(new WalkInputPayload(wagonId, forward, strafe, relativeYaw, sneak, exit));
+    }
+
+    /** Local feet for the debug log, two decimals. */
+    private static String fmt(Vector3d v) {
+        return String.format(Locale.ROOT, "(%.2f %.2f %.2f)", v.x, v.y, v.z);
     }
 
     /** True if the ridden wagon is left only through its doors (no right-click exit). */
