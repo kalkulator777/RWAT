@@ -19,6 +19,7 @@
     "LivingEntityRendererSeatMixin",
     "LivingEntityWalkAnimationMixin",
     "LocalPlayerCrouchMixin",
+    "LocalPlayerWagonViewMixin",
     "SoundManagerFilesMixin"
   ],
   "injectors": {

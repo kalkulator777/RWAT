@@ -280,8 +280,9 @@ public final class ClientAutoScene {
             // look far round: the camera turns freely, the drawn head stops at the chair's limit
             case 456 -> look(mc, 170.0F, 0.0F);
             case 466 -> report(mc, String.format(Locale.ROOT,
-                    "looked 170 off the desk: yaw %.1f, head %.1f, body %.1f, wagon %.1f",
-                    mc.player.getYRot(), mc.player.getYHeadRot(), mc.player.yBodyRot, wagon(mc).getYRot()));
+                    "looked 170 off the desk: yaw %.1f, camera %.1f, head %.1f, body %.1f, wagon %.1f",
+                    mc.player.getYRot(), mc.gameRenderer.getMainCamera().getYRot(), mc.player.getYHeadRot(),
+                    mc.player.yBodyRot, wagon(mc).getYRot()));
             case 470 -> mc.setScreen(new com.muzhik17.trainsmod.client.gui.DriverPanelScreen(wagon(mc)));
             case 485 -> shot(mc, "rwat-walk-driver-panel.png");
             case 495 -> mc.stop();
