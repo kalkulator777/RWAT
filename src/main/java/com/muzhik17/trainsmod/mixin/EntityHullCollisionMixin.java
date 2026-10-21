@@ -25,11 +25,17 @@ import net.minecraft.world.phys.Vec3;
  * own local frame ({@link HullCollision}).
  *
  * <p><b>Common</b> mixin on purpose: the local player's movement is resolved
- * client-side (the server doesn't run {@code collide} for a client-authoritative
- * player), while mobs are resolved server-side — so both sides must clamp. A
- * passenger doesn't collide with the hull of its own vehicle. The "wagon overtakes
- * a standing entity" case can't be caught here (it's the wagon that moves, not the
- * entity) — the server-side shove in {@code ConsistManager} covers it.
+ * client-side, mobs' server-side — so both sides clamp. Not a player on the
+ * server, though: its {@code handleMovePlayer} replays the client's move
+ * through {@code collide} and checks it against what the client claimed, and
+ * the server's hull runs a couple of ticks plus the ping ahead of the one the
+ * client drew and walked by — clamped there, a player by a moving train was
+ * "moved wrongly" and set back. The client's own clamp keeps a player out; one
+ * the server finds overlapping a hull anyway is pushed out by the shove. A
+ * passenger doesn't collide with the hull of its own vehicle. The "wagon
+ * overtakes a standing entity" case can't be caught here (it's the wagon that
+ * moves, not the entity) — the server-side shove in {@code ConsistManager}
+ * covers it.
  *
  * <p>Open doors (SPEC v1.5): a <b>player</b> is let through an open doorway
  * ({@link WagonEntity#openPortals}) and boarded by the server once inside;
@@ -44,8 +50,9 @@ public abstract class EntityHullCollisionMixin {
     @Inject(method = "collide", at = @At("RETURN"), cancellable = true)
     private void rwat$collideHull(Vec3 movement, CallbackInfoReturnable<Vec3> cir) {
         Entity self = (Entity) (Object) this;
-        if (self instanceof WagonEntity || self.isSpectator()) {
-            return;
+        if (self instanceof WagonEntity || self.isSpectator()
+                || self instanceof Player && !self.level().isClientSide()) {
+            return; // a player is clamped by its own client (see above)
         }
         Vec3 allowed = cir.getReturnValue();
         if (allowed.lengthSqr() < 1.0e-12) {
