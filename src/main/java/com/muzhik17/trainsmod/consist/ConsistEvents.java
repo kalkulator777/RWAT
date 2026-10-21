@@ -4,10 +4,16 @@ import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.GameType;
+import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.EntityMountEvent;
+import net.neoforged.neoforge.event.entity.EntityTeleportEvent;
+import net.neoforged.neoforge.event.entity.EntityTravelToDimensionEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
 
 /**
@@ -41,6 +47,9 @@ public final class ConsistEvents {
      * the logout takes them off it ({@code PlayerList.remove} → {@code
      * unRide}) once they are marked disconnected, but before they are removed
      * — refused, the car would keep a player gone from the world aboard.
+     * What carries a rider elsewhere — a teleport, another dimension,
+     * spectating, another vehicle — lets them off first by a sanctioned exit
+     * ({@link #letOff}); Shift at an open door stays as it is.
      */
     @SubscribeEvent
     static void onMount(EntityMountEvent event) {
@@ -53,6 +62,70 @@ public final class ConsistEvents {
         if (wagon.isWalkingRider(player) && !wagon.dismountAllowed() && !leavingTheGame
                 && !wagon.isRemoved() && !player.isRemoved()) {
             event.setCanceled(true);
+        }
+    }
+
+    /**
+     * Mounting something else ({@code /ride}, another mod's seat) lets a
+     * rider off the wagon first: vanilla's {@code startRiding} tries to get
+     * them off the old vehicle, the guard refuses, and it seats them on the
+     * new one anyway — the wagon kept a ghost passenger. Lowest priority: a
+     * mount another listener refuses leaves them aboard.
+     */
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    static void onMountOther(EntityMountEvent event) {
+        if (event.isMounting() && event.getEntityMounting().getVehicle() instanceof WagonEntity wagon
+                && event.getEntityBeingMounted() != wagon) {
+            letOff(event.getEntityMounting());
+        }
+    }
+
+    /**
+     * A teleport someone announces lets a rider off first ({@code /tp},
+     * {@code /spreadplayers}, a mod's): before the teleport, so one another
+     * listener cancels leaves them aboard. The unannounced ones are caught
+     * where vanilla dismounts for them ({@code ServerPlayerTeleportMixin}).
+     * Not a pearl thrown aboard — no way out but the doors, the player stays
+     * (SPEC v1.5-б, checked in game 2026-10-13) — nor, alike, a chorus fruit
+     * eaten aboard.
+     */
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    static void onTeleport(EntityTeleportEvent event) {
+        if (!(event instanceof EntityTeleportEvent.EnderPearl)
+                && !(event instanceof EntityTeleportEvent.ChorusFruit)) {
+            letOff(event.getEntity());
+        }
+    }
+
+    /**
+     * Into another dimension a rider goes off the wagon first, never its
+     * passenger from another level (vanilla's own way there doesn't always
+     * get them off, and where it tries, the guard refuses). Travel within the
+     * level — a pearl's landing comes this way — is no change.
+     */
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    static void onTravelToDimension(EntityTravelToDimensionEvent event) {
+        if (event.getDimension() != event.getEntity().level().dimension()) {
+            letOff(event.getEntity());
+        }
+    }
+
+    /** Spectating, a rider is off the wagon, where they stood (vanilla's dismount there the guard refuses). */
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    static void onGameModeChange(PlayerEvent.PlayerChangeGameModeEvent event) {
+        if (event.getNewGameMode() == GameType.SPECTATOR) {
+            letOff(event.getEntity());
+        }
+    }
+
+    /**
+     * Let a player off the wagon they ride where they stand (server), by a
+     * sanctioned exit ({@link WagonEntity#releaseRider}): something is about
+     * to carry them elsewhere. Anything else is left alone.
+     */
+    public static void letOff(Entity entity) {
+        if (entity instanceof ServerPlayer player && player.getVehicle() instanceof WagonEntity wagon) {
+            wagon.releaseRider(player);
         }
     }
 }

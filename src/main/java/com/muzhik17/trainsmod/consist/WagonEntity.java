@@ -889,6 +889,22 @@ public class WagonEntity extends Entity {
     }
 
     /**
+     * Let a rider off where they stand, by a sanctioned exit (server): for
+     * what carries them elsewhere — a teleport, another dimension, spectating,
+     * another vehicle ({@link ConsistEvents}). Vanilla's own dismount on the
+     * way there is one the guard refuses: the player stayed aboard, or the car
+     * kept them as a ghost passenger. Their chair and floor spot go with them.
+     */
+    public void releaseRider(ServerPlayer player) {
+        if (player.getVehicle() != this) {
+            return;
+        }
+        doorExit = player.position();
+        exitRider(player);
+        doorExit = null;
+    }
+
+    /**
      * Apply one tick of walk input from a rider (server-authoritative, SPEC
      * v1.5-б): the exit edge dismounts; otherwise step the rider's local feet
      * along the floor and clamp inside the interior walls. Crouched
