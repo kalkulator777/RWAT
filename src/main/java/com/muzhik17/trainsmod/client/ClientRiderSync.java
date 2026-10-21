@@ -45,7 +45,7 @@ public final class ClientRiderSync {
     public static void apply(int consistId, List<RiderLocal> riders) {
         Set<Integer> now = new HashSet<>();
         for (RiderLocal rider : riders) {
-            if (ClientWalk.putRemote(rider.entityId(), rider.wagonId(), rider.local())) {
+            if (ClientWalk.putRemote(rider.entityId(), rider.wagonId(), rider.local(), rider.ack())) {
                 now.add(rider.entityId());
                 Integer before = OWNER.put(rider.entityId(), consistId);
                 if (before != null && before != consistId) {

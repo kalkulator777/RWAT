@@ -19,6 +19,11 @@ import net.minecraft.resources.ResourceLocation;
  * rides a boardable wagon and is authoritative over the resulting local
  * position (it clamps against the interior walls).
  *
+ * <p>{@code seq} numbers the client's walk inputs: the server says with each
+ * rider sync which one its feet are after ({@code RiderSyncPayload}), and
+ * the client puts its prediction right against them there ({@code
+ * ClientWalkLog}) — whatever the round trip.
+ *
  * <p>{@code wagonId} is the wagon the client walks — its prediction's frame.
  * The server drops input meant for another wagon than the one the player
  * rides there: right after a gangway carried them on (SPEC §9.5) the client
@@ -34,8 +39,8 @@ import net.minecraft.resources.ResourceLocation;
  * of the door they clicked, away from the doorway they walked out of
  * (play-test 2026-10-14).
  */
-public record WalkInputPayload(int wagonId, float forward, float strafe, float relativeYaw, boolean sneak,
-        boolean exit) implements CustomPacketPayload {
+public record WalkInputPayload(int wagonId, int seq, float forward, float strafe, float relativeYaw,
+        boolean sneak, boolean exit) implements CustomPacketPayload {
 
     public static final CustomPacketPayload.Type<WalkInputPayload> TYPE =
             new CustomPacketPayload.Type<>(
@@ -46,6 +51,7 @@ public record WalkInputPayload(int wagonId, float forward, float strafe, float r
 
     private static void write(FriendlyByteBuf buf, WalkInputPayload payload) {
         buf.writeVarInt(payload.wagonId);
+        buf.writeVarInt(payload.seq);
         buf.writeFloat(payload.forward);
         buf.writeFloat(payload.strafe);
         buf.writeFloat(payload.relativeYaw);
@@ -54,8 +60,8 @@ public record WalkInputPayload(int wagonId, float forward, float strafe, float r
     }
 
     private static WalkInputPayload read(FriendlyByteBuf buf) {
-        return new WalkInputPayload(buf.readVarInt(), buf.readFloat(), buf.readFloat(), buf.readFloat(),
-                buf.readBoolean(), buf.readBoolean());
+        return new WalkInputPayload(buf.readVarInt(), buf.readVarInt(), buf.readFloat(), buf.readFloat(),
+                buf.readFloat(), buf.readBoolean(), buf.readBoolean());
     }
 
     @Override

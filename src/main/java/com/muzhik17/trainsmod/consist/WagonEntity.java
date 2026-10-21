@@ -21,6 +21,7 @@ import com.muzhik17.trainsmod.kinematics.PoseMath;
 import com.muzhik17.trainsmod.kinematics.ReturnAboard;
 import com.muzhik17.trainsmod.kinematics.RiderWalk;
 import com.muzhik17.trainsmod.kinematics.WagonPose;
+import com.muzhik17.trainsmod.network.RiderLocal;
 import com.muzhik17.trainsmod.network.RiderPlacePayload;
 import com.muzhik17.trainsmod.stock.ConsistComposition;
 import com.muzhik17.trainsmod.stock.WagonType;
@@ -163,6 +164,8 @@ public class WagonEntity extends Entity {
 
     /** Server-authoritative local feet of each walking rider (SPEC v1.5-б). */
     private final Map<UUID, Vector3d> riderLocal = new HashMap<>();
+    /** The number of each rider's last walk input taken in here: the rider sync tells their client. */
+    private final Map<UUID, Integer> walkAck = new HashMap<>();
     /** Set true only while {@link #exitRider} runs, so the dismount guard lets it through. */
     private boolean dismountAllowed;
     /** Set true only while a gangway boards a rider here ({@link #boardAt}): see {@link #carryingOn()}. */
@@ -891,9 +894,14 @@ public class WagonEntity extends Entity {
      * only a gangway into the next car ({@link RiderWalk#exitDoor}).
      * {@code relativeYaw} is the look relative to the car as the client drew
      * it, so the step here is the client's own ({@code WalkInputPayload}).
+     * Every input taken in is acknowledged by its number {@code seq}, applied
+     * or not (seated, the keys drive): the rider sync says which input the
+     * feet are after, and the client puts its prediction right against them
+     * there ({@code ClientWalkLog}).
      */
-    public void setWalkInput(ServerPlayer player, float forward, float strafe, float relativeYaw,
+    public void setWalkInput(ServerPlayer player, int seq, float forward, float strafe, float relativeYaw,
             boolean sneak, boolean exit) {
+        walkAck.put(player.getUUID(), seq);
         if (isSeated(player)) {
             return; // seated: the keys drive (DriveInputPayload), sneaking stands up
         }
@@ -1361,20 +1369,22 @@ public class WagonEntity extends Entity {
     }
 
     /**
-     * This wagon's walking riders as (passenger entity id → local feet), for the
-     * server→client {@code RiderSyncPayload} (SPEC v1.5-б). Keyed by the network
-     * entity id (the same on every client), not UUID, so observers can match it
-     * to the rider entity. Empty when no one walks here — the common case.
+     * This wagon's walking riders' local feet, for the server→client {@code
+     * RiderSyncPayload} (SPEC v1.5-б), each with the number of the rider's last
+     * walk input taken in here. Keyed by the network entity id (the same on
+     * every client), not UUID, so observers can match it to the rider entity.
+     * Empty when no one walks here — the common case.
      */
-    public Map<Integer, Vector3d> walkingRiderLocals() {
+    public List<RiderLocal> walkingRiders() {
         if (riderLocal.isEmpty()) {
-            return Map.of();
+            return List.of();
         }
-        Map<Integer, Vector3d> out = new HashMap<>();
+        List<RiderLocal> out = new ArrayList<>();
         for (Entity passenger : getPassengers()) {
             Vector3d local = riderLocal.get(passenger.getUUID());
             if (local != null) {
-                out.put(passenger.getId(), local);
+                out.add(new RiderLocal(passenger.getId(), getId(), local.x, local.y, local.z,
+                        walkAck.getOrDefault(passenger.getUUID(), RiderLocal.NO_ACK)));
             }
         }
         return out;
@@ -1525,6 +1535,7 @@ public class WagonEntity extends Entity {
     protected void removePassenger(Entity passenger) {
         super.removePassenger(passenger);
         riderLocal.remove(passenger.getUUID());
+        walkAck.remove(passenger.getUUID());
         int chair = chairOf(passenger);
         if (!level().isClientSide && chair >= 0) {
             setSeated(chair, -1);
