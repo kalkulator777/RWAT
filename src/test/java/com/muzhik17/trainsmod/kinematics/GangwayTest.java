@@ -98,6 +98,19 @@ class GangwayTest {
     }
 
     @Test
+    void anOpenDoorInTheEndWall_takesThem_thoughAShutOneIsNearer() {
+        // the next car's rear end wall with two gangway doors: the one in line shut, the other open
+        List<WagonType.Door> doors = List.of(
+                new WagonType.Door("Left", 0.2, 1.936, -12.044, 1.0, 3.874, -11.75, false, false, true),
+                new WagonType.Door("Right", -1.0, 1.936, -12.044, -0.2, 3.874, -11.75, false, false, true));
+        RiderWalk.Arrival arrival = RiderWalk.gangwayArrival(doors, PLATZKART, 1, 0.6, 1 << 1);
+        assertNotNull(arrival, "the open door takes them");
+        assertEquals(1, arrival.door());
+        assertEquals(-0.2 - RiderWalk.PLAYER_HALF_WIDTH, arrival.feet().x, 1.0e-6);
+        assertNull(RiderWalk.gangwayArrival(doors, PLATZKART, 1, 0.6, 0), "both shut: wall");
+    }
+
+    @Test
     void arrival_keepsTheRiderWithinTheDoorSpan() {
         // came through a wide door off-centre; this car's door is narrower
         RiderWalk.Arrival arrival = RiderWalk.gangwayArrival(DOORS, PLATZKART, 1, 1.2);

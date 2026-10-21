@@ -280,7 +280,7 @@ public final class RiderWalk {
 
     /**
      * Where a rider coming through a gangway lands in the next car (SPEC
-     * §9.5): its connecting door in the end wall facing them — the one
+     * §9.5): its connecting door in the end wall facing them — the open one
      * nearest their place across the car — and a spot just inside it, at
      * that place (within the door), on the nearest floor.
      *
@@ -299,10 +299,11 @@ public final class RiderWalk {
 
     /**
      * {@link #gangwayArrival(List, WagonType.Interior, int, double)} through
-     * the next car's door only if it is open (bit {@code i} of {@code
-     * openMask}): a shut door of the next car is wall — the rider opens it
-     * themselves, through their own open door (play-test 2026-10-10: walking
-     * through it shut and seeing it swing open behind you was wrong).
+     * an open door of the next car only (bit {@code i} of {@code openMask}):
+     * a shut door of the next car is wall — the rider opens it themselves,
+     * through their own open door (play-test 2026-10-10: walking through it
+     * shut and seeing it swing open behind you was wrong); another open one
+     * in that end wall takes them, even if a shut one is nearer.
      */
     public static Arrival gangwayArrival(List<WagonType.Door> doors, WagonType.Interior interior,
             int travel, double across, int openMask) {
@@ -310,7 +311,7 @@ public final class RiderWalk {
         double bestOff = Double.MAX_VALUE;
         for (int i = 0; i < doors.size() && i < 32; i++) {
             WagonType.Door door = doors.get(i);
-            if (door.connecting() && door.axis() == 2 && door.outward() == -travel) {
+            if (door.connecting() && door.axis() == 2 && door.outward() == -travel && door.open(openMask, i)) {
                 double off = Math.abs(along(across, door) - across);
                 if (off < bestOff) {
                     best = i;
@@ -318,7 +319,7 @@ public final class RiderWalk {
                 }
             }
         }
-        if (best < 0 || !doors.get(best).open(openMask, best)) {
+        if (best < 0) {
             return null;
         }
         WagonType.Door door = doors.get(best);

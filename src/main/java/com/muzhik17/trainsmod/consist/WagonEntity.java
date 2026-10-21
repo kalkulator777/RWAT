@@ -964,8 +964,8 @@ public class WagonEntity extends Entity {
      * on that end (SPEC §9.5): the wagon ahead for a door in the front (+Z)
      * end wall, the one behind for the rear. Both pose frames point the same
      * way along the train, so the rider keeps their place across the car.
-     * False (the door stays wall) if no wagon is coupled there, it has no
-     * connecting door facing back, or that door is shut.
+     * False (the door stays wall) if no wagon is coupled there or it has no
+     * open connecting door facing back.
      */
     private boolean passGangway(ServerPlayer player, WagonType.Door door, Vector3d local) {
         if (door.axis() != 2 || !(level() instanceof ServerLevel level)) {
@@ -996,10 +996,10 @@ public class WagonEntity extends Entity {
 
     /**
      * Where a rider coming through the gangway lands here (SPEC §9.5): just
-     * inside this wagon's connecting door in the end wall facing them, at
-     * their place across the car (within the door), on the floor. Null if
-     * there is no such door, it is shut (the rider opens it themselves) or
-     * there is no floor.
+     * inside this wagon's open connecting door in the end wall facing them
+     * (the nearest, if several), at their place across the car (within the
+     * door), on the floor. Null if there is no such door open (the rider
+     * opens it themselves) or there is no floor.
      *
      * @param travel the way they walk along the train: +1 forward (they enter
      *               through this wagon's rear end), -1 back
