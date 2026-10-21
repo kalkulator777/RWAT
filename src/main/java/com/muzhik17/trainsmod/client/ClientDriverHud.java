@@ -72,7 +72,7 @@ public final class ClientDriverHud {
         int height = graphics.guiHeight();
         int x = width - DriverPanel.WIDTH - MARGIN;
         boolean besideHotbar = x >= width / 2 + HOTBAR_HALF + MARGIN;
-        int y = height - DriverPanel.height(readout) - (besideHotbar ? MARGIN : STATUS_BARS + MARGIN);
+        int y = height - DriverPanel.height(mc.font, readout) - (besideHotbar ? MARGIN : STATUS_BARS + MARGIN);
         DriverPanel.draw(graphics, mc.font, x, y, readout, false, 0, 0);
     }
 

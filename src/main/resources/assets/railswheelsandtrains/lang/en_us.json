@@ -50,6 +50,8 @@
   "screen.railswheelsandtrains.cab": "cab",
   "screen.railswheelsandtrains.traction": "traction",
   "screen.railswheelsandtrains.walk_in": "walk-in",
+  "screen.railswheelsandtrains.metres": "%s m",
+  "screen.railswheelsandtrains.tonnes": "%s t",
   "screen.railswheelsandtrains.livery_base": "Base livery",
   "screen.railswheelsandtrains.no_stock": "No rolling stock installed: put a content pack into rwat_packs and restart.",
   "screen.railswheelsandtrains.loading": "Loading the model…",
