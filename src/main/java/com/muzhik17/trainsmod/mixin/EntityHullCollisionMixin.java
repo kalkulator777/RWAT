@@ -11,6 +11,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import com.muzhik17.trainsmod.consist.WagonEntity;
 import com.muzhik17.trainsmod.kinematics.HullCollision;
 import com.muzhik17.trainsmod.stock.WagonType;
+import com.muzhik17.trainsmod.stock.WagonTypes;
 
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
@@ -44,8 +45,8 @@ import net.minecraft.world.phys.Vec3;
 @Mixin(Entity.class)
 public abstract class EntityHullCollisionMixin {
 
-    /** Inflate the wagon search box by the longest stock half-length so far-centred wagons are found. */
-    private static final double SEARCH_REACH = 14.0;
+    /** Past the longest car's half-length, how far the wagon search box reaches (its corners, pitch). */
+    private static final double SEARCH_SLACK = 1.0;
 
     @Inject(method = "collide", at = @At("RETURN"), cancellable = true)
     private void rwat$collideHull(Vec3 movement, CallbackInfoReturnable<Vec3> cir) {
@@ -59,7 +60,8 @@ public abstract class EntityHullCollisionMixin {
             return;
         }
         AABB box = self.getBoundingBox();
-        AABB search = box.expandTowards(allowed).inflate(SEARCH_REACH);
+        // wagons whose centre is up to the longest car's half-length away
+        AABB search = box.expandTowards(allowed).inflate(WagonTypes.longest() / 2.0 + SEARCH_SLACK);
         List<WagonEntity> wagons = self.level().getEntitiesOfClass(WagonEntity.class, search);
         if (wagons.isEmpty()) {
             return;

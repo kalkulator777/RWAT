@@ -49,6 +49,20 @@ class WagonTypesTest {
     }
 
     @Test
+    void longestFollowsTheLoadedLayer_neverUnderThePlaceholder() {
+        double placeholder = WagonTypes.missing("gone:wagon").length();
+        assertEquals(placeholder, WagonTypes.longest());
+        WagonType coach = new WagonType("b:coach", 32.5, new double[]{12.0, -12.0}, 40.0, 100.0,
+                WagonType.Resistance.NONE, null, null, WagonType.Brakes.NONE, null);
+        WagonType shunter = type("a:shunter", true, false);
+        WagonTypes.load(Map.of(coach.id(), coach, shunter.id(), shunter));
+        assertEquals(32.5, WagonTypes.longest());
+        // a reload without the long car shrinks it back
+        WagonTypes.load(Map.of(shunter.id(), shunter));
+        assertEquals(placeholder, WagonTypes.longest());
+    }
+
+    @Test
     void noPacksMeansNoDefaultConsist() {
         assertNull(WagonTypes.defaultConsist());
     }

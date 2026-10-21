@@ -24,6 +24,7 @@ import com.muzhik17.trainsmod.kinematics.WagonPose;
 import com.muzhik17.trainsmod.network.RiderPlacePayload;
 import com.muzhik17.trainsmod.stock.ConsistComposition;
 import com.muzhik17.trainsmod.stock.WagonType;
+import com.muzhik17.trainsmod.stock.WagonTypes;
 
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -1542,8 +1543,8 @@ public class WagonEntity extends Entity {
      */
     @Override
     public AABB getBoundingBoxForCulling() {
-        // half the longest stock frame (platzkart ~12.6) plus curve slack
-        double reach = 16.0;
+        // half the longest car's frame plus curve slack
+        double reach = WagonTypes.longest() / 2.0 + 3.4;
         if (level().isClientSide) {
             reach += Math.abs(ClientConsists.speed(getConsistId())) * 2.0;
         }
