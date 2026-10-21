@@ -1,6 +1,7 @@
 package com.muzhik17.trainsmod.client.gui;
 
 import java.util.List;
+import java.util.Locale;
 
 import com.muzhik17.trainsmod.client.render.model.StockModel;
 import com.muzhik17.trainsmod.client.render.model.StockModels;
@@ -89,7 +90,12 @@ public final class StockPickerScreen extends Screen {
 
     /** "25.1 m · 53 t · cab · traction · walk-in" — what sets the types apart at a glance. */
     private static Component describe(WagonType type) {
-        StringBuilder text = new StringBuilder(String.format("%.1f m · %.0f t", type.length(), type.massT()));
+        StringBuilder text = new StringBuilder()
+                .append(Component.translatable("screen.railswheelsandtrains.metres",
+                        String.format(Locale.ROOT, "%.1f", type.length())).getString())
+                .append(" · ")
+                .append(Component.translatable("screen.railswheelsandtrains.tonnes",
+                        String.format(Locale.ROOT, "%.0f", type.massT())).getString());
         if (type.drivable()) {
             text.append(" · ").append(Component.translatable("screen.railswheelsandtrains.cab").getString());
         }

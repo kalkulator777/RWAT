@@ -46,6 +46,8 @@
   "screen.railswheelsandtrains.cab": "кабина",
   "screen.railswheelsandtrains.traction": "тяга",
   "screen.railswheelsandtrains.walk_in": "салон",
+  "screen.railswheelsandtrains.metres": "%s м",
+  "screen.railswheelsandtrains.tonnes": "%s т",
   "screen.railswheelsandtrains.livery_base": "Базовая ливрея",
   "screen.railswheelsandtrains.no_stock": "Подвижной состав не установлен: положите пак в rwat_packs и перезапустите игру.",
   "screen.railswheelsandtrains.loading": "Загрузка модели…",
