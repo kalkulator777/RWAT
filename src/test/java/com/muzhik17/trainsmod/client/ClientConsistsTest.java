@@ -19,10 +19,10 @@ import com.muzhik17.trainsmod.stock.WagonType;
 
 /**
  * Snapshot playback through gaps in the stream (SPEC §2.1): a silent stream
- * is dropped after {@code STALE_DROP_TICKS} client ticks (Поправка 2), a
- * server hitch holds the train at the extrapolation cap instead of
- * saw-toothing, the resumed stream is caught up with, and a standing train's
- * keep-alives keep it. Drives the wire-free {@link ClientConsists#apply} core
+ * is dropped after {@code STALE_DROP_TICKS} client ticks (the 2026-06-12
+ * untracked-consist fix), a server hitch holds the train at the
+ * extrapolation cap instead of saw-toothing, the resumed stream is caught up
+ * with, and a standing train's keep-alives keep it. Drives the wire-free {@link ClientConsists#apply} core
  * and samples the poses on a straight line, so no Minecraft class is touched.
  */
 class ClientConsistsTest {
