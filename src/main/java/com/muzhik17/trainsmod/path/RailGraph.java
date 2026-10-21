@@ -20,6 +20,8 @@ public final class RailGraph {
 
     /** Clicking this close to an existing node reuses it instead of creating one. */
     public static final double NODE_SNAP_RADIUS = 1.5;
+    /** The shortest segment, blocks: the chord between its nodes, after the ends snapped. */
+    public static final double MIN_SEGMENT_LENGTH = 2.0;
     /** Route walking safety cap (cycles, runaway branches). */
     public static final int MAX_ROUTE_SEGMENTS = 256;
     /**
@@ -171,6 +173,22 @@ public final class RailGraph {
     // --- editing ---
 
     /**
+     * Why {@link #createSegment} refuses a segment: what the ends snapped to
+     * leaves no track to build.
+     */
+    public enum Refusal {
+        /** Both ends snap to one node: a loop with no chord (NaN tangents). */
+        SAME_NODE,
+        /** The nodes the ends snap to are closer together than {@link #MIN_SEGMENT_LENGTH}. */
+        TOO_SHORT,
+        /**
+         * A segment between the same two nodes with the same axes at both ends
+         * is already there: the new one would lie on it (a phantom switch).
+         */
+        DUPLICATE
+    }
+
+    /**
      * Create a segment between two marker points (SPEC §2.2 UX): each end
      * snaps to an existing node within {@link #NODE_SNAP_RADIUS} (reusing its
      * shared tangent → smooth continuation), otherwise a new node is created
@@ -179,7 +197,7 @@ public final class RailGraph {
      *
      * @param dirA tangent axis at {@code a} (e.g. the marker's look direction)
      * @param dirB tangent axis at {@code b}
-     * @return the created segment
+     * @return the created segment, or null if refused ({@link #refusal})
      */
     public RailSegment createSegment(Vector3d a, Vector3d dirA, Vector3d b, Vector3d dirB) {
         return createSegment(a, dirA, false, b, dirB, false);
@@ -189,18 +207,26 @@ public final class RailGraph {
      * Like {@link #createSegment(Vector3d, Vector3d, Vector3d, Vector3d)}, but
      * {@code forceA}/{@code forceB} store the given axis on the segment end
      * itself ({@link RailSegment#dirA()}) even when the end snaps to an
-     * existing node with a different axis. Used by diamond crossings: the
-     * centre node carries the first path's axis, the second path's segments
-     * carry their own.
+     * existing node with a different axis. Used by X-crossings: the centre
+     * node carries the first path's axis, the second path's segments carry
+     * their own.
+     *
+     * <p>Both ends snap among the nodes that exist before the call, so the
+     * far end never snaps to a node the near end has just created. Nothing is
+     * created — null is returned — when the segment is refused
+     * ({@link #refusal}).
      */
     public RailSegment createSegment(Vector3d a, Vector3d dirA, boolean forceA,
             Vector3d b, Vector3d dirB, boolean forceB) {
         RailNode nodeA = nodeNear(a);
+        RailNode nodeB = nodeNear(b);
+        if (refusal(nodeA, a, dirA, forceA, nodeB, b, dirB, forceB) != null) {
+            return null;
+        }
         if (nodeA == null) {
             nodeA = new RailNode(nextNodeId++, a, new Vector3d(dirA));
             nodes.put(nodeA.id(), nodeA);
         }
-        RailNode nodeB = nodeNear(b);
         if (nodeB == null) {
             nodeB = new RailNode(nextNodeId++, b, new Vector3d(dirB));
             nodes.put(nodeB.id(), nodeB);
@@ -216,6 +242,60 @@ public final class RailGraph {
         nodeA.segments().add(segment.id());
         nodeB.segments().add(segment.id());
         return segment;
+    }
+
+    /**
+     * Why {@link #createSegment(Vector3d, Vector3d, boolean, Vector3d, Vector3d, boolean)}
+     * would refuse this segment now, or null if it would build it. The ends
+     * snap first, as there; then the segment is refused if both land on one
+     * node, if the nodes are closer than {@link #MIN_SEGMENT_LENGTH} (the
+     * markers may be far enough apart while the nodes they snap to are not),
+     * or if a segment already joins the same two nodes with the same axes at
+     * both ends. Another segment between the same two nodes is not refused
+     * when an end's axis differs (a {@code force}d axis): the curve is
+     * another one. With the axes the same it is not — each end's sign turns
+     * toward the chord, so the curve is exactly the existing one.
+     */
+    public Refusal refusal(Vector3d a, Vector3d dirA, boolean forceA,
+            Vector3d b, Vector3d dirB, boolean forceB) {
+        return refusal(nodeNear(a), a, dirA, forceA, nodeNear(b), b, dirB, forceB);
+    }
+
+    private Refusal refusal(RailNode nodeA, Vector3d a, Vector3d dirA, boolean forceA,
+            RailNode nodeB, Vector3d b, Vector3d dirB, boolean forceB) {
+        if (nodeA != null && nodeA == nodeB) {
+            return Refusal.SAME_NODE;
+        }
+        Vector3d pa = nodeA != null ? nodeA.position() : a;
+        Vector3d pb = nodeB != null ? nodeB.position() : b;
+        if (pa.distance(pb) < MIN_SEGMENT_LENGTH) {
+            return Refusal.TOO_SHORT;
+        }
+        if (nodeA == null || nodeB == null) {
+            return null; // a new node: nothing can join it yet
+        }
+        Vector3d axisA = forceA ? new Vector3d(dirA).normalize() : nodeA.direction();
+        Vector3d axisB = forceB ? new Vector3d(dirB).normalize() : nodeB.direction();
+        for (int id : nodeA.segments()) {
+            RailSegment other = segment(id);
+            if (other.otherNode(nodeA.id()) == nodeB.id()
+                    && sameAxis(axisAt(other, nodeA.id()), axisA)
+                    && sameAxis(axisAt(other, nodeB.id()), axisB)) {
+                return Refusal.DUPLICATE;
+            }
+        }
+        return null;
+    }
+
+    /** The tangent axis a segment uses at its end on {@code nodeId}: its own override, else the node's. */
+    private Vector3d axisAt(RailSegment segment, int nodeId) {
+        Vector3d override = segment.nodeA() == nodeId ? segment.dirA() : segment.dirB();
+        return override != null ? new Vector3d(override) : node(nodeId).direction();
+    }
+
+    /** Whether two unit axes are the same up to sign. */
+    private static boolean sameAxis(Vector3d u, Vector3d v) {
+        return Math.abs(u.dot(v)) > 1.0 - 1.0e-6;
     }
 
     /**

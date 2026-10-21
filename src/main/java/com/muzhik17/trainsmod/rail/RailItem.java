@@ -8,6 +8,7 @@ import org.joml.Vector3d;
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.ServerConfig;
 import com.muzhik17.trainsmod.client.ClientItemScreens;
+import com.muzhik17.trainsmod.path.RailGraph;
 import com.muzhik17.trainsmod.path.RailSegment;
 
 import net.minecraft.ChatFormatting;
@@ -46,7 +47,11 @@ import net.minecraft.world.level.block.state.BlockState;
  */
 public class RailItem extends Item {
 
-    private static final double MIN_SEGMENT_LENGTH = 2.0;
+    /**
+     * The markers' own distance is checked up front for a clearer message; the
+     * graph checks the snapped nodes again ({@link RailGraph#refusal}).
+     */
+    private static final double MIN_SEGMENT_LENGTH = RailGraph.MIN_SEGMENT_LENGTH;
     /**
      * Min |cos| between a flat-crossing chord and its end markers' axes: the
      * markers must face each other along the chord. 8 marker rotations put the

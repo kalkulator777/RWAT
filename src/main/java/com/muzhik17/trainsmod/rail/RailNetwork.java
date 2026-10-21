@@ -123,7 +123,9 @@ public final class RailNetwork extends SavedData {
      * everything in the loading gauge over the new segments, so a train
      * fits through a hill ({@link #gaugeCells}). If something there can't go — unbreakable, a
      * container, or not the player's to break — nothing is built or changed,
-     * the player is told where, and null is returned.
+     * the player is told where, and null is returned. So it is if the graph
+     * refuses a segment ({@link RailGraph#refusal}: both ends on one node, too
+     * short once snapped, or a duplicate of an existing one).
      */
     public List<RailSegment> build(ServerLevel level, ServerPlayer player, List<SegmentSpec> specs,
             RailSegment.Look look, Collection<BlockPos> consumed) {
@@ -139,6 +141,13 @@ public final class RailNetwork extends SavedData {
         for (SegmentSpec spec : specs) {
             RailSegment segment = graph.createSegment(spec.a(), spec.dirA(), spec.forceA(),
                     spec.b(), spec.dirB(), spec.forceB());
+            if (segment == null) {
+                RailGraph.Refusal refusal = graph.refusal(spec.a(), spec.dirA(), spec.forceA(),
+                        spec.b(), spec.dirB(), spec.forceB());
+                unbuild(created);
+                reportRefused(player, refusal, spec);
+                return null;
+            }
             graph.setSegmentLook(segment.id(), look);
             created.add(segment.id());
         }
@@ -151,9 +160,7 @@ public final class RailNetwork extends SavedData {
         Set<BlockPos> gaugeCells = gauge == null ? Set.of() : gaugeCells(created, gauge, layout);
         BedClearing.Plan clearing = planClearing(level, player, layout, new HashSet<>(consumed), gaugeCells);
         if (clearing.refused()) {
-            for (int i = created.size() - 1; i >= 0; i--) {
-                graph.removeSegment(created.get(i));
-            }
+            unbuild(created);
             reportBlocked(level, player, clearing.blocked());
             return null;
         }
@@ -174,6 +181,28 @@ public final class RailNetwork extends SavedData {
         }
         markChanged(level);
         return built;
+    }
+
+    /** Take a refused build's segments back out of the graph, newest first; their new nodes go with them. */
+    private void unbuild(List<Integer> created) {
+        for (int i = created.size() - 1; i >= 0; i--) {
+            graph.removeSegment(created.get(i));
+        }
+    }
+
+    /** Tell the player why the graph refused a segment of the build ({@link RailGraph#refusal}). */
+    private void reportRefused(ServerPlayer player, RailGraph.Refusal refusal, SegmentSpec spec) {
+        Component message = switch (refusal) {
+            case SAME_NODE -> {
+                Vector3d node = graph.nodeNear(spec.a()).position();
+                yield Component.translatable("message.railswheelsandtrains.rail.refused.same_node",
+                        (int) Math.floor(node.x), (int) Math.floor(node.y), (int) Math.floor(node.z));
+            }
+            case TOO_SHORT -> Component.translatable("message.railswheelsandtrains.rail.refused.too_short",
+                    (int) RailGraph.MIN_SEGMENT_LENGTH);
+            case DUPLICATE -> Component.translatable("message.railswheelsandtrains.rail.refused.duplicate");
+        };
+        player.displayClientMessage(message, false);
     }
 
     /**
