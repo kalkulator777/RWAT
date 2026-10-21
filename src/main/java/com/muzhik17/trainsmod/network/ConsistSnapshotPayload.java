@@ -53,8 +53,12 @@ public record ConsistSnapshotPayload(int consistId, double s, double v, long gam
     public static final StreamCodec<FriendlyByteBuf, ConsistSnapshotPayload> STREAM_CODEC =
             StreamCodec.of(ConsistSnapshotPayload::write, ConsistSnapshotPayload::read);
 
-    public static ConsistSnapshotPayload of(Consist consist, long gameTime, int[] wagonEntityIds) {
-        return new ConsistSnapshotPayload(consist.id(), consist.s(), consist.speed(), gameTime,
+    /**
+     * The consist's state now, at speed {@code v} — its own, or 0 for a train
+     * standing frozen (it doesn't move, whatever speed it froze with).
+     */
+    public static ConsistSnapshotPayload of(Consist consist, double v, long gameTime, int[] wagonEntityIds) {
+        return new ConsistSnapshotPayload(consist.id(), consist.s(), v, gameTime,
                 consist.pathSpec(), consist.composition(),
                 consist.frame(), consist.frameFrom(), consist.frameShift(), wagonEntityIds,
                 new Handles(consist.handle(Consist.Handle.REVERSER),

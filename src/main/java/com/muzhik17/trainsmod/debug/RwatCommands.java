@@ -337,6 +337,10 @@ public final class RwatCommands {
         double startS = Math.max(nearestS(path, playerPos), minHeadS);
 
         Consist consist = ConsistManager.get(level).spawn(level, spec, path, composition, startS);
+        if (consist == null) {
+            ctx.getSource().sendFailure(Component.literal("A wagon could not join the level: nothing spawned."));
+            return 0;
+        }
 
         double pathLength = path.length();
         ctx.getSource().sendSuccess(() -> Component.literal(String.format(
@@ -526,13 +530,14 @@ public final class RwatCommands {
             TrackPath path = consist.resolvePath(network.graph(), network.revision());
             String line;
             if (path == null) {
-                line = String.format("#%d  FROZEN (route references removed rails)  wagons=%d",
+                line = String.format("#%d  STRANDED, not placed yet (none of its wagons loaded)  wagons=%d",
                         consist.id(), consist.wagonIds().size());
             } else {
                 Vector3d pos = path.samplePosition(consist.s());
-                line = String.format("#%d  s=%.1f/%.1f  v=%.2f  at [%.0f %.0f %.0f]  wagons=%d  chunks=%d",
+                line = String.format("#%d  s=%.1f/%.1f  v=%.2f  at [%.0f %.0f %.0f]  wagons=%d  chunks=%d%s",
                         consist.id(), consist.s(), path.length(), consist.speed(),
-                        pos.x, pos.y, pos.z, consist.wagonIds().size(), manager.chunksHeld(consist.id()));
+                        pos.x, pos.y, pos.z, consist.wagonIds().size(), manager.chunksHeld(consist.id()),
+                        consist.pathSpec() instanceof TrackPathSpec.Stranded ? "  STRANDED (its rails are gone)" : "");
             }
             ctx.getSource().sendSuccess(() -> Component.literal(line), false);
         }
@@ -631,7 +636,7 @@ public final class RwatCommands {
         TrackPath path = consist.resolvePath(network.graph(), network.revision());
         if (path == null) {
             ctx.getSource().sendFailure(Component.literal(
-                    "Consist #" + id + " is frozen (route references removed rails)."));
+                    "Consist #" + id + " is stranded and not placed yet (none of its wagons loaded)."));
             return 0;
         }
         Vector3d pos = path.samplePosition(consist.s());

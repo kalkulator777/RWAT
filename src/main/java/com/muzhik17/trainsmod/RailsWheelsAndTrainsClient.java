@@ -81,7 +81,9 @@ public class RailsWheelsAndTrainsClient {
      * firing — an advancing clock would run the train on by extrapolation,
      * and the silence would drop the consists' states (STALE_DROP_TICKS):
      * trains blinking out until their next snapshot. The same under
-     * {@code /tick freeze}, where the server's gameTime stands too.
+     * {@code /tick freeze}, where the server's gameTime stands too: the
+     * consists stand with the world, and run on a tick per tick of
+     * {@code /tick step}.
      */
     @SubscribeEvent
     static void onClientTickPre(ClientTickEvent.Pre event) {

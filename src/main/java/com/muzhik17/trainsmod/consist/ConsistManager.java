@@ -103,17 +103,28 @@ public final class ConsistManager extends SavedData {
      * Create a consist and spawn its wagon entities posed on {@code path}
      * (the resolved {@code pathSpec}) with the head at {@code headS}. The
      * caller keeps the whole train on the path.
+     *
+     * @return the consist, or null if a wagon couldn't join the level (another
+     *         mod refused it) — then nothing of the train is left behind
      */
     public Consist spawn(ServerLevel level, TrackPathSpec pathSpec, TrackPath path,
             ConsistComposition composition, double headS) {
         Consist consist = create(pathSpec, composition, headS);
+        List<WagonEntity> joined = new ArrayList<>(composition.wagonCount());
         for (int i = 0; i < composition.wagonCount(); i++) {
             WagonEntity wagon = new WagonEntity(RailsWheelsAndTrains.WAGON_ENTITY.get(), level);
             wagon.setConsistId(consist.id());
             wagon.setWagonIndex(i);
             WagonPose pose = ConsistKinematics.wagonPose(path, headS, i, composition);
             wagon.moveTo(pose.body().x, pose.body().y, pose.body().z, pose.yaw(), pose.pitch());
-            level.addFreshEntity(wagon);
+            if (!level.addFreshEntity(wagon)) {
+                // a train with a wagon missing would carry a ghost: none at all
+                // (unlisted first, so the wagons already in go as plain removals)
+                remove(consist.id());
+                joined.forEach(Entity::discard);
+                return null;
+            }
+            joined.add(wagon);
             consist.wagonIds().add(wagon.getUUID());
         }
         // new stock is delivered parked: it holds on a grade until released
@@ -179,13 +190,18 @@ public final class ConsistManager extends SavedData {
                 dirty = true; // re-anchored onto a re-walked route (SPEC §2.2 v1)
             }
             if (path == null) {
-                continue; // nothing of the route survived — frozen (SPEC §2.1)
+                path = placeStranded(level, network, consist);
+                if (path == null) {
+                    continue; // stranded somewhere not known yet: none of its wagons has loaded
+                }
+                dirty = true;
             }
             Driver driver = driverOf(level, consist);
             // chunk loading (SPEC §2.1, 2026-10-12): driven or on the move, the
             // consist holds its chunks and runs; otherwise it runs only where
             // the world ticks under it, else it stands frozen (still synced
             // below to the players who see its loaded wagons)
+            boolean wasFrozen = chunks.frozen(consist.id());
             boolean running = chunks.runs(level, consist, path, driver != null, chunkPolicy, now);
             if (running) {
                 // input only counts while a cab has a driver; the handles
@@ -268,11 +284,12 @@ public final class ConsistManager extends SavedData {
                 // the client drops them by gameTime (handleSnapshot). A train
                 // standing frozen (SPEC §2.1, 2026-10-12) — seen from beyond the
                 // simulation distance — only needs keeping alive on the clients
-                // (STALE_DROP_TICKS): a snapshot every FROZEN_SNAPSHOT_TICKS.
-                if (running || consist.speed() != 0.0
-                        || (now + consist.id()) % FROZEN_SNAPSHOT_TICKS == 0) {
-                    ConsistSnapshotPayload snapshot =
-                            ConsistSnapshotPayload.of(consist, level.getGameTime(), entityIds);
+                // (STALE_DROP_TICKS): a snapshot the tick it froze, then every
+                // FROZEN_SNAPSHOT_TICKS, at rest whatever speed it froze with —
+                // it doesn't move, and the clients extrapolate a snapshot's speed
+                if (running || !wasFrozen || (now + consist.id()) % FROZEN_SNAPSHOT_TICKS == 0) {
+                    ConsistSnapshotPayload snapshot = ConsistSnapshotPayload.of(consist,
+                            running ? consist.speed() : 0.0, level.getGameTime(), entityIds);
                     for (WagonEntity wagon : wagons) {
                         PacketDistributor.sendToPlayersTrackingEntity(wagon, snapshot);
                     }
@@ -306,6 +323,29 @@ public final class ConsistManager extends SavedData {
         if (dirty) {
             setDirty();
         }
+    }
+
+    /**
+     * Place a consist stranded before its curves were known (decision D2:
+     * its saved route was already gone) by the first of its wagons that is
+     * loaded, where that wagon stands ({@link Consist#strandAlong}).
+     *
+     * @return its path now, or null if it isn't such a consist or none of its wagons is loaded
+     */
+    private static TrackPath placeStranded(ServerLevel level, RailNetwork network, Consist consist) {
+        if (!(consist.pathSpec() instanceof TrackPathSpec.Stranded)) {
+            return null;
+        }
+        List<UUID> ids = consist.wagonIds();
+        for (int i = 0; i < ids.size() && i < consist.composition().wagonCount(); i++) {
+            if (level.getEntity(ids.get(i)) instanceof WagonEntity wagon) {
+                Vector3d axis = PoseMath.localToWorld(new Vector3d(), wagon.getYRot(), wagon.getXRot(),
+                        new Vector3d(0.0, 0.0, 1.0));
+                consist.strandAlong(i, new Vector3d(wagon.getX(), wagon.getY(), wagon.getZ()), axis);
+                return consist.resolvePath(network.graph(), network.revision());
+            }
+        }
+        return null;
     }
 
     // --- coupling (SPEC §6.12) ---
@@ -584,12 +624,13 @@ public final class ConsistManager extends SavedData {
         if (cut < 1 || cut >= count || consist.wagonIds().size() != count) {
             return null;
         }
+        // resolved first: a re-walk renumbers s (SPEC §2.2), and the plan is cut at s
+        RailNetwork network = RailNetwork.get(level);
+        TrackPath path = consist.resolvePath(network.graph(), network.revision());
         Coupling.Split plan = Coupling.split(consist.composition(), consist.s(), cut);
         Driver driver = driverOf(level, consist);
         boolean driverInRear = driver != null
                 && consist.wagonIds().indexOf(driver.cab().getUUID()) >= cut;
-        RailNetwork network = RailNetwork.get(level);
-        TrackPath path = consist.resolvePath(network.graph(), network.revision());
         Vector3d coupler = path == null ? null
                 : path.samplePosition(Coupling.couplerS(consist.composition(), consist.s(), cut - 1));
 
@@ -762,7 +803,9 @@ public final class ConsistManager extends SavedData {
      * it is, one consist or two, with its handles and handbrakes — and the
      * one-wagon consist left over goes with the entity. In survival its
      * rolling stock item drops, with its type and livery, ready to be put
-     * back on the rails ({@code doEntityDrops} permitting).
+     * back on the rails ({@code doEntityDrops} permitting). A wagon removed
+     * past the manager — {@code /kill}, the void — leaves its train the same
+     * way, without the item ({@link WagonEntity#remove}).
      *
      * @return false if its train can't be cut (its wagon list out of step with the composition): nothing breaks
      */
@@ -986,6 +1029,8 @@ public final class ConsistManager extends SavedData {
         for (Tag entry : tag.getList("Consists", Tag.TAG_COMPOUND)) {
             Consist consist = Consist.load((CompoundTag) entry);
             manager.consists.put(consist.id(), consist);
+            // never below a loaded id: a counter behind would give a new train an old one's id
+            manager.nextId = Math.max(manager.nextId, consist.id() + 1);
         }
         return manager;
     }
