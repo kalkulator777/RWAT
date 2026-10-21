@@ -13,9 +13,6 @@ import com.muzhik17.trainsmod.path.StrandedTrack;
 import com.muzhik17.trainsmod.path.TrackPath;
 
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.DoubleTag;
-import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.Tag;
 import net.minecraft.network.FriendlyByteBuf;
 
 /**
@@ -267,11 +264,15 @@ public sealed interface TrackPathSpec {
             }
             case Stranded stranded -> {
                 tag.putString("PathType", "stranded");
-                ListTag curves = new ListTag();
-                for (double number : stranded.curves()) {
-                    curves.add(DoubleTag.valueOf(number));
+                // the curves' numbers bit for bit, as longs: a list tag would make
+                // this interface link the NBT tag types, and the pure tests that
+                // use a spec run without Minecraft on the classpath
+                double[] numbers = stranded.curves();
+                long[] bits = new long[numbers.length];
+                for (int i = 0; i < bits.length; i++) {
+                    bits[i] = Double.doubleToRawLongBits(numbers[i]);
                 }
-                tag.put("StrandCurves", curves);
+                tag.putLongArray("StrandCurves", bits);
                 byte[] flags = new byte[stranded.reversed().length];
                 for (int i = 0; i < flags.length; i++) {
                     flags[i] = (byte) (stranded.reversed()[i] ? 1 : 0);
@@ -295,10 +296,10 @@ public sealed interface TrackPathSpec {
             return new Route(segments, reversed);
         }
         if ("stranded".equals(tag.getString("PathType"))) {
-            ListTag list = tag.getList("StrandCurves", Tag.TAG_DOUBLE);
-            double[] curves = new double[list.size()];
+            long[] bits = tag.getLongArray("StrandCurves");
+            double[] curves = new double[bits.length];
             for (int i = 0; i < curves.length; i++) {
-                curves[i] = list.getDouble(i);
+                curves[i] = Double.longBitsToDouble(bits[i]);
             }
             byte[] flags = tag.getByteArray("StrandReversed");
             boolean[] reversed = new boolean[flags.length];
