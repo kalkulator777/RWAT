@@ -100,12 +100,21 @@ public class RailsWheelsAndTrains {
      * system never picks it up: invisible forever (the big-circle playtest
      * bug). 10 ticks keeps the spawn base ≤0.5 s stale for a few bytes per
      * wagon per second; the client still ignores the move packets themselves.
+     *
+     * <p>Tracked 10 chunks out (and drawn as far: {@code
+     * WagonEntity.shouldRenderAtSqrDistance}). The server caps tracking at its
+     * view distance, 10 by default, so more would only tell on servers that
+     * see further — and there each moving train's every-tick snapshot, sent
+     * once per wagon to everyone tracking it, would reach ~2.5× the players
+     * at 16. Fire-immune: nothing burns on the small pick box (fire aspect,
+     * lightning, lava) — the car itself takes no harm but at its bogies.
      */
     public static final DeferredHolder<EntityType<?>, EntityType<WagonEntity>> WAGON_ENTITY =
             ENTITY_TYPES.register("wagon", () -> EntityType.Builder
                     .<WagonEntity>of(WagonEntity::new, MobCategory.MISC)
                     .sized(1.5F, 1.5F)
                     .passengerAttachments(1.0F)
+                    .fireImmune()
                     .clientTrackingRange(10)
                     .updateInterval(10)
                     .build(MODID + ":wagon"));
