@@ -2,7 +2,9 @@ package com.muzhik17.trainsmod.path;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
@@ -21,8 +23,14 @@ import java.util.function.Predicate;
  * (region protection, spawn protection). The refusal comes before anything
  * changes.
  *
- * <p>Pure: the world is asked through {@link Occupant} and a may-break
- * predicate, so the rules are unit-tested without one.
+ * <p>The bed itself is the player's edit too ({@link Changes}): every cell it
+ * goes into or changes in needs the right to place there, every cell it
+ * comes out of — and, for a demolition or a repaint, every cell of the
+ * structure's own bed — the right to break there. One cell the player may
+ * not change refuses the whole edit, wherever along the track it is.
+ *
+ * <p>Pure: the world is asked through {@link Occupant} and the may-break and
+ * may-place predicates, so the rules are unit-tested without one.
  */
 public final class BedClearing {
 
@@ -46,11 +54,25 @@ public final class BedClearing {
 
     /** Why a build was refused. */
     public enum Reason {
-        UNBREAKABLE, CONTAINER, PROTECTED
+        UNBREAKABLE, CONTAINER,
+        /** An obstacle in the way the player may not break there. */
+        PROTECTED,
+        /** Bed the player may not lay, change or take out there. */
+        PROTECTED_BED
     }
 
     /** The cell that refused the build, and why. */
     public record Blocked(BedRaster.Cell cell, Reason reason) {
+    }
+
+    /**
+     * The bed cells an edit changes, besides what it clears: {@code lifted} —
+     * bed taken out, and for a demolition or a repaint every cell of the
+     * structure's own bed (touching a structure at all needs the right to
+     * break wherever it lies); {@code laid} — cells the bed goes into or
+     * changes in.
+     */
+    public record Changes(Collection<BedRaster.Cell> lifted, Collection<BedRaster.Cell> laid) {
     }
 
     /**
@@ -72,16 +94,24 @@ public final class BedClearing {
     /**
      * Plan clearing the way for {@code bed} cells and the cells {@code above}
      * them that must be clear — the headroom, and the loading gauge when a
-     * build clears it (a cell in both counts as bed). Unbreakable blocks and containers refuse
-     * the build before anyone is asked whether a block may be broken; then
-     * {@code mayBreak} is asked for each cell to be emptied, in order, and the
-     * first it denies refuses the build as protected.
+     * build clears it (a cell in both counts as bed) — and check the bed's own
+     * {@code changes}. Unbreakable blocks and containers refuse the build
+     * before anyone is asked whether a cell may be changed. Then every cell
+     * the edit changes is asked once, in order: {@code mayBreak} for each cell
+     * to be emptied and then for each {@linkplain Changes#lifted lifted} one,
+     * {@code mayPlace} for each cell the bed is {@linkplain Changes#laid laid}
+     * in that wasn't asked to break already (a cell the right to break was
+     * asked for is the player's to change). The first denial refuses the
+     * build as protected — {@link Reason#PROTECTED} for an obstacle,
+     * {@link Reason#PROTECTED_BED} for the bed.
      *
      * @param occupant what each cell holds now
      * @param mayBreak whether the builder may break that cell (protection)
+     * @param mayPlace whether the builder may place a block in that cell (protection)
      */
     public static Plan plan(Collection<BedRaster.Cell> bed, Collection<BedRaster.Cell> above,
-            Function<BedRaster.Cell, Occupant> occupant, Predicate<BedRaster.Cell> mayBreak) {
+            Function<BedRaster.Cell, Occupant> occupant, Changes changes,
+            Predicate<BedRaster.Cell> mayBreak, Predicate<BedRaster.Cell> mayPlace) {
         List<BedRaster.Cell> removed = new ArrayList<>();
         for (BedRaster.Cell cell : bed) {
             Occupant what = occupant.apply(cell);
@@ -106,9 +136,21 @@ public final class BedClearing {
                 removed.add(cell);
             }
         }
+        Set<BedRaster.Cell> asked = new HashSet<>();
         for (BedRaster.Cell cell : removed) {
+            asked.add(cell);
             if (!mayBreak.test(cell)) {
                 return new Plan(List.of(), new Blocked(cell, Reason.PROTECTED));
+            }
+        }
+        for (BedRaster.Cell cell : changes.lifted()) {
+            if (asked.add(cell) && !mayBreak.test(cell)) {
+                return new Plan(List.of(), new Blocked(cell, Reason.PROTECTED_BED));
+            }
+        }
+        for (BedRaster.Cell cell : changes.laid()) {
+            if (asked.add(cell) && !mayPlace.test(cell)) {
+                return new Plan(List.of(), new Blocked(cell, Reason.PROTECTED_BED));
             }
         }
         return new Plan(List.copyOf(removed), null);

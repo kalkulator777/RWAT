@@ -31,19 +31,24 @@ import net.minecraft.world.level.block.state.BlockState;
  * The rails (SPEC §2.2 UX). Clicking a plain {@link RailMarkerBlock} connects
  * it to the nearest other plain marker — a segment is built between the two
  * with tangents taken from the markers' directions, and both marker blocks are
- * consumed.
+ * consumed. Three more plain markers laid out as two crossing chords build a
+ * flat crossing instead (two independent segments, no shared node).
  *
- * <p>Clicking a {@link RailSwitchMarkerBlock} builds a junction instead: with
- * three more switch markers in range — a diamond crossing (two independent
- * segments between opposite pairs); otherwise — a Y-switch from this marker
- * (the toe) to the two nearest plain markers (the branch ends), two segments
- * sharing the toe node and its tangent. All involved markers are consumed.
+ * <p>Clicking a {@link RailSwitchMarkerBlock} builds a junction instead, by
+ * how many other switch markers are in range: three — an X-crossing through a
+ * shared centre node, or a scissors crossover if the paired chords don't
+ * cross; one — an N-crossover between two tracks; none — a Y-switch from this
+ * marker (the toe) to the two nearest plain markers (the branch ends), two
+ * segments sharing the toe node and its tangent. All involved markers are
+ * consumed. Only markers the player may break count as in range — someone
+ * else's, in their region, is passed over ({@link RailNetwork#nearestMarkers}).
  *
  * <p>Right-clicking into the air opens the rail style picker (SPEC §6.10):
  * the chosen style and bed material (SPEC §2.2) are stored on the stack, and
  * every segment this item builds is drawn in that style on that bed.
  * Sneak-right-clicking existing track repaints its whole structure in the
- * held style and bed.
+ * held style and bed. Builds and repaints are refused whole when any cell of
+ * bed they would change is one the player may not build in.
  */
 public class RailItem extends Item {
 
@@ -130,7 +135,8 @@ public class RailItem extends Item {
             BlockPos posA, BlockState stateA) {
         RailNetwork network = RailNetwork.get(level);
         Vector3d dirA = RailMarkerBlock.direction(stateA.getValue(RailMarkerBlock.ROTATION));
-        List<BlockPos> nearest = network.nearestMarkers(level, posA, ServerConfig.maxMarkerDistance(), false, 3);
+        List<BlockPos> nearest = network.nearestMarkers(level, player, posA,
+                ServerConfig.maxMarkerDistance(), false, 3);
         if (nearest.isEmpty()) {
             player.displayClientMessage(Component.literal(
                     "Rails: no second marker within " + ServerConfig.maxMarkerDistance() + " blocks."), true);
@@ -248,7 +254,8 @@ public class RailItem extends Item {
         Vector3d a = cellCentre(posA);
         Vector3d dirA = RailMarkerBlock.direction(stateA.getValue(RailMarkerBlock.ROTATION));
 
-        List<BlockPos> switchMates = network.nearestMarkers(level, posA, ServerConfig.maxMarkerDistance(), true, 3);
+        List<BlockPos> switchMates = network.nearestMarkers(level, player, posA,
+                ServerConfig.maxMarkerDistance(), true, 3);
         if (switchMates.size() == 3) {
             buildCrossing(level, player, look, network, posA, a, dirA, switchMates);
             return;
@@ -264,7 +271,8 @@ public class RailItem extends Item {
             return;
         }
 
-        List<BlockPos> branches = network.nearestMarkers(level, posA, ServerConfig.maxMarkerDistance(), false, 2);
+        List<BlockPos> branches = network.nearestMarkers(level, player, posA,
+                ServerConfig.maxMarkerDistance(), false, 2);
         if (branches.size() < 2) {
             player.displayClientMessage(Component.literal(
                     "Switch: needs two rail markers (branch ends) in range — or more"
@@ -314,7 +322,7 @@ public class RailItem extends Item {
         Vector3d c = cellCentre(posC);
         Vector3d dirC = markerDirection(level, posC);
 
-        List<BlockPos> plains = network.nearestMarkers(level, posA, ServerConfig.maxMarkerDistance(), false, 8);
+        List<BlockPos> plains = network.nearestMarkers(level, player, posA, ServerConfig.maxMarkerDistance(), false, 8);
         if (plains.size() < 2) {
             player.displayClientMessage(Component.literal(
                     "Crossover: needs two rail markers (the tracks' continuations) in range."), true);
