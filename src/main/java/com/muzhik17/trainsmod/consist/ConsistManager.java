@@ -271,8 +271,7 @@ public final class ConsistManager extends SavedData {
                     // (SPEC v1.5-а part 2: the case the entity-move clamp can't
                     // catch, because here it's the wagon that moved)
                     shoveOutsiders(level, wagon);
-                    wagon.walkingRiderLocals().forEach((id, local) ->
-                            riders.add(new RiderLocal(id, wagon.getId(), local.x, local.y, local.z)));
+                    riders.addAll(wagon.walkingRiders());
                 }
             }
 

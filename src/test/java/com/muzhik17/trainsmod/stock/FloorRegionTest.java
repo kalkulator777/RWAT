@@ -2,6 +2,7 @@ package com.muzhik17.trainsmod.stock;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -102,6 +103,57 @@ class FloorRegionTest {
         for (int i = 1; i < parent.length; i++) {
             assertEquals(root(parent, 0), root(parent, i), "piece " + i + " is reachable");
         }
+    }
+
+    @Test
+    void aCut_partsTheFloorAtItsFaces() {
+        // a thin shut door across a one-box floor
+        FloorRegion r = FloorRegion.of(List.of(zone(-1.0, 0.0, 1.0, 5.0)), M,
+                List.of(new FloorRegion.Cut(-0.05, -1.0, 0.05, 6.0)));
+        assertEquals(1, r.cuts().size());
+        assertFalse(r.fits(0.0, 2.0), "inside the cut");
+        assertTrue(r.fits(-0.05, 2.0), "on its face");
+        assertEquals(-0.05, r.reach(-0.5, 2.0, 0, 1), EPS);
+        int[] parent = new int[r.pieces().size()];
+        for (int i = 0; i < parent.length; i++) {
+            parent[i] = i;
+        }
+        for (int[] link : r.links()) {
+            parent[root(parent, link[0])] = root(parent, link[1]);
+        }
+        for (int i = 0; i < parent.length; i++) {
+            for (int j = 0; j < parent.length; j++) {
+                if (r.pieces().get(i).maxX() < 0.0 && r.pieces().get(j).minX() > 0.0) {
+                    assertNotEquals(root(parent, i), root(parent, j), "pieces " + i + " and " + j + " joined");
+                }
+            }
+        }
+        assertTrue(r.throughCut(-0.5, 2.0, 0.5, 2.0), "a step through it");
+        assertFalse(r.throughCut(-0.05, 1.0, -0.05, 3.0), "along its face");
+        assertFalse(r.throughCut(-0.5, 2.0, -0.05, 2.0), "up to its face");
+    }
+
+    @Test
+    void aCutNobodyStandsIn_changesNothing() {
+        // a door in the wall between two zones: the gap is wall already
+        List<WagonType.Interior.Zone> zones = List.of(zone(-1.0, 0.0, 1.0, 5.0), zone(-1.0, 5.2, 1.0, 9.0));
+        FloorRegion r = FloorRegion.of(zones, M, List.of(new FloorRegion.Cut(-0.7, 5.0, 0.7, 5.2)));
+        assertTrue(r.cuts().isEmpty());
+        assertEquals(FloorRegion.of(zones, M).pieces(), r.pieces());
+    }
+
+    @Test
+    void aShutDoorsCut_isItsLeafAcrossTheWall_itsSpanGrownByTheMargin() {
+        // the platzkart's compartment door: a side door, thin across X
+        WagonType.Door kupe = new WagonType.Door("DoorKupe", 0.375, 1.811, 6.875, 0.5, 3.936, 7.5, true, false);
+        assertEquals(new FloorRegion.Cut(0.375, 6.875 - M, 0.5, 7.5 + M), FloorRegion.Cut.shut(kupe, M));
+        // an end door drawn without thickness: a centimetre
+        WagonType.Door flat = new WagonType.Door("flat", -0.4, 1.0, 5.0, 0.4, 3.0, 5.0, true, false);
+        FloorRegion.Cut cut = FloorRegion.Cut.shut(flat, M);
+        assertEquals(-0.4 - M, cut.minX(), EPS);
+        assertEquals(0.4 + M, cut.maxX(), EPS);
+        assertEquals(0.01, cut.maxZ() - cut.minZ(), EPS);
+        assertEquals(5.0, (cut.minZ() + cut.maxZ()) * 0.5, EPS);
     }
 
     private static int root(int[] parent, int i) {

@@ -25,6 +25,10 @@ import net.minecraft.resources.ResourceLocation;
  * <b>local</b> frame, so the client pairs it with its own interpolated body pose
  * and vanilla's entity lerp smooths the result — no separate interpolation
  * buffer is needed (unlike {@code s}).
+ *
+ * <p>Each rider's entry also says which of their walk inputs the feet are
+ * after ({@link RiderLocal#ack}): the rider's own client puts its prediction
+ * right against the server's feet after the same input ({@code ClientWalkLog}).
  */
 public record RiderSyncPayload(int consistId, List<RiderLocal> riders) implements CustomPacketPayload {
 
@@ -44,6 +48,7 @@ public record RiderSyncPayload(int consistId, List<RiderLocal> riders) implement
             buf.writeDouble(rider.x());
             buf.writeDouble(rider.y());
             buf.writeDouble(rider.z());
+            buf.writeVarInt(rider.ack());
         }
     }
 
@@ -53,7 +58,7 @@ public record RiderSyncPayload(int consistId, List<RiderLocal> riders) implement
         List<RiderLocal> riders = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             riders.add(new RiderLocal(buf.readVarInt(), buf.readVarInt(), buf.readDouble(),
-                    buf.readDouble(), buf.readDouble()));
+                    buf.readDouble(), buf.readDouble(), buf.readVarInt()));
         }
         return new RiderSyncPayload(consistId, riders);
     }
