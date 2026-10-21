@@ -1,9 +1,11 @@
 package com.muzhik17.trainsmod.client.gui;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import com.muzhik17.trainsmod.client.ClientConfig;
 import com.muzhik17.trainsmod.client.ClientConsists;
@@ -46,8 +48,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * doors on each side and the lights inside, for the whole train at once and
  * car by car — left and right as the driver sees them from this cab, the
  * cars by number and name. Below, the switch for the instruments on the HUD.
- * Kept dumb on purpose (SPEC §7.3) — it shows and sends; the server decides
- * who may move a handle, switch the lights or work the doors. The world
+ * Kept dumb on purpose (SPEC §7.3) — it shows and sends, its switches
+ * working only while this cab drives; the server decides who may move a
+ * handle, switch the lights or work the doors. The world
  * stays visible behind it (no blur): the train keeps running while it is open.
  */
 public final class DriverPanelScreen extends Screen {
@@ -80,8 +83,12 @@ public final class DriverPanelScreen extends Screen {
     private final WagonEntity cab;
     /** Group → label, in the order the train's models list them. */
     private final Map<String, String> groups = new LinkedHashMap<>();
-    /** Groups switched from this screen before the wagons' synced state catches up. */
-    private final Map<String, Boolean> pending = new LinkedHashMap<>();
+    /** Groups switched from this screen before the wagons' synced state catches up (kept over a resize). */
+    private final PendingSwitches pending = new PendingSwitches();
+    /** The groups some wagon of the train has on, as synced: read once a tick, not per button per frame. */
+    private final Set<String> lit = new HashSet<>();
+    /** Ticks since the screen opened: the clock of {@link #pending}. */
+    private int ticks;
     /** The cars of the train page, front first. */
     private final List<Car> cars = new ArrayList<>();
     private final List<CarToggle> carToggles = new ArrayList<>();
@@ -96,8 +103,8 @@ public final class DriverPanelScreen extends Screen {
 
     /** The cars the train had when the page was made: a coupling or a cut while open remakes it. */
     private int carsKnown;
-    /** The train page's buttons, active only while this cab drives. */
-    private final List<Button> trainButtons = new ArrayList<>();
+    /** The buttons that switch something on the train (lights, doors): active only while this cab drives. */
+    private final List<Button> switches = new ArrayList<>();
 
     /**
      * A car of the train: its row on the page, entity, number in the train,
@@ -116,9 +123,10 @@ public final class DriverPanelScreen extends Screen {
     protected void init() {
         groups.clear();
         collectGroups();
+        pending.retain(groups.keySet());
         collectCars();
         carToggles.clear();
-        trainButtons.clear();
+        switches.clear();
         int count = groups.size();
         int rowsFit = Math.max(1, (height - FOOTER - GAP - TOP + GAP) / (BUTTON_HEIGHT + GAP));
         int columns = Math.max(1, (count + rowsFit - 1) / rowsFit);
@@ -140,7 +148,9 @@ public final class DriverPanelScreen extends Screen {
             for (String group : groups.keySet()) {
                 int x = lightsX + (i / rows) * (buttonWidth + GAP);
                 int y = TOP + (i % rows) * (BUTTON_HEIGHT + GAP);
-                addRenderableWidget(new LightButton(group, x, y, buttonWidth));
+                LightButton button = new LightButton(group, x, y, buttonWidth);
+                switches.add(button);
+                addRenderableWidget(button);
                 i++;
             }
         } else {
@@ -154,6 +164,7 @@ public final class DriverPanelScreen extends Screen {
                 .bounds(width / 2 - 154, footerY, 150, BUTTON_HEIGHT).build());
         addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, b -> onClose())
                 .bounds(width / 2 + 4, footerY, 150, BUTTON_HEIGHT).build());
+        refresh();
     }
 
     /**
@@ -187,7 +198,7 @@ public final class DriverPanelScreen extends Screen {
             for (int column = 0; column < 3; column++) {
                 CarToggle toggle = new CarToggle(car, targets[column], toggleX(column));
                 carToggles.add(toggle);
-                trainButtons.add(toggle);
+                switches.add(toggle);
                 addRenderableWidget(toggle);
             }
         }
@@ -197,7 +208,7 @@ public final class DriverPanelScreen extends Screen {
     private void addTrainButton(int x, int y, int width, String key, CarControlPayload.Target target, boolean on) {
         Button button = Button.builder(Component.translatable("screen.railswheelsandtrains.driver_panel." + key),
                 b -> switchTrain(target, on)).bounds(x, y, width, BUTTON_HEIGHT).build();
-        trainButtons.add(button);
+        switches.add(button);
         addRenderableWidget(button);
     }
 
@@ -222,20 +233,39 @@ public final class DriverPanelScreen extends Screen {
 
     @Override
     public void tick() {
+        ticks++;
         // left the cab, or stood up from the chair: nothing to drive from here
         if (minecraft != null && ClientDriverHud.cab(minecraft) != cab) {
             onClose();
             return;
         }
         ConsistComposition composition = ClientConsists.composition(cab.getConsistId());
-        if (page == Page.TRAIN && composition != null && composition.wagonCount() != carsKnown) {
-            rebuildWidgets(); // coupled or cut while open
+        if (composition != null && composition.wagonCount() != carsKnown) {
+            rebuildWidgets(); // coupled or cut while open: other cars, other light groups
             return;
         }
-        // the doors and lights are switched by whoever drives: from another cab, look only
+        refresh();
+    }
+
+    /**
+     * Read the lamps' synced state, let it overrule the clicks it has caught
+     * up with (or that waited too long), and let the switches work only
+     * while this cab drives: the lights and doors are switched by whoever
+     * drives — from another cab, look only.
+     */
+    private void refresh() {
+        lit.clear();
+        for (WagonEntity wagon : wagons()) {
+            for (String group : groups.keySet()) {
+                if (wagon.controlValue(group) > 0.0F) {
+                    lit.add(group);
+                }
+            }
+        }
+        pending.settle(lit::contains, ticks);
         DriverReadout readout = DriverPanel.readout(cab);
         boolean inControl = readout != null && readout.inControl();
-        for (Button button : trainButtons) {
+        for (Button button : switches) {
             button.active = inControl;
         }
     }
@@ -395,10 +425,10 @@ public final class DriverPanelScreen extends Screen {
                 state(ClientConfig.driverHud()));
     }
 
-    /** Switch a light group on every wagon of the train. */
+    /** Switch a light group on every wagon of the train; its lamp shows the click until the sync answers. */
     private void toggle(String group) {
         boolean on = !isOn(group);
-        pending.put(group, on);
+        pending.put(group, on, ticks);
         PacketDistributor.sendToServer(new ControlGroupPayload(cab.getConsistId(),
                 ControlGroupPayload.Scope.PANEL, group, on ? 1.0F : 0.0F));
     }
@@ -554,18 +584,10 @@ public final class DriverPanelScreen extends Screen {
         }
     }
 
-    /** On if any wagon of the train has it on (or this screen just switched it). */
+    /** On if any wagon of the train has it on — or the way this screen just switched it, until the sync answers. */
     private boolean isOn(String group) {
         Boolean switched = pending.get(group);
-        if (switched != null) {
-            return switched;
-        }
-        for (WagonEntity wagon : wagons()) {
-            if (wagon.controlValue(group) > 0.0F) {
-                return true;
-            }
-        }
-        return false;
+        return switched != null ? switched : lit.contains(group);
     }
 
     private List<WagonEntity> wagons() {
