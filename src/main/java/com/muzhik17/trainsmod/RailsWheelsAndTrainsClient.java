@@ -20,6 +20,7 @@ import com.muzhik17.trainsmod.client.render.RailRenderer;
 import com.muzhik17.trainsmod.client.render.WagonRenderer;
 import com.muzhik17.trainsmod.client.render.model.RailModelReloadListener;
 import com.muzhik17.trainsmod.client.render.model.WagonModelReloadListener;
+import com.muzhik17.trainsmod.client.sound.TrainSounds;
 
 import net.minecraft.client.Minecraft;
 import net.neoforged.api.distmarker.Dist;
@@ -33,6 +34,7 @@ import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
+import net.neoforged.neoforge.event.level.LevelEvent;
 
 /**
  * Client-only mod entry point. Never loaded on a dedicated server, so accessing
@@ -87,13 +89,39 @@ public class RailsWheelsAndTrainsClient {
         ClientRide.tickAll();
     }
 
-    /**
-     * Snapshot buffers and the graph copy are per-connection state; drop them
-     * when leaving — and the picks under the crosshair, the held control and
-     * the view's tilt, which hold the level's wagons.
-     */
+    /** The graph copy and the baked meshes are per-connection state; drop them when leaving, with the level's. */
     @SubscribeEvent
     static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
+        clearLevel();
+        ClientRailGraph.clear();
+        RailRenderer.clear();
+        WagonRenderer.clearBaked();
+    }
+
+    /**
+     * The client level goes: another dimension (a portal, a respawn there) or
+     * the way out. Consist ids repeat across dimensions — each level's
+     * manager counts from 1 — so a state kept from the old level mixed its
+     * buffered {@code s} with the new level's path. Dropped as the level goes,
+     * before the new one's first packet (a new level noticed on a tick, as the
+     * rail renderer does for its meshes, would come after the snapshots that
+     * arrived with it and throw them away). The rail graph isn't dropped: the
+     * sync that follows the change replaces it ({@link ClientRailGraph}).
+     */
+    @SubscribeEvent
+    static void onLevelUnload(LevelEvent.Unload event) {
+        if (event.getLevel().isClientSide()) { // the integrated server's levels unload here too
+            clearLevel();
+        }
+    }
+
+    /**
+     * Everything of one level, by its consist and entity ids or holding its
+     * wagons: the snapshot buffers, the riders' feet, the bodies' sway, the
+     * picks under the crosshair, the held control, the view's tilt, the train
+     * sounds. The next level's snapshots fill them again.
+     */
+    private static void clearLevel() {
         ClientConsists.clearAll();
         ClientWalk.clearAll();
         ClientRiderSync.clearAll();
@@ -104,8 +132,6 @@ public class RailsWheelsAndTrainsClient {
         ClientBogieHit.clear();
         ClientWagonRay.clear();
         ClientRideCamera.clear();
-        ClientRailGraph.clear();
-        RailRenderer.clear();
-        WagonRenderer.clearBaked();
+        TrainSounds.clearAll();
     }
 }
