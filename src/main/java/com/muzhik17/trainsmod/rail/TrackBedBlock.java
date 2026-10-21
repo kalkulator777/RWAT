@@ -13,6 +13,7 @@ import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
+import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
@@ -26,9 +27,10 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * rising rail.
  *
  * <p>Dumb block: stores nothing about the graph; the graph in SavedData is
- * the source of truth. A segment's bed is one unit though — breaking any bed
- * block removes the whole segment (and the rest of its bed) via
- * {@link RailNetwork#removeSegmentContaining}.
+ * the source of truth. A structure's bed is one unit though — breaking any
+ * bed block removes the whole structure (and the rest of its bed) via
+ * {@link RailNetwork#removeSegmentContaining}. The broken block itself stays
+ * when track still wants it: the neighbour's bed at a joint or a crossing.
  */
 public class TrackBedBlock extends Block {
 
@@ -92,5 +94,22 @@ public class TrackBedBlock extends Block {
             }
         }
         return super.playerWillDestroy(level, pos, state, player);
+    }
+
+    /**
+     * Vanilla takes the broken block out after {@link #playerWillDestroy}
+     * whatever happened there. Not if some track still wants the cell: the
+     * surviving neighbour at a joint or a crossing has just re-laid its bed
+     * into it — air there would be a hole in that bed. The client, which took
+     * the block out ahead of the server, gets it back with the server's
+     * answer to the break.
+     */
+    @Override
+    public boolean onDestroyedByPlayer(BlockState state, Level level, BlockPos pos, Player player,
+            boolean willHarvest, FluidState fluid) {
+        if (level instanceof ServerLevel serverLevel && RailNetwork.get(serverLevel).isTrackBed(pos)) {
+            return false;
+        }
+        return super.onDestroyedByPlayer(state, level, pos, player, willHarvest, fluid);
     }
 }

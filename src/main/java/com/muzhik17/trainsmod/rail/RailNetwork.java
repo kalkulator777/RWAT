@@ -488,6 +488,11 @@ public final class RailNetwork extends SavedData {
         return cells;
     }
 
+    /** Whether the bed of some segment holds {@code cell} — the cell is still wanted as track bed. */
+    public boolean isTrackBed(BlockPos cell) {
+        return segmentContaining(cell) != null;
+    }
+
     /**
      * One cell of bed as a segment wants it: how high, in what material, and
      * which segment wants it.
