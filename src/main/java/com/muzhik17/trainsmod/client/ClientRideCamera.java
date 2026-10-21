@@ -10,6 +10,7 @@ import net.minecraft.world.entity.Entity;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.ViewportEvent;
 
 /**
@@ -23,7 +24,11 @@ import net.neoforged.neoforge.client.event.ViewportEvent;
  * <p>Two cars rock each on its own, so walking through a gangway into the
  * next one (SPEC §9.5) changed the tilt at once — on a moving train a
  * visible tip of the horizon. The old car's tilt is eased into the new car's
- * over {@link #BLEND_TICKS}.
+ * over {@link #BLEND_TICKS}, on a clock of this class's own. (The camera
+ * entity's age, the clock before, starts over with every new player entity —
+ * a respawn, another dimension: a blend begun at the old player's age then
+ * ran for minutes, its ease far outside 0..1, and the view spun.) Off a car,
+ * the blend is dropped.
  */
 @EventBusSubscriber(modid = RailsWheelsAndTrains.MODID, value = Dist.CLIENT)
 public final class ClientRideCamera {
@@ -39,22 +44,42 @@ public final class ClientRideCamera {
     /** The old car's tilt less the new one's at the change, degrees, eased out from {@link #blendStart}. */
     private static double offsetRoll;
     private static double offsetPitch;
-    /** The camera entity's age (ticks + partial) at the change of car. */
+    /** {@link #ticks} (+ partial) at the change of car. */
     private static double blendStart = Double.NEGATIVE_INFINITY;
+    /** Client ticks while the game runs: the blend's clock, never reset. */
+    private static long ticks;
 
     private ClientRideCamera() {
+    }
+
+    /** No car's tilt to ease out of (off a car; logout, another level). */
+    public static void clear() {
+        lastWagon = -1;
+        lastRoll = 0.0;
+        lastPitch = 0.0;
+        offsetRoll = 0.0;
+        offsetPitch = 0.0;
+        blendStart = Double.NEGATIVE_INFINITY;
+    }
+
+    /** The clock stands while paused, as the entities do. */
+    @SubscribeEvent
+    static void onClientTick(ClientTickEvent.Post event) {
+        if (!Minecraft.getInstance().isPaused()) {
+            ticks++;
+        }
     }
 
     @SubscribeEvent
     static void onCameraAngles(ViewportEvent.ComputeCameraAngles event) {
         Entity viewer = Minecraft.getInstance().getCameraEntity();
         if (viewer == null || !(viewer.getVehicle() instanceof WagonEntity wagon)) {
-            lastWagon = -1;
+            clear();
             return;
         }
         double share = ClientConfig.cameraSway();
         if (share <= 0.0) {
-            lastWagon = -1;
+            clear();
             return;
         }
         float partialTick = (float) event.getPartialTick();
@@ -65,14 +90,14 @@ public final class ClientRideCamera {
         double relative = Math.toRadians(Mth.wrapDegrees(event.getYaw() - wagon.getYRot()));
         double roll = Math.toDegrees((-sway.pitch() * Math.sin(relative) + sway.roll() * Math.cos(relative)) * share);
         double pitch = Math.toDegrees((sway.pitch() * Math.cos(relative) + sway.roll() * Math.sin(relative)) * share);
-        double now = viewer.tickCount + partialTick;
+        double now = ticks + partialTick;
         if (wagon.getId() != lastWagon && lastWagon != -1) {
             // through a gangway into another car: start from the tilt shown last frame
             offsetRoll = lastRoll - roll;
             offsetPitch = lastPitch - pitch;
             blendStart = now;
         }
-        double left = 1.0 - (now - blendStart) / BLEND_TICKS;
+        double left = Mth.clamp(1.0 - (now - blendStart) / BLEND_TICKS, 0.0, 1.0);
         if (left > 0.0) {
             double ease = left * left * (3.0 - 2.0 * left); // smoothstep: no kink at either end
             roll += offsetRoll * ease;
