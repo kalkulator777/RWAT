@@ -96,7 +96,10 @@ public final class ClientCabInteract {
     private static String hoverRefusal;
     /** The refusal that names the driver's key (SPEC §9.2). */
     private static final String KEY_NEEDED = "message.railswheelsandtrains.need_key";
-    /** False after a click until the use button is released (vanilla repeats use while held). */
+    /**
+     * False after a click until the use button is released: vanilla repeats
+     * use while it is held, and the repeats go nowhere ({@link ClientWagonRay#onUseHeld}).
+     */
     private static boolean armed = true;
 
     private record Grab(WagonEntity wagon, StockModel.Control control, Vector3f grabPoint,
@@ -139,6 +142,11 @@ public final class ClientCabInteract {
      */
     public static boolean takesClick() {
         return grab != null || hover != null;
+    }
+
+    /** True from a click of the cab's — worked or refused — till the use button is released. */
+    static boolean holdsUse() {
+        return grab != null || !armed;
     }
 
     /** The driver's chair of this wagon under the crosshair (its index in {@code cab.seats}), −1 if none. */
@@ -225,6 +233,10 @@ public final class ClientCabInteract {
                 ? "control.railswheelsandtrains.driver_seated" : null;
     }
 
+    /**
+     * A new click: while the button is held after one of the cab's, vanilla's
+     * repeats are dropped before they get here ({@link ClientWagonRay#onUseHeld}).
+     */
     @SubscribeEvent
     static void onUse(InputEvent.InteractionKeyMappingTriggered event) {
         if (!event.isUseItem() || event.getHand() != InteractionHand.MAIN_HAND) {
@@ -233,13 +245,6 @@ public final class ClientCabInteract {
         Minecraft mc = Minecraft.getInstance();
         LocalPlayer player = mc.player;
         if (player == null || mc.level == null) {
-            return;
-        }
-        if (grab != null || !armed) {
-            if (grab != null) {
-                event.setCanceled(true); // still holding a control: not a new click
-                event.setSwingHand(false);
-            }
             return;
         }
         Pick pick = hover; // what the last frame showed under the crosshair

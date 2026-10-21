@@ -44,7 +44,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *
  * <p>Holding the button doesn't flap the door: vanilla repeats the use action
  * every few ticks while held, so a door click is armed again only after the
- * button is released.
+ * button is released — till then the repeats go nowhere
+ * ({@link ClientWagonRay#onUseHeld}), wherever the crosshair has gone.
  *
  * <p>A door into a cab, on a server whose cabs want the driver's key (SPEC
  * §9.2), isn't sent without one: the action bar says the key is needed.
@@ -87,6 +88,11 @@ public final class ClientDoorInteract {
         return pick != null && pick.wagon() == wagon && !ClientCabInteract.takesClick() ? pick.door() : -1;
     }
 
+    /** True from a door click — a locked door's too — till the use button is released. */
+    static boolean holdsUse() {
+        return !armed;
+    }
+
     /** True if the door under the crosshair won't open for the player: a cab door, no driver's key (SPEC §9.2). */
     public static boolean highlightLocked() {
         Pick pick = framePick;
@@ -112,14 +118,12 @@ public final class ClientDoorInteract {
         event.setCanceled(true); // the click belongs to the door, not an item or block
         // a door into a cab wants the driver's key, if the server wants it (SPEC §9.2): not sent
         boolean locked = pick.wagon().cabArea().cabDoor(pick.door()) && !CabAccess.mayWork(player);
-        event.setSwingHand(armed && !locked);
-        if (armed) {
-            armed = false;
-            if (locked) {
-                CabAccess.refuse(player);
-            } else {
-                PacketDistributor.sendToServer(new DoorTogglePayload(pick.wagon().getId(), pick.door()));
-            }
+        event.setSwingHand(!locked);
+        armed = false; // a new click: the repeats of a held one never get here
+        if (locked) {
+            CabAccess.refuse(player);
+        } else {
+            PacketDistributor.sendToServer(new DoorTogglePayload(pick.wagon().getId(), pick.door()));
         }
     }
 

@@ -77,6 +77,11 @@ public final class ClientCouplerInteract {
                 ? pick(mc, player, look) : null;
     }
 
+    /** True from an uncouple or handbrake click till the use button is released ({@link ClientWagonRay#onUseHeld}). */
+    static boolean holdsUse() {
+        return !armed;
+    }
+
     @SubscribeEvent(priority = EventPriority.HIGH)
     static void onUse(InputEvent.InteractionKeyMappingTriggered event) {
         if (!event.isUseItem() || event.getHand() != InteractionHand.MAIN_HAND) {
@@ -93,13 +98,10 @@ public final class ClientCouplerInteract {
             return; // no coupler under the crosshair: doors / the item's hint
         }
         event.setCanceled(true); // the click belongs to the coupler / the handbrake
-        event.setSwingHand(armed);
-        if (armed) {
-            armed = false;
-            PacketDistributor.sendToServer(pick.handbrake()
-                    ? new HandbrakePayload(pick.wagon().getId())
-                    : new UncouplePayload(pick.wagon().getId(), pick.front()));
-        }
+        armed = false; // a new click: the repeats of a held one never get here
+        PacketDistributor.sendToServer(pick.handbrake()
+                ? new HandbrakePayload(pick.wagon().getId())
+                : new UncouplePayload(pick.wagon().getId(), pick.front()));
     }
 
     @SubscribeEvent
