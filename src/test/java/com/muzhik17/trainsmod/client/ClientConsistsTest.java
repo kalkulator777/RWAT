@@ -158,6 +158,19 @@ class ClientConsistsTest {
     }
 
     @Test
+    void tickSpeed_followsThePlaybackClock() {
+        for (long t = 0; t <= 10; t++) {
+            snapshot(t, 0.005 * t * t, 0.01 * t); // speeding up
+            ClientConsists.tickAll();
+        }
+        assertEquals(0.08, ClientConsists.tickSpeed(ID), EPS, "the speed the delay behind the newest snapshot");
+        assertEquals(0.10, ClientConsists.speed(ID), EPS);
+
+        ticks(5);
+        assertEquals(0.10, ClientConsists.tickSpeed(ID), EPS, "past the newest snapshot: its speed");
+    }
+
+    @Test
     void lateAndDuplicateSnapshots_areIgnored() {
         snapshot(100, 10.0, 0.5);
         Handles moved = new Handles(1, 3, 0, 0, 0);

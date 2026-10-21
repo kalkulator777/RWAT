@@ -6,6 +6,7 @@ import java.util.BitSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.ToDoubleFunction;
 
 import com.muzhik17.trainsmod.consist.Handles;
 import com.muzhik17.trainsmod.kinematics.ConsistKinematics;
@@ -425,18 +426,8 @@ public final class ClientConsists {
         if (state == null || state.buffer.isEmpty() || Double.isNaN(state.clock)) {
             return 0.0;
         }
-        Snapshot previous = null;
-        for (Snapshot snapshot : state.buffer) {
-            if (snapshot.gameTime >= state.clock) {
-                if (previous == null) {
-                    return snapshot.v;
-                }
-                double f = (state.clock - previous.gameTime) / (snapshot.gameTime - previous.gameTime);
-                return previous.v + (snapshot.v - previous.v) * f;
-            }
-            previous = snapshot;
-        }
-        return state.buffer.peekLast().v;
+        double v = bracketed(state, state.clock, Snapshot::v);
+        return Double.isNaN(v) ? state.buffer.peekLast().v : v;
     }
 
     /** The consist's materialized path (for debug rendering), or null. */
@@ -447,20 +438,34 @@ public final class ClientConsists {
 
     /** Interpolate s between bracketing snapshots; extrapolate past the newest. */
     private static double sampleS(State state, double time) {
-        Snapshot previous = null;
-        for (Snapshot snapshot : state.buffer) {
-            if (snapshot.gameTime >= time) {
-                if (previous == null) {
-                    return snapshot.s;
-                }
-                double f = (time - previous.gameTime) / (snapshot.gameTime - previous.gameTime);
-                return previous.s + (snapshot.s - previous.s) * f;
-            }
-            previous = snapshot;
+        double s = bracketed(state, time, Snapshot::s);
+        if (!Double.isNaN(s)) {
+            return s;
         }
         Snapshot newest = state.buffer.peekLast();
         double dt = Math.min(time - newest.gameTime, MAX_EXTRAPOLATION_TICKS);
         return newest.s + newest.v * dt;
+    }
+
+    /**
+     * A snapshot field interpolated between the snapshots bracketing
+     * {@code time} (the oldest one's value before the buffer), NaN past the
+     * newest.
+     */
+    private static double bracketed(State state, double time, ToDoubleFunction<Snapshot> field) {
+        Snapshot previous = null;
+        for (Snapshot snapshot : state.buffer) {
+            if (snapshot.gameTime >= time) {
+                if (previous == null) {
+                    return field.applyAsDouble(snapshot);
+                }
+                double f = (time - previous.gameTime) / (snapshot.gameTime - previous.gameTime);
+                double from = field.applyAsDouble(previous);
+                return from + (field.applyAsDouble(snapshot) - from) * f;
+            }
+            previous = snapshot;
+        }
+        return Double.NaN;
     }
 
     /** Drop everything (e.g. on logout / level change). */
