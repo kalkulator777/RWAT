@@ -1551,6 +1551,23 @@ public class WagonEntity extends Entity {
         return getBoundingBox().inflate(reach);
     }
 
+    /**
+     * Drawn as far as it is tracked. Vanilla draws an entity out to its box's
+     * size × 64 blocks, times the entity-distance setting ({@link
+     * #getViewScale}) — the 1.5 pick box gave 96, short of the 160 a wagon is
+     * tracked at, so trains came and went six chunks out while the rails ran
+     * on. The car's length stands in for the box's size here, and the range
+     * never falls short of the tracking range: a wagon the server sends is
+     * drawn.
+     */
+    @Override
+    public boolean shouldRenderAtSqrDistance(double distanceSq) {
+        WagonType type = typeNow();
+        double size = type != null ? type.length() : getBoundingBox().getSize();
+        double range = Math.max(size * 64.0 * getViewScale(), getType().clientTrackingRange() * 16.0);
+        return distanceSq < range * range;
+    }
+
     /** Server: open the doors a save had open, once this wagon's type is known (SPEC §9.8). */
     private void reopenSavedDoors() {
         WagonType type = serverType();
