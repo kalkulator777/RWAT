@@ -5,7 +5,9 @@ package com.muzhik17.trainsmod.client.sound;
  * is switched on and off: the lead-in ({@code start}) once, then {@code main}
  * looping for as long as it stays on, then the tail ({@code stop}) once.
  * Volume, pitch and position follow every tick. {@link #kill} silences it
- * without the tail (out of hearing, the wagon gone).
+ * without the tail (out of hearing, the wagon gone); switched on again to
+ * <b>resume</b>, it goes straight into {@code main} — the engine kept running
+ * all along, it only wasn't heard.
  *
  * <p>The sound engine drops a loop without a word: the sound device changed,
  * {@code /stopsound}, no free channel. A loop found dropped starts again — at
@@ -76,13 +78,21 @@ final class LoopPlayer<S> {
         return state != State.OFF;
     }
 
-    void update(boolean on, long now, double x, double y, double z, float volume, float pitch) {
+    /**
+     * Follow the switch for this tick.
+     *
+     * @param resume switched on now, go straight into {@code main}: the sound
+     *               was going already, only not heard (out of hearing, over
+     *               the budget, first sight)
+     */
+    void update(boolean on, boolean resume, long now, double x, double y, double z, float volume,
+            float pitch) {
         switch (state) {
             case OFF -> {
                 if (!on) {
                     return;
                 }
-                if (loop.start() != null) {
+                if (loop.start() != null && !resume) {
                     lead = speaker.play(loop.start(), false, x, y, z, volume, pitch);
                     nextAt = after(now, loop.start());
                     state = State.STARTING;

@@ -71,8 +71,8 @@ class LoopPlayerTest {
 
     private static final SoundSet.Loop DR1 = new SoundSet.Loop("start", "idle", "stop", null, null);
 
-    private static void tick(LoopPlayer<?> player, boolean on, long now) {
-        player.update(on, now, 0.0, 0.0, 0.0, 1.0F, 1.0F);
+    private static void tick(LoopPlayer<?> player, boolean on, boolean resume, long now) {
+        player.update(on, resume, now, 0.0, 0.0, 0.0, 1.0F, 1.0F);
     }
 
     @Test
@@ -80,17 +80,31 @@ class LoopPlayerTest {
         Engine engine = new Engine();
         engine.lengths.put("start", 10);
         LoopPlayer<Engine.Voice> player = new LoopPlayer<>(DR1, engine, false);
-        tick(player, true, 0);
+        tick(player, true, false, 0);
         for (long t = 1; t < 9; t++) {
-            tick(player, true, t);
+            tick(player, true, false, t);
         }
         assertEquals(List.of("start"), engine.played);
-        tick(player, true, 9); // the lead-in's last tick: the loop takes over
+        tick(player, true, false, 9); // the lead-in's last tick: the loop takes over
         assertEquals(List.of("start", "idle"), engine.played);
-        tick(player, false, 10);
+        tick(player, false, false, 10);
         assertEquals(List.of("start", "idle", "stop"), engine.played);
         assertEquals(0, engine.playing("idle"));
         assertFalse(player.on());
+    }
+
+    /** M30: a running engine come into hearing (or found on joining) doesn't start up again. */
+    @Test
+    void aResumedEngineGoesStraightIntoItsLoop() {
+        Engine engine = new Engine();
+        LoopPlayer<Engine.Voice> player = new LoopPlayer<>(DR1, engine, false);
+        tick(player, true, true, 0);
+        assertEquals(List.of("idle"), engine.played);
+        player.kill(); // out of hearing: no tail
+        tick(player, false, true, 1);
+        tick(player, true, true, 2);
+        assertEquals(List.of("idle", "idle"), engine.played);
+        assertEquals(1, engine.playing("idle"));
     }
 
     /** H12: a loop the sound engine dropped plays again — not stays silent till it is switched off. */
@@ -99,12 +113,12 @@ class LoopPlayerTest {
         Engine engine = new Engine();
         LoopPlayer<Engine.Voice> player = new LoopPlayer<>(new SoundSet.Loop(null, "wheels", null, null, null),
                 engine, false);
-        tick(player, true, 0);
+        tick(player, true, false, 0);
         long t = LoopPlayer.RETRY_TICKS;
-        tick(player, true, t);
+        tick(player, true, false, t);
         assertEquals(1, engine.played.size());
         engine.dropAll();
-        tick(player, true, ++t);
+        tick(player, true, false, ++t);
         assertEquals(2, engine.played.size());
         assertEquals(1, engine.playing("wheels"));
         assertTrue(player.on());
@@ -118,19 +132,19 @@ class LoopPlayerTest {
         LoopPlayer<Engine.Voice> player = new LoopPlayer<>(new SoundSet.Loop(null, "idle", null, null, null),
                 engine, false);
         for (long t = 0; t < LoopPlayer.RETRY_TICKS; t++) {
-            tick(player, true, t);
+            tick(player, true, false, t);
         }
         assertEquals(1, engine.played.size());
-        tick(player, true, LoopPlayer.RETRY_TICKS);
+        tick(player, true, false, LoopPlayer.RETRY_TICKS);
         assertEquals(2, engine.played.size());
         engine.full = false;
         for (long t = LoopPlayer.RETRY_TICKS + 1; t <= 2L * LoopPlayer.RETRY_TICKS; t++) {
-            tick(player, true, t);
+            tick(player, true, false, t);
         }
         assertEquals(3, engine.played.size());
         assertEquals(1, engine.playing("idle"));
         for (long t = 2L * LoopPlayer.RETRY_TICKS + 1; t < 5L * LoopPlayer.RETRY_TICKS; t++) {
-            tick(player, true, t);
+            tick(player, true, false, t);
         }
         assertEquals(3, engine.played.size()); // playing: left alone
     }
@@ -143,10 +157,10 @@ class LoopPlayerTest {
         LoopPlayer<Engine.Voice> player = new LoopPlayer<>(new SoundSet.Loop(null, "horn", null, null, null),
                 engine, true);
         for (long t = 0; t < 60; t++) {
-            tick(player, true, t);
+            tick(player, true, false, t);
         }
         assertEquals(List.of("horn", "horn", "horn"), engine.played); // at 0, 29 and 58
-        tick(player, false, 60);
+        tick(player, false, false, 60);
         assertTrue(engine.voices.get(2).active, "a short blast plays out");
         assertFalse(player.on());
     }

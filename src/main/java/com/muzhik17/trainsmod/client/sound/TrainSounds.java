@@ -53,7 +53,8 @@ import net.neoforged.neoforge.client.event.sound.SoundEngineLoadEvent;
  * body jolts ({@link ClientRide#takeJoints});</li>
  * <li><b>engine</b> ({@code idle}) — runs while the train is manned or moving,
  * its pitch rising with the throttle; a lead-in and tail if declared (the
- * DR1's engine starts and stops);</li>
+ * DR1's engine starts and stops) — the lead-in only when the engine starts
+ * here and now, not when a running one comes into hearing;</li>
  * <li><b>doors</b> — each door's sound as it opens or closes (an iron door
  * if the pack gives none);</li>
  * <li><b>cab controls</b> — the notch of the throttle, brake and reverser in
@@ -120,6 +121,8 @@ public final class TrainSounds {
         SoundSet sounds = SoundSet.NONE;
         LoopPlayer<TrainSound> wheels;
         LoopPlayer<TrainSound> engine;
+        /** The engine ran last tick; null before the first — one found running was started before we came. */
+        Boolean alive;
         float throttle;
         int doorMask = -1;
     }
@@ -269,18 +272,27 @@ public final class TrainSounds {
         float fade = (float) Math.min(kmh / WHEELS_FADE_KMH, 1.0);
         float[] pitch = loop.pitch() != null ? loop.pitch() : WHEELS_PITCH;
         float[] level = loop.volume() != null ? loop.volume() : WHEELS_VOLUME;
-        audio.wheels.update(on, ticks, wagon.getX(), wagon.getY() + 0.5, wagon.getZ(),
+        audio.wheels.update(on, false, ticks, wagon.getX(), wagon.getY() + 0.5, wagon.getZ(),
                 (float) (lerp(level, Math.min(f, 1.0F)) * fade * volume), lerp(pitch, f));
     }
 
+    /**
+     * The engine's loop. Its lead-in plays only when the engine starts this
+     * tick: one already running — come into hearing or the budget, found on
+     * joining the world or after the sound engine restarted — resumes
+     * straight into its loop, at its throttle.
+     */
     private static void engine(WagonAudio audio, WagonEntity wagon, boolean on, Handles handles,
             boolean alive, double volume) {
+        boolean seen = audio.alive != null;
+        boolean started = alive && seen && !audio.alive;
+        audio.alive = alive;
         if (audio.engine == null) {
             return;
         }
         float target = alive ? handles.throttle() / (float) Consist.NOTCHES : 0.0F;
         float rate = target > audio.throttle ? ENGINE_UP : ENGINE_DOWN;
-        audio.throttle += Math.clamp(target - audio.throttle, -rate, rate);
+        audio.throttle = seen ? audio.throttle + Math.clamp(target - audio.throttle, -rate, rate) : target;
         SoundSet.Loop loop = audio.engine.loop();
         float[] pitch = loop.pitch() != null ? loop.pitch() : ENGINE_PITCH;
         float[] level = loop.volume() != null ? loop.volume() : ENGINE_VOLUME;
@@ -288,7 +300,7 @@ public final class TrainSounds {
             audio.engine.kill(); // out of hearing / over budget: no shutdown sound
             return;
         }
-        audio.engine.update(on, ticks, wagon.getX(), wagon.getY() + 2.0, wagon.getZ(),
+        audio.engine.update(on, !started, ticks, wagon.getX(), wagon.getY() + 2.0, wagon.getZ(),
                 (float) (lerp(level, audio.throttle) * volume), lerp(pitch, audio.throttle));
     }
 
@@ -385,11 +397,11 @@ public final class TrainSounds {
 
         int signals = ClientConsists.signals(consistId);
         if (audio.horn != null) {
-            audio.horn.update((signals & Consist.HORN) != 0, ticks, roof.x, roof.y, roof.z,
+            audio.horn.update((signals & Consist.HORN) != 0, false, ticks, roof.x, roof.y, roof.z,
                     (float) volume, 1.0F);
         }
         if (audio.bell != null) {
-            audio.bell.update((signals & Consist.BELL) != 0, ticks, roof.x, roof.y, roof.z,
+            audio.bell.update((signals & Consist.BELL) != 0, false, ticks, roof.x, roof.y, roof.z,
                     (float) volume, 1.0F);
         }
     }
