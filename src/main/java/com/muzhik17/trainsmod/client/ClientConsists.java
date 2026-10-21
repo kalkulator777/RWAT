@@ -126,43 +126,56 @@ public final class ClientConsists {
 
     /** Called on the client main thread from the payload handler. */
     public static void handleSnapshot(ConsistSnapshotPayload payload) {
-        State state = STATES.get(payload.consistId());
+        apply(payload.consistId(), payload.s(), payload.v(), payload.gameTime(), payload.pathSpec(),
+                payload.composition(), payload.frame(), payload.frameFrom(), payload.frameShift(),
+                payload.wagonEntityIds(), payload.handles(), payload.handbrakes(),
+                payload.trainBrakePressure(), payload.indBrakePressure(), payload.signals());
+    }
+
+    /**
+     * {@link #handleSnapshot} on the payload's fields, in its order — the
+     * wire-free core, so the playback is unit-testable without the Minecraft
+     * classes the payload type needs.
+     */
+    static void apply(int consistId, double s, double v, long gameTime, TrackPathSpec pathSpec,
+            ConsistComposition composition, int frame, int frameFrom, double frameShift,
+            int[] wagonIds, Handles handles, BitSet handbrakes,
+            float trainBrakePressure, float indBrakePressure, int signals) {
+        State state = STATES.get(consistId);
         if (state == null) {
             state = new State();
-            state.frame = payload.frame();
-            if (payload.frameFrom() != payload.consistId()) {
-                adoptParent(state, STATES.get(payload.frameFrom()), payload.frameShift(),
-                        payload.gameTime());
+            state.frame = frame;
+            if (frameFrom != consistId) {
+                adoptParent(state, STATES.get(frameFrom), frameShift, gameTime);
             }
-            STATES.put(payload.consistId(), state);
+            STATES.put(consistId, state);
         } else {
             Snapshot newest = state.buffer.peekLast();
-            if (newest != null && payload.gameTime() <= newest.gameTime) {
+            if (newest != null && gameTime <= newest.gameTime) {
                 return; // out of order / duplicate (one copy per tracked wagon)
             }
-            if (payload.frame() != state.frame) {
-                reframe(state, payload);
+            if (frame != state.frame) {
+                reframe(state, consistId, frame, frameFrom, frameShift);
             }
         }
-        if (!payload.pathSpec().equals(state.spec)) {
-            state.spec = payload.pathSpec();
+        if (!pathSpec.equals(state.spec)) {
+            state.spec = pathSpec;
             state.path = null; // re-resolve lazily
         }
-        state.composition = payload.composition();
-        state.handles = payload.handles();
-        state.handbrakes = payload.handbrakes();
-        state.trainBrakePressure = payload.trainBrakePressure();
-        state.indBrakePressure = payload.indBrakePressure();
-        state.signals = payload.signals();
-        int[] wagonIds = payload.wagonEntityIds();
+        state.composition = composition;
+        state.handles = handles;
+        state.handbrakes = handbrakes;
+        state.trainBrakePressure = trainBrakePressure;
+        state.indBrakePressure = indBrakePressure;
+        state.signals = signals;
         state.wagonIds = wagonIds;
         for (int i = 0; i < wagonIds.length; i++) {
             if (wagonIds[i] >= 0) {
-                MEMBERS.put(wagonIds[i], new Member(payload.consistId(), i));
+                MEMBERS.put(wagonIds[i], new Member(consistId, i));
             }
         }
-        state.buffer.addLast(new Snapshot(payload.gameTime(), payload.s(), payload.v()));
-        long cutoff = payload.gameTime() - BUFFER_KEEP_TICKS;
+        state.buffer.addLast(new Snapshot(gameTime, s, v));
+        long cutoff = gameTime - BUFFER_KEEP_TICKS;
         while (!state.buffer.isEmpty() && state.buffer.peekFirst().gameTime < cutoff) {
             state.buffer.pollFirst();
         }
@@ -175,19 +188,19 @@ public final class ClientConsists {
      * jump while the buffer drains. Missed a frame (the shift is relative to
      * one we never saw): drop the buffer — a short hold, never a slide.
      */
-    private static void reframe(State state, ConsistSnapshotPayload payload) {
-        if (payload.frame() == state.frame + 1 && payload.frameFrom() == payload.consistId()) {
+    private static void reframe(State state, int consistId, int frame, int frameFrom,
+            double frameShift) {
+        if (frame == state.frame + 1 && frameFrom == consistId) {
             List<Snapshot> shifted = new ArrayList<>(state.buffer.size());
             for (Snapshot snapshot : state.buffer) {
-                shifted.add(new Snapshot(snapshot.gameTime, snapshot.s + payload.frameShift(),
-                        snapshot.v));
+                shifted.add(new Snapshot(snapshot.gameTime, snapshot.s + frameShift, snapshot.v));
             }
             state.buffer.clear();
             state.buffer.addAll(shifted);
         } else {
             state.buffer.clear();
         }
-        state.frame = payload.frame();
+        state.frame = frame;
     }
 
     /**
