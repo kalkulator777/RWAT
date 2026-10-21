@@ -20,7 +20,9 @@ import com.muzhik17.trainsmod.stock.WagonType;
  * by yaw only (pitch is ignored so a graded car's floor stays walkable), and
  * kept on the walkable floor — wherever the body fits in the union of the
  * {@link WagonType.Interior} zones (SPEC §9.8, {@link FloorRegion}), plus a
- * bridge through every open door between zones (SPEC §9.1). A step that would
+ * bridge through every open door between zones (SPEC §9.1); a shut one stands
+ * across the floor even where the zones on its two sides touch, and no step
+ * passes through it ({@link FloorRegion.Cut#shut}). A step that would
  * leave the floor slides along the wall. Vertical movement (stairs, jumping
  * between decks) is out of v0: the feet take the floor height under them.
  *
@@ -91,17 +93,21 @@ public final class RiderWalk {
             float playerYaw, float wagonYaw, WagonType.Interior interior,
             List<WagonType.Door> doors, int openMask, boolean sneak) {
         Vector3d next = unclamped(local, forward, strafe, playerYaw, wagonYaw, speed(sneak));
-        if (!onFloor(local.x, local.z, interior, doors, openMask)) {
-            return interior.clampFeet(next, PLAYER_HALF_WIDTH); // lost the floor: nearest point
+        FloorRegion region = interior.region(PLAYER_HALF_WIDTH, doors, openMask);
+        if (!onFloor(local.x, local.z, region, doors, openMask)) {
+            // lost the floor (a door shut on them in its doorway): nearest point
+            return interior.clampFeet(next, PLAYER_HALF_WIDTH, doors, openMask);
         }
-        if (onFloor(next.x, next.z, interior, doors, openMask)) {
+        if (onFloor(next.x, next.z, region, doors, openMask)
+                && !region.throughCut(local.x, local.z, next.x, next.z)) {
             return withFloor(next, local.y, interior);
         }
         // slide: the step pulled back onto each box of the floor near the
         // rider — along the wall they push against, or easing into floor just
         // beside them (out of a doorway that isn't in line with the floor
         // beyond it), only within SIDESTEP, which can't cross a wall: where a
-        // body fits, any wall leaves ≥ 2 half-widths of no room.
+        // body fits, any wall leaves ≥ 2 half-widths of no room. A shut door
+        // between zones leaves only its thickness: no candidate through it.
         // Keep the candidate that makes the most headway along the step — but
         // never (beyond AHEAD_SLACK) past the step's end: floor just ahead (an
         // opening off the platzkart's aisle into a bay) would otherwise pull
@@ -112,7 +118,6 @@ public final class RiderWalk {
         double maxGain = mx * mx + mz * mz + AHEAD_SLACK * Math.hypot(mx, mz);
         Vector3d best = new Vector3d(local);
         double bestGain = 1.0e-9;
-        FloorRegion region = interior.region(PLAYER_HALF_WIDTH);
         List<FloorRegion.Piece> pieces = region.pieces();
         for (int i = region.firstPieceReaching(local.z - SIDESTEP); i < pieces.size(); i++) {
             FloorRegion.Piece piece = pieces.get(i);
@@ -120,7 +125,8 @@ public final class RiderWalk {
                 break;
             }
             double[] c = piece.clamp(next.x, next.z);
-            if (Math.hypot(c[0] - local.x, c[1] - local.z) <= SIDESTEP) {
+            if (Math.hypot(c[0] - local.x, c[1] - local.z) <= SIDESTEP
+                    && !region.throughCut(local.x, local.z, c[0], c[1])) {
                 double gain = (c[0] - local.x) * mx + (c[1] - local.z) * mz;
                 if (gain > bestGain && gain <= maxGain) {
                     best = new Vector3d(c[0], local.y, c[1]);
@@ -133,7 +139,7 @@ public final class RiderWalk {
             if (door.inner() && door.open(openMask, i) && inBridge(local.x, local.z, door)) {
                 Vector3d c = clampToBridge(next.x, next.z, door);
                 double gain = (c.x - local.x) * mx + (c.z - local.z) * mz;
-                if (gain > bestGain) {
+                if (gain > bestGain && !region.throughCut(local.x, local.z, c.x, c.z)) {
                     best = c;
                     bestGain = gain;
                 }
@@ -224,7 +230,7 @@ public final class RiderWalk {
             float playerYaw, float wagonYaw, WagonType.Interior interior,
             List<WagonType.Door> doors, int openMask, boolean sneak) {
         Vector3d next = unclamped(local, forward, strafe, playerYaw, wagonYaw, speed(sneak));
-        FloorRegion region = interior.region(PLAYER_HALF_WIDTH);
+        FloorRegion region = interior.region(PLAYER_HALF_WIDTH, doors, openMask);
         for (int i = 0; i < doors.size() && i < 32; i++) {
             WagonType.Door door = doors.get(i);
             if (door.inner() || !door.open(openMask, i) || (sneak && !keepsAboard(door))) {
@@ -318,7 +324,7 @@ public final class RiderWalk {
         WagonType.Door door = doors.get(best);
         Vector3d inside = new Vector3d(along(across, door), 0.0,
                 door.innerFace() + travel * (PLAYER_HALF_WIDTH + GANGWAY_CLEARANCE));
-        return new Arrival(best, interior.clampFeet(inside, PLAYER_HALF_WIDTH));
+        return new Arrival(best, interior.clampFeet(inside, PLAYER_HALF_WIDTH, doors, openMask));
     }
 
     /** A gangway arrival: the door walked in through and the rider's new local feet. */
@@ -332,10 +338,13 @@ public final class RiderWalk {
         return lo > hi ? (door.spanMin() + door.spanMax()) * 0.5 : Math.clamp(value, lo, hi);
     }
 
-    /** True if a rider centred at (x, z) stands on the floor: fits on it, or in an open door's bridge. */
-    static boolean onFloor(double x, double z, WagonType.Interior interior,
+    /**
+     * True if a rider centred at (x, z) stands on the floor: fits on it (the
+     * {@code region} with the shut doors cut out), or in an open door's bridge.
+     */
+    static boolean onFloor(double x, double z, FloorRegion region,
             List<WagonType.Door> doors, int openMask) {
-        if (interior.fits(x, z, PLAYER_HALF_WIDTH)) {
+        if (region.fits(x, z)) {
             return true;
         }
         for (int i = 0; i < doors.size(); i++) {

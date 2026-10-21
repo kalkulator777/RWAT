@@ -13,9 +13,16 @@ import com.muzhik17.trainsmod.stock.WagonType;
  * makes measuring by hand: a zone no player fits in, a part of the floor
  * nobody can walk to (from the first zone or a way in of its own — the
  * other end's cab of a double-ended locomotive has its own steps), a door the floor doesn't end at (so it can't be
- * walked through), a gangway door that isn't in an end wall, a cab floor
+ * walked through), a door between zones the floor runs through (zones that
+ * touch or overlap in its doorway: shut, the engine still cuts the floor
+ * there, but a body stands half in the leaf) or round (its two sides are one
+ * floor without it: shut, it is no wall), a gangway door that isn't in an
+ * end wall, a cab floor
  * without a driver's chair, a chair nobody can stand near enough to sit in
- * (or at the wrong height for the floor there). Pure; the type
+ * (or at the wrong height for the floor there). The parts of the floor are
+ * those with every door between zones shut ({@link
+ * WagonType.Interior#region(double, List, int)}), joined where one opens.
+ * Pure; the type
  * registry logs what it finds on load, and a unit test runs it over every
  * type of the generated packs.
  */
@@ -45,42 +52,50 @@ public final class FloorCheck {
             return out;
         }
         List<WagonType.Interior.Zone> zones = interior.zones();
+        List<WagonType.Door> doors = type.doors();
         FloorRegion region = interior.region(M);
         List<FloorRegion.Piece> pieces = region.pieces();
         if (pieces.isEmpty()) {
             out.add(String.format(Locale.ROOT,
                     "a player fits nowhere on the floor: every part of it is narrower than %.1f", 2 * M));
         }
+        // the floor with every door between zones shut: its pieces are the parts walked
+        FloorRegion shut = interior.region(M, doors, 0);
+        List<FloorRegion.Piece> parts = shut.pieces();
         // each zone's parts of the region: where a centre can stand inside it
         List<List<Integer>> inZone = new ArrayList<>();
         for (int i = 0; i < zones.size(); i++) {
             WagonType.Interior.Zone z = zones.get(i);
             List<Integer> mine = new ArrayList<>();
-            for (int p = 0; p < pieces.size(); p++) {
-                if (pieces.get(p).touches(z.minX(), z.minZ(), z.maxX(), z.maxZ())) {
+            for (int p = 0; p < parts.size(); p++) {
+                if (parts.get(p).touches(z.minX(), z.minZ(), z.maxX(), z.maxZ())) {
                     mine.add(p);
                 }
             }
             inZone.add(mine);
-            if (mine.isEmpty() && !pieces.isEmpty()) {
+            boolean fits = false;
+            for (FloorRegion.Piece piece : pieces) {
+                fits |= piece.touches(z.minX(), z.minZ(), z.maxX(), z.maxZ());
+            }
+            if (!fits && !pieces.isEmpty()) {
                 out.add(String.format(Locale.ROOT, "zone %d holds no place a player fits (%.2f x %.2f):"
                         + " widen it to %.1f or join it to a wider zone",
                         i, z.maxX() - z.minX(), z.maxZ() - z.minZ(), 2 * M));
             }
         }
-        int[] parent = new int[pieces.size()];
-        for (int i = 0; i < parent.length; i++) {
-            parent[i] = i;
+        // joined: by the floor alone (every door between zones shut), then by open doors too
+        int[] alone = new int[parts.size()];
+        for (int i = 0; i < alone.length; i++) {
+            alone[i] = i;
         }
-        for (int[] link : region.links()) {
-            union(parent, link[0], link[1]);
+        for (int[] link : shut.links()) {
+            union(alone, link[0], link[1]);
         }
-        List<WagonType.Door> doors = type.doors();
+        int[] parent = alone.clone();
         List<Integer> waysIn = new ArrayList<>(); // the floor pieces outside and gangway doors open onto
         for (int d = 0; d < doors.size(); d++) {
             WagonType.Door door = doors.get(d);
             String name = "door " + d + " '" + door.id() + "'";
-            int piece;
             double thick = door.axis() == 0 ? door.maxX() - door.minX() : door.maxZ() - door.minZ();
             if (thick > MAX_DOOR_THICKNESS) {
                 out.add(String.format(Locale.ROOT, "%s is %.2f thick: is the box the door leaf?", name, thick));
@@ -93,25 +108,60 @@ public final class FloorCheck {
             }
             if (door.inner()) {
                 double[] b = bridge(door);
+                FloorRegion.Cut cut = FloorRegion.Cut.shut(door, M);
                 int first = -1;
-                for (int p = 0; p < pieces.size(); p++) {
-                    if (pieces.get(p).touches(b[0], b[1], b[2], b[3])) {
+                List<Integer> before = new ArrayList<>(); // the parts its bridge reaches on each side
+                List<Integer> behind = new ArrayList<>();
+                for (int p = 0; p < parts.size(); p++) {
+                    FloorRegion.Piece part = parts.get(p);
+                    if (part.touches(b[0], b[1], b[2], b[3])) {
                         if (first < 0) {
                             first = p;
                         } else {
                             union(parent, first, p);
+                        }
+                        // no part reaches into the cut: each ends at or begins past it
+                        double end = door.axis() == 0 ? part.maxX() : part.maxZ();
+                        if (end <= (door.axis() == 0 ? cut.minX() : cut.minZ()) + 1.0e-6) {
+                            before.add(p);
+                        } else {
+                            behind.add(p);
                         }
                     }
                 }
                 if (first < 0) {
                     out.add(name + " (inner) touches no floor");
                 }
-            } else if ((piece = walkablePiece(door, region)) >= 0) {
-                waysIn.add(piece);
+                if (door.fixed()) {
+                    continue; // never shut
+                }
+                boolean through = false;
+                for (FloorRegion.Piece piece : pieces) {
+                    through |= cut.bites(piece);
+                }
+                if (through) {
+                    out.add(name + " (inner): the floor runs through its doorway — the zones on its two sides"
+                            + " touch or overlap in it, and a player stands half in the shut leaf: part them"
+                            + " (any gap is wall; open, the door bridges it)");
+                }
+                boolean round = false;
+                for (int p : before) {
+                    for (int q : behind) {
+                        round |= find(alone, p) == find(alone, q);
+                    }
+                }
+                if (round) {
+                    out.add(name + " (inner): its two sides are one floor without it — the floor runs round"
+                            + " it or through the wall beside it, so shut it is no wall");
+                }
             } else {
-                out.add(name + " isn't where the floor ends: nobody can walk through it"
-                        + " (a player must fit in front of it, inside its span, with the floor ending"
-                        + " within " + RiderWalk.DOOR_WALL_SLACK + " of its inner face)");
+                List<Integer> from = walkablePieces(door, shut);
+                if (from.isEmpty()) {
+                    out.add(name + " isn't where the floor ends: nobody can walk through it"
+                            + " (a player must fit in front of it, inside its span, with the floor ending"
+                            + " within " + RiderWalk.DOOR_WALL_SLACK + " of its inner face)");
+                }
+                waysIn.addAll(from);
             }
         }
         if (!inZone.isEmpty() && !inZone.get(0).isEmpty()) {
@@ -174,16 +224,21 @@ public final class FloorCheck {
      * ends at its inner face.
      */
     static boolean walkableThrough(WagonType.Door door, FloorRegion region) {
-        return walkablePiece(door, region) >= 0;
+        return !walkablePieces(door, region).isEmpty();
     }
 
-    /** The piece of the region a rider walks through {@code door} from (see {@link #walkableThrough}), −1 if none. */
-    static int walkablePiece(WagonType.Door door, FloorRegion region) {
+    /**
+     * Every piece of the region a rider walks through {@code door} from (see
+     * {@link #walkableThrough}), in order; empty if none. {@code
+     * tools/floorgen.py}'s {@code door_seeds} is the same rule.
+     */
+    static List<Integer> walkablePieces(WagonType.Door door, FloorRegion region) {
         boolean side = door.axis() == 0;
         int out = door.outward();
         double lo = door.spanMin() + RiderWalk.DOOR_SPAN_INSET;
         double hi = door.spanMax() - RiderWalk.DOOR_SPAN_INSET;
         List<FloorRegion.Piece> pieces = region.pieces();
+        List<Integer> found = new ArrayList<>();
         for (int i = 0; i < pieces.size(); i++) {
             FloorRegion.Piece p = pieces.get(i);
             double pLo = Math.max(lo, side ? p.minZ() : p.minX());
@@ -195,14 +250,15 @@ public final class FloorCheck {
             for (double along = pLo; ; along = Math.min(pHi, along + SPAN_STEP)) {
                 double wall = side ? region.reach(across, along, 0, out) : region.reach(along, across, 2, out);
                 if (!Double.isNaN(wall) && RiderWalk.facesDoor(wall, door)) {
-                    return i;
+                    found.add(i);
+                    break;
                 }
                 if (along >= pHi) {
                     break;
                 }
             }
         }
-        return -1;
+        return found;
     }
 
     /** Where a rider's centre may be in an open inner door, as {@link RiderWalk} bridges it: {minX, minZ, maxX, maxZ}. */
