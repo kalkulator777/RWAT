@@ -398,13 +398,7 @@ public final class TrainSounds {
         if (!moved) {
             return;
         }
-        SoundSet.Control control = null;
-        for (Map.Entry<String, SoundSet.Control> entry : sounds.controls().entrySet()) {
-            if (entry.getKey().startsWith(kind) || (alias != null && entry.getKey().startsWith(alias))) {
-                control = entry.getValue();
-                break;
-            }
-        }
+        SoundSet.Control control = sounds.control(kind, alias);
         if (control == null) {
             return;
         }

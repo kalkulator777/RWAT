@@ -75,6 +75,32 @@ class SoundSetTest {
         assertTrue(SoundSet.NONE.files().isEmpty());
     }
 
+    /**
+     * A cab control of a kind is the first the pack declares, the same on
+     * every run (the maps used to lose the order, and with it which of
+     * {@code _1}/{@code _2} a notch played).
+     */
+    @Test
+    void controlsAndDoorsKeepTheDeclaredOrder() {
+        SoundSet sounds = parse("""
+                {
+                  "controls": { "WIDGET_9": { "move": "w.ogg" }, "WIDGET_8": { "move": "w.ogg" },
+                                "WIDGET_7": { "move": "w.ogg" }, "WIDGET_6": { "move": "w.ogg" },
+                                "WIDGET_5": { "move": "w.ogg" }, "WIDGET_4": { "move": "w.ogg" },
+                                "THROTTLE_2": { "move": "t2.ogg" }, "THROTTLE_1": { "move": "t1.ogg" },
+                                "IND_BRAKE_1": { "engage": "ind.ogg" } },
+                  "doors": { "d9": "d.ogg", "d8": "d.ogg", "d7": "d.ogg", "d6": "d.ogg", "d5": "d.ogg",
+                             "d4": "d.ogg", "d3": "d.ogg", "d2": "d.ogg", "d1": "d.ogg", "d0": "d.ogg" }
+                }""");
+        assertEquals(List.of("WIDGET_9", "WIDGET_8", "WIDGET_7", "WIDGET_6", "WIDGET_5", "WIDGET_4",
+                "THROTTLE_2", "THROTTLE_1", "IND_BRAKE_1"), List.copyOf(sounds.controls().keySet()));
+        assertEquals(List.of("d9", "d8", "d7", "d6", "d5", "d4", "d3", "d2", "d1", "d0"),
+                List.copyOf(sounds.doors().keySet()));
+        assertEquals("mvp:t2.ogg", sounds.control("THROTTLE_", null).move());
+        assertEquals("mvp:ind.ogg", sounds.control("INDEPENDENT_BRAKE_", "IND_BRAKE_").engage());
+        assertNull(sounds.control("REVERSER_", null));
+    }
+
     @Test
     void aDeclarationWithoutSoundsHasNone() {
         WagonModelDecl decl = WagonModelDecl.parse("mvp",
