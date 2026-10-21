@@ -21,9 +21,13 @@ public final class ConsistEvents {
     private ConsistEvents() {
     }
 
+    /**
+     * Consists run with the world: not while {@code /tick freeze} holds it
+     * (the event still fires), a tick per tick of {@code /tick step}.
+     */
     @SubscribeEvent
     static void onLevelTickPost(LevelTickEvent.Post event) {
-        if (event.getLevel() instanceof ServerLevel level) {
+        if (event.getLevel() instanceof ServerLevel level && level.tickRateManager().runsNormally()) {
             ConsistManager.get(level).tick(level);
         }
     }

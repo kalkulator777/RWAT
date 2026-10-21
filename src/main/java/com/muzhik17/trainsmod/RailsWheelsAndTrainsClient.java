@@ -70,11 +70,14 @@ public class RailsWheelsAndTrainsClient {
      * <p>Frozen while paused: the singleplayer pause stops the integrated
      * server (no new snapshots, gameTime stands still) but client ticks keep
      * firing — an advancing clock would extrapolate the train forward until
-     * the drift hits the snap threshold and yanks it back, in a loop.
+     * the drift hits the snap threshold and yanks it back, in a loop. The
+     * same under {@code /tick freeze}: the consists stand with the world,
+     * and run on a tick per tick of {@code /tick step}.
      */
     @SubscribeEvent
     static void onClientTickPre(ClientTickEvent.Pre event) {
-        if (Minecraft.getInstance().isPaused()) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.isPaused() || mc.level != null && !mc.level.tickRateManager().runsNormally()) {
             return;
         }
         ClientConsists.tickAll();
