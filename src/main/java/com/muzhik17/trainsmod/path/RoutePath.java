@@ -56,6 +56,16 @@ public final class RoutePath implements TrackPath {
         return cumulative[index + 1] - cumulative[index];
     }
 
+    /** The curve of part {@code index}, in its segment's own direction. */
+    public HermiteSegment partCurve(int index) {
+        return parts[index].segment();
+    }
+
+    /** True if part {@code index} is travelled against its curve's direction. */
+    public boolean partReversed(int index) {
+        return reversed[index];
+    }
+
     @Override
     public double length() {
         return cumulative[parts.length];
