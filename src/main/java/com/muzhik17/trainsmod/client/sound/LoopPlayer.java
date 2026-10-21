@@ -1,41 +1,72 @@
 package com.muzhik17.trainsmod.client.sound;
 
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.sounds.SoundManager;
-
 /**
  * Plays one declared loop (SPEC §10) — an engine, a horn, the wheels — as it
  * is switched on and off: the lead-in ({@code start}) once, then {@code main}
  * looping for as long as it stays on, then the tail ({@code stop}) once.
  * Volume, pitch and position follow every tick. {@link #kill} silences it
- * without the tail (out of hearing, the wagon gone).
+ * without the tail (out of hearing, the wagon gone); switched on again to
+ * <b>resume</b>, it goes straight into {@code main} — the engine kept running
+ * all along, it only wasn't heard.
+ *
+ * <p>The sound engine drops a loop without a word: the sound device changed,
+ * {@code /stopsound}, no free channel. A loop found dropped starts again — at
+ * most once per {@link #RETRY_TICKS}, so an engine with no channel to spare
+ * isn't asked every tick.
  *
  * <p>A <b>signal</b> given as a single file (most of MVP's horns: one blast
  * with its own attack and fade) is not looped — looping would chop the blast
  * into a stutter. As in IR it plays whole, again each time it ends while the
  * key is held; let go, a short blast sounds out ({@link #SOUND_OUT_TICKS}),
  * a long recording is cut.
+ *
+ * <p>No MC types: the sounds go out through a {@link Speaker} — the game's
+ * sound engine ({@link TrainSounds}), a stand-in in the tests.
+ *
+ * @param <S> a playing sound, as the speaker hands it back
  */
-final class LoopPlayer {
+final class LoopPlayer<S> {
 
     /** A released signal blast no longer than this plays out, ticks. */
     private static final int SOUND_OUT_TICKS = 80;
+    /** A dropped loop is started again at most this often, ticks. */
+    static final int RETRY_TICKS = 40;
+
+    /** Where a loop's sounds play. */
+    interface Speaker<S> {
+        /** Start a sound there, at that volume and pitch; null if the reference can't be played. */
+        S play(String ref, boolean looping, double x, double y, double z, float volume, float pitch);
+
+        /** Move a playing sound, and set its volume and pitch. */
+        void place(S sound, double x, double y, double z, float volume, float pitch);
+
+        /** False once the sound engine no longer has the sound: it ended, was dropped, or never got a channel. */
+        boolean active(S sound);
+
+        /** Stop the sound at the sound engine's next tick. */
+        void end(S sound);
+
+        /** Ticks a sound plays, or −1 if unknown. */
+        int ticks(String ref);
+    }
 
     private enum State { OFF, STARTING, RUNNING }
 
     private final SoundSet.Loop loop;
-    private final int distance;
+    private final Speaker<S> speaker;
     /** A single-file signal: repeated whole while on (see the class comment). */
     private final boolean repeat;
     private State state = State.OFF;
-    private TrainSound lead;
-    private TrainSound main;
+    private S lead;
+    private S main;
     /** Tick the loop takes over from the lead-in (or the next blast starts); −1 = once the sound has stopped. */
     private long nextAt;
+    /** Before this tick a dropped loop is not started again. */
+    private long retryAt;
 
-    LoopPlayer(SoundSet.Loop loop, int distance, boolean signal) {
+    LoopPlayer(SoundSet.Loop loop, Speaker<S> speaker, boolean signal) {
         this.loop = loop;
-        this.distance = distance;
+        this.speaker = speaker;
         this.repeat = signal && loop.start() == null && loop.stop() == null;
     }
 
@@ -47,15 +78,22 @@ final class LoopPlayer {
         return state != State.OFF;
     }
 
-    void update(boolean on, long now, double x, double y, double z, float volume, float pitch) {
-        SoundManager sounds = Minecraft.getInstance().getSoundManager();
+    /**
+     * Follow the switch for this tick.
+     *
+     * @param resume switched on now, go straight into {@code main}: the sound
+     *               was going already, only not heard (out of hearing, over
+     *               the budget, first sight)
+     */
+    void update(boolean on, boolean resume, long now, double x, double y, double z, float volume,
+            float pitch) {
         switch (state) {
             case OFF -> {
                 if (!on) {
                     return;
                 }
-                if (loop.start() != null) {
-                    lead = play(loop.start(), false, x, y, z, volume, pitch);
+                if (loop.start() != null && !resume) {
+                    lead = speaker.play(loop.start(), false, x, y, z, volume, pitch);
                     nextAt = after(now, loop.start());
                     state = State.STARTING;
                 } else {
@@ -71,14 +109,14 @@ final class LoopPlayer {
                     return;
                 }
                 place(lead, x, y, z, volume, pitch);
-                if (over(sounds, now, lead)) {
+                if (over(now, lead)) {
                     startMain(now, x, y, z, volume, pitch);
                 }
             }
             case RUNNING -> {
                 if (!on) {
-                    if (!repeat || SoundInfo.ticks(loop.main()) > SOUND_OUT_TICKS
-                            || SoundInfo.ticks(loop.main()) < 0) {
+                    if (!repeat || speaker.ticks(loop.main()) > SOUND_OUT_TICKS
+                            || speaker.ticks(loop.main()) < 0) {
                         end(main);
                     }
                     main = null;
@@ -87,34 +125,40 @@ final class LoopPlayer {
                     return;
                 }
                 place(main, x, y, z, volume, pitch);
-                if (repeat && over(sounds, now, main)) {
-                    startMain(now, x, y, z, volume, pitch); // the next blast
+                if (repeat) {
+                    if (over(now, main)) {
+                        startMain(now, x, y, z, volume, pitch); // the next blast
+                    }
+                } else if (main != null && now >= retryAt && !speaker.active(main)) {
+                    end(main); // the sound engine let it go: start it again
+                    startMain(now, x, y, z, volume, pitch);
                 }
             }
         }
     }
 
     private void startMain(long now, double x, double y, double z, float volume, float pitch) {
-        main = play(loop.main(), !repeat, x, y, z, volume, pitch);
+        main = speaker.play(loop.main(), !repeat, x, y, z, volume, pitch);
         nextAt = repeat ? after(now, loop.main()) : -1;
+        retryAt = now + RETRY_TICKS;
         lead = null; // a lead-in plays out by itself
         state = State.RUNNING;
     }
 
     /** Tick a sound started {@code now} ends, or −1 if its length is unknown. */
-    private static long after(long now, String ref) {
-        int length = SoundInfo.ticks(ref);
+    private long after(long now, String ref) {
+        int length = speaker.ticks(ref);
         return length > 0 ? now + length - 1 : -1;
     }
 
     /** True once the current sound is through: at its known end, else when it stopped playing. */
-    private boolean over(SoundManager sounds, long now, TrainSound current) {
-        return nextAt >= 0 ? now >= nextAt : current == null || !sounds.isActive(current);
+    private boolean over(long now, S current) {
+        return nextAt >= 0 ? now >= nextAt : current == null || !speaker.active(current);
     }
 
     private void playStop(double x, double y, double z, float volume, float pitch) {
         if (loop.stop() != null) {
-            play(loop.stop(), false, x, y, z, volume, pitch);
+            speaker.play(loop.stop(), false, x, y, z, volume, pitch);
         }
     }
 
@@ -127,27 +171,15 @@ final class LoopPlayer {
         state = State.OFF;
     }
 
-    private TrainSound play(String ref, boolean looping, double x, double y, double z, float volume,
-            float pitch) {
-        TrainSound sound = TrainSound.of(ref, looping, distance);
+    private void place(S sound, double x, double y, double z, float volume, float pitch) {
         if (sound != null) {
-            place(sound, x, y, z, volume, pitch);
-            TrainSounds.play(sound);
-        }
-        return sound;
-    }
-
-    private static void place(TrainSound sound, double x, double y, double z, float volume,
-            float pitch) {
-        if (sound != null) {
-            sound.moveTo(x, y, z);
-            sound.set(volume, pitch);
+            speaker.place(sound, x, y, z, volume, pitch);
         }
     }
 
-    private static void end(TrainSound sound) {
+    private void end(S sound) {
         if (sound != null) {
-            sound.end();
+            speaker.end(sound);
         }
     }
 }

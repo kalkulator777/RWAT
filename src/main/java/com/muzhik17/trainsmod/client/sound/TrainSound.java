@@ -19,7 +19,8 @@ import net.minecraft.world.phys.Vec3;
  * at a point in the world, its volume, pitch and position set by
  * {@link TrainSounds} every tick. A file plays straight from its path — no
  * {@code sounds.json} entry needed, the declaration is the registration —
- * with its own hearing distance (a horn carries further than the wheels).
+ * with its own hearing distance (a horn carries further than the wheels); a
+ * sound event plays its own file, but carries as far as a file would.
  * OpenAL places only mono sounds in the world: a stereo file would sound as
  * loud at the far end of the hearing distance as next to it, so its volume
  * falls off with distance here instead (MVP's wheels, joints and doors are
@@ -27,13 +28,16 @@ import net.minecraft.world.phys.Vec3;
  */
 final class TrainSound extends AbstractTickableSoundInstance {
 
+    /** The volume slider train sounds go by: Friendly Creatures (SPEC §10.3). */
+    static final SoundSource SOURCE = SoundSource.NEUTRAL;
+
     private final boolean file;
     private final int distance;
     private final boolean stereo;
 
     private TrainSound(ResourceLocation location, boolean file, boolean looping, int distance,
             boolean stereo) {
-        super(SoundEvent.createVariableRangeEvent(location), SoundSource.NEUTRAL,
+        super(SoundEvent.createVariableRangeEvent(location), SOURCE,
                 SoundInstance.createUnseededRandom());
         this.file = file;
         this.distance = distance;
@@ -61,7 +65,13 @@ final class TrainSound extends AbstractTickableSoundInstance {
     @Override
     public WeighedSoundEvents resolve(SoundManager manager) {
         if (!file) {
-            return super.resolve(manager); // a registered sound event
+            WeighedSoundEvents events = super.resolve(manager); // a registered sound event
+            if (sound != SoundManager.EMPTY_SOUND && sound != SoundManager.INTENTIONALLY_EMPTY_SOUND) {
+                // its own file and levels, our distance (sounds.json's default is 16 blocks)
+                sound = new Sound(sound.getLocation(), sound.getVolume(), sound.getPitch(), sound.getWeight(),
+                        sound.getType(), sound.shouldStream(), sound.shouldPreload(), distance);
+            }
+            return events;
         }
         this.sound = new FileSound(location, distance);
         WeighedSoundEvents events = new WeighedSoundEvents(location, null);

@@ -55,6 +55,7 @@ public class RailsWheelsAndTrainsClient {
         modEventBus.addListener(ClientDriveInput::register);
         modEventBus.addListener(ClientCabHud::register);
         modEventBus.addListener(ClientDriverHud::register);
+        modEventBus.addListener(TrainSounds::onSoundEngineLoad);
         ClientConfig.register(container);
     }
 
