@@ -12,9 +12,9 @@ import net.neoforged.neoforge.event.tick.LevelTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
- * Sends the full rail graph to players on login and dimension change
- * (edits are synced by {@link RailNetwork} itself), and polls the switch
- * stands for redstone every server tick (SPEC §2.2 v1).
+ * Sends the full rail graph to players on login, dimension change and
+ * respawn (edits are synced by {@link RailNetwork} itself), and polls the
+ * switch stands for redstone every server tick (SPEC §2.2 v1).
  */
 @EventBusSubscriber(modid = RailsWheelsAndTrains.MODID)
 public final class RailEvents {
@@ -36,6 +36,17 @@ public final class RailEvents {
 
     @SubscribeEvent
     static void onPlayerChangedDimension(PlayerEvent.PlayerChangedDimensionEvent event) {
+        sendGraph(event.getEntity() instanceof ServerPlayer player ? player : null);
+    }
+
+    /**
+     * Respawning may land in another dimension without a dimension-change
+     * event — dying in the Nether with the bed in the overworld, leaving the
+     * End through its exit portal ({@code PlayerList.respawn}). Respawning
+     * in the same dimension just sends the same graph again.
+     */
+    @SubscribeEvent
+    static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
         sendGraph(event.getEntity() instanceof ServerPlayer player ? player : null);
     }
 
