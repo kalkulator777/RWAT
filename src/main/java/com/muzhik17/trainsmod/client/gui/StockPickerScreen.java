@@ -29,7 +29,9 @@ public final class StockPickerScreen extends Screen {
     private static final int GAP = 8;
 
     private final InteractionHand hand;
-    private final RollingStockItem.Selection current;
+    /** The type and livery chosen so far: the stack's at first, kept when the window is resized. */
+    private String chosenType;
+    private String chosenLivery;
     private PickerList<String> types;
     private PickerList<String> liveries;
     private Button select;
@@ -41,7 +43,8 @@ public final class StockPickerScreen extends Screen {
     public StockPickerScreen(InteractionHand hand, RollingStockItem.Selection current) {
         super(Component.translatable("screen.railswheelsandtrains.rolling_stock"));
         this.hand = hand;
-        this.current = current;
+        this.chosenType = current == null ? null : current.type();
+        this.chosenLivery = current == null ? ConsistComposition.Slot.BASE_LIVERY : current.livery();
     }
 
     @Override
@@ -57,15 +60,20 @@ public final class StockPickerScreen extends Screen {
         previewY0 = 32;
         previewY1 = 32 + previewHeight;
 
-        types = new PickerList<>(minecraft, left, 32, typesWidth, listHeight,
-                type -> showLiveries(type, ConsistComposition.Slot.BASE_LIVERY), type -> confirm());
+        types = new PickerList<>(minecraft, left, 32, typesWidth, listHeight, type -> {
+                    chosenType = type;
+                    showLiveries(type);
+                }, type -> confirm());
         for (WagonType type : WagonTypes.all()) {
             types.add(type.id(), RollingStockItem.stockName(type.id()), describe(type));
         }
         addRenderableWidget(types);
 
         liveries = new PickerList<>(minecraft, previewX0, previewY1 + GAP, rightWidth,
-                listHeight - previewHeight - GAP, livery -> updateButtons(), livery -> confirm());
+                listHeight - previewHeight - GAP, livery -> {
+                    chosenLivery = livery;
+                    updateButtons();
+                }, livery -> confirm());
         addRenderableWidget(liveries);
 
         select = addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> confirm())
@@ -73,12 +81,10 @@ public final class StockPickerScreen extends Screen {
         addRenderableWidget(Button.builder(Component.translatable("gui.cancel"), b -> onClose())
                 .bounds(width / 2 + 4, height - 30, 100, 20).build());
 
-        if (current != null) {
-            types.select(current.type());
-            showLiveries(current.type(), current.livery());
-        } else {
-            updateButtons();
+        if (chosenType != null) {
+            types.select(chosenType); // fills the liveries
         }
+        updateButtons();
     }
 
     /** "25.1 m · 53 t · cab · traction · walk-in" — what sets the types apart at a glance. */
@@ -96,8 +102,11 @@ public final class StockPickerScreen extends Screen {
         return Component.literal(text.toString());
     }
 
-    /** Fill the livery list for {@code type} (base textures first) and select {@code livery}. */
-    private void showLiveries(String type, String livery) {
+    /**
+     * Fill the livery list for {@code type} (base textures first) and select
+     * the livery chosen so far if the type has it, else the base.
+     */
+    private void showLiveries(String type) {
         liveries.clear();
         liveries.add(ConsistComposition.Slot.BASE_LIVERY,
                 Component.translatable("screen.railswheelsandtrains.livery_base"), null);
@@ -105,7 +114,7 @@ public final class StockPickerScreen extends Screen {
         for (String id : declared) {
             liveries.add(id, Component.literal(id), null);
         }
-        liveries.select(declared.contains(livery) ? livery : ConsistComposition.Slot.BASE_LIVERY);
+        liveries.select(declared.contains(chosenLivery) ? chosenLivery : ConsistComposition.Slot.BASE_LIVERY);
         updateButtons();
     }
 

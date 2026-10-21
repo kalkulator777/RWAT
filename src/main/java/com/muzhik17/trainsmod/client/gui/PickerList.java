@@ -10,8 +10,9 @@ import net.minecraft.network.chat.Component;
 
 /**
  * A scrolling list of choices for the item pickers (SPEC §6.10/§6.11): each
- * row is a title plus an optional grey second line. A click selects (and
- * tells {@code onSelect}); a double click also confirms ({@code onConfirm}).
+ * row is a title plus an optional grey second line. A click or the arrow keys
+ * select, and a new selection tells {@code onSelect}; a double click also
+ * confirms ({@code onConfirm}).
  *
  * @param <T> the value a row stands for
  */
@@ -44,7 +45,7 @@ final class PickerList<T> extends ObjectSelectionList<PickerList.Row<T>> {
         setScrollAmount(0.0);
     }
 
-    /** Select the row of {@code value} (if listed) and scroll it into view. */
+    /** Select the row of {@code value} (if listed; telling {@code onSelect}) and scroll it into view. */
     void select(T value) {
         for (Row<T> row : children()) {
             if (row.value.equals(value)) {
@@ -58,6 +59,23 @@ final class PickerList<T> extends ObjectSelectionList<PickerList.Row<T>> {
     T selectedValue() {
         Row<T> row = getSelected();
         return row == null ? null : row.value;
+    }
+
+    /**
+     * Every way a row gets selected ends here — a click, and the arrow keys
+     * through {@code setFocused}, which never reach {@link Row#mouseClicked}:
+     * a row newly selected tells {@code onSelect}, the row already selected
+     * doesn't again.
+     */
+    @Override
+    public void setSelected(Row<T> row) {
+        if (row == getSelected()) {
+            return;
+        }
+        super.setSelected(row);
+        if (row != null) {
+            onSelect.accept(row.value);
+        }
     }
 
     @Override
@@ -100,7 +118,6 @@ final class PickerList<T> extends ObjectSelectionList<PickerList.Row<T>> {
         @Override
         public boolean mouseClicked(double mouseX, double mouseY, int button) {
             owner.setSelected(this);
-            owner.onSelect.accept(value);
             long now = Util.getMillis();
             if (now - lastClick < DOUBLE_CLICK_MS) {
                 owner.onConfirm.accept(value);
