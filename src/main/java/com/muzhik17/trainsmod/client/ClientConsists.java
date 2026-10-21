@@ -27,7 +27,9 @@ import com.muzhik17.trainsmod.stock.ConsistComposition;
  * client tick ({@link #tickAll}) and gently nudged toward (newest snapshot −
  * delay). The client's {@code getGameTime()} is deliberately <i>not</i> used:
  * the server hard-corrects it every 20 ticks, and each correction would jump
- * {@code s} — the periodic back-and-forth jerk seen in play-tests.
+ * {@code s} — the periodic back-and-forth jerk seen in play-tests. In a
+ * snapshot gap the clock runs into the extrapolation cap and holds there
+ * until the stream catches up; it never snaps back for silence alone.
  *
  * <p><b>Phase:</b> {@link #tickPose} (the entity tick / rider seat) samples at
  * the clock; {@link #renderPose} interpolates between the previous and current
@@ -58,17 +60,25 @@ public final class ClientConsists {
     private static final long BUFFER_KEEP_TICKS = 40;
     private static final double MAX_EXTRAPOLATION_TICKS = 20.0;
     /**
-     * Snapshot silence after which a consist's state is dropped wholesale.
-     * Snapshots stop when this client no longer tracks any of the consist's
-     * wagons; the state must not outlive that, or a later re-tracked wagon's
-     * first tick samples the stale buffer and teleports the entity to where
-     * the train was minutes ago — usually a client-unloaded chunk, where it
-     * stops ticking and goes permanently invisible (the "/tp to the parked
-     * train: no locomotive" play-test bug, 2026-06-12). Generous vs the
-     * 20-tick extrapolation cap: a live-but-lagging stream keeps its buffer.
+     * Snapshot silence, in client ticks since the newest snapshot arrived,
+     * after which a consist's state is dropped wholesale. Snapshots stop when
+     * this client no longer tracks any of the consist's wagons; the state must
+     * not outlive that, or a later re-tracked wagon's first tick samples the
+     * stale buffer and teleports the entity to where the train was minutes ago
+     * — usually a client-unloaded chunk, where it stops ticking and goes
+     * permanently invisible (the "/tp to the parked train: no locomotive"
+     * play-test bug, 2026-06-12). Generous vs the 20-tick extrapolation cap: a
+     * live-but-lagging stream keeps its buffer, and a standing train's
+     * keep-alive (every 10 ticks) keeps its state. Counted in ticks, not on
+     * the playback clock: the clock holds at the extrapolation cap in a gap,
+     * so it never gets this far past the newest snapshot.
      */
-    private static final double STALE_DROP_TICKS = 60.0;
-    /** Clock drift beyond this snaps instead of slewing (teleport / lag spike). */
+    private static final int STALE_DROP_TICKS = 60;
+    /**
+     * A tick that brought a snapshot whose target is further than this from
+     * the clock snaps the clock instead of slewing (teleport, the catch-up
+     * burst after a server hitch).
+     */
     private static final double CLOCK_SNAP_TICKS = 20.0;
     /** Max clock slew per tick (5% time dilation — imperceptible). */
     private static final double CLOCK_SLEW_PER_TICK = 0.05;
@@ -90,6 +100,13 @@ public final class ClientConsists {
         double clock = Double.NaN;
         /** The clock one client tick ago — the lerp window vanilla shows riders in. */
         double prevClock = Double.NaN;
+        /** Client ticks since the newest snapshot arrived (see {@link #STALE_DROP_TICKS}). */
+        int silentTicks;
+        /**
+         * The clock ran into the extrapolation cap in a snapshot gap and stands
+         * there until the stream's playback point catches up with it.
+         */
+        boolean holding;
         /** The server frame the buffered {@code s} values are in. */
         int frame;
         /** The driver's handles per the newest snapshot (SPEC §9: cab levers). */
@@ -175,6 +192,7 @@ public final class ClientConsists {
             }
         }
         state.buffer.addLast(new Snapshot(gameTime, s, v));
+        state.silentTicks = 0;
         long cutoff = gameTime - BUFFER_KEEP_TICKS;
         while (!state.buffer.isEmpty() && state.buffer.peekFirst().gameTime < cutoff) {
             state.buffer.pollFirst();
@@ -219,6 +237,7 @@ public final class ClientConsists {
         }
         state.clock = parent.clock;
         state.prevClock = parent.prevClock;
+        state.holding = parent.holding;
     }
 
     /**
@@ -245,7 +264,16 @@ public final class ClientConsists {
     /**
      * Advance every consist's playback clock by one client tick, slewing it
      * toward (newest snapshot − delay). Called once per client tick (Pre).
-     * Also drops states whose snapshot stream has gone silent (untracked
+     *
+     * <p>In a snapshot gap the clock runs into the extrapolation cap
+     * ({@link #MAX_EXTRAPOLATION_TICKS} past the newest snapshot) and holds
+     * there — the train stands where extrapolation took it — until the
+     * resumed stream's playback point catches up with the clock. Snapping back
+     * to (newest − delay) instead made a train saw-tooth through a server
+     * hitch (a second ahead, a jump back, again). Only a tick that brought a
+     * snapshot may snap, when its target is far from the clock.
+     *
+     * <p>Also drops states whose snapshot stream has gone silent (untracked
      * consist) — see {@link #STALE_DROP_TICKS}.
      */
     public static void tickAll() {
@@ -253,19 +281,27 @@ public final class ClientConsists {
         while (iterator.hasNext()) {
             var entry = iterator.next();
             State state = entry.getValue();
-            Snapshot newest = state.buffer.peekLast();
-            if (newest == null) {
-                continue;
-            }
-            if (!Double.isNaN(state.clock)
-                    && state.clock - newest.gameTime > STALE_DROP_TICKS) {
+            boolean fresh = state.silentTicks == 0; // a snapshot came since the last tick
+            if (++state.silentTicks > STALE_DROP_TICKS) {
                 iterator.remove();
                 int consistId = entry.getKey();
                 MEMBERS.values().removeIf(member -> member.consistId == consistId);
                 continue;
             }
+            Snapshot newest = state.buffer.peekLast();
+            if (newest == null) {
+                continue;
+            }
             double target = newest.gameTime - INTERP_DELAY_TICKS;
-            if (Double.isNaN(state.clock) || Math.abs(target - state.clock) > CLOCK_SNAP_TICKS) {
+            if (state.holding) {
+                if (state.clock + 1.0 > target) {
+                    state.prevClock = state.clock;
+                    continue;
+                }
+                state.holding = false; // the stream caught up: play on from here
+            }
+            if (Double.isNaN(state.clock)
+                    || fresh && Math.abs(target - state.clock) > CLOCK_SNAP_TICKS) {
                 state.prevClock = target - 1.0;
                 state.clock = target;
                 continue;
@@ -274,6 +310,11 @@ public final class ClientConsists {
             state.clock += 1.0;
             double err = target - state.clock;
             state.clock += Math.max(-CLOCK_SLEW_PER_TICK, Math.min(CLOCK_SLEW_PER_TICK, err));
+            double cap = newest.gameTime + MAX_EXTRAPOLATION_TICKS;
+            if (state.clock > cap) {
+                state.clock = cap;
+                state.holding = true;
+            }
         }
     }
 
