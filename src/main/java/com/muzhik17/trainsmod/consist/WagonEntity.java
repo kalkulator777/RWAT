@@ -340,6 +340,29 @@ public class WagonEntity extends Entity {
     }
 
     /**
+     * A wagon destroyed past its train — {@code /kill}, falling out of the
+     * world — leaves the train as if broken up ({@link
+     * ConsistManager#breakWagon}, no item): the consist would otherwise run
+     * on with a ghost wagon. The manager unlists a wagon before it removes
+     * it, and an unloading chunk or a change of dimension doesn't destroy
+     * one, so those removals pass as they are.
+     */
+    @Override
+    public void remove(RemovalReason reason) {
+        if (reason.shouldDestroy() && !isRemoved() && level() instanceof ServerLevel level) {
+            ConsistManager manager = ConsistManager.get(level);
+            Consist owner = manager.ownerOf(getUUID());
+            if (owner != null) {
+                setConsistId(owner.id()); // a stale id (it sat unloaded through a coupling) put right
+                if (manager.breakWagon(level, this, false) && isRemoved()) {
+                    return;
+                }
+            }
+        }
+        super.remove(reason);
+    }
+
+    /**
      * The blow's rock this tick, radians of roll (client): a minecart's
      * wobble ({@code sin(t)·t·wear/10}, degrees, swinging as it fades) at
      * {@link #KNOCK_SHARE} of its size.

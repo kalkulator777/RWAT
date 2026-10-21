@@ -337,6 +337,10 @@ public final class RwatCommands {
         double startS = Math.max(nearestS(path, playerPos), minHeadS);
 
         Consist consist = ConsistManager.get(level).spawn(level, spec, path, composition, startS);
+        if (consist == null) {
+            ctx.getSource().sendFailure(Component.literal("A wagon could not join the level: nothing spawned."));
+            return 0;
+        }
 
         double pathLength = path.length();
         ctx.getSource().sendSuccess(() -> Component.literal(String.format(

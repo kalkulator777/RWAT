@@ -103,17 +103,28 @@ public final class ConsistManager extends SavedData {
      * Create a consist and spawn its wagon entities posed on {@code path}
      * (the resolved {@code pathSpec}) with the head at {@code headS}. The
      * caller keeps the whole train on the path.
+     *
+     * @return the consist, or null if a wagon couldn't join the level (another
+     *         mod refused it) — then nothing of the train is left behind
      */
     public Consist spawn(ServerLevel level, TrackPathSpec pathSpec, TrackPath path,
             ConsistComposition composition, double headS) {
         Consist consist = create(pathSpec, composition, headS);
+        List<WagonEntity> joined = new ArrayList<>(composition.wagonCount());
         for (int i = 0; i < composition.wagonCount(); i++) {
             WagonEntity wagon = new WagonEntity(RailsWheelsAndTrains.WAGON_ENTITY.get(), level);
             wagon.setConsistId(consist.id());
             wagon.setWagonIndex(i);
             WagonPose pose = ConsistKinematics.wagonPose(path, headS, i, composition);
             wagon.moveTo(pose.body().x, pose.body().y, pose.body().z, pose.yaw(), pose.pitch());
-            level.addFreshEntity(wagon);
+            if (!level.addFreshEntity(wagon)) {
+                // a train with a wagon missing would carry a ghost: none at all
+                // (unlisted first, so the wagons already in go as plain removals)
+                remove(consist.id());
+                joined.forEach(Entity::discard);
+                return null;
+            }
+            joined.add(wagon);
             consist.wagonIds().add(wagon.getUUID());
         }
         // new stock is delivered parked: it holds on a grade until released
@@ -792,7 +803,9 @@ public final class ConsistManager extends SavedData {
      * it is, one consist or two, with its handles and handbrakes — and the
      * one-wagon consist left over goes with the entity. In survival its
      * rolling stock item drops, with its type and livery, ready to be put
-     * back on the rails ({@code doEntityDrops} permitting).
+     * back on the rails ({@code doEntityDrops} permitting). A wagon removed
+     * past the manager — {@code /kill}, the void — leaves its train the same
+     * way, without the item ({@link WagonEntity#remove}).
      *
      * @return false if its train can't be cut (its wagon list out of step with the composition): nothing breaks
      */
@@ -1016,6 +1029,8 @@ public final class ConsistManager extends SavedData {
         for (Tag entry : tag.getList("Consists", Tag.TAG_COMPOUND)) {
             Consist consist = Consist.load((CompoundTag) entry);
             manager.consists.put(consist.id(), consist);
+            // never below a loaded id: a counter behind would give a new train an old one's id
+            manager.nextId = Math.max(manager.nextId, consist.id() + 1);
         }
         return manager;
     }

@@ -224,7 +224,7 @@ public final class CouplingRowScene {
         double front = 8.0 + loco.totalLength();
         double head = front - Coupling.frontEndS(loco, 0.0);
         Consist consist = ConsistManager.get(level).spawn(level, spec, path, loco, head);
-        trainId = consist.id();
+        trainId = consist == null ? -1 : consist.id(); // refused: the scene reports the train gone
         rowStart = front + 6.0;
         RailsWheelsAndTrains.LOGGER.info("[row] loco #{} front at s={}, the row from s={}", trainId,
                 front, rowStart);
@@ -238,7 +238,9 @@ public final class CouplingRowScene {
             double rear = rowStart + k * pitch;
             double head = rear - Coupling.rearEndS(car, 0.0);
             Consist consist = ConsistManager.get(level).spawn(level, spec, path, car, head);
-            rowCars.add(consist.wagonIds().get(0));
+            if (consist != null) {
+                rowCars.add(consist.wagonIds().get(0));
+            }
         }
         RailsWheelsAndTrains.LOGGER.info("[row] set down cars {}..{}", batch * BATCH,
                 Math.min(ROW, (batch + 1) * BATCH) - 1);

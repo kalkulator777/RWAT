@@ -164,7 +164,9 @@ public class RollingStockItem extends Item {
         if (overlapsStock(level, pose, type)) {
             return Component.translatable("message.railswheelsandtrains.rolling_stock.occupied");
         }
-        ConsistManager.get(level).spawn(level, spec, path, composition, headS);
+        if (ConsistManager.get(level).spawn(level, spec, path, composition, headS) == null) {
+            return Component.translatable("message.railswheelsandtrains.rolling_stock.refused");
+        }
         return null;
     }
 

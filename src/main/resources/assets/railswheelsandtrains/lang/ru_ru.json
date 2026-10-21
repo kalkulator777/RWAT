@@ -35,6 +35,7 @@
   "message.railswheelsandtrains.rolling_stock.not_on_track": "Кликните по пути, чтобы поставить подвижной состав.",
   "message.railswheelsandtrains.rolling_stock.track_too_short": "Путь слишком короткий для вагона длиной %s м.",
   "message.railswheelsandtrains.rolling_stock.occupied": "Слишком близко к стоящему на пути составу.",
+  "message.railswheelsandtrains.rolling_stock.refused": "Вагон здесь поставить нельзя.",
   "tooltip.railswheelsandtrains.livery": "Ливрея: %s",
   "tooltip.railswheelsandtrains.rolling_stock.usage": "ПКМ в воздух — выбрать · ПКМ по пути — поставить",
   "tooltip.railswheelsandtrains.rail.usage": "ПКМ в воздух — стиль и подложка · клик по маркеру — построить · Shift+ПКМ по пути — перекрасить",
