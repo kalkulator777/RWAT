@@ -613,12 +613,13 @@ public final class ConsistManager extends SavedData {
         if (cut < 1 || cut >= count || consist.wagonIds().size() != count) {
             return null;
         }
+        // resolved first: a re-walk renumbers s (SPEC §2.2), and the plan is cut at s
+        RailNetwork network = RailNetwork.get(level);
+        TrackPath path = consist.resolvePath(network.graph(), network.revision());
         Coupling.Split plan = Coupling.split(consist.composition(), consist.s(), cut);
         Driver driver = driverOf(level, consist);
         boolean driverInRear = driver != null
                 && consist.wagonIds().indexOf(driver.cab().getUUID()) >= cut;
-        RailNetwork network = RailNetwork.get(level);
-        TrackPath path = consist.resolvePath(network.graph(), network.revision());
         Vector3d coupler = path == null ? null
                 : path.samplePosition(Coupling.couplerS(consist.composition(), consist.s(), cut - 1));
 
