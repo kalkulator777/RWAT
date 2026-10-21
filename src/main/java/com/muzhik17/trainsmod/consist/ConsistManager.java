@@ -190,6 +190,7 @@ public final class ConsistManager extends SavedData {
             // consist holds its chunks and runs; otherwise it runs only where
             // the world ticks under it, else it stands frozen (still synced
             // below to the players who see its loaded wagons)
+            boolean wasFrozen = chunks.frozen(consist.id());
             boolean running = chunks.runs(level, consist, path, driver != null, chunkPolicy, now);
             if (running) {
                 // input only counts while a cab has a driver; the handles
@@ -272,11 +273,12 @@ public final class ConsistManager extends SavedData {
                 // the client drops them by gameTime (handleSnapshot). A train
                 // standing frozen (SPEC §2.1, 2026-10-12) — seen from beyond the
                 // simulation distance — only needs keeping alive on the clients
-                // (STALE_DROP_TICKS): a snapshot every FROZEN_SNAPSHOT_TICKS.
-                if (running || consist.speed() != 0.0
-                        || (now + consist.id()) % FROZEN_SNAPSHOT_TICKS == 0) {
-                    ConsistSnapshotPayload snapshot =
-                            ConsistSnapshotPayload.of(consist, level.getGameTime(), entityIds);
+                // (STALE_DROP_TICKS): a snapshot the tick it froze, then every
+                // FROZEN_SNAPSHOT_TICKS, at rest whatever speed it froze with —
+                // it doesn't move, and the clients extrapolate a snapshot's speed
+                if (running || !wasFrozen || (now + consist.id()) % FROZEN_SNAPSHOT_TICKS == 0) {
+                    ConsistSnapshotPayload snapshot = ConsistSnapshotPayload.of(consist,
+                            running ? consist.speed() : 0.0, level.getGameTime(), entityIds);
                     for (WagonEntity wagon : wagons) {
                         PacketDistributor.sendToPlayersTrackingEntity(wagon, snapshot);
                     }
