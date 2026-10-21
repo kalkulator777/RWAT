@@ -28,8 +28,10 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 
 /**
@@ -48,11 +50,12 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
  * of the tick window, the body's sway, the turn of a flipped car) — the
  * doors first, then the cab's controls (a nearer door keeps the click), then
  * the crowbar's couplers. Clicks and drags in the tick use what the last
- * frame picked, as vanilla clicks what its last pick hit. Picking against the
- * wagon's <i>tick</i> pose (its entity position) put the hit boxes up to a
- * tick's travel ahead of the model, which is drawn a tick behind the clock
- * (SPEC §2.1): on a fast train they ran off the parts in the direction of
- * travel (play-test, 2026-10-12).
+ * frame picked, as vanilla clicks what its last pick hit; a click a pick
+ * took keeps the use button till it is released ({@link #onUseHeld}).
+ * Picking against the wagon's <i>tick</i> pose (its entity position) put the
+ * hit boxes up to a tick's travel ahead of the model, which is drawn a tick
+ * behind the clock (SPEC §2.1): on a fast train they ran off the parts in the
+ * direction of travel (play-test, 2026-10-12).
  */
 @EventBusSubscriber(modid = RailsWheelsAndTrains.MODID, value = Dist.CLIENT)
 public final class ClientWagonRay {
@@ -98,6 +101,12 @@ public final class ClientWagonRay {
     private ClientWagonRay() {
     }
 
+    /** Forget the wagons as drawn (logout, another level): entity ids don't outlive their level. */
+    public static void clear() {
+        DRAWN.clear();
+        drawnAt = Float.NaN;
+    }
+
     /**
      * Every frame, before the terrain and the entities: the frame's look,
      * then the picks in their order — a door nearer than a control keeps the
@@ -121,6 +130,25 @@ public final class ClientWagonRay {
         ClientCabInteract.frame(mc, player, look);
         ClientCouplerInteract.frame(mc, player, look);
         ClientBogieHit.frame(mc, player, look);
+    }
+
+    /**
+     * The use button held since a click one of the picks took — a door, a
+     * control or a chair, a coupler; worked or refused: vanilla repeats the
+     * use every 4 ticks while it is held, and a repeat is no new click. It
+     * goes nowhere, wherever the crosshair has gone since: not to another
+     * pick, not to the item in hand (rails opened their style picker, blocks
+     * were set), not to the wagon's own hitbox ({@code WagonEntity.interact}
+     * boarded an outsider or let a rider off). First of the use listeners, so
+     * no pick sees it.
+     */
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    static void onUseHeld(InputEvent.InteractionKeyMappingTriggered event) {
+        if (event.isUseItem() && (ClientCabInteract.holdsUse() || ClientDoorInteract.holdsUse()
+                || ClientCouplerInteract.holdsUse())) {
+            event.setCanceled(true);
+            event.setSwingHand(false);
+        }
     }
 
     /**

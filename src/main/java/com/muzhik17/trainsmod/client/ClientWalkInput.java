@@ -17,10 +17,13 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket;
 import net.minecraft.util.Mth;
+import net.minecraft.world.InteractionHand;
 import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
@@ -28,9 +31,11 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * WASD as floor movement, predicts the rider's local feet each tick (the same
  * pure {@link RiderWalk} step the server runs, so {@link ClientWalk} matches
  * the authoritative position with no round-trip), and forwards the input to the
- * server. Right-click (use) requests an exit on a door-less type; one with
- * doors is left by walking out an open door ({@code WagonEntity}), and the
- * click is the door's ({@link ClientDoorInteract}). The cab driver is handled by
+ * server. Right-click (use) requests an exit on a door-less type, if no pick
+ * took the click ({@link #onUse}: a handbrake wheel, a window, a gangway door
+ * or a chair keeps its click); one with doors is left by walking out an open
+ * door ({@code WagonEntity}), and the click is the door's
+ * ({@link ClientDoorInteract}). The cab driver is handled by
  * {@link ClientDriveInput} instead — this only engages on wagons with a
  * boardable interior.
  *
@@ -62,8 +67,13 @@ import net.neoforged.neoforge.network.PacketDistributor;
 @EventBusSubscriber(modid = RailsWheelsAndTrains.MODID, value = Dist.CLIENT)
 public final class ClientWalkInput {
 
-    /** Use-key state, to send the exit as a single edge; true while not riding so a held boarding click doesn't exit. */
+    /**
+     * Use-key state last tick: a use while it was down is vanilla's repeat,
+     * not a new click; true while not riding so a held boarding click doesn't exit.
+     */
     private static boolean useWasDown = true;
+    /** A new right-click no pick took came this tick ({@link #onUse}): the exit, on a door-less type. */
+    private static boolean useClicked;
     /** Wagon yaw last tick, to turn the camera by its per-tick change; null when not aboard. */
     private static Float prevWagonYaw;
     /** The ridden wagon's flipped flag last tick, to notice a coupling turning it; null when not aboard. */
@@ -99,6 +109,8 @@ public final class ClientWalkInput {
     static void onClientTick(ClientTickEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
         LocalPlayer player = mc.player;
+        boolean clicked = useClicked; // this tick's: vanilla handles the keys before the tick ends
+        useClicked = false;
         if (player == null || !(player.getVehicle() instanceof WagonEntity wagon)) {
             if (player != null && walkedWagon != -1) {
                 // off a walkable car: aboard, the sneak key reached the server
@@ -236,9 +248,8 @@ public final class ClientWalkInput {
         // read the key, not the player: crouched is what the server is told
         boolean sneak = mc.options.keyShift.isDown();
 
-        boolean useDown = mc.options.keyUse.isDown();
-        boolean exit = useDown && !useWasDown && !doorsOnly(wagon);
-        useWasDown = useDown;
+        boolean exit = clicked && !doorsOnly(wagon);
+        useWasDown = mc.options.keyUse.isDown();
 
         // predict the local feet (seed from the world position on the first tick aboard)
         Vector3d local = ClientWalk.get(player.getId());
@@ -284,6 +295,19 @@ public final class ClientWalkInput {
         ConsistComposition.Slot slot =
                 ClientConsists.slot(wagon.getConsistId(), wagon.getWagonIndex());
         return slot != null && slot.type().doorsOnly();
+    }
+
+    /**
+     * A right-click that reached the end: no pick took it — they cancel the
+     * clicks that are theirs, and the repeats of a button held since one
+     * ({@link ClientWagonRay#onUseHeld}) — so it is the rider's own. Only a
+     * new press counts, not vanilla's repeats while the button is held.
+     */
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    static void onUse(InputEvent.InteractionKeyMappingTriggered event) {
+        if (event.isUseItem() && event.getHand() == InteractionHand.MAIN_HAND && !useWasDown) {
+            useClicked = true;
+        }
     }
 
     /** The synced floor of the wagon the player rides, in its pose frame, or null if not boardable. */
