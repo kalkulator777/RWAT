@@ -179,7 +179,11 @@ public final class ConsistManager extends SavedData {
                 dirty = true; // re-anchored onto a re-walked route (SPEC §2.2 v1)
             }
             if (path == null) {
-                continue; // nothing of the route survived — frozen (SPEC §2.1)
+                path = placeStranded(level, network, consist);
+                if (path == null) {
+                    continue; // stranded somewhere not known yet: none of its wagons has loaded
+                }
+                dirty = true;
             }
             Driver driver = driverOf(level, consist);
             // chunk loading (SPEC §2.1, 2026-10-12): driven or on the move, the
@@ -306,6 +310,29 @@ public final class ConsistManager extends SavedData {
         if (dirty) {
             setDirty();
         }
+    }
+
+    /**
+     * Place a consist stranded before its curves were known (decision D2:
+     * its saved route was already gone) by the first of its wagons that is
+     * loaded, where that wagon stands ({@link Consist#strandAlong}).
+     *
+     * @return its path now, or null if it isn't such a consist or none of its wagons is loaded
+     */
+    private static TrackPath placeStranded(ServerLevel level, RailNetwork network, Consist consist) {
+        if (!(consist.pathSpec() instanceof TrackPathSpec.Stranded)) {
+            return null;
+        }
+        List<UUID> ids = consist.wagonIds();
+        for (int i = 0; i < ids.size() && i < consist.composition().wagonCount(); i++) {
+            if (level.getEntity(ids.get(i)) instanceof WagonEntity wagon) {
+                Vector3d axis = PoseMath.localToWorld(new Vector3d(), wagon.getYRot(), wagon.getXRot(),
+                        new Vector3d(0.0, 0.0, 1.0));
+                consist.strandAlong(i, new Vector3d(wagon.getX(), wagon.getY(), wagon.getZ()), axis);
+                return consist.resolvePath(network.graph(), network.revision());
+            }
+        }
+        return null;
     }
 
     // --- coupling (SPEC §6.12) ---
