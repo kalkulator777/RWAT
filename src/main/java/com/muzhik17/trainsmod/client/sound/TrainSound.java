@@ -28,13 +28,16 @@ import net.minecraft.world.phys.Vec3;
  */
 final class TrainSound extends AbstractTickableSoundInstance {
 
+    /** The volume slider train sounds go by: Friendly Creatures (SPEC §10.3). */
+    static final SoundSource SOURCE = SoundSource.NEUTRAL;
+
     private final boolean file;
     private final int distance;
     private final boolean stereo;
 
     private TrainSound(ResourceLocation location, boolean file, boolean looping, int distance,
             boolean stereo) {
-        super(SoundEvent.createVariableRangeEvent(location), SoundSource.NEUTRAL,
+        super(SoundEvent.createVariableRangeEvent(location), SOURCE,
                 SoundInstance.createUnseededRandom());
         this.file = file;
         this.distance = distance;

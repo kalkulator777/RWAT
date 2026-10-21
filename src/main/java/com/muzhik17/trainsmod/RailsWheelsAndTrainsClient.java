@@ -14,6 +14,7 @@ import com.muzhik17.trainsmod.client.render.RailRenderer;
 import com.muzhik17.trainsmod.client.render.WagonRenderer;
 import com.muzhik17.trainsmod.client.render.model.RailModelReloadListener;
 import com.muzhik17.trainsmod.client.render.model.WagonModelReloadListener;
+import com.muzhik17.trainsmod.client.sound.TrainSounds;
 
 import net.minecraft.client.Minecraft;
 import net.neoforged.api.distmarker.Dist;
@@ -47,6 +48,7 @@ public class RailsWheelsAndTrainsClient {
         modEventBus.addListener(ClientDriveInput::register);
         modEventBus.addListener(ClientCabHud::register);
         modEventBus.addListener(ClientDriverHud::register);
+        modEventBus.addListener(TrainSounds::onSoundEngineLoad);
         ClientConfig.register(container);
     }
 

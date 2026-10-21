@@ -29,6 +29,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
@@ -39,6 +40,7 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
 import net.neoforged.neoforge.client.event.sound.PlaySoundSourceEvent;
 import net.neoforged.neoforge.client.event.sound.PlayStreamingSourceEvent;
+import net.neoforged.neoforge.client.event.sound.SoundEngineLoadEvent;
 
 /**
  * Trains you can hear (SPEC §10), worked out on each client from what it
@@ -60,7 +62,9 @@ import net.neoforged.neoforge.client.event.sound.PlayStreamingSourceEvent;
  * </ul>
  * Loops are kept for the nearest wagons only ({@link #MAX_WHEELS},
  * {@link #MAX_ENGINES}): the sound engine has a few hundred channels for the
- * whole game.
+ * whole game. When it restarts (the sound device changed) or train sounds
+ * can't be heard (a slider at 0), everything is dropped and picked up again
+ * from what the trains are doing.
  */
 @EventBusSubscriber(modid = RailsWheelsAndTrains.MODID, value = Dist.CLIENT)
 public final class TrainSounds {
@@ -114,16 +118,16 @@ public final class TrainSounds {
     private static final class WagonAudio {
         String typeId;
         SoundSet sounds = SoundSet.NONE;
-        LoopPlayer wheels;
-        LoopPlayer engine;
+        LoopPlayer<TrainSound> wheels;
+        LoopPlayer<TrainSound> engine;
         float throttle;
         int doorMask = -1;
     }
 
     private static final class ConsistAudio {
         Handles handles;
-        LoopPlayer horn;
-        LoopPlayer bell;
+        LoopPlayer<TrainSound> horn;
+        LoopPlayer<TrainSound> bell;
         String cabType;
         final Map<String, TrainSound> engaged = new HashMap<>();
     }
@@ -150,7 +154,7 @@ public final class TrainSounds {
     static void onClientTick(ClientTickEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
         ClientLevel level = mc.level;
-        if (level == null) {
+        if (level == null || muted(mc)) {
             clearAll();
             return;
         }
@@ -252,9 +256,9 @@ public final class TrainSounds {
         audio.typeId = typeId;
         audio.sounds = StockModels.sounds(typeId);
         SoundSet.Loop wheels = audio.sounds.wheels() != null ? audio.sounds.wheels() : FALLBACK_WHEELS;
-        audio.wheels = new LoopPlayer(wheels, WHEELS_DISTANCE, false);
+        audio.wheels = new LoopPlayer<>(wheels, new GameSpeaker(WHEELS_DISTANCE), false);
         audio.engine = audio.sounds.idle() != null
-                ? new LoopPlayer(audio.sounds.idle(), ENGINE_DISTANCE, false) : null;
+                ? new LoopPlayer<>(audio.sounds.idle(), new GameSpeaker(ENGINE_DISTANCE), false) : null;
         audio.doorMask = -1;
     }
 
@@ -353,8 +357,10 @@ public final class TrainSounds {
         if (typeId != null && !typeId.equals(audio.cabType)) {
             silence(audio);
             audio.cabType = typeId;
-            audio.horn = sounds.horn() != null ? new LoopPlayer(sounds.horn(), HORN_DISTANCE, true) : null;
-            audio.bell = sounds.bell() != null ? new LoopPlayer(sounds.bell(), BELL_DISTANCE, true) : null;
+            audio.horn = sounds.horn() != null
+                    ? new LoopPlayer<>(sounds.horn(), new GameSpeaker(HORN_DISTANCE), true) : null;
+            audio.bell = sounds.bell() != null
+                    ? new LoopPlayer<>(sounds.bell(), new GameSpeaker(BELL_DISTANCE), true) : null;
         }
 
         // the driver's desk (the chair driven from), or the middle of the cab wagon
@@ -416,19 +422,70 @@ public final class TrainSounds {
     }
 
     private static TrainSound oneShot(String ref, int distance, Vector3d at, float volume, float pitch) {
-        TrainSound sound = TrainSound.of(ref, false, distance);
-        if (sound != null) {
-            sound.moveTo(at.x, at.y, at.z);
-            sound.set(volume, pitch);
-            play(sound);
-        }
-        return sound;
+        return new GameSpeaker(distance).play(ref, false, at.x, at.y, at.z, volume, pitch);
     }
 
     /** Hand a sound to the sound engine (counted for {@link #describe}). */
     static void play(TrainSound sound) {
         asked++;
         Minecraft.getInstance().getSoundManager().play(sound);
+    }
+
+    /** The game's sound engine, for sounds heard up to {@code distance} blocks: what the loops play through. */
+    private record GameSpeaker(int distance) implements LoopPlayer.Speaker<TrainSound> {
+        @Override
+        public TrainSound play(String ref, boolean looping, double x, double y, double z, float volume,
+                float pitch) {
+            TrainSound sound = TrainSound.of(ref, looping, distance);
+            if (sound != null) {
+                place(sound, x, y, z, volume, pitch);
+                TrainSounds.play(sound);
+            }
+            return sound;
+        }
+
+        @Override
+        public void place(TrainSound sound, double x, double y, double z, float volume, float pitch) {
+            sound.moveTo(x, y, z);
+            sound.set(volume, pitch);
+        }
+
+        @Override
+        public boolean active(TrainSound sound) {
+            return Minecraft.getInstance().getSoundManager().isActive(sound);
+        }
+
+        @Override
+        public void end(TrainSound sound) {
+            sound.end();
+        }
+
+        @Override
+        public int ticks(String ref) {
+            return SoundInfo.ticks(ref);
+        }
+    }
+
+    /**
+     * True while train sounds can't be heard: the master or their own slider
+     * ({@link TrainSound#SOURCE}) at 0, or {@code trainVolume} 0. Nothing is
+     * played or kept then: under a master at 0 the sound engine starts no
+     * sound, and one under its slider at 0 it stops — yet goes on calling it
+     * active, so the loop would never know to start again.
+     */
+    private static boolean muted(Minecraft mc) {
+        return mc.options.getSoundSourceVolume(SoundSource.MASTER) <= 0.0F
+                || mc.options.getSoundSourceVolume(TrainSound.SOURCE) <= 0.0F
+                || ClientConfig.trainVolume() <= 0.0;
+    }
+
+    /**
+     * The sound engine started over (mod bus): the sound device changed or
+     * was lost, the options changed it, a resource reload. Every sound it was
+     * playing is gone, ours too — so is what we knew of them.
+     */
+    public static void onSoundEngineLoad(SoundEngineLoadEvent event) {
+        clearAll();
     }
 
     /** The engine started a sound — its file loaded (sound thread). */
@@ -517,7 +574,7 @@ public final class TrainSounds {
                 })));
     }
 
-    /** Drop everything (logout, resource reload). */
+    /** Drop everything (logout, resource reload, the sound engine restarted). */
     public static void clearAll() {
         WAGONS.values().forEach(TrainSounds::silence);
         CONSISTS.values().forEach(TrainSounds::silence);
