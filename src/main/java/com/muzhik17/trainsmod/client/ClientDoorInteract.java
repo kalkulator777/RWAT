@@ -130,6 +130,11 @@ public final class ClientDoorInteract {
         }
     }
 
+    /** Drop the pick (logout, another level): its wagon went with the level. */
+    public static void clear() {
+        framePick = null;
+    }
+
     /** A door under the crosshair; {@code byBox}: by the door's box, as its leaf isn't moved by the model. */
     private record Pick(WagonEntity wagon, int door, double distance, boolean byBox) {
     }

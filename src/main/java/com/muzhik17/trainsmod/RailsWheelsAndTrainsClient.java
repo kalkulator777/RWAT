@@ -1,14 +1,20 @@
 package com.muzhik17.trainsmod;
 
+import com.muzhik17.trainsmod.client.ClientBogieHit;
 import com.muzhik17.trainsmod.client.ClientConsists;
 import com.muzhik17.trainsmod.client.ClientCabHud;
+import com.muzhik17.trainsmod.client.ClientCabInteract;
 import com.muzhik17.trainsmod.client.ClientConfig;
+import com.muzhik17.trainsmod.client.ClientCouplerInteract;
+import com.muzhik17.trainsmod.client.ClientDoorInteract;
 import com.muzhik17.trainsmod.client.ClientDriveInput;
 import com.muzhik17.trainsmod.client.ClientDriverHud;
 import com.muzhik17.trainsmod.client.ClientPanelKey;
 import com.muzhik17.trainsmod.client.ClientRailGraph;
 import com.muzhik17.trainsmod.client.ClientRide;
+import com.muzhik17.trainsmod.client.ClientRideCamera;
 import com.muzhik17.trainsmod.client.ClientRiderSync;
+import com.muzhik17.trainsmod.client.ClientWagonRay;
 import com.muzhik17.trainsmod.client.ClientWalk;
 import com.muzhik17.trainsmod.client.render.RailRenderer;
 import com.muzhik17.trainsmod.client.render.WagonRenderer;
@@ -81,13 +87,23 @@ public class RailsWheelsAndTrainsClient {
         ClientRide.tickAll();
     }
 
-    /** Snapshot buffers and the graph copy are per-connection state; drop them when leaving. */
+    /**
+     * Snapshot buffers and the graph copy are per-connection state; drop them
+     * when leaving — and the picks under the crosshair, the held control and
+     * the view's tilt, which hold the level's wagons.
+     */
     @SubscribeEvent
     static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
         ClientConsists.clearAll();
         ClientWalk.clearAll();
         ClientRiderSync.clearAll();
         ClientRide.clearAll();
+        ClientCabInteract.clear();
+        ClientDoorInteract.clear();
+        ClientCouplerInteract.clear();
+        ClientBogieHit.clear();
+        ClientWagonRay.clear();
+        ClientRideCamera.clear();
         ClientRailGraph.clear();
         RailRenderer.clear();
         WagonRenderer.clearBaked();

@@ -109,6 +109,11 @@ public final class ClientCouplerInteract {
         }
     }
 
+    /** Drop the pick (logout, another level): its wagon went with the level. */
+    public static void clear() {
+        framePick = null;
+    }
+
     /**
      * A coupler — the {@code front} (towards index − 1) or rear end of
      * {@code wagon} — or, if {@code handbrake}, the wagon's handbrake.

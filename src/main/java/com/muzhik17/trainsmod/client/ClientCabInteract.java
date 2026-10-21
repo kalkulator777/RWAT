@@ -295,11 +295,20 @@ public final class ClientCabInteract {
             return;
         }
         if (player == null || !held || current.wagon.isRemoved()) {
-            if (current.control.role().press()) {
+            // a held button is let go on the server — if there still is one to
+            // tell: kicked or timed out, the connection went with the player
+            if (current.control.role().press() && mc.getConnection() != null) {
                 send(current.wagon, current.control, 0.0F);
             }
             grab = null;
         }
+    }
+
+    /** Drop the hover and the held control (logout, another level): their wagons went with the level. */
+    public static void clear() {
+        grab = null;
+        hover = null;
+        hoverRefusal = null;
     }
 
     /**

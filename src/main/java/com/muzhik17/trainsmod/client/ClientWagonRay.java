@@ -98,6 +98,12 @@ public final class ClientWagonRay {
     private ClientWagonRay() {
     }
 
+    /** Forget the wagons as drawn (logout, another level): entity ids don't outlive their level. */
+    public static void clear() {
+        DRAWN.clear();
+        drawnAt = Float.NaN;
+    }
+
     /**
      * Every frame, before the terrain and the entities: the frame's look,
      * then the picks in their order — a door nearer than a control keeps the
