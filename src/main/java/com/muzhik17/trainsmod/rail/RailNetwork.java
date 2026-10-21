@@ -883,6 +883,10 @@ public final class RailNetwork extends SavedData {
         }
         tag.put("Switches", switchList);
         tag.putInt("Revision", revision);
+        // the id counters: ids of demolished track are never handed out again
+        tag.putInt("NextNode", graph.nextNodeId());
+        tag.putInt("NextSegment", graph.nextSegmentId());
+        tag.putInt("NextGroup", graph.nextGroupId());
         return tag;
     }
 
@@ -925,6 +929,8 @@ public final class RailNetwork extends SavedData {
             network.graph.setSwitchSelection(switchTag.getInt("Node"), switchTag.getInt("Sel"));
         }
         network.revision = Math.max(1, tag.getInt("Revision"));
+        network.graph.restoreNextIds(tag.getInt("NextNode"), tag.getInt("NextSegment"),
+                tag.getInt("NextGroup"));
         return network;
     }
 }

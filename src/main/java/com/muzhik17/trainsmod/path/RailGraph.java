@@ -78,6 +78,37 @@ public final class RailGraph {
         node(segment.nodeB()).segments().add(segment.id());
     }
 
+    // --- id counters (persisted with the graph) ---
+
+    /** The id the next new node gets. */
+    public int nextNodeId() {
+        return nextNodeId;
+    }
+
+    /** The id the next new segment gets. */
+    public int nextSegmentId() {
+        return nextSegmentId;
+    }
+
+    /** The id the next new structure group gets. */
+    public int nextGroupId() {
+        return nextGroupId;
+    }
+
+    /**
+     * Restore the id counters saved with the graph, once its nodes and
+     * segments are back. A counter only ever moves up — never below what the
+     * loaded ids need — so the ids of removed nodes, segments and groups are
+     * not handed out again after a restart: a consist still holding a removed
+     * segment's id must not find new, unrelated track under it. Zeros (a save
+     * from before the counters were kept) change nothing.
+     */
+    public void restoreNextIds(int node, int segment, int group) {
+        nextNodeId = Math.max(nextNodeId, node);
+        nextSegmentId = Math.max(nextSegmentId, segment);
+        nextGroupId = Math.max(nextGroupId, group);
+    }
+
     // --- switch state (SPEC §2.2 v1) ---
 
     /** The switch selection counter at a node (0 if never toggled). */
