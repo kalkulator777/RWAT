@@ -1070,12 +1070,14 @@ public class WagonEntity extends Entity {
 
     /**
      * The open doorways the outer hull lets a <b>player</b> through (SPEC
-     * v1.5): one {@link HullCollision.Portal} per open door, read on both
-     * sides — the local player's movement is resolved client-side.
+     * v1.5): one {@link HullCollision.Portal} per open door, in the wall on
+     * its side ({@link HullCollision.Portal#of}), read on both sides — the
+     * local player's movement is resolved client-side.
      */
     public List<HullCollision.Portal> openPortals() {
         List<WagonType.Door> doors = framedDoors();
-        if (doors.isEmpty()) {
+        WagonType.Hull hull = collisionHull();
+        if (doors.isEmpty() || hull == null) {
             return List.of();
         }
         int mask = doorMask();
@@ -1084,11 +1086,7 @@ public class WagonEntity extends Entity {
             // a door between floor zones is inside the hull and a gangway door
             // is no way in from the ground: they cut nothing (SPEC §9.1, §9.5)
             if (doors.get(i).external() && doors.get(i).open(mask, i)) {
-                WagonType.Door door = doors.get(i);
-                portals.add(new HullCollision.Portal(door.axis(),
-                        door.spanMin() + RiderWalk.DOOR_SPAN_INSET,
-                        door.spanMax() - RiderWalk.DOOR_SPAN_INSET,
-                        door.maxY()));
+                portals.add(HullCollision.Portal.of(doors.get(i), hull));
             }
         }
         return portals;
@@ -1176,7 +1174,8 @@ public class WagonEntity extends Entity {
      * the pose is set): the hull let them into the opening ({@link #openPortals}),
      * and once they are past the hull face they become walking riders on the
      * vestibule floor. Entering from the ground works — the step well under a
-     * real vestibule door is what you'd climb.
+     * real vestibule door is what you'd climb. Only through the door's own
+     * wall: a closed door opposite an open one boards nobody.
      */
     public void boardThroughDoors(ServerLevel level) {
         WagonType type = serverType();
@@ -1187,7 +1186,6 @@ public class WagonEntity extends Entity {
         if (portals.isEmpty()) {
             return;
         }
-        WagonType.Hull hull = type.collidableHull();
         Vector3d body = new Vector3d(getX(), getY(), getZ());
         double reach = type.length() / 2.0 + 4.0;
         for (ServerPlayer player : level.players()) {
@@ -1199,14 +1197,9 @@ public class WagonEntity extends Entity {
             Vector3d local = PoseMath.worldToLocal(body, getYRot(), getXRot(),
                     new Vector3d(c.x, c.y, c.z));
             for (HullCollision.Portal portal : portals) {
-                if (!portal.contains(local.x, local.y, local.z)) {
-                    continue;
-                }
-                double across = portal.axis() == 0 ? local.x : local.z;
-                double face = portal.axis() == 0
-                        ? (across > 0 ? hull.maxX() : -hull.minX())
-                        : (across > 0 ? hull.maxZ() : -hull.minZ());
-                if (Math.abs(across) - RiderWalk.PLAYER_HALF_WIDTH < face - BOARD_DEPTH) {
+                // the body's inner side past the door's wall face by BOARD_DEPTH
+                if (portal.contains(local.x, local.y, local.z)
+                        && portal.outside(local.x, local.z) - RiderWalk.PLAYER_HALF_WIDTH < -BOARD_DEPTH) {
                     board(player, type);
                     break;
                 }
