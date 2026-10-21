@@ -32,6 +32,7 @@ import com.muzhik17.trainsmod.physics.TrainPhysics;
 import com.muzhik17.trainsmod.rail.RailNetwork;
 import com.muzhik17.trainsmod.stock.ConsistComposition;
 import com.muzhik17.trainsmod.stock.WagonType;
+import com.muzhik17.trainsmod.stock.WagonTypes;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
@@ -840,8 +841,6 @@ public final class ConsistManager extends SavedData {
         return true;
     }
 
-    /** Inflate the wagon AABB by the longest stock half-length when looking for entities to shove. */
-    private static final double SHOVE_REACH = 14.0;
     /** Cap a player's per-tick shove so a deep overlap ejects over a few ticks, not a launch. */
     private static final double SHOVE_PUSH_SPEED = 0.5;
 
@@ -860,7 +859,8 @@ public final class ConsistManager extends SavedData {
         if (hull == null) {
             return;
         }
-        AABB search = wagon.getBoundingBox().inflate(SHOVE_REACH);
+        // the wagon's box is its centre: reach the longest car's ends, and a step past them
+        AABB search = wagon.getBoundingBox().inflate(WagonTypes.longest() / 2.0 + 1.0);
         List<Entity> nearby = level.getEntities(wagon, search,
                 e -> e instanceof LivingEntity && !e.isSpectator() && !e.isPassenger());
         if (nearby.isEmpty()) {
