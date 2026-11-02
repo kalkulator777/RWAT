@@ -215,5 +215,22 @@
   "hud.railswheelsandtrains.handbrakes": "Ручники %s/%s",
   "control.railswheelsandtrains.handbrake": "Ручной тормоз",
   "control.railswheelsandtrains.handbrake_set": "затянут",
-  "control.railswheelsandtrains.handbrake_released": "отпущен"
+  "control.railswheelsandtrains.handbrake_released": "отпущен",
+  "rwat.packs.title.server": "Паки контента на сервере:",
+  "rwat.packs.title.client": "Паки контента на этом клиенте:",
+  "rwat.packs.none": "  ничего не загружено: положите пак контента в папку rwat_packs в папке игры",
+  "rwat.packs.count.wagon_types": "типов вагонов: %s",
+  "rwat.packs.count.track_beds": "стилей рельсов (полотно): %s",
+  "rwat.packs.count.wagon_models": "моделей вагонов: %s",
+  "rwat.packs.count.rail_styles": "стилей рельсов: %s",
+  "rwat.packs.count.model_files": "загружено и проверено моделей: %s",
+  "rwat.packs.clean": "Ни ошибок, ни предупреждений",
+  "rwat.packs.summary": "Ошибок: %s, предупреждений: %s",
+  "rwat.packs.more": "…и ещё %s, см. лог",
+  "rwat.packs.join": "RWAT: в паках контента есть ошибки (%s), подробности — %s",
+  "rwat.packs.validate.hint": "Модели грузятся, когда вагон впервые рисуется; /rwatc packs validate загрузит и проверит все сразу",
+  "rwat.packs.validate.start": "Загружаю модели: %s…",
+  "rwat.packs.validate.done": "Проверено моделей: %s. Ошибок: %s, предупреждений: %s",
+  "rwat.packs.validate.busy": "Проверка моделей ещё идёт",
+  "rwat.packs.validate.stale": "Паки перезагрузились во время проверки — запустите её снова"
 }
