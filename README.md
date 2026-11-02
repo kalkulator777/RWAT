@@ -9,7 +9,7 @@
 
 > Проект в разработке, сейчас это прототип.
 
-План работ — [docs/roadmap.md](docs/roadmap.md). [SPEC.md](SPEC.md) — журнал архитектурных решений: он объясняет, почему всё устроено так, но местами устарел; источник правды — код и тесты. Формат паков — [docs/proposals/pack-capabilities.md](docs/proposals/pack-capabilities.md) (что пак может задать сейчас) и будущий справочник автора `docs/pack-format.md`, который будет генерироваться из JSON Schema в `schema/` (фаза 1 карты). Правила для агентов — [CLAUDE.md](CLAUDE.md).
+План работ — [docs/roadmap.md](docs/roadmap.md). [SPEC.md](SPEC.md) — журнал архитектурных решений: он объясняет, почему всё устроено так, но местами устарел; источник правды — код и тесты. Формат паков — справочник автора [docs/pack-format.md](docs/pack-format.md), сгенерированный из JSON Schema в `schema/`; что пак может задать и где кончается движок — [docs/proposals/pack-capabilities.md](docs/proposals/pack-capabilities.md). Правила для агентов — [CLAUDE.md](CLAUDE.md).
 
 ## Требования
 
@@ -54,6 +54,8 @@
 
 Паки лежат в `<папка игры>/rwat_packs/`. В разработке клиент читает `run/rwat_packs/`, а `runClient2` и `runServer` подключают туда же через `-Drwat.packDirs`.
 
+**Пак-пример** RWAT Example Pack — `run/rwat_packs/RwatExamplePack/`, свой, под CC0 1.0 (решение R11): пассажирский вагон с ходимым салоном, маневровый тепловоз с кабиной и органами, двухосный полувагон и стиль рельсов показывают все функции формата паков 1. Модели и текстуры процедурные, звуки — ванильные звуковые события Minecraft. Пак пишет скрипт [tools/gen_example_pack.py](tools/gen_example_pack.py) (`python -I tools/gen_example_pack.py`); руками его не правят — правят скрипт, а тест следит, чтобы пак совпадал с его выводом байт в байт. Какой объект какую функцию показывает — [run/rwat_packs/RwatExamplePack/README.md](run/rwat_packs/RwatExamplePack/README.md), сам формат — [docs/pack-format.md](docs/pack-format.md). Пак-пример остаётся в репозитории и после того, как оттуда уберут MVP (R12).
+
 Пак **Matoi Vanilla Pack** (MVP) генерируется из паков Immersive Railroading конвертером [tools/ir2rwat.py](tools/ir2rwat.py):
 
 1. Исходные zip — `MVP-IR-1.8-mc1.12.2-by-FrozeRain.zip` и `MVP-IR-1.7-bugfix-mc1.12.2-by-FrozeRain.zip` (78 и 66 МБ) — лежат в корне репозитория, а готовый пак — в `run/rwat_packs/MatoiVanillaPack/` (734 файла). Это **временно** (решение D3, SPEC §9.6): контент лицензирован как CC BY-NC-ND 4.0, а в репозитории он нужен облачным агентам, чтобы мерить состав и перегенерировать пак. Zip и пак уберут из репозитория (и из истории) после фазы 2 [карты работ](docs/roadmap.md), решение R12; тогда zip придётся класть в корень самому.
@@ -70,7 +72,9 @@
 | `src/test/` | юнит-тесты (JUnit 5) |
 | `tools/` | Python-инструменты (ниже) |
 | `packs/` | рецепт конвертации MVP `mvp.json`, оверрайды по файлу на тип `mvp/<id>.json`, сводки геометрии `mvp/geometry/` |
+| `run/rwat_packs/RwatExamplePack/` | пак-пример, CC0 (см. «Паки контента») |
 | `run/rwat_packs/MatoiVanillaPack/`, `MVP-IR-*.zip` | сгенерированный пак MVP и исходные IR-паки; **временно в репозитории** (см. «Паки контента» и «Лицензия») |
+| `schema/` | формат паков: JSON Schema деклараций, `pack.mcmeta`, рецепта и оверрайда конвертера, конвенции имён OBJ данными (`obj-conventions.json`) |
 | `docs/` | карта работ `roadmap.md`, аудиты и ревью (`reviews/`), предложения (`proposals/`), инструкции агентам (`agents/`) |
 | `SPEC.md` | журнал архитектурных решений (местами устарел, см. выше) |
 | `CLAUDE.md` | правила для агентов |
@@ -95,7 +99,7 @@
 | `rail` | рельсы в мире: маркеры и стрелки, блоки полотна, сеть рельсов (`RailNetwork`), предмет рельсов |
 | `network` | пакеты клиент—сервер и серверные проверки в `RwatNetwork` |
 | `data` | загрузчики датапаков: типы вагонов и раскладка тайлов рельсов |
-| `pack` | поиск папки `rwat_packs/` и подключение каждого пака как ресурс-пака и датапака |
+| `pack` | поиск папки `rwat_packs/` и подключение каждого пака как ресурс-пака и датапака; блок `rwat` в `pack.mcmeta`, строгое чтение деклараций, загрузка типов вагонов целым файлом, проверка файлов моделей, отчёт о проблемах паков (`/rwat packs`, `/rwatc packs`), сверка паков клиента и сервера по хешам |
 | `client` | клиентская логика: ввод, ходьба, камера, снимки составов, выбор под прицелом; подпакеты `client.render` (вагоны, рельсы, свет), `client.render.model` (OBJ, MTL, `.anim`, декларации моделей и стилей рельсов), `client.gui` (пульт, экраны выбора), `client.sound` (звуки из паков) |
 | `mixin` | миксины в Minecraft (коллизия корпуса, посадка и спешивание, камера, клавиши, свет, звук) |
 | `compat` | Iris и LambDynLights — по рефлексии, без зависимости на этапе сборки |
@@ -111,6 +115,9 @@ Python 3.9+, только стандартная библиотека; запу�
 | `ir2rwat.py` | конвертер: IR-паки (zip) по рецепту `packs/*.json` → пак RWAT; `--geometry` пишет сводки геометрии моделей |
 | `floorgen.py` | ходимый пол вагона по треугольникам модели; вызывается конвертером, отдельно рисует карту пола (`--ascii`, `--png`) |
 | `objinfo.py` | замеры модели для разметки: объекты и габариты, органы по группам, высоты пола, двери и свет, которые выводит конвертер |
+| `gen_example_pack.py` | пак-пример `run/rwat_packs/RwatExamplePack` (CC0, решение R11): процедурные модели, текстуры, декларации; запуск `python -I tools/gen_example_pack.py` |
+| `validate_pack.py` | проверка пака, рецепта и оверрайдов по схеме `schema/`; `--self-check` сверяет саму схему с ключами парсеров и конвертера |
+| `gen_pack_docs.py` | справочник автора `docs/pack-format.md` из `schema/`; `--check` — справочник не отстал от схемы |
 | `gen_track_bed.py` | blockstates и модели блоков полотна по списку материалов в `rail/BedMaterial.java` |
 | `gen_driver_key.py` | текстура предмета «ключ машиниста» (пиксель-арт 16×16) |
 
@@ -123,3 +130,5 @@ Python 3.9+, только стандартная библиотека; запу�
 - Файлы шаблона NeoForge MDK распространяются по лицензии MIT, см. [TEMPLATE_LICENSE.txt](TEMPLATE_LICENSE.txt).
 - Исходные zip MVP в корне репозитория и сгенерированный из них пак `run/rwat_packs/MatoiVanillaPack/` — это Matoi Vanilla Pack (FrozeRain и соавторы), лицензия CC BY-NC-ND 4.0 (авторы — в `Credits.txt` пака). Лежат в репозитории **временно** (решение D3, [docs/roadmap.md](docs/roadmap.md), R12) и будут убраны; на них MIT не распространяется, ассеты чужих паков мы не распространяем.
 - Тестовая фикстура `src/test/resources/fixtures/mvp_ir_amendorf_door1.anim` взята без изменений из Matoi Vanilla Pack, лицензия та же.
+
+Пак-пример `run/rwat_packs/RwatExamplePack/` — [CC0 1.0](run/rwat_packs/RwatExamplePack/LICENSE.txt): модели и текстуры свои, процедурные (их пишет `tools/gen_example_pack.py`), чужих ассетов в нём нет; звуков в паке тоже нет — модели ссылаются на ванильные звуковые события Minecraft.
