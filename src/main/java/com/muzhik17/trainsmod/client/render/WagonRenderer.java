@@ -1,8 +1,6 @@
 package com.muzhik17.trainsmod.client.render;
 
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 import org.joml.Matrix4d;
 import org.joml.Matrix4f;
@@ -100,37 +98,34 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
     private static final float BOX_LIFT = 0.45F;
 
     /**
-     * Baked model per (stock model, livery, packed-light value), in access order.
-     * Outdoors this holds one entry per stock type on screen (sky 15); a
-     * train running past lamps or through a lit tunnel keeps meeting new
-     * values. Past {@link #BAKE_CACHE_MAX} the least recently drawn entry is
-     * freed — never the whole cache: the former wholesale flush made every
-     * wagon on screen re-bake its ~70k vertices in one frame. The model key
-     * compares by identity — {@link StockModels} caches instances, and
-     * value-comparing records over 17k-quad meshes would defeat the point of
-     * a cache.
+     * Bakes kept between frames. Outdoors there is one per stock type and
+     * livery on screen (sky 15); a train running past lamps or through a lit
+     * tunnel keeps meeting new light values. A frame that draws more keeps
+     * them all ({@link BakeCache}): the former LRU of this size freed one on
+     * every insert, so with 25 combinations in view every wagon re-baked its
+     * ~70k vertices every frame (H11).
      */
     private static final int BAKE_CACHE_MAX = 24;
-    private static final Map<BakeKey, BakedStockModel> BAKED =
-            new LinkedHashMap<>(32, 0.75F, true) {
-                @Override
-                protected boolean removeEldestEntry(Map.Entry<BakeKey, BakedStockModel> eldest) {
-                    if (size() <= BAKE_CACHE_MAX) {
-                        return false;
-                    }
-                    eldest.getValue().close();
-                    return true;
-                }
-            };
-
     /**
-     * New bakes allowed per frame. A bake is a whole model (~70k vertices,
-     * ~2.5 MB upload); when several wagons hit new light values at once, the
-     * rest borrow their model's most recent bake for a frame or two — a light
-     * step a few frames late instead of a hitch.
+     * New bakes allowed per frame, a first sight of a combination included.
+     * A bake is a whole model (~70k vertices, ~2.5 MB upload); when several
+     * wagons hit new light values at once, the rest borrow their model's most
+     * recent bake for a frame or two — a light step a few frames late instead
+     * of a hitch — and a car seen for the first time shows up a frame or two
+     * later.
      */
     private static final int BAKES_PER_FRAME = 1;
-    private static int bakesThisFrame;
+    /**
+     * Baked model per (stock model, livery, packed light, lit light groups).
+     * The light stays in the key: it is baked into every vertex's lightmap
+     * coordinate, which is what a shader pack reads too — light out of the
+     * buffers takes a shader of our own, and Iris doesn't patch that one
+     * (SPEC §2.4). A bake of the same model and livery stands in for another
+     * over the budget.
+     */
+    private static final BakeCache<BakeKey, BakedStockModel> BAKED = new BakeCache<>(BAKE_CACHE_MAX,
+            BAKES_PER_FRAME, (have, want) -> have.model == want.model && have.livery.equals(want.livery),
+            BakedStockModel::close);
 
     /** Reused draw queue for one wagon's parts (render thread only). */
     private static final GpuMesh.Batch BATCH = new GpuMesh.Batch();
@@ -158,6 +153,11 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
     /** Scratch for the camera in a part's frame (render thread only). */
     private static final Matrix4f TO_PART = new Matrix4f();
 
+    /**
+     * The model compares by identity — {@link StockModels} caches instances,
+     * and value-comparing records over 17k-quad meshes would defeat the point
+     * of a cache.
+     */
     private record BakeKey(StockModel model, String livery, int packedLight, long litMask) {
         @Override
         public boolean equals(Object o) {
@@ -220,12 +220,9 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
         }
         // which of the model's light groups are on (SPEC §8): part of the bake
         long litMask = model.litMask(wagon::controlValue);
+        // null: the frame's bake is spent and no other bake of this model and livery
+        // can stand in — the car shows up a frame or two later (BakeCache)
         BakedStockModel baked = bakedAt(model, slot.livery(), packedLight, litMask);
-        // the interior (the INTERIOR* objects — over a third of a passenger car's
-        // geometry) only near: further out it is a few pixels behind window glass
-        double interior = ClientConfig.interiorDrawDistance(); // 0 = always
-        boolean drawInterior = interior <= 0.0
-                || entityRenderDispatcher.distanceToSqr(bodyX, bodyY, bodyZ) <= interior * interior;
 
         // the body, oriented by the chord between the two bogies (SPEC §2.4);
         // a flipped wagon turns its model 180° in its own local frame (§5.5 step 3)
@@ -238,6 +235,52 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
             poseStack.mulPose(Axis.YP.rotationDegrees(180.0F));
         }
         Matrix4f bodyMatrix = new Matrix4f(poseStack.last().pose()); // model → camera-relative
+        if (baked != null) {
+            drawBody(baked, wagon, slot, wagonIndex, pose, bodyX, bodyY, bodyZ, partialTick, poseStack, buffers);
+        }
+        poseStack.popPose();
+
+        // bogies articulate: each at its own path point, turned to the local
+        // tangent (SPEC §5.2); on a flipped wagon the model's front bogie is
+        // the path-rear one and vice versa, each turned 180° like the body
+        if (baked != null && pose != null) {
+            drawBogie(baked.front(), flipped ? pose.rear() : pose.front(),
+                    flipped, lerped, poseStack);
+            drawBogie(baked.rear(), flipped ? pose.front() : pose.rear(),
+                    flipped, lerped, poseStack);
+        }
+        BATCH.flush();
+
+        // headlight flares, beams and track light (SPEC §8): queued, drawn after translucents
+        if (litMask != 0L && !model.headlights().isEmpty()) {
+            float skyDarken = wagon.level() instanceof net.minecraft.client.multiplayer.ClientLevel client
+                    ? client.getSkyDarken(partialTick) : 1.0F;
+            float dayLight = Math.clamp((skyDarken - 0.2F) / 0.8F, 0.0F, 1.0F);
+            LampEffects.collect(model, litMask, bodyMatrix,
+                    entityRenderDispatcher.cameraOrientation(), packedLight, dayLight);
+        }
+
+        if (DEBUG_BOGIES && pose != null) {
+            VertexConsumer lines = buffers.getBuffer(RenderType.lines());
+            drawBogieMarker(poseStack, lines, lerped, pose.front(), 1.0F, 0.2F, 0.2F); // front: red
+            drawBogieMarker(poseStack, lines, lerped, pose.rear(), 0.2F, 0.6F, 1.0F);  // rear: blue
+        }
+    }
+
+    /**
+     * Everything that rides the body, at the body's pose on {@code poseStack}:
+     * the body and interior, the doors, the cab's controls and the coupler
+     * heads, with the outline of whatever is under the crosshair; and the
+     * bogies, rigidly at their pivots, while the car has no pose yet.
+     */
+    private void drawBody(BakedStockModel baked, WagonEntity wagon, ConsistComposition.Slot slot, int wagonIndex,
+            WagonPose pose, double bodyX, double bodyY, double bodyZ, float partialTick, PoseStack poseStack,
+            MultiBufferSource buffers) {
+        // the interior (the INTERIOR* objects — over a third of a passenger car's
+        // geometry) only near: further out it is a few pixels behind window glass
+        double interior = ClientConfig.interiorDrawDistance(); // 0 = always
+        boolean drawInterior = interior <= 0.0
+                || entityRenderDispatcher.distanceToSqr(bodyX, bodyY, bodyZ) <= interior * interior;
         draw(baked.body(), poseStack);
         if (drawInterior) {
             draw(baked.interior(), poseStack);
@@ -272,33 +315,6 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
             drawRigidBogie(baked.front(), pivots[0], poseStack);
             drawRigidBogie(baked.rear(), pivots[pivots.length - 1], poseStack);
         }
-        poseStack.popPose();
-
-        // bogies articulate: each at its own path point, turned to the local
-        // tangent (SPEC §5.2); on a flipped wagon the model's front bogie is
-        // the path-rear one and vice versa, each turned 180° like the body
-        if (pose != null) {
-            drawBogie(baked.front(), flipped ? pose.rear() : pose.front(),
-                    flipped, lerped, poseStack);
-            drawBogie(baked.rear(), flipped ? pose.front() : pose.rear(),
-                    flipped, lerped, poseStack);
-        }
-        BATCH.flush();
-
-        // headlight flares, beams and track light (SPEC §8): queued, drawn after translucents
-        if (litMask != 0L && !model.headlights().isEmpty()) {
-            float skyDarken = wagon.level() instanceof net.minecraft.client.multiplayer.ClientLevel client
-                    ? client.getSkyDarken(partialTick) : 1.0F;
-            float dayLight = Math.clamp((skyDarken - 0.2F) / 0.8F, 0.0F, 1.0F);
-            LampEffects.collect(model, litMask, bodyMatrix,
-                    entityRenderDispatcher.cameraOrientation(), packedLight, dayLight);
-        }
-
-        if (DEBUG_BOGIES && pose != null) {
-            VertexConsumer lines = buffers.getBuffer(RenderType.lines());
-            drawBogieMarker(poseStack, lines, lerped, pose.front(), 1.0F, 0.2F, 0.2F); // front: red
-            drawBogieMarker(poseStack, lines, lerped, pose.rear(), 0.2F, 0.6F, 1.0F);  // rear: blue
-        }
     }
 
     /**
@@ -316,52 +332,33 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
         poseStack.translate(0.0, -Sway.CENTRE_Y, 0.0);
     }
 
+    /** The frame before ended: the bakes it didn't draw may go, a new frame's budget opens. */
     @SubscribeEvent
     static void onFrameStart(RenderFrameEvent.Pre event) {
-        bakesThisFrame = 0;
+        BAKED.nextFrame();
     }
 
     /**
-     * The model baked in this livery at this light value, baking on first
-     * sight of the combination within the per-frame budget. Over budget, the
-     * most recently used bake of the same model and livery at another light
-     * stands in until a later frame bakes the right one; only a combination
-     * with no bake at all bakes regardless.
+     * The model baked in this livery at this light value and these lit
+     * groups, baking on first sight of the combination within the per-frame
+     * budget. Over budget, the most recently used bake of the same model and
+     * livery stands in until a later frame bakes the right one; with none,
+     * null — nothing to draw this frame.
      */
     private static BakedStockModel bakedAt(StockModel model, String livery, int packedLight,
             long litMask) {
-        BakeKey key = new BakeKey(model, livery, packedLight, litMask);
-        BakedStockModel baked = BAKED.get(key); // counts as a use for the LRU
-        if (baked != null) {
-            return baked;
-        }
-        if (bakesThisFrame >= BAKES_PER_FRAME) {
-            BakedStockModel standIn = latestBakeOf(model, livery);
-            if (standIn != null) {
-                return standIn;
-            }
-        }
-        bakesThisFrame++;
-        baked = BakedStockModel.bake(model, livery, packedLight, litMask);
-        BAKED.put(key, baked); // may free the least recently used other entry
-        return baked;
-    }
-
-    /** The most recently used bake of {@code model} in {@code livery} at any light, or null. */
-    private static BakedStockModel latestBakeOf(StockModel model, String livery) {
-        BakedStockModel latest = null;
-        for (Map.Entry<BakeKey, BakedStockModel> entry : BAKED.entrySet()) { // no reordering
-            if (entry.getKey().model() == model && entry.getKey().livery().equals(livery)) {
-                latest = entry.getValue(); // access order: later = more recent
-            }
-        }
-        return latest;
+        return BAKED.get(new BakeKey(model, livery, packedLight, litMask),
+                key -> BakedStockModel.bake(key.model(), key.livery(), key.packedLight(), key.litMask()));
     }
 
     /** Drop all baked buffers (logout, resource reload). */
     public static void clearBaked() {
-        BAKED.values().forEach(BakedStockModel::close);
         BAKED.clear();
+    }
+
+    /** What the bake cache has done so far (the {@code depot} autoscene's measure). */
+    public static BakeCache.Stats bakeStats() {
+        return BAKED.stats();
     }
 
     /**
