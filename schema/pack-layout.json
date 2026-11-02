@@ -168,7 +168,8 @@
     {"keyword": "x-status", "en": "How far the engine follows the field: reserved or pending-engine (see statuses); x-status-note / x-status-note-ru say what exactly.", "ru": "Насколько движок следует полю: reserved или pending-engine (см. statuses); x-status-note / x-status-note-ru говорят, что именно."},
     {"keyword": "deprecated", "en": "An old form the engine still reads; write the new one.", "ru": "Старая форма, которую движок ещё читает; пишите новую."},
     {"keyword": "x-file", "en": "Where the file a schema describes lives in a pack.", "ru": "Где в паке лежит файл, который описывает схема."},
-    {"keyword": "x-code", "en": "The code that reads the file, relative to src/main/java/com/muzhik17/trainsmod/ or tools/.", "ru": "Код, который читает файл, — от src/main/java/com/muzhik17/trainsmod/ или tools/."}
+    {"keyword": "x-code", "en": "The code that reads the file, relative to src/main/java/com/muzhik17/trainsmod/ or tools/.", "ru": "Код, который читает файл, — от src/main/java/com/muzhik17/trainsmod/ или tools/."},
+    {"keyword": "x-keys", "en": "The constant of the code that lists an object's keys, <file>#<NAME> (the file as in x-code): any other key is warned about. The test SchemaKeysTest and validate_pack.py --self-check hold the object's properties equal to it; every closed object of a pack file has one.", "ru": "Константа кода, в которой перечислены ключи объекта, <файл>#<ИМЯ> (файл — как в x-code): о любом другом ключе предупреждают. Тест SchemaKeysTest и validate_pack.py --self-check держат свойства объекта равными ей; она есть у каждого закрытого объекта файлов пака."}
   ],
   "statuses": [
     {"status": "reserved", "label-ru": "Зарезервировано", "en": "parsed but not modelled: setting it changes nothing in game (the loader will warn).", "ru": "разбирается, но не моделируется: в игре ничего не меняет (загрузчик будет предупреждать)."},

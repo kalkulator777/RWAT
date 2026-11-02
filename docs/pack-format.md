@@ -121,6 +121,7 @@
 - `x-status` — насколько движок следует полю: reserved или pending-engine (см. statuses); `x-status-note` / `x-status-note-ru` говорят, что именно.
 - `x-file` — где в паке лежит файл, который описывает схема.
 - `x-code` — код, который читает файл, — от src/main/java/com/muzhik17/trainsmod/ или tools/.
+- `x-keys` — константа кода, в которой перечислены ключи объекта, `<файл>#<ИМЯ>` (файл — как в `x-code`): о любом другом ключе предупреждают. Тест SchemaKeysTest и `validate_pack.py` --self-check держат свойства объекта равными ей; она есть у каждого закрытого объекта файлов пака.
 
 Единицы: `block` — блок (= 1 м), `t` — т, `km/h` — км/ч, `kW` — кВт, `kN` — кН, `N` — Н, `N·s/m` — Н·с/м, `N·s²/m²` — Н·с²/м², `s` — с, `deg` — °, `multiplier` — ×.
 
@@ -219,7 +220,7 @@
 
 ## 7. Стиль рельсов
 
-Схема `schema/rail_model.schema.json`. Код: [RailModelReloadListener.java](../src/main/java/com/muzhik17/trainsmod/client/render/model/RailModelReloadListener.java), [RailFootprintReloadListener.java](../src/main/java/com/muzhik17/trainsmod/data/RailFootprintReloadListener.java), [TileFootprint.java](../src/main/java/com/muzhik17/trainsmod/path/TileFootprint.java).
+Схема `schema/rail_model.schema.json`. Код: [RailStyleDecl.java](../src/main/java/com/muzhik17/trainsmod/pack/RailStyleDecl.java), [RailModelReloadListener.java](../src/main/java/com/muzhik17/trainsmod/client/render/model/RailModelReloadListener.java), [RailFootprintReloadListener.java](../src/main/java/com/muzhik17/trainsmod/data/RailFootprintReloadListener.java), [TileFootprint.java](../src/main/java/com/muzhik17/trainsmod/path/TileFootprint.java).
 
 `assets/<namespace>/rail_models/<id>.json`: стиль рельсов `<namespace>:<id>` — один тайл пути, повторяемый вдоль каждого участка этого стиля. Клиент его рисует, сервер по тому же OBJ кладёт полотно (проекция всей модели растрируется в столбцы полотна на высоте подошвы рельса). Встроенный стиль — railswheelsandtrains:standard. После правки OBJ: F3+T — картинка, /reload — полотно новых построек, /rwat rail rebed — уже уложенное.
 

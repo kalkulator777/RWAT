@@ -22,7 +22,10 @@ What it walks:
 property is described in English and Russian, defaults and examples validate,
 the override patches mirror the declarations they patch, the regexes of
 schema/obj-conventions.json compile and match the Java ones, and the keys the
-Java parsers and the converter read are the keys the schemas declare.
+Java parsers and the converter know are the keys the schemas declare: an
+object's "x-keys" names the constant of the code that lists its keys
+("stock/WagonTypeParser.java#DOOR_KEYS", "tools/ir2rwat.py#RECIPE_KEYS"), read
+from the source (the test SchemaKeysTest holds the Java side by reflection).
 
 Usage:
     python -I tools/validate_pack.py run/rwat_packs/MatoiVanillaPack packs/mvp.json
@@ -35,6 +38,7 @@ Python 3.9+, standard library only.
 """
 
 import argparse
+import ast
 import json
 import math
 import re
@@ -497,25 +501,100 @@ def java_string(literal):
     return literal.encode("utf-8").decode("unicode_escape")
 
 
-def property_names(node):
-    """Every key under any 'properties' of a schema document."""
-    names = set()
-    for _, schema in walk_schema(node):
-        names.update(schema.get("properties", {}).keys())
-    return names
+# a Java key constant: Set<String> KEYS = PackJson.keys("a", "b") (or Set.of / List.of)
+JAVA_KEY_CONSTANT = re.compile(r"\b(?:Set|List|Collection)<String>\s+(\w+)\s*=\s*"
+                               r"(?:PackJson\.keys|Set\.of|List\.of)\(([^;]*?)\)\s*;", re.S)
+JAVA_STRING = re.compile(r'"((?:[^"\\]|\\.)*)"')
+RESERVED = "RESERVED_"
 
 
-CALL_KEY = re.compile(r"\b\w+\(\s*(?:[\w.]+\s*,\s*)*\"([a-z][a-z0-9_]*)\"")
+def key_constants(file):
+    """{name: keys} of the key constants a code file declares — `file` as x-keys
+    names it: relative to the Java code root, or tools/<name>.py. Java: the
+    Set<String> / List<String> constants built from string literals; Python:
+    the module-level literal tuples, lists, sets and dicts of strings (a
+    dict's keys)."""
+    if file.startswith("tools/"):
+        tree = ast.parse((ROOT / file).read_text(encoding="utf-8"))
+        found = {}
+        for node in tree.body:
+            if not (isinstance(node, ast.Assign) and len(node.targets) == 1
+                    and isinstance(node.targets[0], ast.Name)):
+                continue
+            try:
+                value = ast.literal_eval(node.value)
+            except (ValueError, TypeError, SyntaxError, MemoryError, RecursionError):
+                continue
+            if isinstance(value, (tuple, list, set, frozenset, dict)) and value \
+                    and all(isinstance(k, str) for k in value):
+                found[node.targets[0].id] = set(value)
+        return found
+    text = (JAVA_ROOT / file).read_text(encoding="utf-8")
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+    text = re.sub(r"//[^\n]*", "", text)
+    return {m.group(1): {java_string(s) for s in JAVA_STRING.findall(m.group(2))}
+            for m in JAVA_KEY_CONSTANT.finditer(text)}
 
 
-def java_keys(*files):
-    keys = set()
-    for name in files:
-        text = (JAVA_ROOT / name).read_text(encoding="utf-8")
-        text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
-        text = re.sub(r"//[^\n]*", "", text)
-        keys.update(CALL_KEY.findall(text))
-    return keys
+def pack_file_schemas(store):
+    """The schemas of the files a pack holds (pack-layout.json's files)."""
+    layout = json.loads((store.folder / "pack-layout.json").read_text(encoding="utf-8"))
+    return {f["schema"] for f in layout["files"] if f.get("schema")}
+
+
+def check_key_constants(store, problem):
+    """Every object naming its code's key constant in x-keys has exactly its keys,
+    its reserved ones are the constant's RESERVED_ companion; every closed object
+    of a pack file names one; every *KEYS constant of a named file is named
+    (the Java half is SchemaKeysTest's too)."""
+    pack_files = pack_file_schemas(store)
+    named = {}      # code file → names the schemas give
+    constants = {}  # code file → its key constants
+    for uri, document in store.by_id.items():
+        name = uri.rsplit("/", 1)[-1]
+        for pointer, schema in walk_schema(document):
+            if "properties" not in schema:
+                continue
+            where = f"{name}#{pointer}"
+            ref = schema.get("x-keys")
+            if ref is None:
+                if name in pack_files and schema.get("additionalProperties") is False:
+                    problem(where, "a closed object of a pack file without x-keys "
+                                   "(name the constant of the parser that lists its keys)")
+                continue
+            file, _, constant = ref.partition("#")
+            label = f"{where} ↔ {file.rsplit('/', 1)[-1]}#{constant}"
+            try:
+                if file not in constants:
+                    constants[file] = key_constants(file)
+            except (OSError, SyntaxError) as e:
+                problem(where, f"x-keys {ref!r}: can't read {file}: {e}")
+                constants[file] = {}
+                continue
+            named.setdefault(file, set()).add(constant)
+            code = constants[file].get(constant)
+            if code is None:
+                problem(where, f"x-keys {ref!r}: {file} declares no key constant {constant}")
+                continue
+            ours = set(schema["properties"])
+            if ours - code:
+                problem(label, f"in the schema, not in the code: {sorted(ours - code)}")
+            if code - ours:
+                problem(label, f"in the code, not in the schema: {sorted(code - ours)}")
+            reserved = {k for k, sub in schema["properties"].items() if sub.get("x-status") == "reserved"}
+            companion = constants[file].get(RESERVED + constant)
+            if companion is not None:
+                if reserved != companion:
+                    problem(label, f"x-status reserved on {sorted(reserved)}, "
+                                   f"{RESERVED + constant} lists {sorted(companion)}")
+            elif reserved:
+                problem(label, f"{sorted(reserved)} marked reserved, but there is no {RESERVED + constant} "
+                               f"to warn about them")
+    for file, names in named.items():
+        for constant in constants.get(file, {}):
+            companion = constant.startswith(RESERVED) and constant[len(RESERVED):] in names
+            if constant.endswith("KEYS") and constant not in names and not companion:
+                problem(f"{file}#{constant}", "named by no x-keys of the schemas")
 
 
 def self_check(store):
@@ -625,46 +704,13 @@ def self_check(store):
     if copy is None or java_string(copy.group(1)) != conventions["naming"]["copy_suffix"]["regex"]:
         problem("obj-conventions.json naming.copy_suffix", "isn't ObjectRole.COPY_SUFFIX")
 
-    # 4. schema keys = the keys the parsers read (heuristic: string literals passed to calls)
-    def compare(label, schema_keys, code_keys, ignore=()):
-        code_keys = set(code_keys) - set(ignore)
-        if code_keys - schema_keys:
-            problem(label, f"read by the code, not in the schema: {sorted(code_keys - schema_keys)}")
-        if schema_keys - code_keys:
-            problem(label, f"in the schema, not read by the code: {sorted(schema_keys - code_keys)}")
-
+    # 4. schema keys = the keys the code knows: the constants x-keys names (Java parsers, converter)
+    check_key_constants(store, problem)
     _, wagon_type = store.root("wagon_type")
-    _, wagon_model = store.root("wagon_model")
-    _, rail_model = store.root("rail_model")
-    compare("wagon_type ↔ stock/WagonTypeParser.java", property_names(wagon_type),
-            java_keys("stock/WagonTypeParser.java"))
     defaults = (JAVA_ROOT / "stock/StockDefaults.java").read_text(encoding="utf-8")
     systems = re.findall(r"^\s+([A-Z]+)\([\d.]+, [\d.]+, [\d.]+\)", defaults, re.M)
     if sorted(s.lower() for s in systems) != sorted(wagon_type["$defs"]["brakes"]["properties"]["system"]["enum"]):
         problem("wagon_type brakes.system", f"enum isn't StockDefaults.BrakeSystem {systems}")
-    compare("wagon_model ↔ WagonModelDecl.java + SoundSet.java", property_names(wagon_model),
-            java_keys("client/render/model/WagonModelDecl.java", "client/sound/SoundSet.java"))
-    compare("rail_model ↔ RailModelReloadListener.java", property_names(rail_model),
-            java_keys("client/render/model/RailModelReloadListener.java"), ignore=("rail_models",))
-    compare("rail_model ↔ RailFootprintReloadListener.java", property_names(rail_model),
-            java_keys("data/RailFootprintReloadListener.java"))
-
-    converter = (ROOT / "tools/ir2rwat.py").read_text(encoding="utf-8")
-    _, recipe = store.root("recipe")
-    recipe_keys = set(re.findall(r"(?:self|converter)\.recipe(?:\.get\(|\[)\"(\w+)\"", converter))
-    recipe_keys |= set(re.findall(r"\bs(?:\.get\(|\[)\"(\w+)\"", converter))  # sources
-    recipe_keys |= {k for k in re.findall(r"defaults\.get\(\"(\w+)\"", converter)}
-    schema_recipe = set(recipe["properties"]) | set(recipe["$defs"]["source"]["properties"]) \
-        | set(recipe["$defs"]["sound_defaults"]["properties"])
-    compare("recipe ↔ tools/ir2rwat.py", schema_recipe, recipe_keys)
-    _, override = store.root("recipe_override")
-    override_keys = set(re.findall(r"overrides\.get\(\"(\w+)\"", converter))
-    compare("recipe_override ↔ tools/ir2rwat.py", set(override["properties"]), override_keys)
-    floorgen = (ROOT / "tools/floorgen.py").read_text(encoding="utf-8")
-    m = re.search(r"^OPTIONS = \{([^}]*)\}", floorgen, re.M)
-    floor_keys = set(re.findall(r"\"(\w+)\"", m.group(1))) if m else set()
-    compare("recipe_override floor ↔ tools/floorgen.py OPTIONS",
-            set(override["$defs"]["floor"]["properties"]), floor_keys)
     return problems
 
 

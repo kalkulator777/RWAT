@@ -6,6 +6,7 @@
   "x-description-ru": "packs/<имя>.json: что конвертирует tools/ir2rwat.py — какие zip-паки Immersive Railroading, в какой пак RWAT и с какими поправками. В рецепте и оверрайдах нет ассетов, поэтому ими можно делиться там, где лицензия IR-пака не разрешает делиться сконвертированным паком. Относительные пути — от папки рецепта.",
   "x-file": "packs/<name>.json",
   "x-code": ["tools/ir2rwat.py"],
+  "x-keys": "tools/ir2rwat.py#RECIPE_KEYS",
   "type": "object",
   "properties": {
     "name": {
@@ -106,6 +107,7 @@
   "$defs": {
     "source": {
       "type": "object",
+      "x-keys": "tools/ir2rwat.py#SOURCE_KEYS",
       "description": "One IR pack.",
       "x-description-ru": "Один пак IR.",
       "properties": {

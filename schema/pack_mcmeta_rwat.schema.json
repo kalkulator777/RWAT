@@ -37,6 +37,7 @@
   "$defs": {
     "rwat": {
       "type": "object",
+      "x-keys": "pack/RwatPackMeta.java#KEYS",
       "description": "RWAT's block: the pack format version the pack is written in and who made it. A pack without the block, or without format, loads as format 1 with a warning; a block that is not an object keeps the pack out. A descriptive field of the wrong type or an unknown key is a warning and ignored. /rwat packs lists the block and its problems.",
       "x-description-ru": "Блок RWAT: версия формата, в которой написан пак, и кто его сделал. Пак без блока или без format грузится как формат 1 с предупреждением; блок не-объект не даёт паку подключиться. Описательное поле не того типа или незнакомый ключ — предупреждение, значение не берётся. /rwat packs показывает блок и его проблемы.",
       "properties": {

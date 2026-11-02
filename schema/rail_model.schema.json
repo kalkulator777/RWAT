@@ -5,7 +5,8 @@
   "description": "assets/<namespace>/rail_models/<id>.json: rail style <namespace>:<id> — one track tile repeated along every segment laid in it. The client draws it, the server lays the track bed from the same OBJ (the projection of the whole model, rasterised into bed columns at the rail foot height). The built-in style is railswheelsandtrains:standard. After editing the OBJ: F3+T for the picture, /reload for new beds, /rwat rail rebed for beds already laid.",
   "x-description-ru": "assets/<namespace>/rail_models/<id>.json: стиль рельсов <namespace>:<id> — один тайл пути, повторяемый вдоль каждого участка этого стиля. Клиент его рисует, сервер по тому же OBJ кладёт полотно (проекция всей модели растрируется в столбцы полотна на высоте подошвы рельса). Встроенный стиль — railswheelsandtrains:standard. После правки OBJ: F3+T — картинка, /reload — полотно новых построек, /rwat rail rebed — уже уложенное.",
   "x-file": "assets/<namespace>/rail_models/<id>.json",
-  "x-code": ["client/render/model/RailModelReloadListener.java", "data/RailFootprintReloadListener.java", "path/TileFootprint.java"],
+  "x-code": ["pack/RailStyleDecl.java", "client/render/model/RailModelReloadListener.java", "data/RailFootprintReloadListener.java", "path/TileFootprint.java"],
+  "x-keys": "pack/RailStyleDecl.java#KEYS",
   "type": "object",
   "properties": {
     "obj": {

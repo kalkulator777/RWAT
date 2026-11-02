@@ -6,6 +6,7 @@
   "x-description-ru": "data/<namespace>/wagon_types/<id>.json: один тип подвижного состава — геометрия, физика, пол, двери, кабина. Путь файла и есть id типа <namespace>:<id>, внутри файла id не пишется. Читает сервер и синхронизирует клиентам. Пропущенное поле — значение движка, явный 0 — ноль.",
   "x-file": "data/<namespace>/wagon_types/<id>.json",
   "x-code": ["stock/WagonTypeParser.java", "stock/StockDefaults.java", "data/WagonTypeReloadListener.java"],
+  "x-keys": "stock/WagonTypeParser.java#KEYS",
   "type": "object",
   "properties": {
     "length": {
@@ -89,6 +90,7 @@
   "$defs": {
     "resistance": {
       "type": "object",
+      "x-keys": "stock/WagonTypeParser.java#RESISTANCE_KEYS",
       "description": "Davis running resistance R = a + b·v + c·v² (N, v in m/s), plus the nose drag c_front·v² paid only by the car leading the train in the direction of travel. Each coefficient may be given alone.",
       "x-description-ru": "Сопротивление движению по Дэвису: R = a + b·v + c·v² (Н, v в м/с), плюс лобовое c_front·v², которое платит только головной по ходу вагон. Каждый коэффициент можно задать отдельно.",
       "properties": {
@@ -129,6 +131,7 @@
     },
     "traction": {
       "type": "object",
+      "x-keys": "stock/WagonTypeParser.java#TRACTION_KEYS",
       "description": "Present = the car pulls. Tractive effort is min(max_tractive_effort_kn, power_kw / v), capped by adhesion; all powered cars of a train pull from the same throttle (8 notches). Diesel, electric and steam are not told apart.",
       "x-description-ru": "Есть секция — вагон тянет. Сила тяги — min(max_tractive_effort_kn, power_kw / v) с потолком по сцеплению; тянут все тяговые вагоны поезда от одного контроллера (8 позиций). Дизель, электро и пар не различаются.",
       "properties": {
@@ -168,6 +171,7 @@
     },
     "brakes": {
       "type": "object",
+      "x-keys": "stock/WagonTypeParser.java#BRAKES_KEYS",
       "description": "Brake circuits: forces (kN) and how fast the train brake acts. The system picks a preset; every other field overrides it.",
       "x-description-ru": "Тормозные контуры: силы (кН) и скорость действия автотормоза. system выбирает пресет, остальные поля его перекрывают.",
       "properties": {
@@ -249,6 +253,7 @@
     },
     "cab": {
       "type": "object",
+      "x-keys": "stock/WagonTypeParser.java#CAB_KEYS",
       "description": "Present = the train can be driven from this car; {} is a cab without chairs. With interior, the cab is walked and driven by its levers, and seats are the driver's chairs; without interior the driver takes the car's single vanilla seat, keys only.",
       "x-description-ru": "Есть секция — поездом можно управлять из этого вагона; {} — кабина без кресел. С interior по кабине ходят и управляют рычагами, а seats — кресла машиниста; без interior машинист садится на единственное ванильное место и управляет клавишами.",
       "properties": {
@@ -284,6 +289,7 @@
     },
     "seat": {
       "type": "object",
+      "x-keys": "stock/WagonTypeParser.java#SEAT_KEYS",
       "description": "One driver's chair.",
       "x-description-ru": "Одно кресло машиниста.",
       "properties": {
@@ -309,6 +315,7 @@
     },
     "zone": {
       "type": "object",
+      "x-keys": "stock/WagonTypeParser.java#ZONE_KEYS",
       "x-frame": "obj",
       "x-status": "pending-engine",
       "x-status-note": "reads the legacy RWAT frame; the OBJ frame comes with the R6 wave.",
@@ -332,6 +339,7 @@
     },
     "door": {
       "type": "object",
+      "x-keys": "stock/WagonTypeParser.java#DOOR_KEYS",
       "x-frame": "obj",
       "x-status": "pending-engine",
       "x-status-note": "reads the legacy RWAT frame; the OBJ frame comes with the R6 wave.",
@@ -387,6 +395,7 @@
     },
     "couplers": {
       "type": "object",
+      "x-keys": "stock/WagonTypeParser.java#COUPLERS_KEYS",
       "description": "Where the couplers engage, from the frame ends (±length/2), + = outward. Coupled cars stand coupler point to coupler point; a negative offset lets the heads and the gangway bellows meet inside the frames.",
       "x-description-ru": "Где сцепляются сцепки, от концов рамы (±length/2), + — наружу. Сцепленные вагоны стоят точка сцепления к точке; отрицательное смещение сводит головы сцепок и суфле внутрь рам.",
       "properties": {

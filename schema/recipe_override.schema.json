@@ -6,6 +6,7 @@
   "x-description-ru": "packs/<имя>/<id>.json (папка overrides_dir рецепта) или запись overrides рецепта: поправки к типу <id> поверх того, что tools/ir2rwat.py выводит из пака IR. type и model глубоко сливаются со сгенерированными декларациями: объект сливается по ключам, всё остальное (список, число) заменяет, null удаляет ключ. Сгенерированный пак руками не правят: поправки живут здесь.",
   "x-file": "packs/<name>/<id>.json",
   "x-code": ["tools/ir2rwat.py", "tools/floorgen.py"],
+  "x-keys": "tools/ir2rwat.py#OVERRIDE_KEYS",
   "type": "object",
   "properties": {
     "name": {
@@ -266,6 +267,7 @@
     },
     "floor": {
       "type": "object",
+      "x-keys": "tools/floorgen.py#OPTIONS",
       "description": "Floor generator options; every member is optional. The generator finds the floor level, marks floor and obstacle cells on a grid, gives the clearance back, applies add and remove, keeps what a rider can reach from a hull or gangway door and tiles it into floor zones.",
       "x-description-ru": "Параметры генератора пола, все необязательны. Генератор находит уровень пола, размечает клетки пола и препятствий на сетке, отдаёт запас clearance, применяет add и remove, оставляет то, куда игрок дойдёт от наружной или переходной двери, и режет это на зоны пола.",
       "x-code": ["tools/floorgen.py"],
