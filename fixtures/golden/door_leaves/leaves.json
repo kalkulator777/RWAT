@@ -1,8 +1,11 @@
 {
-  "$comment": "A model's objects -> its door leaves and the type's door each is (convention.DoorLeaves; the door by WagonType.doorHolding at the centre of the leaf's textured faces). input: objects [{name, min, max (OBJ frame), textured (default true)}] in file order, skip (name prefixes the model drops: the convention's CARGO_FILL and the declaration's skip), animated (objects an .anim moves), doors (the type's, as the pack writes them). expected: keys (the doors the model moves by name, in order), leaves [{key, objects, drawn, door (its id, or null)}].",
+  "description": "A model's objects -> its door leaves and the type's door each is (convention.DoorLeaves; the door by WagonType.doorHolding at the centre of the leaf's textured box). input: objects [{name, min, max (OBJ frame), textured (default true)}] in file order, skip (the name prefixes the model drops: the convention's CARGO_FILL and the declaration's skip), animated (objects an .anim moves), doors (the type's, as the pack writes them). expected: keys (the doors the model moves by name, in order), leaves [{key, objects, drawn, door (its id, or null)}].",
+  "frame": "none",
+  "tolerance": 1e-09,
   "cases": [
     {
-      "name": "a hinged leaf in its door",
+      "id": "a-hinged-leaf-in-its-door",
+      "note": "a hinged leaf in its door",
       "input": {
         "objects": [
           {"name": "DOOR_1_LEAF", "min": [-0.95, 0.9, 1.42], "max": [-0.05, 2.8, 1.48]},
@@ -16,7 +19,8 @@
       }
     },
     {
-      "name": "a sliding leaf",
+      "id": "a-sliding-leaf",
+      "note": "a sliding leaf",
       "input": {
         "objects": [{"name": "DOOR_1_TL_0.8_X", "min": [-0.95, 0.9, 1.42], "max": [-0.05, 2.8, 1.48]}],
         "doors": [{"id": "door_1", "min": [-1.0, 0.86375, 1.4], "max": [0.0, 2.86375, 1.5]}]
@@ -27,7 +31,8 @@
       }
     },
     {
-      "name": "a door nothing moves is body",
+      "id": "a-door-nothing-moves-is-body",
+      "note": "a door nothing moves is body",
       "input": {
         "objects": [{"name": "DOOR_1_EXTERNAL", "min": [-0.95, 0.9, 1.42], "max": [-0.05, 2.8, 1.48]}],
         "doors": [{"id": "door_1", "min": [-1.0, 0.86375, 1.4], "max": [0.0, 2.86375, 1.5]}]
@@ -35,7 +40,8 @@
       "expected": {"keys": [], "leaves": []}
     },
     {
-      "name": "a leaf outside every door",
+      "id": "a-leaf-outside-every-door",
+      "note": "a leaf outside every door",
       "input": {
         "objects": [{"name": "DOOR_2_ROT_-90", "min": [-2.95, 0.9, 1.42], "max": [-2.05, 2.8, 1.48]}],
         "doors": [
@@ -49,7 +55,8 @@
       }
     },
     {
-      "name": "a leaf drawn by nothing",
+      "id": "a-leaf-drawn-by-nothing",
+      "note": "a leaf drawn by nothing",
       "input": {
         "objects": [{"name": "DOOR_1_ROT_90", "min": [-0.95, 0.9, 1.42], "max": [-0.05, 2.8, 1.48], "textured": false}],
         "doors": [{"id": "door_1", "min": [-1.0, 0.86375, 1.4], "max": [0.0, 2.86375, 1.5]}]
@@ -60,7 +67,8 @@
       }
     },
     {
-      "name": "two leaves of one doorway",
+      "id": "two-leaves-of-one-doorway",
+      "note": "two leaves of one doorway",
       "input": {
         "objects": [
           {"name": "DOOR_1_TL_0.5_X", "min": [-0.95, 0.9, 1.42], "max": [-0.5, 2.8, 1.48]},
@@ -77,7 +85,8 @@
       }
     },
     {
-      "name": "a copy suffix",
+      "id": "a-copy-suffix",
+      "note": "a copy suffix",
       "input": {
         "objects": [
           {"name": "DOOR_1_ROT_90", "min": [-0.95, 0.9, 1.42], "max": [-0.05, 2.8, 1.48]},
@@ -98,7 +107,8 @@
       }
     },
     {
-      "name": "hidden, skipped, bogie and coupler objects",
+      "id": "hidden-skipped-bogie-and-coupler-objects",
+      "note": "hidden, skipped, bogie and coupler objects",
       "input": {
         "objects": [
           {"name": "DOOR_1_ROT_90_HIDE", "min": [-0.95, 0.9, 1.42], "max": [-0.05, 2.8, 1.48]},
@@ -116,7 +126,8 @@
       "expected": {"keys": [], "leaves": []}
     },
     {
-      "name": "an object an .anim moves",
+      "id": "an-object-an-anim-moves",
+      "note": "an object an .anim moves",
       "input": {
         "objects": [
           {"name": "DOOR_5_ROT", "min": [-0.95, 0.9, 1.42], "max": [-0.05, 2.8, 1.48]},
@@ -128,7 +139,8 @@
       "expected": {"keys": [], "leaves": []}
     },
     {
-      "name": "a BOGEY_ object of no bogie",
+      "id": "a-bogey-object-of-no-bogie",
+      "note": "a BOGEY_ object of no bogie",
       "input": {
         "objects": [{"name": "BOGEY_MIDDLE_DOOR_6_ROT_45", "min": [-0.95, 0.9, 1.42], "max": [-0.05, 2.8, 1.48]}],
         "doors": [{"id": "door_1", "min": [-1.0, 0.86375, 1.4], "max": [0.0, 2.86375, 1.5]}]
@@ -139,7 +151,8 @@
       }
     },
     {
-      "name": "doors in the order their objects come",
+      "id": "doors-in-the-order-their-objects-come",
+      "note": "doors in the order their objects come",
       "input": {
         "objects": [
           {"name": "DOOR_7_LEAF", "min": [-0.95, 0.9, -1.48], "max": [-0.05, 2.8, -1.42]},
@@ -160,7 +173,8 @@
       }
     },
     {
-      "name": "no doors in the type",
+      "id": "no-doors-in-the-type",
+      "note": "no doors in the type",
       "input": {"objects": [{"name": "DOOR_1_ROT_90", "min": [-0.95, 0.9, 1.42], "max": [-0.05, 2.8, 1.48]}]},
       "expected": {
         "keys": ["DOOR_1"],

@@ -1,0 +1,127 @@
+{
+  "description": "An OBJ o/g line -> the name of the object its faces belong to (convention.ObjectRole.objectName): the rest of the line, trimmed (blanks: the characters up to U+0020), \"default\" if it names nothing, null if the line is no o/g line. input.line; expected: the name or null.",
+  "frame": "none",
+  "tolerance": 0,
+  "cases": [
+    {
+      "id": "name-o",
+      "note": "o",
+      "input": {"line": "o BODY"},
+      "expected": "BODY"
+    },
+    {
+      "id": "name-g",
+      "note": "g",
+      "input": {"line": "g BODY"},
+      "expected": "BODY"
+    },
+    {
+      "id": "name-a-blank-inside",
+      "note": "a blank inside",
+      "input": {"line": "o Door Leaf"},
+      "expected": "Door Leaf"
+    },
+    {
+      "id": "name-blanks-inside-kept-ends-dropped",
+      "note": "blanks inside kept, ends dropped",
+      "input": {"line": "o  Door   Leaf  "},
+      "expected": "Door   Leaf"
+    },
+    {
+      "id": "name-a-tab-after-the-keyword",
+      "note": "a tab after the keyword",
+      "input": {"line": "o\tDOOR_1_ROT_90"},
+      "expected": "DOOR_1_ROT_90"
+    },
+    {
+      "id": "name-an-indented-line-with-a-cr",
+      "note": "an indented line with a CR",
+      "input": {"line": "  o BODY\r"},
+      "expected": "BODY"
+    },
+    {
+      "id": "name-a-copy-suffix-stays",
+      "note": "a copy suffix stays",
+      "input": {"line": "o DOOR_3.001"},
+      "expected": "DOOR_3.001"
+    },
+    {
+      "id": "name-g-with-two-words",
+      "note": "g with two words",
+      "input": {"line": "g a b"},
+      "expected": "a b"
+    },
+    {
+      "id": "name-cyrillic",
+      "note": "Cyrillic",
+      "input": {"line": "o Тележка"},
+      "expected": "Тележка"
+    },
+    {
+      "id": "name-o-naming-nothing",
+      "note": "o naming nothing",
+      "input": {"line": "o"},
+      "expected": "default"
+    },
+    {
+      "id": "name-o-and-blanks-naming-nothing",
+      "note": "o and blanks naming nothing",
+      "input": {"line": "o   "},
+      "expected": "default"
+    },
+    {
+      "id": "name-a-no-break-space-ends-the-name",
+      "note": "a no-break space ends the name",
+      "input": {"line": "o BODY "},
+      "expected": "BODY "
+    },
+    {
+      "id": "name-a-no-break-space-is-no-blank",
+      "note": "a no-break space is no blank",
+      "input": {"line": "o BODY"},
+      "expected": null
+    },
+    {
+      "id": "name-off-is-no-o-line",
+      "note": "off is no o line",
+      "input": {"line": "off"},
+      "expected": null
+    },
+    {
+      "id": "name-obj-is-no-o-line",
+      "note": "obj is no o line",
+      "input": {"line": "obj BODY"},
+      "expected": null
+    },
+    {
+      "id": "name-no-blank-after-the-keyword",
+      "note": "no blank after the keyword",
+      "input": {"line": "oBODY"},
+      "expected": null
+    },
+    {
+      "id": "name-a-comment",
+      "note": "a comment",
+      "input": {"line": "# o BODY"},
+      "expected": null
+    },
+    {
+      "id": "name-a-vertex",
+      "note": "a vertex",
+      "input": {"line": "v 1 2 3"},
+      "expected": null
+    },
+    {
+      "id": "name-usemtl",
+      "note": "usemtl",
+      "input": {"line": "usemtl body"},
+      "expected": null
+    },
+    {
+      "id": "name-empty",
+      "note": "empty",
+      "input": {"line": ""},
+      "expected": null
+    }
+  ]
+}

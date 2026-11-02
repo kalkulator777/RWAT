@@ -1,0 +1,264 @@
+{
+  "description": "A file and the schema it is checked against -> what tools/validate_pack.py, the reference, finds in it (Validator.validate on schema/): each finding's place as a JSON pointer (RFC 6901, \"\" the whole file), its severity (error, warning) and its text. input.schema (wagon_type, wagon_model, rail_model, pack_mcmeta_rwat, recipe, recipe_override), input.document (or read from a file of the example pack); expected: the findings, [] if none. The editor's Ajv words its findings otherwise: a port compares the places and severities.",
+  "frame": "none",
+  "tolerance": 0,
+  "cases": [
+    {
+      "id": "example-coach-type",
+      "note": "the example pack's coach-type: nothing to say",
+      "input": {"schema": "wagon_type"},
+      "input_file": {"document": "run/rwat_packs/RwatExamplePack/data/rwat_example/wagon_types/coach.json"},
+      "expected": []
+    },
+    {
+      "id": "example-shunter-type",
+      "note": "the example pack's shunter-type: nothing to say",
+      "input": {"schema": "wagon_type"},
+      "input_file": {"document": "run/rwat_packs/RwatExamplePack/data/rwat_example/wagon_types/shunter.json"},
+      "expected": []
+    },
+    {
+      "id": "example-gondola-type",
+      "note": "the example pack's gondola-type: nothing to say",
+      "input": {"schema": "wagon_type"},
+      "input_file": {"document": "run/rwat_packs/RwatExamplePack/data/rwat_example/wagon_types/gondola.json"},
+      "expected": []
+    },
+    {
+      "id": "example-coach-model",
+      "note": "the example pack's coach-model: nothing to say",
+      "input": {"schema": "wagon_model"},
+      "input_file": {"document": "run/rwat_packs/RwatExamplePack/assets/rwat_example/wagon_models/coach.json"},
+      "expected": []
+    },
+    {
+      "id": "example-shunter-model",
+      "note": "the example pack's shunter-model: nothing to say",
+      "input": {"schema": "wagon_model"},
+      "input_file": {"document": "run/rwat_packs/RwatExamplePack/assets/rwat_example/wagon_models/shunter.json"},
+      "expected": []
+    },
+    {
+      "id": "example-gondola-model",
+      "note": "the example pack's gondola-model: nothing to say",
+      "input": {"schema": "wagon_model"},
+      "input_file": {"document": "run/rwat_packs/RwatExamplePack/assets/rwat_example/wagon_models/gondola.json"},
+      "expected": []
+    },
+    {
+      "id": "example-rail-model",
+      "note": "the example pack's rail-model: nothing to say",
+      "input": {"schema": "rail_model"},
+      "input_file": {"document": "run/rwat_packs/RwatExamplePack/assets/rwat_example/rail_models/wooden_track.json"},
+      "expected": []
+    },
+    {
+      "id": "an-unknown-key-with-a-hint",
+      "note": "an unknown key: an error with the nearest known one",
+      "input": {
+        "schema": "wagon_type",
+        "document": {"length": 25.0, "bogies": [8.5, -8.5], "mass_t": 50.0, "max_speed": 100}
+      },
+      "expected": [
+        {
+          "pointer": "/max_speed",
+          "severity": "error",
+          "text": "unknown key 'max_speed' (did you mean 'max_speed_kmh'?)"
+        }
+      ]
+    },
+    {
+      "id": "an-unknown-key-far-from-any",
+      "note": "an unknown key like none: no hint",
+      "input": {
+        "schema": "wagon_type",
+        "document": {"length": 25.0, "bogies": [8.5, -8.5], "mass_t": 50.0, "xyzzy": 1}
+      },
+      "expected": [{"pointer": "/xyzzy", "severity": "error", "text": "unknown key 'xyzzy'"}]
+    },
+    {
+      "id": "a-string-for-a-number",
+      "note": "length \"20\"",
+      "input": {"schema": "wagon_type", "document": {"length": "20", "bogies": [2, -2], "mass_t": 10}},
+      "expected": [{"pointer": "/length", "severity": "error", "text": "expected number, got string \"20\""}]
+    },
+    {
+      "id": "length-zero",
+      "note": "length 0: not above 0",
+      "input": {"schema": "wagon_type", "document": {"length": 0, "bogies": [2, -2], "mass_t": 10}},
+      "expected": [{"pointer": "/length", "severity": "error", "text": "0 must be greater than 0"}]
+    },
+    {
+      "id": "no-mass",
+      "note": "mass_t missing",
+      "input": {"schema": "wagon_type", "document": {"length": 10, "bogies": [2, -2]}},
+      "expected": [{"pointer": "", "severity": "error", "text": "missing required key 'mass_t'"}]
+    },
+    {
+      "id": "no-bogies",
+      "note": "bogies empty",
+      "input": {"schema": "wagon_type", "document": {"length": 10, "bogies": [], "mass_t": 10}},
+      "expected": [{"pointer": "/bogies", "severity": "error", "text": "0 item(s), at least 1 needed"}]
+    },
+    {
+      "id": "a-null",
+      "note": "null for a number",
+      "input": {"schema": "wagon_type", "document": {"length": 10, "bogies": [2, -2], "mass_t": null}},
+      "expected": [{"pointer": "/mass_t", "severity": "error", "text": "expected number, got null"}]
+    },
+    {
+      "id": "interior-a-number",
+      "note": "interior 5: neither form",
+      "input": {
+        "schema": "wagon_type",
+        "document": {"length": 25.0, "bogies": [8.5, -8.5], "mass_t": 50.0, "interior": 5}
+      },
+      "expected": [
+        {
+          "pointer": "/interior",
+          "severity": "error",
+          "text": "matches none of the allowed forms (array, object)"
+        },
+        {"pointer": "/interior", "severity": "error", "text": "expected array, got integer 5"}
+      ]
+    },
+    {
+      "id": "a-door-without-an-id",
+      "note": "a door with no id and an unknown key",
+      "input": {
+        "schema": "wagon_type",
+        "document": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "doors": [{"min": [0, 1, 1.4], "max": [1, 3, 1.5], "inside": true}]
+        }
+      },
+      "expected": [
+        {"pointer": "/doors/0", "severity": "error", "text": "missing required key 'id'"},
+        {"pointer": "/doors/0/inside", "severity": "error", "text": "unknown key 'inside'"}
+      ]
+    },
+    {
+      "id": "an-unknown-brake-system",
+      "note": "brakes.system not one of them",
+      "input": {
+        "schema": "wagon_type",
+        "document": {"length": 25.0, "bogies": [8.5, -8.5], "mass_t": 50.0, "brakes": {"system": "electric"}}
+      },
+      "expected": [
+        {
+          "pointer": "/brakes/system",
+          "severity": "error",
+          "text": "\"electric\" is not one of [\"passenger\", \"freight\", \"ep\"]"
+        }
+      ]
+    },
+    {
+      "id": "reserved-brake-keys",
+      "note": "the dynamic brake: reserved, a warning",
+      "input": {
+        "schema": "wagon_type",
+        "document": {"length": 25.0, "bogies": [8.5, -8.5], "mass_t": 50.0, "brakes": {"dynamic_kn": 100}}
+      },
+      "expected": [
+        {
+          "pointer": "/brakes/dynamic_kn",
+          "severity": "warning",
+          "text": "reserved: parsed and synced, not modelled: no dynamic brake acts. The loader warns when it is set (R7)."
+        }
+      ]
+    },
+    {
+      "id": "the-old-chair",
+      "note": "cab.seat, the older form",
+      "input": {
+        "schema": "wagon_type",
+        "document": {"length": 25.0, "bogies": [8.5, -8.5], "mass_t": 50.0, "cab": {"seat": [0, 2, 0], "seat_yaw": 180}}
+      },
+      "expected": [
+        {
+          "pointer": "/cab/seat",
+          "severity": "warning",
+          "text": "deprecated form: Old form: one chair's point"
+        },
+        {
+          "pointer": "/cab/seat_yaw",
+          "severity": "warning",
+          "text": "deprecated form: Old form: the yaw of seat"
+        }
+      ]
+    },
+    {
+      "id": "seat-and-seats",
+      "note": "cab.seat with cab.seats",
+      "input": {
+        "schema": "wagon_type",
+        "document": {"length": 25.0, "bogies": [8.5, -8.5], "mass_t": 50.0, "cab": {"seat": [0, 2, 0], "seats": []}}
+      },
+      "expected": [
+        {
+          "pointer": "/cab/seat",
+          "severity": "warning",
+          "text": "deprecated form: Old form: one chair's point"
+        },
+        {
+          "pointer": "/cab",
+          "severity": "error",
+          "text": "matches a form that is not allowed: all of 'seat', 'seats' together"
+        }
+      ]
+    },
+    {
+      "id": "a-point-of-two",
+      "note": "a point of two numbers",
+      "input": {
+        "schema": "wagon_type",
+        "document": {"length": 25.0, "bogies": [8.5, -8.5], "mass_t": 50.0, "cab": {"seats": [{"at": [0, 2]}]}}
+      },
+      "expected": [{"pointer": "/cab/seats/0/at", "severity": "error", "text": "2 item(s), at least 3 needed"}]
+    },
+    {
+      "id": "a-key-with-a-blank",
+      "note": "an unknown key with a blank: its place quoted",
+      "input": {"schema": "wagon_type", "document": {"length": 10, "bogies": [2, -2], "mass_t": 10, "a b": 1}},
+      "expected": [{"pointer": "/a b", "severity": "error", "text": "unknown key 'a b'"}]
+    },
+    {
+      "id": "a-model-without-obj",
+      "note": "a model with no obj",
+      "input": {"schema": "wagon_model", "document": {"bogies": [2, -2]}},
+      "expected": [{"pointer": "", "severity": "error", "text": "missing required key 'obj'"}]
+    },
+    {
+      "id": "a-model-path-in-capitals",
+      "note": "a model path in capitals",
+      "input": {"schema": "wagon_model", "document": {"obj": "stock/Coach/Coach.obj"}},
+      "expected": [
+        {
+          "pointer": "/obj",
+          "severity": "error",
+          "text": "\"stock/Coach/Coach.obj\" doesn't match ^([a-z0-9_.-]+:)?[a-z0-9_./-]+$"
+        }
+      ]
+    },
+    {
+      "id": "a-rail-model-unknown-key",
+      "note": "a rail model's unknown key",
+      "input": {"schema": "rail_model", "document": {"obj": "track/t.obj", "tile_lenght": 0.75}},
+      "expected": [
+        {
+          "pointer": "/tile_lenght",
+          "severity": "error",
+          "text": "unknown key 'tile_lenght' (did you mean 'tile_length'?)"
+        }
+      ]
+    },
+    {
+      "id": "not-an-object",
+      "note": "a type that is an array",
+      "input": {"schema": "wagon_type", "document": [1, 2]},
+      "expected": [{"pointer": "", "severity": "error", "text": "expected object, got array [1, 2]"}]
+    }
+  ]
+}

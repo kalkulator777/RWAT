@@ -1,33 +1,41 @@
 {
-  "$comment": "A hinge marker's corners -> its hinge and axis (convention.PivotAxis, Immersive Railroading's rule). input.corners: the corners of the marker's faces in file order (OBJ frame; read as float32, as the OBJ loader reads them); expected: points (how many distinct), centre, axis (unit).",
+  "description": "A hinge marker's corners -> its hinge and axis (convention.PivotAxis, Immersive Railroading's rule; the ties: the earlier point wins end A and end B, a point as near both ends is in neither half). input.corners: the corners of the marker's faces in file order (OBJ frame), read as float32 as the OBJ loader reads them; expected: points (how many distinct), centre, axis (unit).",
+  "frame": "obj",
+  "tolerance": 1e-09,
   "cases": [
     {
-      "name": "a rod along +X",
+      "id": "a-rod-along-x",
+      "note": "a rod along +X",
       "input": {"corners": [[1, 0, 0], [1, 0.01, 0], [3, 0, 0], [3, 0.01, 0]]},
       "expected": {"points": 4, "centre": [2.0, 0.004999999888241291, 0.0], "axis": [1.0, 0.0, 0.0]}
     },
     {
-      "name": "the same rod across the origin",
+      "id": "the-same-rod-across-the-origin",
+      "note": "the same rod across the origin",
       "input": {"corners": [[-1, 0, 0], [-1, 0.01, 0], [-3, 0, 0], [-3, 0.01, 0]]},
       "expected": {"points": 4, "centre": [-2.0, 0.004999999888241291, 0.0], "axis": [-1.0, 0.0, 0.0]}
     },
     {
-      "name": "a line of two points",
+      "id": "a-line-of-two-points",
+      "note": "a line of two points",
       "input": {"corners": [[0, 1, 2], [0, 1, 1]]},
       "expected": {"points": 2, "centre": [0.0, 1.0, 1.5], "axis": [0.0, 0.0, 1.0]}
     },
     {
-      "name": "the same line the other way round",
+      "id": "the-same-line-the-other-way-round",
+      "note": "the same line the other way round",
       "input": {"corners": [[0, 1, 1], [0, 1, 2]]},
       "expected": {"points": 2, "centre": [0.0, 1.0, 1.5], "axis": [0.0, 0.0, 1.0]}
     },
     {
-      "name": "a line equally far both ends",
+      "id": "a-line-equally-far-both-ends",
+      "note": "a line equally far both ends",
       "input": {"corners": [[0, 1, -1], [0, 1, 1]]},
       "expected": {"points": 2, "centre": [0.0, 1.0, 0.0], "axis": [0.0, 0.0, 1.0]}
     },
     {
-      "name": "a tilted line",
+      "id": "a-tilted-line",
+      "note": "a tilted line",
       "input": {"corners": [[0.5, 2.0, 0.3], [0.6, 2.4, 0.2]]},
       "expected": {
         "points": 2,
@@ -36,7 +44,8 @@
       }
     },
     {
-      "name": "a lever box: the first corner decides",
+      "id": "a-lever-box-the-first-corner-decides",
+      "note": "a lever box: the first corner decides",
       "input": {
         "corners": [
           [3.691, 2.916, 0.561],
@@ -56,7 +65,8 @@
       }
     },
     {
-      "name": "the same box from another corner",
+      "id": "the-same-box-from-another-corner",
+      "note": "the same box from another corner",
       "input": {
         "corners": [
           [3.691, 2.916, 0.498],
@@ -76,7 +86,8 @@
       }
     },
     {
-      "name": "a long switch across the car's centre",
+      "id": "a-long-switch-across-the-cars-centre",
+      "note": "a long switch across the car's centre",
       "input": {
         "corners": [
           [7.081534, 4.622171, 0.716298],
@@ -96,7 +107,8 @@
       }
     },
     {
-      "name": "a box about the origin",
+      "id": "a-box-about-the-origin",
+      "note": "a box about the origin",
       "input": {
         "corners": [
           [-0.1, -0.2, 1.0],
@@ -112,22 +124,26 @@
       "expected": {"points": 8, "centre": [0.0, 0.0, 0.0], "axis": [0.0, 0.0, -1.0]}
     },
     {
-      "name": "one point: no axis, +Z",
+      "id": "one-point-no-axis-z",
+      "note": "one point: no axis, +Z",
       "input": {"corners": [[1, 2, 3]]},
       "expected": {"points": 1, "centre": [1.0, 2.0, 3.0], "axis": [0.0, 0.0, 1.0]}
     },
     {
-      "name": "one point many times",
+      "id": "one-point-many-times",
+      "note": "one point many times",
       "input": {"corners": [[1, 2, 3], [1, 2, 3], [1, 2, 3]]},
       "expected": {"points": 1, "centre": [1.0, 2.0, 3.0], "axis": [0.0, 0.0, 1.0]}
     },
     {
-      "name": "a triangle's repeated corner and -0",
+      "id": "a-triangles-repeated-corner-and-0",
+      "note": "a triangle's repeated corner and -0",
       "input": {"corners": [[0, 0, 1], [0, 0, 2], [0, -0.0, 2], [0, 0, 1], [0, 0, 2]]},
       "expected": {"points": 2, "centre": [0.0, 0.0, 1.5], "axis": [0.0, 0.0, 1.0]}
     },
     {
-      "name": "a thin ring and its axle",
+      "id": "a-thin-ring-and-its-axle",
+      "note": "a thin ring and its axle",
       "input": {
         "corners": [
           [0, 0, 0],
@@ -141,6 +157,24 @@
         ]
       },
       "expected": {"points": 8, "centre": [0.20000000298023224, 0.0, 0.05000000074505806], "axis": [1.0, 0.0, 0.0]}
+    },
+    {
+      "id": "a-point-as-near-to-both-ends-is-in-neither-half",
+      "note": "a point as near the near end as the far one counts in neither half",
+      "input": {"corners": [[0, 0, 0], [2, 0, 0], [1, 0.5, 0]]},
+      "expected": {"points": 3, "centre": [1.0, 0.25, 0.0], "axis": [1.0, 0.0, 0.0]}
+    },
+    {
+      "id": "end-b-a-tie-goes-to-the-earlier-point",
+      "note": "two points equally far from end A: the earlier is end B",
+      "input": {"corners": [[-0.5, -0.5, 0], [0, 0, 0], [3, 0, 0], [0, 3, 0]]},
+      "expected": {"points": 4, "centre": [1.25, 1.25, 0.0], "axis": [0.9670745372626464, -0.2544932992796438, 0.0]}
+    },
+    {
+      "id": "end-b-the-same-tie-the-other-way-round",
+      "note": "the same points, the tied ones swapped: the other is end B, the axis turns",
+      "input": {"corners": [[-0.5, -0.5, 0], [0, 0, 0], [0, 3, 0], [3, 0, 0]]},
+      "expected": {"points": 4, "centre": [1.25, 1.25, 0.0], "axis": [-0.2544932992796438, 0.9670745372626464, 0.0]}
     }
   ]
 }

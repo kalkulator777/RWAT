@@ -1,0 +1,73 @@
+{
+  "description": "An unknown key and the keys its object knows -> the hint validate_pack.py appends to its finding (suggestion: the known key most like it, lower case, by 1 - edit distance / the longer length, at least 0.6; the first of equals), \" (did you mean '<key>'?)\" or \"\". input.key, input.known; expected: the hint.",
+  "frame": "none",
+  "tolerance": 0,
+  "cases": [
+    {
+      "id": "suggest-0-a-key-missing-its-unit",
+      "note": "a key missing its unit",
+      "input": {"key": "max_speed", "known": ["length", "max_speed_kmh", "mass_t"]},
+      "expected": " (did you mean 'max_speed_kmh'?)"
+    },
+    {
+      "id": "suggest-1-two-letters-swapped",
+      "note": "two letters swapped",
+      "input": {"key": "lenght", "known": ["length", "bogies"]},
+      "expected": " (did you mean 'length'?)"
+    },
+    {
+      "id": "suggest-2-case-aside",
+      "note": "case aside",
+      "input": {"key": "MASS_T", "known": ["length", "mass_t"]},
+      "expected": " (did you mean 'mass_t'?)"
+    },
+    {
+      "id": "suggest-3-nothing-near",
+      "note": "nothing near",
+      "input": {"key": "xyz", "known": ["length", "bogies"]},
+      "expected": ""
+    },
+    {
+      "id": "suggest-4-an-empty-key",
+      "note": "an empty key",
+      "input": {"key": "", "known": ["length"]},
+      "expected": ""
+    },
+    {
+      "id": "suggest-5-similarity-exactly-0-6-a-hint",
+      "note": "similarity exactly 0.6: a hint",
+      "input": {"key": "abcxy", "known": ["abcde"]},
+      "expected": " (did you mean 'abcde'?)"
+    },
+    {
+      "id": "suggest-6-similarity-0-5-none",
+      "note": "similarity 0.5: none",
+      "input": {"key": "abxy", "known": ["abcd"]},
+      "expected": ""
+    },
+    {
+      "id": "suggest-7-two-equally-near-the-first",
+      "note": "two equally near: the first",
+      "input": {"key": "abcdx", "known": ["abcde", "abcdy"]},
+      "expected": " (did you mean 'abcde'?)"
+    },
+    {
+      "id": "suggest-8-the-nearer-of-two",
+      "note": "the nearer of two",
+      "input": {"key": "door", "known": ["doors", "door_s"]},
+      "expected": " (did you mean 'doors'?)"
+    },
+    {
+      "id": "suggest-9-a-rail-models-key",
+      "note": "a rail model's key",
+      "input": {"key": "tile_lenght", "known": ["obj", "tile_length", "bed"]},
+      "expected": " (did you mean 'tile_length'?)"
+    },
+    {
+      "id": "suggest-10-a-key-with-an-apostrophe-its-hint-quoted",
+      "note": "a key with an apostrophe: its hint quoted as Python writes it",
+      "input": {"key": "it's", "known": ["its"]},
+      "expected": " (did you mean 'its'?)"
+    }
+  ]
+}

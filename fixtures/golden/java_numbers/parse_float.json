@@ -1,0 +1,301 @@
+{
+  "description": "Float.parseFloat(text) — how ObjectRole reads OFFSET, RANGE, TL and ROT_<degrees> and the OBJ loader its coordinates — as the exact value of the float it gives (0.1 is 0.10000000149011612), or null if it refuses the text (NumberFormatException: the reader then takes its fallback). input.text; expected: the float, \"NaN\", \"Infinity\", \"-Infinity\" or null.",
+  "frame": "none",
+  "tolerance": 0,
+  "cases": [
+    {
+      "id": "parse-0-a-plain-decimal",
+      "note": "a plain decimal",
+      "input": {"text": "1.5"},
+      "expected": 1.5
+    },
+    {
+      "id": "parse-1-a-number-with-letters-after-it-is-refused-not-read",
+      "note": "a number with letters after it is refused, not read as far as it goes (JavaScript's parseFloat reads 1.5)",
+      "input": {"text": "1.5abc"},
+      "expected": null
+    },
+    {
+      "id": "parse-2-a-float-suffix",
+      "note": "a float suffix",
+      "input": {"text": "1f"},
+      "expected": 1.0
+    },
+    {
+      "id": "parse-3-a-float-suffix-in-capitals",
+      "note": "a float suffix in capitals",
+      "input": {"text": "1F"},
+      "expected": 1.0
+    },
+    {
+      "id": "parse-4-a-double-suffix",
+      "note": "a double suffix",
+      "input": {"text": "2.5d"},
+      "expected": 2.5
+    },
+    {
+      "id": "parse-5-a-double-suffix-in-capitals",
+      "note": "a double suffix in capitals",
+      "input": {"text": "2.5D"},
+      "expected": 2.5
+    },
+    {
+      "id": "parse-6-two-suffixes-are-refused",
+      "note": "two suffixes are refused",
+      "input": {"text": "1.5ff"},
+      "expected": null
+    },
+    {
+      "id": "parse-7-a-hexadecimal-float",
+      "note": "a hexadecimal float",
+      "input": {"text": "0x1p3"},
+      "expected": 8.0
+    },
+    {
+      "id": "parse-8-a-hexadecimal-float-in-capitals",
+      "note": "a hexadecimal float in capitals",
+      "input": {"text": "0X1.8P1"},
+      "expected": 3.0
+    },
+    {
+      "id": "parse-9-a-hexadecimal-fraction",
+      "note": "a hexadecimal fraction",
+      "input": {"text": "0x.8p1"},
+      "expected": 1.0
+    },
+    {
+      "id": "parse-10-a-hexadecimal-number-needs-its-binary-exponent",
+      "note": "a hexadecimal number needs its binary exponent",
+      "input": {"text": "0x10"},
+      "expected": null
+    },
+    {
+      "id": "parse-11-blanks-around-are-dropped",
+      "note": "blanks around are dropped",
+      "input": {"text": " 2.5 "},
+      "expected": 2.5
+    },
+    {
+      "id": "parse-12-a-tab-and-a-line-end-around-are-dropped",
+      "note": "a tab and a line end around are dropped",
+      "input": {"text": "\t-3\n"},
+      "expected": -3.0
+    },
+    {
+      "id": "parse-13-a-no-break-space-is-no-blank",
+      "note": "a no-break space is no blank",
+      "input": {"text": " 2"},
+      "expected": null
+    },
+    {
+      "id": "parse-14-a-plus-sign",
+      "note": "a plus sign",
+      "input": {"text": "+1"},
+      "expected": 1.0
+    },
+    {
+      "id": "parse-15-a-minus-sign",
+      "note": "a minus sign",
+      "input": {"text": "-0.75"},
+      "expected": -0.75
+    },
+    {
+      "id": "parse-16-no-digit-before-the-point",
+      "note": "no digit before the point",
+      "input": {"text": ".5"},
+      "expected": 0.5
+    },
+    {
+      "id": "parse-17-no-digit-after-the-point",
+      "note": "no digit after the point",
+      "input": {"text": "5."},
+      "expected": 5.0
+    },
+    {
+      "id": "parse-18-an-exponent",
+      "note": "an exponent",
+      "input": {"text": "1e3"},
+      "expected": 1000.0
+    },
+    {
+      "id": "parse-19-an-exponent-in-capitals-negative",
+      "note": "an exponent in capitals, negative",
+      "input": {"text": "1E-3"},
+      "expected": 0.0010000000474974513
+    },
+    {
+      "id": "parse-20-an-exponent-with-a-plus",
+      "note": "an exponent with a plus",
+      "input": {"text": "1.0e+2"},
+      "expected": 100.0
+    },
+    {
+      "id": "parse-21-leading-zeros",
+      "note": "leading zeros",
+      "input": {"text": "00012"},
+      "expected": 12.0
+    },
+    {
+      "id": "parse-22-an-exponent-with-no-digits",
+      "note": "an exponent with no digits",
+      "input": {"text": "1e"},
+      "expected": null
+    },
+    {
+      "id": "parse-23-nothing",
+      "note": "nothing",
+      "input": {"text": ""},
+      "expected": null
+    },
+    {
+      "id": "parse-24-a-sign-alone",
+      "note": "a sign alone",
+      "input": {"text": "-"},
+      "expected": null
+    },
+    {
+      "id": "parse-25-a-point-alone",
+      "note": "a point alone",
+      "input": {"text": "."},
+      "expected": null
+    },
+    {
+      "id": "parse-26-an-underscore",
+      "note": "an underscore",
+      "input": {"text": "1_000"},
+      "expected": null
+    },
+    {
+      "id": "parse-27-a-comma",
+      "note": "a comma",
+      "input": {"text": "1,5"},
+      "expected": null
+    },
+    {
+      "id": "parse-28-a-blank-inside",
+      "note": "a blank inside",
+      "input": {"text": "1 2"},
+      "expected": null
+    },
+    {
+      "id": "parse-29-nan",
+      "note": "NaN",
+      "input": {"text": "NaN"},
+      "expected": "NaN"
+    },
+    {
+      "id": "parse-30-infinity",
+      "note": "Infinity",
+      "input": {"text": "Infinity"},
+      "expected": "Infinity"
+    },
+    {
+      "id": "parse-31-minus-infinity",
+      "note": "minus Infinity",
+      "input": {"text": "-Infinity"},
+      "expected": "-Infinity"
+    },
+    {
+      "id": "parse-32-plus-infinity",
+      "note": "plus Infinity",
+      "input": {"text": "+Infinity"},
+      "expected": "Infinity"
+    },
+    {
+      "id": "parse-33-nan-in-small-letters-is-refused",
+      "note": "nan in small letters is refused",
+      "input": {"text": "nan"},
+      "expected": null
+    },
+    {
+      "id": "parse-34-inf-is-refused",
+      "note": "inf is refused",
+      "input": {"text": "inf"},
+      "expected": null
+    },
+    {
+      "id": "parse-35-infinity-with-a-suffix-is-refused",
+      "note": "Infinity with a suffix is refused",
+      "input": {"text": "Infinityf"},
+      "expected": null
+    },
+    {
+      "id": "parse-36-past-the-largest-float-infinity",
+      "note": "past the largest float: Infinity",
+      "input": {"text": "1e40"},
+      "expected": "Infinity"
+    },
+    {
+      "id": "parse-37-past-the-largest-float-the-other-way",
+      "note": "past the largest float the other way",
+      "input": {"text": "-1e40"},
+      "expected": "-Infinity"
+    },
+    {
+      "id": "parse-38-below-the-smallest-float-0",
+      "note": "below the smallest float: 0",
+      "input": {"text": "1e-50"},
+      "expected": 0.0
+    },
+    {
+      "id": "parse-39-the-largest-float",
+      "note": "the largest float",
+      "input": {"text": "3.4028235e38"},
+      "expected": 3.4028234663852886E38
+    },
+    {
+      "id": "parse-40-a-little-past-the-largest-float-rounds-to-it",
+      "note": "a little past the largest float, less than half a step: rounds to it",
+      "input": {"text": "3.40282356e38"},
+      "expected": 3.4028234663852886E38
+    },
+    {
+      "id": "parse-40-half-a-step-past-the-largest-float-is-infinity",
+      "note": "more than half a step past the largest float: Infinity",
+      "input": {"text": "3.4028236e38"},
+      "expected": "Infinity"
+    },
+    {
+      "id": "parse-41-the-smallest-float",
+      "note": "the smallest float",
+      "input": {"text": "1.4e-45"},
+      "expected": 1.401298464324817E-45
+    },
+    {
+      "id": "parse-42-half-the-smallest-float-rounds-to-0",
+      "note": "half the smallest float rounds to 0",
+      "input": {"text": "0.7e-45"},
+      "expected": 0.0
+    },
+    {
+      "id": "parse-43-0-1-as-the-float-nearest-it",
+      "note": "0.1 as the float nearest it",
+      "input": {"text": "0.1"},
+      "expected": 0.10000000149011612
+    },
+    {
+      "id": "parse-44-an-odd-integer-past-2-24-rounds-to-even",
+      "note": "an odd integer past 2^24 rounds to even",
+      "input": {"text": "16777217"},
+      "expected": 1.6777216E7
+    },
+    {
+      "id": "parse-45-exactly-half-way-between-two-floats-to-the-even-on",
+      "note": "exactly half way between two floats: to the even one",
+      "input": {"text": "1.000000059604644775390625"},
+      "expected": 1.0
+    },
+    {
+      "id": "parse-46-a-hair-past-half-way-rounds-up-read-straight-to-fl",
+      "note": "a hair past half way rounds up: read straight to float, not through a double (fround(parseFloat) rounds twice and gives 1)",
+      "input": {"text": "1.0000000596046447753906250001"},
+      "expected": 1.0000001192092896
+    },
+    {
+      "id": "parse-47-a-full-width-digit-is-refused",
+      "note": "a full-width digit is refused",
+      "input": {"text": "１"},
+      "expected": null
+    }
+  ]
+}

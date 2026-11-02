@@ -1,0 +1,310 @@
+{
+  "description": "A type as the pack writes it (format 1, OBJ frame) -> what the engine holds of it, in the model frame (stock.WagonTypeParser.parse: markup turned, defaults filled in, geometry checked): error (a finding, or null), warnings (findings), type (length, bogies, mass_t, max_speed_kmh, resistance, traction, cab seats {at, yaw, faces_back}, brakes, interior {zones [minX, minY, minZ, maxX, maxY, maxZ], floor_y}, doors {id, box, flags, group, external, axis, outward, inner_face, outer_face, span}, couplers {front, rear, reach [front, rear]}, hull, powered, drivable, boardable, doors_only, wheelbase, leaf_doors), and answers to the questions, asked in the model frame: door_holding [[x, y, z]] (WagonType.doorHolding), doors_worked_by [group] and doors_opened_with [index] (open-door bits), door_open [[mask, index]] (Door.open), floor_at [[x, z]] (Interior.floorAt, margin 0.3), clamp_feet [[x, y, z]] (Interior.clampFeet with the doors and input.open). The loader's findings have only their text yet.",
+  "frame": "model",
+  "tolerance": 1e-09,
+  "cases": [
+    {
+      "id": "example-coach",
+      "note": "the example pack's coach",
+      "input": {
+        "door_holding": [[1.48, 2.5, 8.75], [-1.48, 2.5, -8.75], [0, 2.5, 7.85]],
+        "doors_worked_by": ["DoorsL", "doorsr", "salon_door", "SALON_ARCH", "gangway_front"],
+        "doors_opened_with": [0, 1, 2, 3, 4, 5, 6, 7, 8],
+        "door_open": [[0, 7], [64, 6], [0, 6]],
+        "floor_at": [[0, 8.75], [0, 0], [0, 7.85]],
+        "clamp_feet": [[0, 2, 7.85], [1.4, 2, 0]]
+      },
+      "input_file": {"type": "run/rwat_packs/RwatExamplePack/data/rwat_example/wagon_types/coach.json"},
+      "expected": {
+        "error": null,
+        "warnings": [],
+        "type": {
+          "length": 20.0,
+          "bogies": [7.0, -7.0],
+          "mass_t": 42.0,
+          "max_speed_kmh": 120.0,
+          "resistance": {"a": 494.0, "b": 14.0, "c": 1.1, "c_front": 5.0},
+          "traction": null,
+          "cab": null,
+          "brakes": {
+            "train_kn": 46.2,
+            "independent_kn": 0.0,
+            "dynamic_kn": 0.0,
+            "dynamic_fade_kmh": 0.0,
+            "parking_kn": 18.0,
+            "apply_s": 1.5,
+            "release_s": 3.0
+          },
+          "interior": {
+            "zones": [
+              [-1.4, 1.58625, 7.9, 1.4, 4.03625, 9.6],
+              [-0.55, 1.73625, -7.8, 0.55, 4.03625, 7.8],
+              [-1.4, 1.73625, -1.2, 1.4, 4.03625, 1.2],
+              [-1.4, 1.58625, -9.6, 1.4, 4.03625, -7.9]
+            ],
+            "floor_y": 1.58625
+          },
+          "doors": [
+            {
+              "id": "door_fl",
+              "box": [1.45, 1.58625, 8.25, 1.51, 3.73625, 9.25],
+              "inner": false,
+              "fixed": false,
+              "connecting": false,
+              "group": "DoorsL",
+              "external": true,
+              "axis": 0,
+              "outward": 1,
+              "inner_face": 1.45,
+              "outer_face": 1.51,
+              "span": [8.25, 9.25]
+            },
+            {
+              "id": "door_fr",
+              "box": [-1.51, 1.58625, 8.25, -1.45, 3.73625, 9.25],
+              "inner": false,
+              "fixed": false,
+              "connecting": false,
+              "group": "DoorsR",
+              "external": true,
+              "axis": 0,
+              "outward": -1,
+              "inner_face": -1.45,
+              "outer_face": -1.51,
+              "span": [8.25, 9.25]
+            },
+            {
+              "id": "door_rl",
+              "box": [1.45, 1.58625, -9.25, 1.51, 3.73625, -8.25],
+              "inner": false,
+              "fixed": false,
+              "connecting": false,
+              "group": "DoorsL",
+              "external": true,
+              "axis": 0,
+              "outward": 1,
+              "inner_face": 1.45,
+              "outer_face": 1.51,
+              "span": [-9.25, -8.25]
+            },
+            {
+              "id": "door_rr",
+              "box": [-1.51, 1.58625, -9.25, -1.45, 3.73625, -8.25],
+              "inner": false,
+              "fixed": false,
+              "connecting": false,
+              "group": "DoorsR",
+              "external": true,
+              "axis": 0,
+              "outward": -1,
+              "inner_face": -1.45,
+              "outer_face": -1.51,
+              "span": [-9.25, -8.25]
+            },
+            {
+              "id": "gangway_front",
+              "box": [-0.45, 1.58625, 9.62, 0.45, 3.6862500000000002, 9.68],
+              "inner": false,
+              "fixed": false,
+              "connecting": true,
+              "group": null,
+              "external": false,
+              "axis": 2,
+              "outward": 1,
+              "inner_face": 9.62,
+              "outer_face": 9.68,
+              "span": [-0.45, 0.45]
+            },
+            {
+              "id": "gangway_rear",
+              "box": [-0.45, 1.58625, -9.68, 0.45, 3.6862500000000002, -9.62],
+              "inner": false,
+              "fixed": false,
+              "connecting": true,
+              "group": null,
+              "external": false,
+              "axis": 2,
+              "outward": -1,
+              "inner_face": -9.62,
+              "outer_face": -9.68,
+              "span": [-0.45, 0.45]
+            },
+            {
+              "id": "salon_door",
+              "box": [-0.45, 1.73625, 7.82, 0.45, 3.73625, 7.88],
+              "inner": true,
+              "fixed": false,
+              "connecting": false,
+              "group": null,
+              "external": false,
+              "axis": 2,
+              "outward": 1,
+              "inner_face": 7.82,
+              "outer_face": 7.88,
+              "span": [-0.45, 0.45]
+            },
+            {
+              "id": "salon_arch",
+              "box": [-0.45, 1.73625, -7.88, 0.45, 3.73625, -7.82],
+              "inner": true,
+              "fixed": true,
+              "connecting": false,
+              "group": null,
+              "external": false,
+              "axis": 2,
+              "outward": -1,
+              "inner_face": -7.82,
+              "outer_face": -7.88,
+              "span": [-0.45, 0.45]
+            }
+          ],
+          "couplers": {"front": -0.05, "rear": -0.05, "reach": [9.95, 9.95]},
+          "hull": [-1.7, 0.4, -10.0, 1.7, 4.7, 10.0],
+          "powered": false,
+          "drivable": false,
+          "boardable": true,
+          "doors_only": true,
+          "wheelbase": 14.0,
+          "leaf_doors": 127
+        },
+        "answers": {
+          "door_holding": [0, 3, 6],
+          "doors_worked_by": [5, 10, 64, 0, 16],
+          "doors_opened_with": [5, 10, 5, 10, 16, 32, 64, 0, 0],
+          "door_open": [true, true, false],
+          "floor_at": [1.58625, 1.73625, "NaN"],
+          "clamp_feet": [[0.0, 1.73625, 7.5], [1.0999999999999999, 1.73625, 0.0]]
+        }
+      }
+    },
+    {
+      "id": "example-shunter",
+      "note": "the example pack's shunter",
+      "input": {"floor_at": [[0, -2.3]], "clamp_feet": [[0, 2, 0]]},
+      "input_file": {"type": "run/rwat_packs/RwatExamplePack/data/rwat_example/wagon_types/shunter.json"},
+      "expected": {
+        "error": null,
+        "warnings": [],
+        "type": {
+          "length": 14.0,
+          "bogies": [4.0, -4.0],
+          "mass_t": 68.0,
+          "max_speed_kmh": 60.0,
+          "resistance": {"a": 780.0, "b": 18.0, "c": 1.6, "c_front": 7.0},
+          "traction": {"power_kw": 750.0, "max_tractive_effort_kn": 210.0, "adhesion": 1.15, "ramp_s": 6.0},
+          "cab": {
+            "seats": [
+              {"at": [-0.8, 2.53625, -1.65], "yaw": 0.0, "faces_back": false},
+              {"at": [0.8, 2.53625, -2.95], "yaw": 180.0, "faces_back": true}
+            ]
+          },
+          "brakes": {
+            "train_kn": 68.0,
+            "independent_kn": 52.0,
+            "dynamic_kn": 0.0,
+            "dynamic_fade_kmh": 0.0,
+            "parking_kn": 30.0,
+            "apply_s": 5.0,
+            "release_s": 9.0
+          },
+          "interior": {
+            "zones": [[-1.42, 2.03625, -3.35, 1.42, 4.33625, -1.25], [-1.42, 2.03625, -3.92, 0.0, 4.33625, -3.35]],
+            "floor_y": 2.03625
+          },
+          "doors": [
+            {
+              "id": "steps_left",
+              "box": [1.42, 2.03625, -2.6, 1.5, 4.03625, -2.0],
+              "inner": false,
+              "fixed": true,
+              "connecting": false,
+              "group": null,
+              "external": true,
+              "axis": 0,
+              "outward": 1,
+              "inner_face": 1.42,
+              "outer_face": 1.5,
+              "span": [-2.6, -2.0]
+            },
+            {
+              "id": "steps_right",
+              "box": [-1.5, 2.03625, -2.6, -1.42, 4.03625, -2.0],
+              "inner": false,
+              "fixed": true,
+              "connecting": false,
+              "group": null,
+              "external": true,
+              "axis": 0,
+              "outward": -1,
+              "inner_face": -1.42,
+              "outer_face": -1.5,
+              "span": [-2.6, -2.0]
+            }
+          ],
+          "couplers": {"front": 0.05, "rear": 0.05, "reach": [7.05, 7.05]},
+          "hull": [-1.7, 0.4, -7.0, 1.7, 4.7, 7.0],
+          "powered": true,
+          "drivable": true,
+          "boardable": true,
+          "doors_only": true,
+          "wheelbase": 8.0,
+          "leaf_doors": 0
+        },
+        "answers": {
+          "door_holding": [],
+          "doors_worked_by": [],
+          "doors_opened_with": [],
+          "door_open": [],
+          "floor_at": [2.03625],
+          "clamp_feet": [[0.0, 2.03625, -1.55]]
+        }
+      }
+    },
+    {
+      "id": "example-gondola",
+      "note": "the example pack's gondola",
+      "input": {},
+      "input_file": {"type": "run/rwat_packs/RwatExamplePack/data/rwat_example/wagon_types/gondola.json"},
+      "expected": {
+        "error": null,
+        "warnings": [],
+        "type": {
+          "length": 10.0,
+          "bogies": [2.75, -2.75],
+          "mass_t": 22.0,
+          "max_speed_kmh": 90.0,
+          "resistance": {"a": 354.0, "b": 14.0, "c": 1.3, "c_front": 5.0},
+          "traction": null,
+          "cab": null,
+          "brakes": {
+            "train_kn": 14.0,
+            "independent_kn": 0.0,
+            "dynamic_kn": 0.0,
+            "dynamic_fade_kmh": 0.0,
+            "parking_kn": 8.8,
+            "apply_s": 15.0,
+            "release_s": 30.0
+          },
+          "interior": null,
+          "doors": [],
+          "couplers": {"front": 0.0, "rear": 0.0, "reach": [5.0, 5.0]},
+          "hull": [-1.7, 0.4, -5.0, 1.7, 4.7, 5.0],
+          "powered": false,
+          "drivable": false,
+          "boardable": false,
+          "doors_only": false,
+          "wheelbase": 5.5,
+          "leaf_doors": 0
+        },
+        "answers": {
+          "door_holding": [],
+          "doors_worked_by": [],
+          "doors_opened_with": [],
+          "door_open": [],
+          "floor_at": [],
+          "clamp_feet": []
+        }
+      }
+    }
+  ]
+}

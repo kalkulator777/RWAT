@@ -1,0 +1,1808 @@
+{
+  "description": "A type as the pack writes it (format 1, OBJ frame) -> what the engine holds of it, in the model frame (stock.WagonTypeParser.parse: markup turned, defaults filled in, geometry checked): error (a finding, or null), warnings (findings), type (length, bogies, mass_t, max_speed_kmh, resistance, traction, cab seats {at, yaw, faces_back}, brakes, interior {zones [minX, minY, minZ, maxX, maxY, maxZ], floor_y}, doors {id, box, flags, group, external, axis, outward, inner_face, outer_face, span}, couplers {front, rear, reach [front, rear]}, hull, powered, drivable, boardable, doors_only, wheelbase, leaf_doors), and answers to the questions, asked in the model frame: door_holding [[x, y, z]] (WagonType.doorHolding), doors_worked_by [group] and doors_opened_with [index] (open-door bits), door_open [[mask, index]] (Door.open), floor_at [[x, z]] (Interior.floorAt, margin 0.3), clamp_feet [[x, y, z]] (Interior.clampFeet with the doors and input.open). The loader's findings have only their text yet.",
+  "frame": "model",
+  "tolerance": 1e-09,
+  "cases": [
+    {
+      "id": "the-smallest-wagon",
+      "note": "the smallest declaration: length, bogies and mass",
+      "input": {"type": {"length": 17.75, "bogies": [5.86, -5.86], "mass_t": 24.0}},
+      "expected": {
+        "error": null,
+        "warnings": [],
+        "type": {
+          "length": 17.75,
+          "bogies": [5.86, -5.86],
+          "mass_t": 24.0,
+          "max_speed_kmh": 0.0,
+          "resistance": {"a": 368.0, "b": 14.0, "c": 1.3, "c_front": 5.0},
+          "traction": null,
+          "cab": null,
+          "brakes": {
+            "train_kn": 24.0,
+            "independent_kn": 0.0,
+            "dynamic_kn": 0.0,
+            "dynamic_fade_kmh": 0.0,
+            "parking_kn": 9.600000000000001,
+            "apply_s": 4.0,
+            "release_s": 8.0
+          },
+          "interior": null,
+          "doors": [],
+          "couplers": {"front": 0.0, "rear": 0.0, "reach": [8.875, 8.875]},
+          "hull": [-1.7, 0.4, -8.875, 1.7, 4.7, 8.875],
+          "powered": false,
+          "drivable": false,
+          "boardable": false,
+          "doors_only": false,
+          "wheelbase": 11.72,
+          "leaf_doors": 0
+        },
+        "answers": {
+          "door_holding": [],
+          "doors_worked_by": [],
+          "doors_opened_with": [],
+          "door_open": [],
+          "floor_at": [],
+          "clamp_feet": []
+        }
+      }
+    },
+    {
+      "id": "everything-a-pack-may-say",
+      "note": "every section of the format",
+      "input": {
+        "type": {
+          "length": 18.125,
+          "bogies": [4.4375, -4.4375],
+          "mass_t": 123.0,
+          "max_speed_kmh": 95.0,
+          "resistance": {"a": 1060.0, "b": 14.0, "c": 1.3, "c_front": 5.0},
+          "traction": {"power_kw": 994.0, "max_tractive_effort_kn": 226.0, "adhesion": 1.0, "ramp_s": 4.0},
+          "cab": {"seats": [{"at": [-7.6, 2.2, 0.5], "yaw": 0}, {"at": [7.6, 2.2, -0.5], "yaw": 180}]},
+          "brakes": {
+            "system": "passenger",
+            "train_kn": 160.0,
+            "independent_kn": 90.0,
+            "parking_kn": 30.0,
+            "apply_s": 4.0,
+            "release_s": 8.0
+          },
+          "interior": [
+            {"min": [-8.6, 1.4, -1.3], "max": [-6.0, 3.9, 1.3]},
+            {"min": [6.0, 1.4, -1.3], "max": [8.6, 3.9, 1.3]}
+          ],
+          "doors": [
+            {"id": "cab_l", "min": [-7.5, 1.4, 1.3], "max": [-6.7, 3.4, 1.4], "group": "DoorsL"},
+            {"id": "cab_r", "min": [-7.5, 1.4, -1.4], "max": [-6.7, 3.4, -1.3], "group": "doorsr"}
+          ],
+          "couplers": {"front": -0.14, "rear": -0.14},
+          "aliases": ["golden:old_name"]
+        }
+      },
+      "expected": {
+        "error": null,
+        "warnings": [],
+        "type": {
+          "length": 18.125,
+          "bogies": [4.4375, -4.4375],
+          "mass_t": 123.0,
+          "max_speed_kmh": 95.0,
+          "resistance": {"a": 1060.0, "b": 14.0, "c": 1.3, "c_front": 5.0},
+          "traction": {"power_kw": 994.0, "max_tractive_effort_kn": 226.0, "adhesion": 1.0, "ramp_s": 4.0},
+          "cab": {
+            "seats": [
+              {"at": [0.5, 2.6362500000000004, 7.6], "yaw": 0.0, "faces_back": false},
+              {"at": [-0.5, 2.6362500000000004, -7.6], "yaw": 180.0, "faces_back": true}
+            ]
+          },
+          "brakes": {
+            "train_kn": 160.0,
+            "independent_kn": 90.0,
+            "dynamic_kn": 0.0,
+            "dynamic_fade_kmh": 0.0,
+            "parking_kn": 30.0,
+            "apply_s": 4.0,
+            "release_s": 8.0
+          },
+          "interior": {
+            "zones": [[-1.3, 1.83625, 6.0, 1.3, 4.33625, 8.6], [-1.3, 1.83625, -8.6, 1.3, 4.33625, -6.0]],
+            "floor_y": 1.83625
+          },
+          "doors": [
+            {
+              "id": "cab_l",
+              "box": [1.3, 1.83625, 6.7, 1.4, 3.8362499999999997, 7.5],
+              "inner": false,
+              "fixed": false,
+              "connecting": false,
+              "group": "DoorsL",
+              "external": true,
+              "axis": 0,
+              "outward": 1,
+              "inner_face": 1.3,
+              "outer_face": 1.4,
+              "span": [6.7, 7.5]
+            },
+            {
+              "id": "cab_r",
+              "box": [-1.4, 1.83625, 6.7, -1.3, 3.8362499999999997, 7.5],
+              "inner": false,
+              "fixed": false,
+              "connecting": false,
+              "group": "doorsr",
+              "external": true,
+              "axis": 0,
+              "outward": -1,
+              "inner_face": -1.3,
+              "outer_face": -1.4,
+              "span": [6.7, 7.5]
+            }
+          ],
+          "couplers": {"front": -0.14, "rear": -0.14, "reach": [8.9225, 8.9225]},
+          "hull": [-1.7, 0.4, -9.0625, 1.7, 4.7, 9.0625],
+          "powered": true,
+          "drivable": true,
+          "boardable": true,
+          "doors_only": true,
+          "wheelbase": 8.875,
+          "leaf_doors": 3
+        },
+        "answers": {
+          "door_holding": [],
+          "doors_worked_by": [],
+          "doors_opened_with": [],
+          "door_open": [],
+          "floor_at": [],
+          "clamp_feet": []
+        }
+      }
+    },
+    {
+      "id": "the-old-one-chair-form",
+      "note": "cab.seat and seat_yaw, the older form",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "cab": {"seat": [-8.0, 2.2, 0.5], "seat_yaw": 180}
+        }
+      },
+      "expected": {
+        "error": null,
+        "warnings": [],
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "max_speed_kmh": 0.0,
+          "resistance": {"a": 550.0, "b": 14.0, "c": 1.3, "c_front": 5.0},
+          "traction": null,
+          "cab": {"seats": [{"at": [0.5, 2.6362500000000004, 8.0], "yaw": 180.0, "faces_back": true}]},
+          "brakes": {
+            "train_kn": 50.0,
+            "independent_kn": 35.0,
+            "dynamic_kn": 0.0,
+            "dynamic_fade_kmh": 0.0,
+            "parking_kn": 20.0,
+            "apply_s": 4.0,
+            "release_s": 8.0
+          },
+          "interior": null,
+          "doors": [],
+          "couplers": {"front": 0.0, "rear": 0.0, "reach": [12.5, 12.5]},
+          "hull": [-1.7, 0.4, -12.5, 1.7, 4.7, 12.5],
+          "powered": false,
+          "drivable": true,
+          "boardable": false,
+          "doors_only": false,
+          "wheelbase": 17.0,
+          "leaf_doors": 0
+        },
+        "answers": {
+          "door_holding": [],
+          "doors_worked_by": [],
+          "doors_opened_with": [],
+          "door_open": [],
+          "floor_at": [],
+          "clamp_feet": []
+        }
+      }
+    },
+    {
+      "id": "seat-and-seats-together",
+      "note": "cab.seat with cab.seats: an error",
+      "input": {
+        "type": {"length": 25.0, "bogies": [8.5, -8.5], "mass_t": 50.0, "cab": {"seat": [0, 2, 0], "seats": []}}
+      },
+      "expected": {
+        "error": {
+          "code": null,
+          "subject": null,
+          "index": null,
+          "params": {},
+          "text": "'cab' has both 'seat' and 'seats': list every chair in 'seats'"
+        },
+        "warnings": [],
+        "type": null,
+        "answers": null
+      }
+    },
+    {
+      "id": "seventeen-chairs",
+      "note": "more chairs than 16: an error",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "cab": {
+            "seats": [
+              {"at": [0, 2, 0]},
+              {"at": [0, 2, 0]},
+              {"at": [0, 2, 0]},
+              {"at": [0, 2, 0]},
+              {"at": [0, 2, 0]},
+              {"at": [0, 2, 0]},
+              {"at": [0, 2, 0]},
+              {"at": [0, 2, 0]},
+              {"at": [0, 2, 0]},
+              {"at": [0, 2, 0]},
+              {"at": [0, 2, 0]},
+              {"at": [0, 2, 0]},
+              {"at": [0, 2, 0]},
+              {"at": [0, 2, 0]},
+              {"at": [0, 2, 0]},
+              {"at": [0, 2, 0]},
+              {"at": [0, 2, 0]}
+            ]
+          }
+        }
+      },
+      "expected": {
+        "error": {
+          "code": null,
+          "subject": null,
+          "index": null,
+          "params": {},
+          "text": "'cab.seats' lists more than 16 chairs"
+        },
+        "warnings": [],
+        "type": null,
+        "answers": null
+      }
+    },
+    {
+      "id": "chairs-facing-either-way",
+      "note": "a chair faces back past 90 degrees off forward",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "cab": {
+            "seats": [
+              {"at": [0, 2, 0], "yaw": 0},
+              {"at": [0, 2, 0], "yaw": 90},
+              {"at": [0, 2, 0], "yaw": 91},
+              {"at": [0, 2, 0], "yaw": 180},
+              {"at": [0, 2, 0], "yaw": -90},
+              {"at": [0, 2, 0], "yaw": -91},
+              {"at": [0, 2, 0], "yaw": 270},
+              {"at": [0, 2, 0], "yaw": 540},
+              {"at": [0, 2, 0], "yaw": -180},
+              {"at": [0, 2, 0], "yaw": 450},
+              {"at": [0, 2, 0], "yaw": 89.5}
+            ]
+          }
+        }
+      },
+      "expected": {
+        "error": null,
+        "warnings": [],
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "max_speed_kmh": 0.0,
+          "resistance": {"a": 550.0, "b": 14.0, "c": 1.3, "c_front": 5.0},
+          "traction": null,
+          "cab": {
+            "seats": [
+              {"at": [0.0, 2.4362500000000002, 0.0], "yaw": 0.0, "faces_back": false},
+              {"at": [0.0, 2.4362500000000002, 0.0], "yaw": 90.0, "faces_back": false},
+              {"at": [0.0, 2.4362500000000002, 0.0], "yaw": 91.0, "faces_back": true},
+              {"at": [0.0, 2.4362500000000002, 0.0], "yaw": 180.0, "faces_back": true},
+              {"at": [0.0, 2.4362500000000002, 0.0], "yaw": -90.0, "faces_back": false},
+              {"at": [0.0, 2.4362500000000002, 0.0], "yaw": -91.0, "faces_back": true},
+              {"at": [0.0, 2.4362500000000002, 0.0], "yaw": 270.0, "faces_back": false},
+              {"at": [0.0, 2.4362500000000002, 0.0], "yaw": 540.0, "faces_back": true},
+              {"at": [0.0, 2.4362500000000002, 0.0], "yaw": -180.0, "faces_back": true},
+              {"at": [0.0, 2.4362500000000002, 0.0], "yaw": 450.0, "faces_back": false},
+              {"at": [0.0, 2.4362500000000002, 0.0], "yaw": 89.5, "faces_back": false}
+            ]
+          },
+          "brakes": {
+            "train_kn": 50.0,
+            "independent_kn": 35.0,
+            "dynamic_kn": 0.0,
+            "dynamic_fade_kmh": 0.0,
+            "parking_kn": 20.0,
+            "apply_s": 4.0,
+            "release_s": 8.0
+          },
+          "interior": null,
+          "doors": [],
+          "couplers": {"front": 0.0, "rear": 0.0, "reach": [12.5, 12.5]},
+          "hull": [-1.7, 0.4, -12.5, 1.7, 4.7, 12.5],
+          "powered": false,
+          "drivable": true,
+          "boardable": false,
+          "doors_only": false,
+          "wheelbase": 17.0,
+          "leaf_doors": 0
+        },
+        "answers": {
+          "door_holding": [],
+          "doors_worked_by": [],
+          "doors_opened_with": [],
+          "door_open": [],
+          "floor_at": [],
+          "clamp_feet": []
+        }
+      }
+    },
+    {
+      "id": "length-zero",
+      "note": "a length of 0: an error",
+      "input": {"type": {"length": 0, "bogies": [1, -1], "mass_t": 10}},
+      "expected": {
+        "error": {
+          "code": null,
+          "subject": null,
+          "index": null,
+          "params": {},
+          "text": "'length' must be a positive number of blocks, got 0"
+        },
+        "warnings": [],
+        "type": null,
+        "answers": null
+      }
+    },
+    {
+      "id": "a-bogie-outside-the-body",
+      "note": "a pivot past length/2: an error",
+      "input": {"type": {"length": 25, "bogies": [13, -8], "mass_t": 10}},
+      "expected": {
+        "error": {
+          "code": null,
+          "subject": null,
+          "index": null,
+          "params": {},
+          "text": "'bogies[0]' = 13 is outside the body: a pivot must lie within ±length/2 = ±12.5"
+        },
+        "warnings": [],
+        "type": null,
+        "answers": null
+      }
+    },
+    {
+      "id": "a-bogie-at-the-end",
+      "note": "a pivot right at length/2 is outside",
+      "input": {"type": {"length": 25, "bogies": [12.5, -8], "mass_t": 10}},
+      "expected": {
+        "error": {
+          "code": null,
+          "subject": null,
+          "index": null,
+          "params": {},
+          "text": "'bogies[0]' = 12.5 is outside the body: a pivot must lie within ±length/2 = ±12.5"
+        },
+        "warnings": [],
+        "type": null,
+        "answers": null
+      }
+    },
+    {
+      "id": "bogies-not-front-to-back",
+      "note": "the pivots must run front to back; a small number prints as Java writes a double",
+      "input": {"type": {"length": 25, "bogies": [1e-05, 5.0], "mass_t": 10}},
+      "expected": {
+        "error": {
+          "code": null,
+          "subject": null,
+          "index": null,
+          "params": {},
+          "text": "'bogies' must run front to back, each pivot behind the one before: 'bogies[1]' = 5 is not behind 'bogies[0]' = 1.0E-5"
+        },
+        "warnings": [],
+        "type": null,
+        "answers": null
+      }
+    },
+    {
+      "id": "two-pivots-in-one-place",
+      "note": "equal pivots: an error",
+      "input": {"type": {"length": 25, "bogies": [3, 3], "mass_t": 10}},
+      "expected": {
+        "error": {
+          "code": null,
+          "subject": null,
+          "index": null,
+          "params": {},
+          "text": "'bogies' must run front to back, each pivot behind the one before: 'bogies[1]' = 3 is not behind 'bogies[0]' = 3"
+        },
+        "warnings": [],
+        "type": null,
+        "answers": null
+      }
+    },
+    {
+      "id": "one-bogie",
+      "note": "one pivot: front and rear alike",
+      "input": {"type": {"length": 10, "bogies": [0], "mass_t": 10}},
+      "expected": {
+        "error": null,
+        "warnings": [],
+        "type": {
+          "length": 10.0,
+          "bogies": [0.0],
+          "mass_t": 10.0,
+          "max_speed_kmh": 0.0,
+          "resistance": {"a": 270.0, "b": 14.0, "c": 1.3, "c_front": 5.0},
+          "traction": null,
+          "cab": null,
+          "brakes": {
+            "train_kn": 10.0,
+            "independent_kn": 0.0,
+            "dynamic_kn": 0.0,
+            "dynamic_fade_kmh": 0.0,
+            "parking_kn": 4.0,
+            "apply_s": 4.0,
+            "release_s": 8.0
+          },
+          "interior": null,
+          "doors": [],
+          "couplers": {"front": 0.0, "rear": 0.0, "reach": [5.0, 5.0]},
+          "hull": [-1.7, 0.4, -5.0, 1.7, 4.7, 5.0],
+          "powered": false,
+          "drivable": false,
+          "boardable": false,
+          "doors_only": false,
+          "wheelbase": 0.0,
+          "leaf_doors": 0
+        },
+        "answers": {
+          "door_holding": [],
+          "doors_worked_by": [],
+          "doors_opened_with": [],
+          "door_open": [],
+          "floor_at": [],
+          "clamp_feet": []
+        }
+      }
+    },
+    {
+      "id": "no-bogies",
+      "note": "an empty bogies list: an error",
+      "input": {"type": {"length": 10, "bogies": [], "mass_t": 10}},
+      "expected": {
+        "error": {
+          "code": null,
+          "subject": null,
+          "index": null,
+          "params": {},
+          "text": "'bogies' must list at least one pivot offset"
+        },
+        "warnings": [],
+        "type": null,
+        "answers": null
+      }
+    },
+    {
+      "id": "a-coupler-half-the-length",
+      "note": "a coupler offset of length/2: an error",
+      "input": {"type": {"length": 25.0, "bogies": [8.5, -8.5], "mass_t": 50.0, "couplers": {"front": 12.5}}},
+      "expected": {
+        "error": {
+          "code": null,
+          "subject": null,
+          "index": null,
+          "params": {},
+          "text": "'couplers.front' = 12.5 must be under length/2 = 12.5 in size"
+        },
+        "warnings": [],
+        "type": null,
+        "answers": null
+      }
+    },
+    {
+      "id": "couplers-in-and-out",
+      "note": "couplers set in and out: their reach",
+      "input": {
+        "type": {"length": 25.0, "bogies": [8.5, -8.5], "mass_t": 50.0, "couplers": {"front": 0.5, "rear": -0.25}}
+      },
+      "expected": {
+        "error": null,
+        "warnings": [],
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "max_speed_kmh": 0.0,
+          "resistance": {"a": 550.0, "b": 14.0, "c": 1.3, "c_front": 5.0},
+          "traction": null,
+          "cab": null,
+          "brakes": {
+            "train_kn": 50.0,
+            "independent_kn": 0.0,
+            "dynamic_kn": 0.0,
+            "dynamic_fade_kmh": 0.0,
+            "parking_kn": 20.0,
+            "apply_s": 4.0,
+            "release_s": 8.0
+          },
+          "interior": null,
+          "doors": [],
+          "couplers": {"front": 0.5, "rear": -0.25, "reach": [13.0, 12.25]},
+          "hull": [-1.7, 0.4, -12.5, 1.7, 4.7, 12.5],
+          "powered": false,
+          "drivable": false,
+          "boardable": false,
+          "doors_only": false,
+          "wheelbase": 17.0,
+          "leaf_doors": 0
+        },
+        "answers": {
+          "door_holding": [],
+          "doors_worked_by": [],
+          "doors_opened_with": [],
+          "door_open": [],
+          "floor_at": [],
+          "clamp_feet": []
+        }
+      }
+    },
+    {
+      "id": "mass-zero",
+      "note": "a mass of 0: an error",
+      "input": {"type": {"length": 10, "bogies": [2, -2], "mass_t": 0}},
+      "expected": {
+        "error": {
+          "code": null,
+          "subject": null,
+          "index": null,
+          "params": {},
+          "text": "'mass_t' must be a positive number, got 0"
+        },
+        "warnings": [],
+        "type": null,
+        "answers": null
+      }
+    },
+    {
+      "id": "a-negative-speed",
+      "note": "a negative amount: an error",
+      "input": {"type": {"length": 25.0, "bogies": [8.5, -8.5], "mass_t": 50.0, "max_speed_kmh": -1}},
+      "expected": {
+        "error": {
+          "code": null,
+          "subject": null,
+          "index": null,
+          "params": {},
+          "text": "'max_speed_kmh' must be a number ≥ 0, got -1"
+        },
+        "warnings": [],
+        "type": null,
+        "answers": null
+      }
+    },
+    {
+      "id": "no-length",
+      "note": "a required field missing: an error",
+      "input": {"type": {"bogies": [2, -2], "mass_t": 10}},
+      "expected": {
+        "error": {
+          "code": null,
+          "subject": null,
+          "index": null,
+          "params": {},
+          "text": "missing required field 'length'"
+        },
+        "warnings": [],
+        "type": null,
+        "answers": null
+      }
+    },
+    {
+      "id": "a-length-in-a-string",
+      "note": "a string for a number: an error that quotes it",
+      "input": {"type": {"length": "20", "bogies": [2, -2], "mass_t": 10}},
+      "expected": {
+        "error": {
+          "code": null,
+          "subject": null,
+          "index": null,
+          "params": {},
+          "text": "'length' must be a finite number, got the string \"20\""
+        },
+        "warnings": [],
+        "type": null,
+        "answers": null
+      }
+    },
+    {
+      "id": "a-null-length",
+      "note": "null for a number: an error",
+      "input": {"type": {"length": null, "bogies": [2, -2], "mass_t": 10}},
+      "expected": {
+        "error": {
+          "code": null,
+          "subject": null,
+          "index": null,
+          "params": {},
+          "text": "'length' must be a finite number, got null"
+        },
+        "warnings": [],
+        "type": null,
+        "answers": null
+      }
+    },
+    {
+      "id": "numbers-in-exponent-form",
+      "note": "2.5e1 and 1E1 are numbers",
+      "input": {"type": {"length": 25.0, "bogies": [10.0, -10.0], "mass_t": 100.0}},
+      "expected": {
+        "error": null,
+        "warnings": [],
+        "type": {
+          "length": 25.0,
+          "bogies": [10.0, -10.0],
+          "mass_t": 100.0,
+          "max_speed_kmh": 0.0,
+          "resistance": {"a": 900.0, "b": 14.0, "c": 1.3, "c_front": 5.0},
+          "traction": null,
+          "cab": null,
+          "brakes": {
+            "train_kn": 100.0,
+            "independent_kn": 0.0,
+            "dynamic_kn": 0.0,
+            "dynamic_fade_kmh": 0.0,
+            "parking_kn": 40.0,
+            "apply_s": 4.0,
+            "release_s": 8.0
+          },
+          "interior": null,
+          "doors": [],
+          "couplers": {"front": 0.0, "rear": 0.0, "reach": [12.5, 12.5]},
+          "hull": [-1.7, 0.4, -12.5, 1.7, 4.7, 12.5],
+          "powered": false,
+          "drivable": false,
+          "boardable": false,
+          "doors_only": false,
+          "wheelbase": 20.0,
+          "leaf_doors": 0
+        },
+        "answers": {
+          "door_holding": [],
+          "doors_worked_by": [],
+          "doors_opened_with": [],
+          "door_open": [],
+          "floor_at": [],
+          "clamp_feet": []
+        }
+      }
+    },
+    {
+      "id": "unknown-keys-warn-with-the-nearest",
+      "note": "unknown keys: a warning each, with the nearest known key",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "max_speed": 100,
+          "Mass_T": 3,
+          "brakes": {"train": 10},
+          "doors": [{"id": "d", "min": [0, 1, 1.4], "max": [1, 3, 1.5], "inside": true}],
+          "colour": "red"
+        }
+      },
+      "expected": {
+        "error": null,
+        "warnings": [
+          {
+            "code": null,
+            "subject": null,
+            "index": null,
+            "params": {},
+            "text": "unknown key 'max_speed' (ignored) — did you mean 'max_speed_kmh'?"
+          },
+          {
+            "code": null,
+            "subject": null,
+            "index": null,
+            "params": {},
+            "text": "unknown key 'Mass_T' (ignored) — did you mean 'mass_t'?"
+          },
+          {
+            "code": null,
+            "subject": null,
+            "index": null,
+            "params": {},
+            "text": "unknown key 'colour' (ignored)"
+          },
+          {
+            "code": null,
+            "subject": null,
+            "index": null,
+            "params": {},
+            "text": "unknown key 'brakes.train' (ignored) — did you mean 'brakes.train_kn'?"
+          },
+          {
+            "code": null,
+            "subject": null,
+            "index": null,
+            "params": {},
+            "text": "unknown key 'doors[0].inside' (ignored)"
+          }
+        ],
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "max_speed_kmh": 0.0,
+          "resistance": {"a": 550.0, "b": 14.0, "c": 1.3, "c_front": 5.0},
+          "traction": null,
+          "cab": null,
+          "brakes": {
+            "train_kn": 50.0,
+            "independent_kn": 0.0,
+            "dynamic_kn": 0.0,
+            "dynamic_fade_kmh": 0.0,
+            "parking_kn": 20.0,
+            "apply_s": 4.0,
+            "release_s": 8.0
+          },
+          "interior": null,
+          "doors": [
+            {
+              "id": "d",
+              "box": [1.4, 1.43625, -1.0, 1.5, 3.4362500000000002, 0.0],
+              "inner": false,
+              "fixed": false,
+              "connecting": false,
+              "group": null,
+              "external": true,
+              "axis": 0,
+              "outward": 1,
+              "inner_face": 1.4,
+              "outer_face": 1.5,
+              "span": [-1.0, 0.0]
+            }
+          ],
+          "couplers": {"front": 0.0, "rear": 0.0, "reach": [12.5, 12.5]},
+          "hull": [-1.7, 0.4, -12.5, 1.7, 4.7, 12.5],
+          "powered": false,
+          "drivable": false,
+          "boardable": false,
+          "doors_only": false,
+          "wheelbase": 17.0,
+          "leaf_doors": 1
+        },
+        "answers": {
+          "door_holding": [],
+          "doors_worked_by": [],
+          "doors_opened_with": [],
+          "door_open": [],
+          "floor_at": [],
+          "clamp_feet": []
+        }
+      }
+    },
+    {
+      "id": "reserved-brake-keys",
+      "note": "the dynamic brake's keys: warned about, kept",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "brakes": {"dynamic_kn": 100, "dynamic_fade_kmh": 10}
+        }
+      },
+      "expected": {
+        "error": null,
+        "warnings": [
+          {
+            "code": null,
+            "subject": null,
+            "index": null,
+            "params": {},
+            "text": "'brakes.dynamic_kn' is reserved: the dynamic brake isn't modelled yet, the value is kept but does nothing"
+          },
+          {
+            "code": null,
+            "subject": null,
+            "index": null,
+            "params": {},
+            "text": "'brakes.dynamic_fade_kmh' is reserved: the dynamic brake isn't modelled yet, the value is kept but does nothing"
+          }
+        ],
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "max_speed_kmh": 0.0,
+          "resistance": {"a": 550.0, "b": 14.0, "c": 1.3, "c_front": 5.0},
+          "traction": null,
+          "cab": null,
+          "brakes": {
+            "train_kn": 50.0,
+            "independent_kn": 0.0,
+            "dynamic_kn": 100.0,
+            "dynamic_fade_kmh": 10.0,
+            "parking_kn": 20.0,
+            "apply_s": 4.0,
+            "release_s": 8.0
+          },
+          "interior": null,
+          "doors": [],
+          "couplers": {"front": 0.0, "rear": 0.0, "reach": [12.5, 12.5]},
+          "hull": [-1.7, 0.4, -12.5, 1.7, 4.7, 12.5],
+          "powered": false,
+          "drivable": false,
+          "boardable": false,
+          "doors_only": false,
+          "wheelbase": 17.0,
+          "leaf_doors": 0
+        },
+        "answers": {
+          "door_holding": [],
+          "doors_worked_by": [],
+          "doors_opened_with": [],
+          "door_open": [],
+          "floor_at": [],
+          "clamp_feet": []
+        }
+      }
+    },
+    {
+      "id": "an-unknown-brake-system",
+      "note": "brakes.system electric: an error",
+      "input": {"type": {"length": 25.0, "bogies": [8.5, -8.5], "mass_t": 50.0, "brakes": {"system": "electric"}}},
+      "expected": {
+        "error": {
+          "code": null,
+          "subject": null,
+          "index": null,
+          "params": {},
+          "text": "unknown brake system 'brakes.system' = 'electric' (passenger, freight or ep)"
+        },
+        "warnings": [],
+        "type": null,
+        "answers": null
+      }
+    },
+    {
+      "id": "a-freight-brake",
+      "note": "brakes.system freight with nothing else",
+      "input": {"type": {"length": 25.0, "bogies": [8.5, -8.5], "mass_t": 50.0, "brakes": {"system": "freight"}}},
+      "expected": {
+        "error": null,
+        "warnings": [],
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "max_speed_kmh": 0.0,
+          "resistance": {"a": 550.0, "b": 14.0, "c": 1.3, "c_front": 5.0},
+          "traction": null,
+          "cab": null,
+          "brakes": {
+            "train_kn": 30.0,
+            "independent_kn": 0.0,
+            "dynamic_kn": 0.0,
+            "dynamic_fade_kmh": 0.0,
+            "parking_kn": 20.0,
+            "apply_s": 15.0,
+            "release_s": 30.0
+          },
+          "interior": null,
+          "doors": [],
+          "couplers": {"front": 0.0, "rear": 0.0, "reach": [12.5, 12.5]},
+          "hull": [-1.7, 0.4, -12.5, 1.7, 4.7, 12.5],
+          "powered": false,
+          "drivable": false,
+          "boardable": false,
+          "doors_only": false,
+          "wheelbase": 17.0,
+          "leaf_doors": 0
+        },
+        "answers": {
+          "door_holding": [],
+          "doors_worked_by": [],
+          "doors_opened_with": [],
+          "door_open": [],
+          "floor_at": [],
+          "clamp_feet": []
+        }
+      }
+    },
+    {
+      "id": "a-cab-gets-an-independent-brake",
+      "note": "an ep brake on a cab car: the independent brake by default",
+      "input": {"type": {"length": 25.0, "bogies": [8.5, -8.5], "mass_t": 50.0, "cab": {}, "brakes": {"system": "ep"}}},
+      "expected": {
+        "error": null,
+        "warnings": [],
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "max_speed_kmh": 0.0,
+          "resistance": {"a": 550.0, "b": 14.0, "c": 1.3, "c_front": 5.0},
+          "traction": null,
+          "cab": {"seats": []},
+          "brakes": {
+            "train_kn": 55.00000000000001,
+            "independent_kn": 35.0,
+            "dynamic_kn": 0.0,
+            "dynamic_fade_kmh": 0.0,
+            "parking_kn": 20.0,
+            "apply_s": 1.5,
+            "release_s": 3.0
+          },
+          "interior": null,
+          "doors": [],
+          "couplers": {"front": 0.0, "rear": 0.0, "reach": [12.5, 12.5]},
+          "hull": [-1.7, 0.4, -12.5, 1.7, 4.7, 12.5],
+          "powered": false,
+          "drivable": true,
+          "boardable": false,
+          "doors_only": false,
+          "wheelbase": 17.0,
+          "leaf_doors": 0
+        },
+        "answers": {
+          "door_holding": [],
+          "doors_worked_by": [],
+          "doors_opened_with": [],
+          "door_open": [],
+          "floor_at": [],
+          "clamp_feet": []
+        }
+      }
+    },
+    {
+      "id": "traction-without-its-effort",
+      "note": "traction needs power and effort: an error",
+      "input": {"type": {"length": 25.0, "bogies": [8.5, -8.5], "mass_t": 50.0, "traction": {"power_kw": 500}}},
+      "expected": {
+        "error": {
+          "code": null,
+          "subject": null,
+          "index": null,
+          "params": {},
+          "text": "missing required field 'traction.max_tractive_effort_kn'"
+        },
+        "warnings": [],
+        "type": null,
+        "answers": null
+      }
+    },
+    {
+      "id": "traction-with-defaults",
+      "note": "traction's adhesion and ramp by default",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "traction": {"power_kw": 500, "max_tractive_effort_kn": 100}
+        }
+      },
+      "expected": {
+        "error": null,
+        "warnings": [],
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "max_speed_kmh": 0.0,
+          "resistance": {"a": 550.0, "b": 14.0, "c": 1.3, "c_front": 5.0},
+          "traction": {"power_kw": 500.0, "max_tractive_effort_kn": 100.0, "adhesion": 1.0, "ramp_s": 4.0},
+          "cab": null,
+          "brakes": {
+            "train_kn": 50.0,
+            "independent_kn": 0.0,
+            "dynamic_kn": 0.0,
+            "dynamic_fade_kmh": 0.0,
+            "parking_kn": 20.0,
+            "apply_s": 4.0,
+            "release_s": 8.0
+          },
+          "interior": null,
+          "doors": [],
+          "couplers": {"front": 0.0, "rear": 0.0, "reach": [12.5, 12.5]},
+          "hull": [-1.7, 0.4, -12.5, 1.7, 4.7, 12.5],
+          "powered": true,
+          "drivable": false,
+          "boardable": false,
+          "doors_only": false,
+          "wheelbase": 17.0,
+          "leaf_doors": 0
+        },
+        "answers": {
+          "door_holding": [],
+          "doors_worked_by": [],
+          "doors_opened_with": [],
+          "door_open": [],
+          "floor_at": [],
+          "clamp_feet": []
+        }
+      }
+    },
+    {
+      "id": "resistance-in-part",
+      "note": "a resistance with one coefficient: the rest by default",
+      "input": {"type": {"length": 25.0, "bogies": [8.5, -8.5], "mass_t": 42.0, "resistance": {"c": 1.1}}},
+      "expected": {
+        "error": null,
+        "warnings": [],
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 42.0,
+          "max_speed_kmh": 0.0,
+          "resistance": {"a": 494.0, "b": 14.0, "c": 1.1, "c_front": 5.0},
+          "traction": null,
+          "cab": null,
+          "brakes": {
+            "train_kn": 42.0,
+            "independent_kn": 0.0,
+            "dynamic_kn": 0.0,
+            "dynamic_fade_kmh": 0.0,
+            "parking_kn": 16.8,
+            "apply_s": 4.0,
+            "release_s": 8.0
+          },
+          "interior": null,
+          "doors": [],
+          "couplers": {"front": 0.0, "rear": 0.0, "reach": [12.5, 12.5]},
+          "hull": [-1.7, 0.4, -12.5, 1.7, 4.7, 12.5],
+          "powered": false,
+          "drivable": false,
+          "boardable": false,
+          "doors_only": false,
+          "wheelbase": 17.0,
+          "leaf_doors": 0
+        },
+        "answers": {
+          "door_holding": [],
+          "doors_worked_by": [],
+          "doors_opened_with": [],
+          "door_open": [],
+          "floor_at": [],
+          "clamp_feet": []
+        }
+      }
+    },
+    {
+      "id": "interior-as-one-box",
+      "note": "interior as an object: one zone",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "interior": {"min": [-5, 1.37375, -1], "max": [5, 3.87375, 1]}
+        }
+      },
+      "expected": {
+        "error": null,
+        "warnings": [],
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "max_speed_kmh": 0.0,
+          "resistance": {"a": 550.0, "b": 14.0, "c": 1.3, "c_front": 5.0},
+          "traction": null,
+          "cab": null,
+          "brakes": {
+            "train_kn": 50.0,
+            "independent_kn": 0.0,
+            "dynamic_kn": 0.0,
+            "dynamic_fade_kmh": 0.0,
+            "parking_kn": 20.0,
+            "apply_s": 4.0,
+            "release_s": 8.0
+          },
+          "interior": {"zones": [[-1.0, 1.81, -5.0, 1.0, 4.31, 5.0]], "floor_y": 1.81},
+          "doors": [],
+          "couplers": {"front": 0.0, "rear": 0.0, "reach": [12.5, 12.5]},
+          "hull": [-1.7, 0.4, -12.5, 1.7, 4.7, 12.5],
+          "powered": false,
+          "drivable": false,
+          "boardable": true,
+          "doors_only": false,
+          "wheelbase": 17.0,
+          "leaf_doors": 0
+        },
+        "answers": {
+          "door_holding": [],
+          "doors_worked_by": [],
+          "doors_opened_with": [],
+          "door_open": [],
+          "floor_at": [],
+          "clamp_feet": []
+        }
+      }
+    },
+    {
+      "id": "interior-an-empty-list",
+      "note": "interior []: an error",
+      "input": {"type": {"length": 25.0, "bogies": [8.5, -8.5], "mass_t": 50.0, "interior": []}},
+      "expected": {
+        "error": {"code": null, "subject": null, "index": null, "params": {}, "text": "'interior' lists no zones"},
+        "warnings": [],
+        "type": null,
+        "answers": null
+      }
+    },
+    {
+      "id": "interior-a-number",
+      "note": "interior 5: an error",
+      "input": {"type": {"length": 25.0, "bogies": [8.5, -8.5], "mass_t": 50.0, "interior": 5}},
+      "expected": {
+        "error": {
+          "code": null,
+          "subject": null,
+          "index": null,
+          "params": {},
+          "text": "'interior' must be an object {min, max} or an array of them, got the number 5"
+        },
+        "warnings": [],
+        "type": null,
+        "answers": null
+      }
+    },
+    {
+      "id": "door-groups",
+      "note": "a door's group: a name, \"\" none, null none and warned about",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "doors": [
+            {"id": "a", "min": [0, 1, 1.4], "max": [1, 3, 1.5], "group": "DoorsL"},
+            {"id": "b", "min": [2, 1, 1.4], "max": [3, 3, 1.5], "group": ""},
+            {"id": "c", "min": [4, 1, 1.4], "max": [5, 3, 1.5], "group": null}
+          ]
+        }
+      },
+      "expected": {
+        "error": null,
+        "warnings": [
+          {
+            "code": null,
+            "subject": null,
+            "index": null,
+            "params": {},
+            "text": "'doors[2].group' is null: obsolete, leave the field out for a door on its own"
+          }
+        ],
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "max_speed_kmh": 0.0,
+          "resistance": {"a": 550.0, "b": 14.0, "c": 1.3, "c_front": 5.0},
+          "traction": null,
+          "cab": null,
+          "brakes": {
+            "train_kn": 50.0,
+            "independent_kn": 0.0,
+            "dynamic_kn": 0.0,
+            "dynamic_fade_kmh": 0.0,
+            "parking_kn": 20.0,
+            "apply_s": 4.0,
+            "release_s": 8.0
+          },
+          "interior": null,
+          "doors": [
+            {
+              "id": "a",
+              "box": [1.4, 1.43625, -1.0, 1.5, 3.4362500000000002, 0.0],
+              "inner": false,
+              "fixed": false,
+              "connecting": false,
+              "group": "DoorsL",
+              "external": true,
+              "axis": 0,
+              "outward": 1,
+              "inner_face": 1.4,
+              "outer_face": 1.5,
+              "span": [-1.0, 0.0]
+            },
+            {
+              "id": "b",
+              "box": [1.4, 1.43625, -3.0, 1.5, 3.4362500000000002, -2.0],
+              "inner": false,
+              "fixed": false,
+              "connecting": false,
+              "group": null,
+              "external": true,
+              "axis": 0,
+              "outward": 1,
+              "inner_face": 1.4,
+              "outer_face": 1.5,
+              "span": [-3.0, -2.0]
+            },
+            {
+              "id": "c",
+              "box": [1.4, 1.43625, -5.0, 1.5, 3.4362500000000002, -4.0],
+              "inner": false,
+              "fixed": false,
+              "connecting": false,
+              "group": null,
+              "external": true,
+              "axis": 0,
+              "outward": 1,
+              "inner_face": 1.4,
+              "outer_face": 1.5,
+              "span": [-5.0, -4.0]
+            }
+          ],
+          "couplers": {"front": 0.0, "rear": 0.0, "reach": [12.5, 12.5]},
+          "hull": [-1.7, 0.4, -12.5, 1.7, 4.7, 12.5],
+          "powered": false,
+          "drivable": false,
+          "boardable": false,
+          "doors_only": false,
+          "wheelbase": 17.0,
+          "leaf_doors": 7
+        },
+        "answers": {
+          "door_holding": [],
+          "doors_worked_by": [],
+          "doors_opened_with": [],
+          "door_open": [],
+          "floor_at": [],
+          "clamp_feet": []
+        }
+      }
+    },
+    {
+      "id": "a-point-of-two-numbers",
+      "note": "a door's min of two numbers: an error",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "doors": [{"id": "a", "min": [0, 1], "max": [1, 3, 1.5]}]
+        }
+      },
+      "expected": {
+        "error": {
+          "code": null,
+          "subject": null,
+          "index": null,
+          "params": {},
+          "text": "'doors[0].min' must be a 3-element array [x, y, z]"
+        },
+        "warnings": [],
+        "type": null,
+        "answers": null
+      }
+    },
+    {
+      "id": "a-flag-not-true-or-false",
+      "note": "fixed 1: an error",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "doors": [{"id": "a", "min": [0, 1, 1.4], "max": [1, 3, 1.5], "fixed": 1}]
+        }
+      },
+      "expected": {
+        "error": {
+          "code": null,
+          "subject": null,
+          "index": null,
+          "params": {},
+          "text": "'doors[0].fixed' must be true or false, got the number 1"
+        },
+        "warnings": [],
+        "type": null,
+        "answers": null
+      }
+    },
+    {
+      "id": "a-yaw-in-a-string",
+      "note": "a chair's yaw as a string: an error",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "cab": {"seats": [{"at": [0, 2, 0], "yaw": "x"}]}
+        }
+      },
+      "expected": {
+        "error": {
+          "code": null,
+          "subject": null,
+          "index": null,
+          "params": {},
+          "text": "'cab.seats[0].yaw' must be a finite number, got the string \"x\""
+        },
+        "warnings": [],
+        "type": null,
+        "answers": null
+      }
+    },
+    {
+      "id": "aliases-are-not-the-types",
+      "note": "aliases are a registry concern: the type doesn't read them",
+      "input": {"type": {"length": 25.0, "bogies": [8.5, -8.5], "mass_t": 50.0, "aliases": "not even a list"}},
+      "expected": {
+        "error": null,
+        "warnings": [],
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "max_speed_kmh": 0.0,
+          "resistance": {"a": 550.0, "b": 14.0, "c": 1.3, "c_front": 5.0},
+          "traction": null,
+          "cab": null,
+          "brakes": {
+            "train_kn": 50.0,
+            "independent_kn": 0.0,
+            "dynamic_kn": 0.0,
+            "dynamic_fade_kmh": 0.0,
+            "parking_kn": 20.0,
+            "apply_s": 4.0,
+            "release_s": 8.0
+          },
+          "interior": null,
+          "doors": [],
+          "couplers": {"front": 0.0, "rear": 0.0, "reach": [12.5, 12.5]},
+          "hull": [-1.7, 0.4, -12.5, 1.7, 4.7, 12.5],
+          "powered": false,
+          "drivable": false,
+          "boardable": false,
+          "doors_only": false,
+          "wheelbase": 17.0,
+          "leaf_doors": 0
+        },
+        "answers": {
+          "door_holding": [],
+          "doors_worked_by": [],
+          "doors_opened_with": [],
+          "door_open": [],
+          "floor_at": [],
+          "clamp_feet": []
+        }
+      }
+    },
+    {
+      "id": "door-questions",
+      "note": "which door holds a point, which a group works, which open together",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "interior": [
+            {"min": [-10, 1.37375, -1.4], "max": [0, 3.87375, 1.4]},
+            {"min": [0, 1.37375, -0.5], "max": [10, 3.87375, 0.5]}
+          ],
+          "doors": [
+            {"id": "door_1", "min": [-9.0, 1.37375, 1.4], "max": [-8.0, 3.47375, 1.46], "group": "Left"},
+            {"id": "door_2", "min": [8.0, 1.37375, 1.4], "max": [9.0, 3.47375, 1.46], "group": "left"},
+            {
+              "id": "steps",
+              "min": [-6.0, 1.37375, -1.46],
+              "max": [-5.0, 3.47375, -1.4],
+              "fixed": true,
+              "group": "Left"
+            },
+            {"id": "inner", "min": [-0.05, 1.37375, -0.5], "max": [0.05, 3.47375, 0.5], "inner": true},
+            {"id": "gangway", "min": [9.95, 1.37375, -0.45], "max": [10.0, 3.37375, 0.45], "connecting": true},
+            {"id": "square", "min": [-3.0, 1.37375, 1.0], "max": [-2.0, 3.0, 2.0]},
+            {"id": "centred", "min": [-0.5, 1.37375, -0.5], "max": [0.5, 3.0, 0.5]}
+          ]
+        },
+        "door_holding": [
+          [1.43, 2.5, 8.5],
+          [1.53, 2.5, 8.5],
+          [1.5600001, 2.5, 8.5],
+          [-1.43, 2.5, 5.5],
+          [0, 2.5, 0],
+          [0, 2.5, 100]
+        ],
+        "doors_worked_by": ["left", "LEFT", "door_2", "steps", "inner", "nothing", ""],
+        "doors_opened_with": [0, 1, 2, 3, 4, 7, -1],
+        "door_open": [[0, 0], [1, 0], [2, 0], [0, 2], [-1, 6], [4, 2]]
+      },
+      "expected": {
+        "error": null,
+        "warnings": [],
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "max_speed_kmh": 0.0,
+          "resistance": {"a": 550.0, "b": 14.0, "c": 1.3, "c_front": 5.0},
+          "traction": null,
+          "cab": null,
+          "brakes": {
+            "train_kn": 50.0,
+            "independent_kn": 0.0,
+            "dynamic_kn": 0.0,
+            "dynamic_fade_kmh": 0.0,
+            "parking_kn": 20.0,
+            "apply_s": 4.0,
+            "release_s": 8.0
+          },
+          "interior": {
+            "zones": [[-1.4, 1.81, 0.0, 1.4, 4.31, 10.0], [-0.5, 1.81, -10.0, 0.5, 4.31, 0.0]],
+            "floor_y": 1.81
+          },
+          "doors": [
+            {
+              "id": "door_1",
+              "box": [1.4, 1.81, 8.0, 1.46, 3.91, 9.0],
+              "inner": false,
+              "fixed": false,
+              "connecting": false,
+              "group": "Left",
+              "external": true,
+              "axis": 0,
+              "outward": 1,
+              "inner_face": 1.4,
+              "outer_face": 1.46,
+              "span": [8.0, 9.0]
+            },
+            {
+              "id": "door_2",
+              "box": [1.4, 1.81, -9.0, 1.46, 3.91, -8.0],
+              "inner": false,
+              "fixed": false,
+              "connecting": false,
+              "group": "left",
+              "external": true,
+              "axis": 0,
+              "outward": 1,
+              "inner_face": 1.4,
+              "outer_face": 1.46,
+              "span": [-9.0, -8.0]
+            },
+            {
+              "id": "steps",
+              "box": [-1.46, 1.81, 5.0, -1.4, 3.91, 6.0],
+              "inner": false,
+              "fixed": true,
+              "connecting": false,
+              "group": "Left",
+              "external": true,
+              "axis": 0,
+              "outward": -1,
+              "inner_face": -1.4,
+              "outer_face": -1.46,
+              "span": [5.0, 6.0]
+            },
+            {
+              "id": "inner",
+              "box": [-0.5, 1.81, -0.05, 0.5, 3.91, 0.05],
+              "inner": true,
+              "fixed": false,
+              "connecting": false,
+              "group": null,
+              "external": false,
+              "axis": 2,
+              "outward": 1,
+              "inner_face": -0.05,
+              "outer_face": 0.05,
+              "span": [-0.5, 0.5]
+            },
+            {
+              "id": "gangway",
+              "box": [-0.45, 1.81, -10.0, 0.45, 3.8099999999999996, -9.95],
+              "inner": false,
+              "fixed": false,
+              "connecting": true,
+              "group": null,
+              "external": false,
+              "axis": 2,
+              "outward": -1,
+              "inner_face": -9.95,
+              "outer_face": -10.0,
+              "span": [-0.45, 0.45]
+            },
+            {
+              "id": "square",
+              "box": [1.0, 1.81, 2.0, 2.0, 3.4362500000000002, 3.0],
+              "inner": false,
+              "fixed": false,
+              "connecting": false,
+              "group": null,
+              "external": true,
+              "axis": 0,
+              "outward": 1,
+              "inner_face": 1.0,
+              "outer_face": 2.0,
+              "span": [2.0, 3.0]
+            },
+            {
+              "id": "centred",
+              "box": [-0.5, 1.81, -0.5, 0.5, 3.4362500000000002, 0.5],
+              "inner": false,
+              "fixed": false,
+              "connecting": false,
+              "group": null,
+              "external": true,
+              "axis": 0,
+              "outward": 1,
+              "inner_face": -0.5,
+              "outer_face": 0.5,
+              "span": [-0.5, 0.5]
+            }
+          ],
+          "couplers": {"front": 0.0, "rear": 0.0, "reach": [12.5, 12.5]},
+          "hull": [-1.7, 0.4, -12.5, 1.7, 4.7, 12.5],
+          "powered": false,
+          "drivable": false,
+          "boardable": true,
+          "doors_only": true,
+          "wheelbase": 17.0,
+          "leaf_doors": 123
+        },
+        "answers": {
+          "door_holding": [0, 0, -1, -1, 3, -1],
+          "doors_worked_by": [3, 3, 2, 0, 8, 0, 0],
+          "doors_opened_with": [3, 3, 0, 8, 16, 0, 0],
+          "door_open": [false, true, false, true, true, true],
+          "floor_at": [],
+          "clamp_feet": []
+        }
+      }
+    },
+    {
+      "id": "feet-on-the-floor",
+      "note": "where feet are clamped to, the floor under a point",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "interior": [
+            {"min": [-10, 1.37375, -1.4], "max": [0, 3.87375, 1.4]},
+            {"min": [0, 1.37375, -0.5], "max": [10, 3.87375, 0.5]}
+          ],
+          "doors": [
+            {"id": "door_1", "min": [-9.0, 1.37375, 1.4], "max": [-8.0, 3.47375, 1.46], "group": "Left"},
+            {"id": "door_2", "min": [8.0, 1.37375, 1.4], "max": [9.0, 3.47375, 1.46], "group": "left"},
+            {
+              "id": "steps",
+              "min": [-6.0, 1.37375, -1.46],
+              "max": [-5.0, 3.47375, -1.4],
+              "fixed": true,
+              "group": "Left"
+            },
+            {"id": "inner", "min": [-0.05, 1.37375, -0.5], "max": [0.05, 3.47375, 0.5], "inner": true},
+            {"id": "gangway", "min": [9.95, 1.37375, -0.45], "max": [10.0, 3.37375, 0.45], "connecting": true},
+            {"id": "square", "min": [-3.0, 1.37375, 1.0], "max": [-2.0, 3.0, 2.0]},
+            {"id": "centred", "min": [-0.5, 1.37375, -0.5], "max": [0.5, 3.0, 0.5]}
+          ]
+        },
+        "open": 0,
+        "floor_at": [[0, 5], [0.45, -5], [0, 0], [3, 3]],
+        "clamp_feet": [[0, 1.9, 5], [5, 1.9, 5], [0, 1.9, -0.1], [0.9, 1.9, -5]]
+      },
+      "expected": {
+        "error": null,
+        "warnings": [],
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "max_speed_kmh": 0.0,
+          "resistance": {"a": 550.0, "b": 14.0, "c": 1.3, "c_front": 5.0},
+          "traction": null,
+          "cab": null,
+          "brakes": {
+            "train_kn": 50.0,
+            "independent_kn": 0.0,
+            "dynamic_kn": 0.0,
+            "dynamic_fade_kmh": 0.0,
+            "parking_kn": 20.0,
+            "apply_s": 4.0,
+            "release_s": 8.0
+          },
+          "interior": {
+            "zones": [[-1.4, 1.81, 0.0, 1.4, 4.31, 10.0], [-0.5, 1.81, -10.0, 0.5, 4.31, 0.0]],
+            "floor_y": 1.81
+          },
+          "doors": [
+            {
+              "id": "door_1",
+              "box": [1.4, 1.81, 8.0, 1.46, 3.91, 9.0],
+              "inner": false,
+              "fixed": false,
+              "connecting": false,
+              "group": "Left",
+              "external": true,
+              "axis": 0,
+              "outward": 1,
+              "inner_face": 1.4,
+              "outer_face": 1.46,
+              "span": [8.0, 9.0]
+            },
+            {
+              "id": "door_2",
+              "box": [1.4, 1.81, -9.0, 1.46, 3.91, -8.0],
+              "inner": false,
+              "fixed": false,
+              "connecting": false,
+              "group": "left",
+              "external": true,
+              "axis": 0,
+              "outward": 1,
+              "inner_face": 1.4,
+              "outer_face": 1.46,
+              "span": [-9.0, -8.0]
+            },
+            {
+              "id": "steps",
+              "box": [-1.46, 1.81, 5.0, -1.4, 3.91, 6.0],
+              "inner": false,
+              "fixed": true,
+              "connecting": false,
+              "group": "Left",
+              "external": true,
+              "axis": 0,
+              "outward": -1,
+              "inner_face": -1.4,
+              "outer_face": -1.46,
+              "span": [5.0, 6.0]
+            },
+            {
+              "id": "inner",
+              "box": [-0.5, 1.81, -0.05, 0.5, 3.91, 0.05],
+              "inner": true,
+              "fixed": false,
+              "connecting": false,
+              "group": null,
+              "external": false,
+              "axis": 2,
+              "outward": 1,
+              "inner_face": -0.05,
+              "outer_face": 0.05,
+              "span": [-0.5, 0.5]
+            },
+            {
+              "id": "gangway",
+              "box": [-0.45, 1.81, -10.0, 0.45, 3.8099999999999996, -9.95],
+              "inner": false,
+              "fixed": false,
+              "connecting": true,
+              "group": null,
+              "external": false,
+              "axis": 2,
+              "outward": -1,
+              "inner_face": -9.95,
+              "outer_face": -10.0,
+              "span": [-0.45, 0.45]
+            },
+            {
+              "id": "square",
+              "box": [1.0, 1.81, 2.0, 2.0, 3.4362500000000002, 3.0],
+              "inner": false,
+              "fixed": false,
+              "connecting": false,
+              "group": null,
+              "external": true,
+              "axis": 0,
+              "outward": 1,
+              "inner_face": 1.0,
+              "outer_face": 2.0,
+              "span": [2.0, 3.0]
+            },
+            {
+              "id": "centred",
+              "box": [-0.5, 1.81, -0.5, 0.5, 3.4362500000000002, 0.5],
+              "inner": false,
+              "fixed": false,
+              "connecting": false,
+              "group": null,
+              "external": true,
+              "axis": 0,
+              "outward": 1,
+              "inner_face": -0.5,
+              "outer_face": 0.5,
+              "span": [-0.5, 0.5]
+            }
+          ],
+          "couplers": {"front": 0.0, "rear": 0.0, "reach": [12.5, 12.5]},
+          "hull": [-1.7, 0.4, -12.5, 1.7, 4.7, 12.5],
+          "powered": false,
+          "drivable": false,
+          "boardable": true,
+          "doors_only": true,
+          "wheelbase": 17.0,
+          "leaf_doors": 123
+        },
+        "answers": {
+          "door_holding": [],
+          "doors_worked_by": [],
+          "doors_opened_with": [],
+          "door_open": [],
+          "floor_at": [1.81, "NaN", 1.81, "NaN"],
+          "clamp_feet": [[0.0, 1.81, 5.0], [1.0999999999999999, 1.81, 5.0], [0.0, 1.81, -0.1], [0.2, 1.81, -5.0]]
+        }
+      }
+    },
+    {
+      "id": "feet-on-a-floor-nobody-fits-on",
+      "note": "clamped feet on a floor too narrow for anyone: the zone's middle line",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "interior": [{"min": [-2, 1.37375, -0.2], "max": [2, 3.87375, 0.2]}]
+        },
+        "clamp_feet": [[1, 1.9, 5], [0, 1.9, 0]]
+      },
+      "expected": {
+        "error": null,
+        "warnings": [],
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "max_speed_kmh": 0.0,
+          "resistance": {"a": 550.0, "b": 14.0, "c": 1.3, "c_front": 5.0},
+          "traction": null,
+          "cab": null,
+          "brakes": {
+            "train_kn": 50.0,
+            "independent_kn": 0.0,
+            "dynamic_kn": 0.0,
+            "dynamic_fade_kmh": 0.0,
+            "parking_kn": 20.0,
+            "apply_s": 4.0,
+            "release_s": 8.0
+          },
+          "interior": {"zones": [[-0.2, 1.81, -2.0, 0.2, 4.31, 2.0]], "floor_y": 1.81},
+          "doors": [],
+          "couplers": {"front": 0.0, "rear": 0.0, "reach": [12.5, 12.5]},
+          "hull": [-1.7, 0.4, -12.5, 1.7, 4.7, 12.5],
+          "powered": false,
+          "drivable": false,
+          "boardable": true,
+          "doors_only": false,
+          "wheelbase": 17.0,
+          "leaf_doors": 0
+        },
+        "answers": {
+          "door_holding": [],
+          "doors_worked_by": [],
+          "doors_opened_with": [],
+          "door_open": [],
+          "floor_at": [],
+          "clamp_feet": [[0.0, 1.81, 1.7], [0.0, 1.81, 0.0]]
+        }
+      }
+    }
+  ]
+}
