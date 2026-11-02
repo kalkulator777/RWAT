@@ -1,0 +1,232 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kalkulator777.github.io/RWAT/schema/wagon_model.schema.json",
+  "title": "Wagon model",
+  "description": "assets/<namespace>/wagon_models/<id>.json: how wagon type <namespace>:<id> is drawn and heard — its OBJ, door animations, liveries, handbrake wheel, sounds, body sway. Client only. A type and its model are paired by the same id; a type without a model is drawn as a box. Any error, in sounds too, throws the whole declaration away (logged).",
+  "x-description-ru": "assets/<namespace>/wagon_models/<id>.json: как выглядит и звучит тип вагона <namespace>:<id> — OBJ, анимации дверей, ливреи, маховик ручника, звуки, раскачка кузова. Только клиент. Тип и модель связаны совпадением id; тип без модели рисуется коробкой. Любая ошибка, в том числе в sounds, выбрасывает всю декларацию (в лог).",
+  "x-file": "assets/<namespace>/wagon_models/<id>.json",
+  "x-code": ["client/render/model/WagonModelDecl.java", "client/sound/SoundSet.java", "client/render/model/IrStockModel.java"],
+  "type": "object",
+  "properties": {
+    "obj": {
+      "$ref": "common.schema.json#/$defs/resource_path",
+      "description": "The model, an OBJ in the IR convention (see the OBJ name conventions): 1 unit = 1 block, front towards −X, Y up, the wheel tread's bottom at y = −0.03. Textures come from its MTL (map_Kd only, relative to the OBJ); a material without map_Kd is not drawn. An invalid path or a missing file draws a placeholder box.",
+      "x-description-ru": "Модель — OBJ по конвенции IR (см. конвенции имён OBJ): 1 единица = 1 блок, перёд — к −X, Y вверх, низ круга катания колеса на y = −0.03. Текстуры — из её MTL (только map_Kd, путь относительно OBJ); материал без map_Kd не рисуется. Неверный путь или нет файла — рисуется коробка-заглушка."
+    },
+    "bogies": {
+      "type": "array",
+      "items": {"type": "number"},
+      "minItems": 1,
+      "x-unit": "block",
+      "x-engine-default": "centres of the BOGEY_FRONT* / BOGEY_REAR* frame meshes, wheels left out",
+      "x-engine-default-ru": "центры мешей рам BOGEY_FRONT* / BOGEY_REAR* без колёс",
+      "description": "Bogie pivots in the OBJ along travel, + = forward (that is −X of the OBJ), front first; only the first and the last are used. They only re-centre the bogie meshes for turning: on the track the type's bogies place them.",
+      "x-description-ru": "Шкворни тележек в OBJ вдоль хода, + — вперёд (то есть −X в OBJ), передний первым; работают первый и последний. Нужны только чтобы перецентровать меши тележек для поворота: по пути тележки ставят bogies типа."
+    },
+    "skip": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "default": [],
+      "description": "Object-name prefixes left out of the render (case matters), on top of the convention's CARGO_FILL* and *HIDE*.",
+      "x-description-ru": "Префиксы имён объектов, которые не рисуются (регистр важен), сверх конвенционных CARGO_FILL* и *HIDE*."
+    },
+    "animations": {
+      "type": "object",
+      "propertyNames": {"minLength": 1},
+      "additionalProperties": {
+        "$ref": "common.schema.json#/$defs/resource_path",
+        "description": "The IR .anim file.",
+        "x-description-ru": "Файл .anim в формате IR."
+      },
+      "default": {},
+      "description": "Door id (case aside) → its IR .anim: the objects the file names (exact names) move by its frames as the door opens; frame = openness × (frames − 1), linear between frames. Only doors animate: a key that is no door id of the type moves nothing.",
+      "x-description-ru": "id двери (без учёта регистра) → её .anim в формате IR: объекты, названные в файле (точные имена), двигаются по его кадрам по мере открытия двери; кадр = открытость × (кадров − 1), между кадрами линейно. Анимируются только двери: ключ, не совпавший с id двери типа, ничего не двигает."
+    },
+    "liveries": {
+      "type": "object",
+      "propertyNames": {"minLength": 1},
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[a-z0-9_./-]+$",
+        "description": "Folder relative to the OBJ's folder.",
+        "x-description-ru": "Папка относительно папки OBJ."
+      },
+      "default": {},
+      "description": "Livery id → folder next to the OBJ: a texture with the same file name in that folder replaces the base one, the others stay. The picker shows the raw id (not translated).",
+      "x-description-ru": "id ливреи → папка рядом с OBJ: текстура с тем же именем файла в этой папке заменяет базовую, остальные остаются. В выборе ливрея показывается сырым id (не переводится)."
+    },
+    "handbrake": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z][A-Z_]*_[0-9]+$",
+        "description": "A control key <KIND>_<n> as the OBJ names it, e.g. WIDGET_5.",
+        "x-description-ru": "Ключ органа <KIND>_<n> как в OBJ, например WIDGET_5."
+      },
+      "default": [],
+      "description": "Cab controls that are the car's handbrake wheel: a click sets or releases the handbrake, the wheel shows its state. An object named HANDBRAKE_<n> needs no entry.",
+      "x-description-ru": "Органы, которые служат маховиком ручного тормоза: клик затягивает или отпускает ручник, маховик показывает его состояние. Объекту с именем HANDBRAKE_<n> запись не нужна."
+    },
+    "sounds": {"$ref": "#/$defs/sounds"},
+    "sway": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 3,
+      "default": 1,
+      "x-unit": "multiplier",
+      "description": "How hard the body rocks on its springs, on top of the player's own setting: 1 = as designed, 0 = never.",
+      "x-description-ru": "Насколько сильно кузов раскачивается на рессорах поверх настройки игрока: 1 — как задумано, 0 — никогда."
+    }
+  },
+  "required": ["obj"],
+  "additionalProperties": false,
+  "$defs": {
+    "sound_ref": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^([a-z0-9_.-]+:)?[a-z0-9_./-]+$",
+      "description": "A sound: a path ending in .ogg is an Ogg Vorbis file in the packs (resource path, no namespace = the declaring pack's); anything else is a sound event id from a sounds.json — vanilla ones with an explicit minecraft: (minecraft:entity.minecart.riding).",
+      "x-description-ru": "Звук: путь на .ogg — файл Ogg Vorbis в паках (путь к ресурсу, без неймспейса — неймспейс пака); всё остальное — id звукового события из sounds.json, ванильные — с явным minecraft: (minecraft:entity.minecart.riding)."
+    },
+    "loop": {
+      "description": "A looping sound: a sound, or {start, main, stop, pitch, volume}.",
+      "x-description-ru": "Петля: звук или {start, main, stop, pitch, volume}.",
+      "oneOf": [
+        {"$ref": "#/$defs/sound_ref"},
+        {
+          "type": "object",
+          "properties": {
+            "start": {
+              "$ref": "#/$defs/sound_ref",
+              "description": "Played once before main starts looping.",
+              "x-description-ru": "Играет один раз перед началом петли main."
+            },
+            "main": {
+              "$ref": "#/$defs/sound_ref",
+              "description": "The loop.",
+              "x-description-ru": "Сама петля."
+            },
+            "stop": {
+              "$ref": "#/$defs/sound_ref",
+              "description": "Played once after the loop ends.",
+              "x-description-ru": "Играет один раз после конца петли."
+            },
+            "pitch": {
+              "$ref": "#/$defs/range",
+              "x-unit": "multiplier",
+              "description": "Pitch [at rest, at full]: across the throttle for idle, the speed for wheels; horn and bell use only the second number. The game limits pitch to 0.5–2.0.",
+              "x-description-ru": "Высота [в покое, на полной]: по контроллеру для idle, по скорости для wheels; horn и bell берут только второе число. Игра ограничивает высоту 0.5–2.0."
+            },
+            "volume": {
+              "$ref": "#/$defs/range",
+              "x-unit": "multiplier",
+              "description": "Volume [at rest, at full], the same way; horn and bell use only the second number.",
+              "x-description-ru": "Громкость [в покое, на полной], так же; horn и bell берут только второе число."
+            }
+          },
+          "required": ["main"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "range": {
+      "type": "array",
+      "items": {"type": "number"},
+      "minItems": 2,
+      "maxItems": 2,
+      "description": "[from, to].",
+      "x-description-ru": "[от, до]."
+    },
+    "control_sounds": {
+      "type": "object",
+      "description": "A cab control's sounds.",
+      "x-description-ru": "Звуки органа управления.",
+      "properties": {
+        "move": {
+          "$ref": "#/$defs/sound_ref",
+          "description": "On every notch the handle passes.",
+          "x-description-ru": "На каждый пройденный нотч рукоятки."
+        },
+        "engage": {
+          "$ref": "#/$defs/sound_ref",
+          "description": "When the handle starts moving (a valve opening).",
+          "x-description-ru": "Когда рукоятка трогается с места (открытие клапана)."
+        }
+      },
+      "additionalProperties": false
+    },
+    "sounds": {
+      "type": "object",
+      "description": "Engine, horns, wheels, rail joints, doors and cab controls. The keys are IR's, so a converted pack keeps its meaning.",
+      "x-description-ru": "Двигатель, сигналы, колёса, стыки, двери и органы кабины. Ключи — как в IR, так что сконвертированный пак сохраняет смысл.",
+      "properties": {
+        "idle": {
+          "$ref": "#/$defs/loop",
+          "x-engine-default": "pitch [1.0, 1.3], volume [0.6, 1.0]",
+          "description": "Engine: runs while the train is manned or moving, pitch and volume follow the throttle; start only when the engine starts here and now, stop when it stops.",
+          "x-description-ru": "Двигатель: работает, пока в поезде есть машинист или поезд едет; высота и громкость — по контроллеру; start — только когда двигатель запускается здесь и сейчас, stop — когда глохнет."
+        },
+        "wheels": {
+          "$ref": "#/$defs/loop",
+          "x-engine-default": "pitch [0.7, 1.3], volume [0.15, 0.6]; absent: minecraft:entity.minecart.riding",
+          "x-engine-default-ru": "pitch [0.7, 1.3], volume [0.15, 0.6]; нет звука — minecraft:entity.minecart.riding",
+          "description": "Rolling: pitch and volume follow the speed (full at 100 km/h).",
+          "x-description-ru": "Ход: высота и громкость — по скорости (полные на 100 км/ч)."
+        },
+        "horn": {
+          "$ref": "#/$defs/loop",
+          "x-engine-default": "pitch 1.0, volume 1.0 (the file as it is)",
+          "x-engine-default-ru": "pitch 1.0, volume 1.0 (файл как есть)",
+          "description": "The horn (тифон), held on the driver's H key in the cab that drives; carries 192 blocks. A held signal sounds at the full end of its ranges: only the second number of pitch and volume is used, the first is ignored — write [0.9, 0.9] to set it.",
+          "x-description-ru": "Тифон: пока машинист держит H в ведущей кабине; слышен на 192 блока. Зажатый сигнал звучит на полном конце диапазонов: из pitch и volume берётся только второе число, первое не используется — пишите [0.9, 0.9]."
+        },
+        "bell": {
+          "$ref": "#/$defs/loop",
+          "x-engine-default": "pitch 1.0, volume 1.0 (the file as it is)",
+          "x-engine-default-ru": "pitch 1.0, volume 1.0 (файл как есть)",
+          "description": "The second signal — a whistle (свисток) on MVP's stock — held on the J key; carries 128 blocks. Like horn, only the second number of pitch and volume is used.",
+          "x-description-ru": "Второй сигнал — свисток у составов MVP — пока держат J; слышен на 128 блоков. Как у horn, из pitch и volume берётся только второе число."
+        },
+        "clack": {
+          "$ref": "#/$defs/sound_ref",
+          "description": "A rail joint under each bogie as it crosses one (joints every 25 m); level and pitch by speed.",
+          "x-description-ru": "Стык под каждой тележкой при проходе (стыки через 25 м); громкость и высота — по скорости."
+        },
+        "doors": {
+          "type": "object",
+          "propertyNames": {"minLength": 1},
+          "additionalProperties": {"$ref": "#/$defs/sound_ref"},
+          "x-engine-default": "minecraft:block.iron_door.open / .close",
+          "description": "Door id (case aside) → one sound for both opening and closing.",
+          "x-description-ru": "id двери (без учёта регистра) → один звук и на открытие, и на закрытие."
+        },
+        "controls": {
+          "type": "object",
+          "propertyNames": {"pattern": "^[A-Za-z][A-Za-z_]*_[0-9]+$"},
+          "additionalProperties": {"$ref": "#/$defs/control_sounds"},
+          "description": "Control key (case aside) → its sounds. Only the train handles sound, in the cab that drives: THROTTLE_, TRAIN_BRAKE_, INDEPENDENT_BRAKE_ / IND_BRAKE_, REVERSER_ — the first declared key of each kind. Other keys (WIDGET_*, ENGINE_START, COUPLER_ENGAGED_*) are accepted and stay silent.",
+          "x-description-ru": "Ключ органа (без учёта регистра) → его звуки. Звучат только рукоятки поезда в ведущей кабине: THROTTLE_, TRAIN_BRAKE_, INDEPENDENT_BRAKE_ / IND_BRAKE_, REVERSER_ — первый объявленный ключ каждого вида. Остальные ключи (WIDGET_*, ENGINE_START, COUPLER_ENGAGED_*) принимаются и молчат."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "examples": [
+    {
+      "obj": "stock/my_coach/my_coach.obj"
+    },
+    {
+      "obj": "stock/my_loco/my_loco.obj",
+      "animations": {"cab_left": "stock/my_loco/cab_left.anim"},
+      "liveries": {"green": "l_green"},
+      "sounds": {
+        "idle": {"main": "stock/my_loco/sounds/idle.ogg", "pitch": [1.0, 1.4]},
+        "horn": "stock/my_loco/sounds/horn.ogg",
+        "wheels": "minecraft:entity.minecart.riding",
+        "doors": {"cab_left": "minecraft:block.iron_door.open"},
+        "controls": {"THROTTLE_1": {"move": "stock/my_loco/sounds/notch.ogg"}}
+      },
+      "sway": 0.7
+    }
+  ]
+}

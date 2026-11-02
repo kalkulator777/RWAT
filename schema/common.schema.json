@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kalkulator777.github.io/RWAT/schema/common.schema.json",
+  "title": "RWAT shared definitions",
+  "description": "Building blocks shared by the RWAT pack schemas: points, boxes, resource paths, ids, lang texts.",
+  "x-description-ru": "Общие кирпичики схем паков RWAT: точки, коробки, пути к ресурсам, id, тексты для lang-файлов.",
+  "$defs": {
+    "vec3": {
+      "type": "array",
+      "items": {"type": "number"},
+      "minItems": 3,
+      "maxItems": 3,
+      "x-unit": "block",
+      "description": "A point [x, y, z] in blocks (1 block = 1 m).",
+      "x-description-ru": "Точка [x, y, z] в блоках (1 блок = 1 м)."
+    },
+    "box": {
+      "type": "object",
+      "description": "An axis-aligned box given by two opposite corners; min ≤ max on every axis.",
+      "x-description-ru": "Коробка, выровненная по осям, — два противоположных угла; min ≤ max по каждой оси.",
+      "properties": {
+        "min": {
+          "$ref": "#/$defs/vec3",
+          "description": "The corner with the smallest x, y and z.",
+          "x-description-ru": "Угол с наименьшими x, y и z."
+        },
+        "max": {
+          "$ref": "#/$defs/vec3",
+          "description": "The corner with the largest x, y and z.",
+          "x-description-ru": "Угол с наибольшими x, y и z."
+        }
+      },
+      "required": ["min", "max"],
+      "additionalProperties": false
+    },
+    "resource_path": {
+      "type": "string",
+      "pattern": "^([a-z0-9_.-]+:)?[a-z0-9_./-]+$",
+      "description": "A file in the packs, as a Minecraft resource location: 'path' is assets/<namespace of the declaring file>/path, 'namespace:path' is assets/<namespace>/path. Lower case letters, digits and _ . - / only.",
+      "x-description-ru": "Файл в паках как ресурс Minecraft: «path» — это assets/<неймспейс объявляющего файла>/path, «namespace:path» — assets/<namespace>/path. Только строчные латинские буквы, цифры и _ . - /."
+    },
+    "type_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$",
+      "description": "A wagon type id, '<namespace>:<path>': the file data/<namespace>/wagon_types/<path>.json declares it.",
+      "x-description-ru": "id типа вагона, «<namespace>:<path>»: его объявляет файл data/<namespace>/wagon_types/<path>.json."
+    },
+    "namespace": {
+      "type": "string",
+      "pattern": "^[a-z0-9_.-]+$",
+      "description": "A Minecraft namespace: lower case letters, digits and _ . - only.",
+      "x-description-ru": "Неймспейс Minecraft: только строчные латинские буквы, цифры и _ . -."
+    },
+    "lang_code": {
+      "type": "string",
+      "pattern": "^[a-z]{2,3}_[a-z0-9]{2,3}$",
+      "description": "A Minecraft language code: en_us, ru_ru, …",
+      "x-description-ru": "Код языка Minecraft: en_us, ru_ru, …"
+    },
+    "lang_texts": {
+      "type": "object",
+      "propertyNames": {"$ref": "#/$defs/lang_code"},
+      "additionalProperties": {"type": "string"},
+      "description": "One text per language: {\"en_us\": \"…\", \"ru_ru\": \"…\"}.",
+      "x-description-ru": "Текст на каждом языке: {\"en_us\": \"…\", \"ru_ru\": \"…\"}."
+    }
+  }
+}
