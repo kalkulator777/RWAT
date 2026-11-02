@@ -3,6 +3,7 @@ package com.muzhik17.trainsmod.path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,6 +33,15 @@ public final class RailGraph {
      * by routing (v1 switching, SPEC §2.2) and rendering (end overhangs).
      */
     public static final double CONTINUATION_DOT = 0.5;
+    /**
+     * Farthest a stored node may lie from the origin on any axis, blocks:
+     * Minecraft's own limit of the world. A node beyond it is damaged data —
+     * and a segment to it would make the bed and the renderer walk an
+     * absurd distance.
+     */
+    public static final double MAX_COORDINATE = 3.0e7;
+    /** A stored segment whose nodes are closer than this has no chord, so no tangents. */
+    private static final double DEGENERATE_CHORD = 1.0e-6;
 
     private final Map<Integer, RailNode> nodes = new LinkedHashMap<>();
     private final Map<Integer, RailSegment> segments = new LinkedHashMap<>();
@@ -72,12 +82,170 @@ public final class RailGraph {
         nextNodeId = Math.max(nextNodeId, node.id() + 1);
     }
 
+    /**
+     * Put a segment in; both its nodes must already be. For data that is known
+     * good (a copy of a graph, the server's sync); stored data goes through
+     * {@link #restoreSegment}, which checks it first.
+     */
     public void putSegment(RailSegment segment) {
         segments.put(segment.id(), segment);
         nextSegmentId = Math.max(nextSegmentId, segment.id() + 1);
         nextGroupId = Math.max(nextGroupId, segment.group() + 1);
         node(segment.nodeA()).segments().add(segment.id());
         node(segment.nodeB()).segments().add(segment.id());
+    }
+
+    // --- restoring a saved graph: damaged records are skipped, not fatal ---
+
+    /**
+     * Put a node read from a save in the graph, or say why it can't be: its
+     * id is not a positive number or is taken, its position is no point of
+     * the world ({@link #MAX_COORDINATE}), its tangent is not a finite,
+     * non-zero vector (a zero tangent would normalise to NaN and take every
+     * curve through the node with it). A skipped node's id is still counted
+     * as used, so new track never gets it.
+     *
+     * @return null if the node is in; else what is wrong with it, in English, for the log
+     */
+    public String restoreNode(int id, Vector3d position, Vector3d direction) {
+        String problem = nodeProblem(id, position, direction);
+        if (problem != null) {
+            if (id >= 1) {
+                nextNodeId = Math.max(nextNodeId, id + 1);
+            }
+            return problem;
+        }
+        putNode(new RailNode(id, position, direction));
+        return null;
+    }
+
+    private String nodeProblem(int id, Vector3d position, Vector3d direction) {
+        if (id < 1) {
+            return "it has no valid id (" + id + ")";
+        }
+        if (nodes.containsKey(id)) {
+            return "another node already has its id";
+        }
+        if (!inWorld(position)) {
+            return "its position " + show(position) + " is no point of the world";
+        }
+        if (!usableAxis(direction)) {
+            return "its tangent " + show(direction) + " is not a finite, non-zero vector";
+        }
+        return null;
+    }
+
+    /**
+     * Put a segment read from a save in the graph, or say why it can't be:
+     * its id is not a positive number or is taken; an end node is missing
+     * (the case {@link #putSegment} answers with a NullPointerException);
+     * both ends are on one node; an end's sign is not +1 or −1; a tangent
+     * override is not a finite, non-zero vector; its nodes coincide; or the
+     * curve through them has no finite length ({@link ArcLengthTable}). Nodes
+     * are restored first ({@link #restoreNode}). A skipped segment's id is
+     * still counted as used: a train that was on it must not find new track
+     * under its old route.
+     *
+     * @return null if the segment is in; else what is wrong with it, in English, for the log
+     */
+    public String restoreSegment(RailSegment segment) {
+        String problem = segmentProblem(segment);
+        if (problem != null) {
+            if (segment.id() >= 1) {
+                nextSegmentId = Math.max(nextSegmentId, segment.id() + 1);
+            }
+            return problem;
+        }
+        putSegment(segment);
+        return null;
+    }
+
+    private String segmentProblem(RailSegment segment) {
+        if (segment.id() < 1) {
+            return "it has no valid id (" + segment.id() + ")";
+        }
+        if (segments.containsKey(segment.id())) {
+            return "another segment already has its id";
+        }
+        RailNode a = node(segment.nodeA());
+        if (a == null) {
+            return "its node A (" + segment.nodeA() + ") is missing";
+        }
+        RailNode b = node(segment.nodeB());
+        if (b == null) {
+            return "its node B (" + segment.nodeB() + ") is missing";
+        }
+        if (a == b) {
+            return "both its ends are on node " + a.id();
+        }
+        if (Math.abs(segment.signA()) != 1 || Math.abs(segment.signB()) != 1) {
+            return "its end signs (" + segment.signA() + ", " + segment.signB() + ") are not +1 or -1";
+        }
+        if (segment.dirA() != null && !usableAxis(segment.dirA())) {
+            return "its tangent at A " + show(segment.dirA()) + " is not a finite, non-zero vector";
+        }
+        if (segment.dirB() != null && !usableAxis(segment.dirB())) {
+            return "its tangent at B " + show(segment.dirB()) + " is not a finite, non-zero vector";
+        }
+        if (a.position().distance(b.position()) < DEGENERATE_CHORD) {
+            return "its nodes " + a.id() + " and " + b.id() + " lie in one spot";
+        }
+        try {
+            ArcLengthTable.of(hermite(segment));
+        } catch (IllegalArgumentException e) {
+            return e.getMessage();
+        }
+        return null;
+    }
+
+    /**
+     * Restore a node's switch selection read from a save, or say why not: the
+     * node is not in the graph (its segments were skipped, or it never was).
+     *
+     * @return null if restored; else the reason
+     */
+    public String restoreSwitchSelection(int nodeId, int selection) {
+        if (node(nodeId) == null) {
+            return "node " + nodeId + " is not in the graph";
+        }
+        setSwitchSelection(nodeId, selection);
+        return null;
+    }
+
+    /**
+     * Remove the nodes no segment is left on — those whose segments were
+     * skipped by {@link #restoreSegment}; a healthy graph has none
+     * ({@link #removeSegment} takes a node with its last segment). Such a
+     * node would only be something for new track to snap onto.
+     *
+     * @return the ids of the nodes removed
+     */
+    public List<Integer> dropOrphanNodes() {
+        List<Integer> dropped = new ArrayList<>();
+        for (Iterator<RailNode> it = nodes.values().iterator(); it.hasNext(); ) {
+            RailNode node = it.next();
+            if (node.segments().isEmpty()) {
+                it.remove();
+                switchSelections.remove(node.id());
+                dropped.add(node.id());
+            }
+        }
+        return dropped;
+    }
+
+    private static boolean inWorld(Vector3d p) {
+        return Math.abs(p.x) <= MAX_COORDINATE && Math.abs(p.y) <= MAX_COORDINATE
+                && Math.abs(p.z) <= MAX_COORDINATE; // false for NaN too
+    }
+
+    /** A direction that normalises to a finite unit vector: finite, and not (nearly) zero. */
+    private static boolean usableAxis(Vector3d v) {
+        double length = v.length();
+        return Double.isFinite(length) && length > 1.0e-9;
+    }
+
+    private static String show(Vector3d v) {
+        return "(" + v.x + ", " + v.y + ", " + v.z + ")";
     }
 
     // --- id counters (persisted with the graph) ---

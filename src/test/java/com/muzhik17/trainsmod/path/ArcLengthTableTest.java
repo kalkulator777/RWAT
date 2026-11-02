@@ -1,6 +1,7 @@
 package com.muzhik17.trainsmod.path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.joml.Vector3d;
@@ -54,5 +55,23 @@ class ArcLengthTableTest {
         assertEquals(1.0, table.tForS(999.0), 1.0e-12);
         assertEquals(0.0, table.sForT(-1.0), 1.0e-12);
         assertEquals(table.length(), table.sForT(2.0), 1.0e-12);
+    }
+
+    /**
+     * A curve through a NaN point used to give a table whose length was NaN,
+     * and the first {@code tForS} then threw from {@code Math.clamp} — in
+     * whatever train or renderer sampled it first, not where the bad data came in.
+     */
+    @Test
+    void aCurveWithNoFiniteLengthIsRefusedWhereItIsBuilt() {
+        HermiteSegment nan = new HermiteSegment(new Vector3d(0, 0, 0), new Vector3d(Double.NaN, 0, 0),
+                new Vector3d(20, 0, 0), new Vector3d(20, 0, 0));
+        assertThrows(IllegalArgumentException.class, () -> ArcLengthTable.of(nan));
+        HermiteSegment infinite = HermiteSegment.straight(new Vector3d(0, 0, 0),
+                new Vector3d(Double.POSITIVE_INFINITY, 0, 0));
+        assertThrows(IllegalArgumentException.class, () -> ArcLengthTable.of(infinite));
+        // a segment that merely has no extent is fine: length 0
+        assertEquals(0.0, ArcLengthTable.of(HermiteSegment.straight(new Vector3d(1, 2, 3), new Vector3d(1, 2, 3)))
+                .length(), 0.0);
     }
 }

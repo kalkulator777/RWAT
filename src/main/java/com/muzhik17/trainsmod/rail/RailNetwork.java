@@ -1077,29 +1077,50 @@ public final class RailNetwork extends SavedData {
         return tag;
     }
 
+    /**
+     * Read the graph back. Damaged records — a segment whose node is gone, a
+     * zero or non-numeric tangent, a curve with no length ({@link RailGraph#restoreNode},
+     * {@link RailGraph#restoreSegment}) — are skipped with an error in the log
+     * saying which and why, and the rest of the graph loads: one bad record
+     * must not take the world down with it. A consist whose route ran over a
+     * skipped segment finds it gone, as after a demolition, and is stranded
+     * where it stands ({@code Consist#resolvePath}). Nothing is marked dirty
+     * for it: the file keeps what it had until the next real edit.
+     */
     private static RailNetwork load(CompoundTag tag, HolderLookup.Provider registries) {
         RailNetwork network = new RailNetwork();
+        RailGraph graph = network.graph;
+        int skipped = 0;
         for (Tag entry : tag.getList("Nodes", Tag.TAG_COMPOUND)) {
             CompoundTag nodeTag = (CompoundTag) entry;
-            network.graph.putNode(new RailNode(nodeTag.getInt("Id"),
-                    new Vector3d(nodeTag.getDouble("X"), nodeTag.getDouble("Y"), nodeTag.getDouble("Z")),
-                    new Vector3d(nodeTag.getDouble("DX"), nodeTag.getDouble("DY"), nodeTag.getDouble("DZ"))));
+            int id = nodeTag.getInt("Id");
+            String problem = graph.restoreNode(id, vector(nodeTag, "X", "Y", "Z"),
+                    vector(nodeTag, "DX", "DY", "DZ"));
+            if (problem != null) {
+                skipped++;
+                RailsWheelsAndTrains.LOGGER.error("Rail network: skipping node {} of the saved graph: {}",
+                        id, problem);
+            }
         }
         for (Tag entry : tag.getList("Segments", Tag.TAG_COMPOUND)) {
             CompoundTag segmentTag = (CompoundTag) entry;
-            Vector3d dirA = segmentTag.contains("DAX")
-                    ? new Vector3d(segmentTag.getDouble("DAX"), segmentTag.getDouble("DAY"),
-                            segmentTag.getDouble("DAZ"))
-                    : null;
-            Vector3d dirB = segmentTag.contains("DBX")
-                    ? new Vector3d(segmentTag.getDouble("DBX"), segmentTag.getDouble("DBY"),
-                            segmentTag.getDouble("DBZ"))
-                    : null;
-            network.graph.putSegment(new RailSegment(segmentTag.getInt("Id"),
+            int id = segmentTag.getInt("Id");
+            Vector3d dirA = segmentTag.contains("DAX") ? vector(segmentTag, "DAX", "DAY", "DAZ") : null;
+            Vector3d dirB = segmentTag.contains("DBX") ? vector(segmentTag, "DBX", "DBY", "DBZ") : null;
+            String problem = graph.restoreSegment(new RailSegment(id,
                     segmentTag.getInt("A"), segmentTag.getInt("SA"),
                     segmentTag.getInt("B"), segmentTag.getInt("SB"), dirA, dirB,
                     segmentTag.getInt("Group"), segmentTag.getString("Style"),
                     segmentTag.getString("Bed")));
+            if (problem != null) {
+                skipped++;
+                RailsWheelsAndTrains.LOGGER.error("Rail network: skipping segment {} of the saved graph: {}",
+                        id, problem);
+            }
+        }
+        for (int id : graph.dropOrphanNodes()) {
+            RailsWheelsAndTrains.LOGGER.error("Rail network: dropping node {} of the saved graph:"
+                    + " every segment on it was skipped", id);
         }
         for (Tag entry : tag.getList("Markers", Tag.TAG_COMPOUND)) {
             CompoundTag markerTag = (CompoundTag) entry;
@@ -1113,11 +1134,31 @@ public final class RailNetwork extends SavedData {
         }
         for (Tag entry : tag.getList("Switches", Tag.TAG_COMPOUND)) {
             CompoundTag switchTag = (CompoundTag) entry;
-            network.graph.setSwitchSelection(switchTag.getInt("Node"), switchTag.getInt("Sel"));
+            String problem = graph.restoreSwitchSelection(switchTag.getInt("Node"), switchTag.getInt("Sel"));
+            if (problem != null) {
+                RailsWheelsAndTrains.LOGGER.warn("Rail network: skipping a switch setting of the saved graph: {}",
+                        problem);
+            }
         }
         network.revision = Math.max(1, tag.getInt("Revision"));
-        network.graph.restoreNextIds(tag.getInt("NextNode"), tag.getInt("NextSegment"),
-                tag.getInt("NextGroup"));
+        graph.restoreNextIds(tag.getInt("NextNode"), tag.getInt("NextSegment"), tag.getInt("NextGroup"));
+        if (skipped > 0) {
+            RailsWheelsAndTrains.LOGGER.error("Rail network: {} damaged record(s) of the saved graph were skipped;"
+                    + " trains that ran over them stand where they are", skipped);
+        }
         return network;
+    }
+
+    /**
+     * A vector of three number tags; a component that is missing or no number
+     * reads as NaN, so the graph refuses the vector ({@code getDouble} would
+     * make it a quiet 0 and a zero tangent).
+     */
+    private static Vector3d vector(CompoundTag tag, String x, String y, String z) {
+        return new Vector3d(number(tag, x), number(tag, y), number(tag, z));
+    }
+
+    private static double number(CompoundTag tag, String key) {
+        return tag.contains(key, Tag.TAG_ANY_NUMERIC) ? tag.getDouble(key) : Double.NaN;
     }
 }
