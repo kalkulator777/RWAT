@@ -39,7 +39,7 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
  * measured: frames and their times, the entity pass of each frame (the
  * wagons' draws issued in it), and what the bake cache did
  * ({@code [depot]} lines in the log); then {@code rwat-depot.png}, and
- * {@code rwat-depot-beam.png} ahead of a lone lit shunter 60 blocks west
+ * {@code rwat-depot-beam.png} ahead of a lone lit DR1 car 60 blocks west
  * of the depot, looking away from it — its light on the track with the car
  * behind the camera (M28). Quits the game at the end.
  */
@@ -66,19 +66,22 @@ public final class DepotScene {
     /** Along each gap between tracks, glowstone this far from the tracks' start, blocks. */
     private static final int[][] GLOW = {{8, 50}, {20}, {35, 70}, {5, 60}, {28}, {45, 12}, {66}};
     /**
-     * The beam shot's train, its lights and its track, blocks across from
-     * the depot's first: alone, so no other car's light or culling box is
-     * near.
+     * The beam shot's train — a DR1 motor car, 26 blocks long, its headlight
+     * on — and its track, blocks across from the depot's first: alone, so no
+     * other car's light or culling box is near.
      */
-    private static final String LONE = "shunter";
-    private static final String[] LONE_LIGHTS = {"FHL"};
+    private static final String LONE = "dr1a_motorhead";
+    private static final String[] LONE_LIGHTS = {"HLB"};
     private static final double LONE_X = -60.0;
     /**
-     * The beam shot's camera this far ahead of the lone car's front, blocks:
-     * past the car's former culling box (half the longest car + 3.4 from its
-     * centre), short of the end of its light on the track (22 past the lamp).
+     * The beam shot's camera this far ahead of the lone car's front, blocks,
+     * looking on nearly level ({@link #BEAM_VIEW_PITCH}): clear of the car's
+     * former culling box (half the longest car + 3.4 round its centre, about
+     * 4 past the front of a 26-block car), with the middle of its light on
+     * the track (11.5 past the lamp) in view.
      */
-    private static final double BEAM_VIEW_AHEAD = 14.0;
+    private static final double BEAM_VIEW_AHEAD = 10.0;
+    private static final float BEAM_VIEW_PITCH = 10.0F;
     private static final int WARMUP_TICKS = 400;
     private static final int WINDOW_TICKS = 400;
     private static final int MODEL_WAIT_TICKS = 2400;
@@ -273,7 +276,7 @@ public final class DepotScene {
                 front = Math.max(front, wagon.getZ() + length * 0.5);
             }
         }
-        tp(mc, x, y0 + 2.5, front + BEAM_VIEW_AHEAD, 0.0F, 30.0F);
+        tp(mc, x, y0 + 2.0, front + BEAM_VIEW_AHEAD, 0.0F, BEAM_VIEW_PITCH);
     }
 
     /** {cars in the depot, cars whose model has loaded}. */
