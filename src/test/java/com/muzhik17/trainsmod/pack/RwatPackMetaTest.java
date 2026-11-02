@@ -212,7 +212,7 @@ class RwatPackMetaTest {
         assertTrue(problem.message().contains("authors"), problem.message());
     }
 
-    /** The block the converter writes today (before format v1): loaded, with warnings only. */
+    /** The block the converter wrote before format v1 (namespace, converted_from): loaded, with warnings only. */
     @Test
     void readsTheConvertersOldBlock() {
         RwatPackMeta.Result result = parse("""
@@ -272,7 +272,7 @@ class RwatPackMetaTest {
         assertFalse(RwatPackMeta.read(temp.resolve("absent.zip"), ID).accepted());
     }
 
-    /** The generated MVP pack, when present: loaded as format 1. */
+    /** The generated MVP pack, when present: its block is format 1 as the converter writes it, read without a word. */
     @Test
     void readsTheGeneratedMvpPack() {
         Path mvp = Path.of("run/rwat_packs/MatoiVanillaPack");
@@ -280,6 +280,7 @@ class RwatPackMetaTest {
 
         RwatPackMeta.Result result = RwatPackMeta.read(mvp, ID);
         assertTrue(result.accepted(), result.problems().toString());
+        assertEquals(List.of(), result.problems());
         assertEquals(1, result.meta().format());
         assertEquals("Matoi Vanilla Pack", result.meta().name());
     }

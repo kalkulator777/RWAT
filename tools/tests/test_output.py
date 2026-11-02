@@ -148,8 +148,37 @@ class OutputTest(unittest.TestCase):
             self.assertEqual([i.filename for i in infos], sorted(i.filename for i in infos))
             self.assertEqual({i.date_time for i in infos}, {ir2rwat.ZIP_TIME})
             self.assertIn(ir2rwat.MARKER, archive.namelist())
-            self.assertEqual(json.loads(archive.read("pack.mcmeta"))["rwat"]["namespace"], "tp")
+            self.assertEqual(json.loads(archive.read("pack.mcmeta"))["rwat"]["format"], 1)
         self.assertEqual(self.leftovers(), [])
+
+    # ------------------------------------------------------------- pack.mcmeta and the notice
+
+    def test_the_rwat_block_is_format_1_and_the_conversion_is_in_the_notice(self):
+        status, out, err = irpack.convert(self.recipe)
+        self.assertEqual(status, 0, out + err)
+        mcmeta = json.loads((self.pack / "pack.mcmeta").read_text("utf-8"))
+        self.assertEqual(mcmeta["rwat"], {"format": 1, "name": "Test Pack", "license": "CC0"})
+        self.assertEqual(mcmeta["pack"]["supported_formats"], [34, 48])
+        notice = (self.pack / ir2rwat.MARKER).read_text("utf-8")
+        self.assertIn("Namespace: tp (the stock and the rail styles are tp:<id>).", notice)
+        self.assertIn("RWAT pack format: 1.", notice)
+        self.assertIn("  - ir.zip (ir.zip) → assets/tp/stock/", notice)
+
+    def test_the_recipes_version_and_authors_go_to_the_rwat_block(self):
+        recipe = irpack.write_recipe(self.folder, [("ir.zip", "stock")], version="1.2.0",
+                                     authors=["Ann", "Bob"])
+        status, out, err = irpack.convert(recipe)
+        self.assertEqual(status, 0, out + err)
+        self.assertEqual(json.loads((self.pack / "pack.mcmeta").read_text("utf-8"))["rwat"],
+                         {"format": 1, "name": "Test Pack", "version": "1.2.0", "authors": ["Ann", "Bob"],
+                          "license": "CC0"})
+        for extra, message in (({"version": 1}, "\"version\" must be a string"),
+                               ({"authors": "Ann"}, "\"authors\" must be a list"),
+                               ({"authors": ["Ann", 2]}, "\"authors\" must list strings")):
+            with self.subTest(extra=extra):
+                status, out, err = irpack.convert(irpack.write_recipe(self.folder, [("ir.zip", "stock")], **extra))
+                self.assertEqual(status, 2, out + err)
+                self.assertIn(message, err)
 
     def test_zip_holds_what_the_folder_holds(self):
         irpack.convert(self.recipe)

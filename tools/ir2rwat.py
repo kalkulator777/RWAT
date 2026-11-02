@@ -13,6 +13,11 @@ can't take, see "Foreign IR packs" below):
     assets/<ns>/rail_models/<id>.json   rail styles, from IR track/ definitions (SPEC §6.10)
     assets/<ns>/lang/<lang>.json        display names (wagon.<ns>.<id>, rail.<ns>.<id>,
                                         light.<ns>.<id>.<group>)
+    pack.mcmeta                         Minecraft's "pack" and RWAT's "rwat" block, format 1:
+                                        the recipe's name, version, authors, license
+    RWAT_CONVERSION.txt                 how it was converted: the namespace, the source packs,
+                                        the stock, every file renamed (and the mark that
+                                        ir2rwat wrote the pack: it replaces no other folder)
 
 IR carries none of RWAT's physics figures beyond mass, power, tractive effort
 and speed, and the converter writes only those (see derive_type): the rest is
@@ -135,6 +140,7 @@ IR_STOCK = IR_ROOT + "rolling_stock/"
 IR_TRACK = IR_ROOT + "track/"
 PACK_FORMAT_RESOURCES = 34  # Minecraft 1.21.1 resource packs
 PACK_FORMAT_DATA = 48       # Minecraft 1.21.1 data packs
+RWAT_FORMAT = 1             # the RWAT pack format the converter writes (pack.mcmeta "rwat"."format")
 MARKER = "RWAT_CONVERSION.txt"
 VALID_PATH = re.compile(r"^[a-z0-9_.\-/]+$")
 # a character Minecraft doesn't take in a resource path (ResourceLocation): copied as _
@@ -144,9 +150,9 @@ NAMESPACE = re.compile(r"^[a-z0-9_.\-]+$")
 ZIP_TIME = (1980, 1, 1, 0, 0, 0)
 # folders under assets/<ns>/ the converter writes itself: no source root may be one
 GENERATED_FOLDERS = ("lang", "rail_models", "wagon_models")
-RECIPE_KEYS = ("copy_root_files", "description", "exclude", "id_strip_prefix", "license", "name", "namespace",
-               "out", "overrides", "overrides_dir", "pack_dir", "rail_exclude", "rail_overrides", "sound_defaults",
-               "sources")
+RECIPE_KEYS = ("authors", "copy_root_files", "description", "exclude", "id_strip_prefix", "license", "name",
+               "namespace", "out", "overrides", "overrides_dir", "pack_dir", "rail_exclude", "rail_overrides",
+               "sound_defaults", "sources", "version")
 SOURCE_KEYS = ("label", "root", "zip")
 OVERRIDE_KEYS = ("floor", "lights", "model", "name", "sway", "type")
 
@@ -932,13 +938,14 @@ def check_recipe(recipe, name):
     if not isinstance(pack_dir, str) or pack_dir in ("", ".", "..") or re.search(r"[/\\:]", pack_dir):
         raise ConversionError(f"{name}: \"pack_dir\" must be a folder name, not {pack_dir!r}")
     kinds = {str: "a string", list: "a list", dict: "an object"}
-    fields = {"copy_root_files": list, "description": str, "exclude": list, "id_strip_prefix": str,
-              "license": str, "name": str, "out": str, "overrides": dict, "overrides_dir": str,
-              "rail_exclude": list, "rail_overrides": dict, "sound_defaults": dict, "sources": list}
+    fields = {"authors": list, "copy_root_files": list, "description": str, "exclude": list,
+              "id_strip_prefix": str, "license": str, "name": str, "out": str, "overrides": dict,
+              "overrides_dir": str, "rail_exclude": list, "rail_overrides": dict, "sound_defaults": dict,
+              "sources": list, "version": str}
     for key, kind in fields.items():
         if key in recipe and not isinstance(recipe[key], kind):
             raise ConversionError(f"{name}: \"{key}\" must be {kinds[kind]}")
-    for key in ("copy_root_files", "exclude", "rail_exclude"):
+    for key in ("authors", "copy_root_files", "exclude", "rail_exclude"):
         for item in recipe.get(key, []):
             if not isinstance(item, str):
                 raise ConversionError(f"{name}: \"{key}\" must list strings, not {item!r}")
@@ -1583,6 +1590,18 @@ class Converter:
                 raise ConversionError(f"--geometry: {path} exists and isn't a geometry digest — refusing to "
                                       f"overwrite it")
 
+    def rwat_block(self):
+        """pack.mcmeta's "rwat" block, format 1 (schema/pack_mcmeta_rwat.schema.json): the format,
+        the pack's name, the recipe's "version" and "authors" if it has them, the license. How
+        the pack was converted (namespace, sources) is in RWAT_CONVERSION.txt, not here."""
+        block = {"format": RWAT_FORMAT, "name": self.recipe.get("name", self.recipe["pack_dir"])}
+        if self.recipe.get("version") is not None:
+            block["version"] = self.recipe.get("version")
+        if self.recipe.get("authors") is not None:
+            block["authors"] = self.recipe.get("authors")
+        block["license"] = self.recipe.get("license", "see the pack's own license")
+        return block
+
     def finish(self):
         """The generated files every pack has: pack.mcmeta, lang files, the notice, the recipe's root files."""
         pack_name = self.recipe["pack_dir"]
@@ -1593,12 +1612,7 @@ class Converter:
                 "supported_formats": [PACK_FORMAT_RESOURCES, PACK_FORMAT_DATA],
                 "description": self.recipe.get("description", pack_name),
             },
-            "rwat": {
-                "name": self.recipe.get("name", pack_name),
-                "namespace": self.namespace,
-                "converted_from": [s.path.name for s in self.sources],
-                "license": self.recipe.get("license", "see the pack's own license"),
-            },
+            "rwat": self.rwat_block(),
         })
         for lang, entries in sorted(self.langs.items()):
             self.generated[f"assets/{self.namespace}/lang/{lang}.json"] = dump(dict(sorted(entries.items())))
@@ -1650,10 +1664,16 @@ class Converter:
         return target
 
     def notice(self):
+        """RWAT_CONVERSION.txt: how the pack was made — the namespace, the source packs and where
+        each landed, what was generated, what is in it, what was renamed — and the marker that
+        ir2rwat wrote the folder (check_target)."""
         moved = sorted((path, asset) for path, asset in self.files.items()
                        if asset.renamed or asset.data is not None)
         lines = [
             f"{self.recipe.get('name', self.recipe['pack_dir'])} — converted for Rails, Wheels & Trains (RWAT)",
+            "",
+            f"Namespace: {self.namespace} (the stock and the rail styles are {self.namespace}:<id>).",
+            f"RWAT pack format: {RWAT_FORMAT}.",
             "",
             "Converted by tools/ir2rwat.py from the Immersive Railroading pack(s):",
         ]
