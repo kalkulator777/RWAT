@@ -25,7 +25,8 @@ import java.util.regex.Pattern;
  *       {@code _OFFSET_<f>} shifts its value; {@code _RANGE_<min>_<max>} maps a
  *       gauge's reading; {@code TL_<amount>_<axis>} slides it;</li>
  *   <li>{@code <KIND>_<n>_ROT[_<degrees>]} is the control's <b>pivot</b>: a
- *       flat marker whose centre is the hinge and whose normal the axis;</li>
+ *       marker whose bounding-box centre is the hinge and whose long direction
+ *       the axis ({@link PivotAxis});</li>
  *   <li>lights: {@code _LCG_<name>} lights with control group {@code name}
  *       ({@code LINVERT} inverts), {@code FULLBRIGHT} glows when lit,
  *       {@code HEADLIGHT_<n>} is a lamp with a flare, {@code _0X<RRGGBB>} its
