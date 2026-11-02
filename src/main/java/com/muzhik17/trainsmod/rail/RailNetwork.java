@@ -431,8 +431,9 @@ public final class RailNetwork extends SavedData {
      * lever on the track bed works — advances the node's switch selection by
      * one (SPEC §2.2 v1: cycle through the diverging legs). Stands whose node
      * is gone (the junction was demolished) are pruned on the way. A stand
-     * whose chunk isn't loaded is passed over without loading it
-     * ({@link SwitchStandPoll}, {@link #standLoaded}). A throw changes the
+     * whose chunk doesn't tick is passed over unread, so the poll neither
+     * loads chunks nor keeps them ({@link SwitchStandPoll}, {@link #standLive}).
+     * A throw changes the
      * routes, so the revision moves on, but no track: the players in the
      * dimension get the new selections alone ({@link RailSwitchesPayload}),
      * not the whole graph.
@@ -442,8 +443,8 @@ public final class RailNetwork extends SavedData {
         List<BlockPos> risen = standPoll.poll(switchStands, node -> graph.node(node) != null,
                 new SwitchStandPoll.Signals<>() {
                     @Override
-                    public boolean loaded(BlockPos stand) {
-                        return standLoaded(level, stand);
+                    public boolean live(BlockPos stand) {
+                        return standLive(level, stand);
                     }
 
                     @Override
@@ -470,11 +471,17 @@ public final class RailNetwork extends SavedData {
     }
 
     /**
-     * Whether every block a stand's signal is read from is loaded: its six
-     * neighbours and those of the cell below ({@link #tickSwitches}) — one
-     * block around it in x and z, so up to four chunks.
+     * Whether a stand's redstone is live ({@link SwitchStandPoll.Signals#live}):
+     * its chunk is in block-ticking range — a player's simulation distance,
+     * a forced chunk; the ticket a block read adds is not one of those — and
+     * every block its signal is read from is loaded: its six neighbours and
+     * those of the cell below ({@link #tickSwitches}), one block around it in
+     * x and z, so up to four chunks.
      */
-    private static boolean standLoaded(ServerLevel level, BlockPos stand) {
+    private static boolean standLive(ServerLevel level, BlockPos stand) {
+        if (!level.shouldTickBlocksAt(stand)) {
+            return false;
+        }
         int minX = SectionPos.blockToSectionCoord(stand.getX() - 1);
         int maxX = SectionPos.blockToSectionCoord(stand.getX() + 1);
         int minZ = SectionPos.blockToSectionCoord(stand.getZ() - 1);

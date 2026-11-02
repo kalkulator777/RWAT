@@ -13,13 +13,15 @@ import java.util.function.IntPredicate;
  * world is read through {@link Signals}, so this imports no Minecraft class
  * and is tested as the core is.
  *
- * <p>A stand whose chunk is not loaded is not read at all: reading a block
- * of an unloaded chunk loads it, and a read every tick would keep it loaded
- * for good (and the whole network's stands with it). Its last power is
- * forgotten then; when the chunk is back, the stand takes the signal it
- * finds without a throw — as every stand does after a restart, since the
- * last power is not saved. A redstone line in an unloaded chunk doesn't
- * change, so nothing a player did is lost.
+ * <p>A stand is read only where its redstone is live ({@link Signals#live}):
+ * where something else — a player nearby, a forced chunk — keeps its chunk
+ * ticking. Reading a block holds its chunk loaded a tick longer (an unloaded
+ * one it loads first), so a read every tick wherever the stand may be kept
+ * the chunks of every stand of the dimension loaded for good. A stand not
+ * read forgets its last power; once live again it takes the signal it finds
+ * without a throw — as every stand does after a restart, since the last
+ * power is not saved. Redstone where blocks don't tick doesn't change, so
+ * no throw a player made is lost.
  *
  * @param <P> a stand's position
  */
@@ -28,19 +30,23 @@ public final class SwitchStandPoll<P> {
     /** How the poll reads the world. */
     public interface Signals<P> {
 
-        /** Whether every block the stand's signal is read from is loaded — reading it then loads nothing. */
-        boolean loaded(P stand);
+        /**
+         * Whether the stand's redstone is live: its chunk ticks, and every
+         * block its signal is read from is loaded — reading it then neither
+         * loads a chunk nor keeps one that nothing else keeps.
+         */
+        boolean live(P stand);
 
-        /** Whether a redstone signal reaches the stand (read only when {@link #loaded}). */
+        /** Whether a redstone signal reaches the stand (read only when {@link #live}). */
         boolean powered(P stand);
     }
 
-    /** The last power read per stand, for the rising edge; absent = not read since the stand was loaded. */
+    /** The last power read per stand, for the rising edge; absent = not read since it went live. */
     private final Map<P, Boolean> lastPowered = new HashMap<>();
 
     /**
      * One tick's poll of {@code stands} (stand → the node it throws): every
-     * loaded stand is read, and one whose signal rose since the last read
+     * live stand is read, and one whose signal rose since the last read
      * throws its node. A stand whose node is no more in the graph
      * ({@code nodeExists} false — the junction was demolished) is taken out
      * of {@code stands} on the way.
@@ -57,7 +63,7 @@ public final class SwitchStandPoll<P> {
                 lastPowered.remove(pos);
                 continue;
             }
-            if (!signals.loaded(pos)) {
+            if (!signals.live(pos)) {
                 lastPowered.remove(pos);
                 continue;
             }
