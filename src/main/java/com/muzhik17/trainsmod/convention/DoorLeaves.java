@@ -1,6 +1,7 @@
 package com.muzhik17.trainsmod.convention;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -36,7 +37,7 @@ public final class DoorLeaves {
     private final Set<String> animated;
 
     private DoorLeaves(Set<String> keys, List<String> skipPrefixes, Set<String> animated) {
-        this.keys = Set.copyOf(keys);
+        this.keys = Collections.unmodifiableSet(new LinkedHashSet<>(keys));
         this.skipPrefixes = List.copyOf(skipPrefixes);
         this.animated = Set.copyOf(animated);
     }
@@ -60,7 +61,7 @@ public final class DoorLeaves {
         return new DoorLeaves(keys, skipPrefixes, animated);
     }
 
-    /** The keys {@code DOOR_<n>} of the doors the model moves by name. */
+    /** The keys {@code DOOR_<n>} of the doors the model moves by name, in the order their objects come. */
     public Set<String> keys() {
         return keys;
     }

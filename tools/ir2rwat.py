@@ -896,9 +896,18 @@ def light_groups(boxes):
 
 
 def anim_objects(raw):
-    """The objects an IR .anim moves (its "O <name>" lines)."""
+    """The objects an IR .anim moves (its "O <name>" lines), each once, in order: read as
+    the engine reads them (IrAnim.parse: the line stripped of blanks, the name the rest after
+    "O ", stripped too; an object named again goes on with the same track)."""
     text = raw.decode("utf-8", errors="replace")
-    return [line[2:].strip() for line in text.splitlines() if line.startswith("O ")]
+    names = []
+    for line in text.splitlines():
+        line = line.strip(floorgen.BLANKS)
+        if line.startswith("O "):
+            name = line[2:].strip(floorgen.BLANKS)
+            if name not in names:
+                names.append(name)
+    return names
 
 
 def deep_merge(base, override):

@@ -228,6 +228,10 @@ tasks.named('test', Test).configure {
     inputs.files(fileTree('packs')).withPropertyName('recipePacks').withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.files(fileTree('run/rwat_packs')).withPropertyName('generatedPacks').withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.files(fileTree('schema')).withPropertyName('packSchemas').withPathSensitivity(PathSensitivity.RELATIVE)
+    // the golden data shared with the Python and TypeScript ports (GoldenTest); `./gradlew test
+    // -Dgolden.update=true` rewrites its expected values from the code (fixtures/golden/README.md)
+    inputs.files(fileTree('fixtures')).withPropertyName('goldenFixtures').withPathSensitivity(PathSensitivity.RELATIVE)
+    systemProperty 'golden.update', System.getProperty('golden.update', 'false')
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.

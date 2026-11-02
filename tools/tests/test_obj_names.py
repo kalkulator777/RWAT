@@ -4,62 +4,17 @@ object in an OBJ's "o" or "g": the whole rest of the line, the spaces inside kep
 loader used to take the first word of both and its MTL parser the whole line, so
 a material named "Dark Wood" found no texture, and an object "o Door Leaf" was
 "Door" to the mod and "Door Leaf" to the converter. The mod reads materials with
-MtlParser.materialName and objects with ObjectRole.objectName; these are the
-converter's ports of the same rules (ir2rwat.material_name, floorgen.object_name_of).
-The cases are the same as MaterialNamesTest.cases and ObjectNamesTest.cases
-(src/test/java/.../client/render/model)."""
+MtlParser.materialName and objects with ObjectRole.objectName; the converter's
+ports are ir2rwat.material_name and floorgen.object_name_of. Their line -> name
+cases are the shared golden data (fixtures/golden/material_names.json and
+object_names.json, test_golden.py); here, the readers that use them."""
 
 import unittest
 
 from irpack import floorgen, ir2rwat
 
-# (line, keyword, name or None): keep in step with MaterialNamesTest.cases
-CASES = [
-    ("newmtl body", "newmtl", "body"),
-    ("newmtl Dark Wood", "newmtl", "Dark Wood"),
-    ("usemtl Dark Wood.001", "usemtl", "Dark Wood.001"),
-    ("  newmtl   Dark   Wood  ", "newmtl", "Dark   Wood"),
-    ("newmtl\tDark Wood", "newmtl", "Dark Wood"),
-    ("usemtl Wood # not a comment", "usemtl", "Wood # not a comment"),
-    ("newmtl", "newmtl", None),
-    ("newmtl   ", "newmtl", None),
-    ("newmtlx body", "newmtl", None),
-    ("usemtl body", "newmtl", None),
-    ("# newmtl body", "newmtl", None),
-    ("mtllib body.mtl", "usemtl", None),
-]
-
-# (line, name or None): keep in step with ObjectNamesTest.cases
-OBJECT_CASES = [
-    ("o BODY", "BODY"),
-    ("g BODY", "BODY"),
-    ("o Door Leaf", "Door Leaf"),
-    ("o  Door   Leaf  ", "Door   Leaf"),
-    ("o\tDOOR_1_ROT_90", "DOOR_1_ROT_90"),
-    ("  o BODY\r", "BODY"),
-    ("o DOOR_3.001", "DOOR_3.001"),
-    ("g a b", "a b"),
-    ("o Тележка", "Тележка"),
-    ("o", "default"),
-    ("o   ", "default"),
-    ("o BODY ", "BODY "),
-    ("o BODY", None),
-    ("off", None),
-    ("obj BODY", None),
-    ("oBODY", None),
-    ("# o BODY", None),
-    ("v 1 2 3", None),
-    ("usemtl body", None),
-    ("", None),
-]
-
 
 class MaterialNameTest(unittest.TestCase):
-
-    def test_a_material_is_the_whole_rest_of_its_line(self):
-        for line, keyword, name in CASES:
-            with self.subTest(line=line, keyword=keyword):
-                self.assertEqual(ir2rwat.material_name(line, keyword), name)
 
     def test_the_mtl_keeps_a_spaced_name(self):
         mtl = (b"newmtl Dark Wood\nmap_Kd wood.png\nnewmtl glass\r\nmap_Kd ../glass.png\r\n"
@@ -70,11 +25,10 @@ class MaterialNameTest(unittest.TestCase):
 
 class ObjectNameTest(unittest.TestCase):
 
-    def test_an_object_is_the_whole_rest_of_its_line(self):
-        for line, name in OBJECT_CASES:
-            with self.subTest(line=line):
-                self.assertEqual(floorgen.object_name_of(line), name)
-                self.assertEqual(floorgen.object_name_of(line + "\n"), name)
+    def test_a_line_end_is_no_part_of_the_name(self):
+        # the tools read lines with their "\n" (the golden cases have none)
+        self.assertEqual(floorgen.object_name_of("o Door Leaf\n"), "Door Leaf")
+        self.assertEqual(floorgen.object_name_of("o\r\n"), "default")
 
     def test_every_reader_of_the_tools_names_objects_so(self):
         # faces before any o/g line are the default object's, as in the engine's loader

@@ -18,37 +18,14 @@ import org.junit.jupiter.api.Test;
  * {@code newmtl}: the whole rest of the line, spaces inside kept (as Blender
  * reads and writes them). The OBJ loader used to take the first word and the
  * MTL parser the whole line, so a material named {@code Dark Wood} found no
- * texture. The cases of {@link #cases} are the same as the converter's
- * ({@code tools/tests/test_obj_names.py}, {@code ir2rwat.material_name}).
+ * texture. The line → name cases are shared with the converter's port
+ * ({@code ir2rwat.material_name}) and the editor's: {@code
+ * fixtures/golden/material_names.json}, run by {@code GoldenTest}.
  */
 class MaterialNamesTest {
 
     private static InputStream text(String contents) {
         return new ByteArrayInputStream(contents.getBytes(StandardCharsets.UTF_8));
-    }
-
-    /** {line, keyword, name or null}: keep in step with tools/tests/test_obj_names.py. */
-    private static List<String[]> cases() {
-        return List.of(
-                new String[] {"newmtl body", "newmtl", "body"},
-                new String[] {"newmtl Dark Wood", "newmtl", "Dark Wood"},
-                new String[] {"usemtl Dark Wood.001", "usemtl", "Dark Wood.001"},
-                new String[] {"  newmtl   Dark   Wood  ", "newmtl", "Dark   Wood"},
-                new String[] {"newmtl\tDark Wood", "newmtl", "Dark Wood"},
-                new String[] {"usemtl Wood # not a comment", "usemtl", "Wood # not a comment"},
-                new String[] {"newmtl", "newmtl", null},
-                new String[] {"newmtl   ", "newmtl", null},
-                new String[] {"newmtlx body", "newmtl", null},
-                new String[] {"usemtl body", "newmtl", null},
-                new String[] {"# newmtl body", "newmtl", null},
-                new String[] {"mtllib body.mtl", "usemtl", null});
-    }
-
-    @Test
-    void aMaterialIsTheWholeRestOfItsLine() {
-        for (String[] c : cases()) {
-            assertEquals(c[2], MtlParser.materialName(c[0], c[1]), c[0] + " as " + c[1]);
-        }
     }
 
     @Test

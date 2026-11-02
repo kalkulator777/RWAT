@@ -1,0 +1,171 @@
+{
+  "$comment": "A model's objects -> its door leaves and the type's door each is (convention.DoorLeaves; the door by WagonType.doorHolding at the centre of the leaf's textured faces). input: objects [{name, min, max (OBJ frame), textured (default true)}] in file order, skip (name prefixes the model drops: the convention's CARGO_FILL and the declaration's skip), animated (objects an .anim moves), doors (the type's, as the pack writes them). expected: keys (the doors the model moves by name, in order), leaves [{key, objects, drawn, door (its id, or null)}].",
+  "cases": [
+    {
+      "name": "a hinged leaf in its door",
+      "input": {
+        "objects": [
+          {"name": "DOOR_1_LEAF", "min": [-0.95, 0.9, 1.42], "max": [-0.05, 2.8, 1.48]},
+          {"name": "DOOR_1_ROT_90", "min": [-1.0, 0.9, 1.45], "max": [-1.0, 2.8, 1.45], "textured": false}
+        ],
+        "doors": [{"id": "door_1", "min": [-1.0, 0.86375, 1.4], "max": [0.0, 2.86375, 1.5]}]
+      },
+      "expected": {
+        "keys": ["DOOR_1"],
+        "leaves": [{"key": "DOOR_1", "objects": ["DOOR_1_LEAF", "DOOR_1_ROT_90"], "drawn": true, "door": "door_1"}]
+      }
+    },
+    {
+      "name": "a sliding leaf",
+      "input": {
+        "objects": [{"name": "DOOR_1_TL_0.8_X", "min": [-0.95, 0.9, 1.42], "max": [-0.05, 2.8, 1.48]}],
+        "doors": [{"id": "door_1", "min": [-1.0, 0.86375, 1.4], "max": [0.0, 2.86375, 1.5]}]
+      },
+      "expected": {
+        "keys": ["DOOR_1"],
+        "leaves": [{"key": "DOOR_1", "objects": ["DOOR_1_TL_0.8_X"], "drawn": true, "door": "door_1"}]
+      }
+    },
+    {
+      "name": "a door nothing moves is body",
+      "input": {
+        "objects": [{"name": "DOOR_1_EXTERNAL", "min": [-0.95, 0.9, 1.42], "max": [-0.05, 2.8, 1.48]}],
+        "doors": [{"id": "door_1", "min": [-1.0, 0.86375, 1.4], "max": [0.0, 2.86375, 1.5]}]
+      },
+      "expected": {"keys": [], "leaves": []}
+    },
+    {
+      "name": "a leaf outside every door",
+      "input": {
+        "objects": [{"name": "DOOR_2_ROT_-90", "min": [-2.95, 0.9, 1.42], "max": [-2.05, 2.8, 1.48]}],
+        "doors": [
+          {"id": "step", "min": [-3.0, 0.86375, 1.4], "max": [-2.0, 2.86375, 1.5], "fixed": true},
+          {"id": "door_1", "min": [-1.0, 0.86375, 1.4], "max": [0.0, 2.86375, 1.5]}
+        ]
+      },
+      "expected": {
+        "keys": ["DOOR_2"],
+        "leaves": [{"key": "DOOR_2", "objects": ["DOOR_2_ROT_-90"], "drawn": true, "door": null}]
+      }
+    },
+    {
+      "name": "a leaf drawn by nothing",
+      "input": {
+        "objects": [{"name": "DOOR_1_ROT_90", "min": [-0.95, 0.9, 1.42], "max": [-0.05, 2.8, 1.48], "textured": false}],
+        "doors": [{"id": "door_1", "min": [-1.0, 0.86375, 1.4], "max": [0.0, 2.86375, 1.5]}]
+      },
+      "expected": {
+        "keys": ["DOOR_1"],
+        "leaves": [{"key": "DOOR_1", "objects": ["DOOR_1_ROT_90"], "drawn": false, "door": null}]
+      }
+    },
+    {
+      "name": "two leaves of one doorway",
+      "input": {
+        "objects": [
+          {"name": "DOOR_1_TL_0.5_X", "min": [-0.95, 0.9, 1.42], "max": [-0.5, 2.8, 1.48]},
+          {"name": "DOOR_2_TL_-0.5_X", "min": [-0.5, 0.9, 1.42], "max": [-0.05, 2.8, 1.48]}
+        ],
+        "doors": [{"id": "door_1", "min": [-1.0, 0.86375, 1.4], "max": [0.0, 2.86375, 1.5]}]
+      },
+      "expected": {
+        "keys": ["DOOR_1", "DOOR_2"],
+        "leaves": [
+          {"key": "DOOR_1", "objects": ["DOOR_1_TL_0.5_X"], "drawn": true, "door": "door_1"},
+          {"key": "DOOR_2", "objects": ["DOOR_2_TL_-0.5_X"], "drawn": true, "door": "door_1"}
+        ]
+      }
+    },
+    {
+      "name": "a copy suffix",
+      "input": {
+        "objects": [
+          {"name": "DOOR_1_ROT_90", "min": [-0.95, 0.9, 1.42], "max": [-0.05, 2.8, 1.48]},
+          {"name": "DOOR_1_HANDLE.001", "min": [-0.2, 1.8, 1.48], "max": [-0.1, 1.9, 1.52]}
+        ],
+        "doors": [{"id": "door_1", "min": [-1.0, 0.86375, 1.4], "max": [0.0, 2.86375, 1.5]}]
+      },
+      "expected": {
+        "keys": ["DOOR_1"],
+        "leaves": [
+          {
+            "key": "DOOR_1",
+            "objects": ["DOOR_1_ROT_90", "DOOR_1_HANDLE.001"],
+            "drawn": true,
+            "door": "door_1"
+          }
+        ]
+      }
+    },
+    {
+      "name": "hidden, skipped, bogie and coupler objects",
+      "input": {
+        "objects": [
+          {"name": "DOOR_1_ROT_90_HIDE", "min": [-0.95, 0.9, 1.42], "max": [-0.05, 2.8, 1.48]},
+          {"name": "DOOR_1", "min": [-0.95, 0.9, 1.42], "max": [-0.05, 2.8, 1.48]},
+          {"name": "CARGO_DOOR_2_ROT", "min": [-0.95, 0.9, 1.42], "max": [-0.05, 2.8, 1.48]},
+          {"name": "DOOR_2", "min": [-0.95, 0.9, 1.42], "max": [-0.05, 2.8, 1.48]},
+          {"name": "BOGEY_FRONT_DOOR_3_ROT", "min": [-0.95, 0.9, 1.42], "max": [-0.05, 2.8, 1.48]},
+          {"name": "DOOR_3", "min": [-0.95, 0.9, 1.42], "max": [-0.05, 2.8, 1.48]},
+          {"name": "COUPLED_FRONT_1_DOOR_4_TL_1_X", "min": [-0.95, 0.9, 1.42], "max": [-0.05, 2.8, 1.48]},
+          {"name": "DOOR_4", "min": [-0.95, 0.9, 1.42], "max": [-0.05, 2.8, 1.48]}
+        ],
+        "skip": ["CARGO_FILL", "CARGO"],
+        "doors": [{"id": "door_1", "min": [-1.0, 0.86375, 1.4], "max": [0.0, 2.86375, 1.5]}]
+      },
+      "expected": {"keys": [], "leaves": []}
+    },
+    {
+      "name": "an object an .anim moves",
+      "input": {
+        "objects": [
+          {"name": "DOOR_5_ROT", "min": [-0.95, 0.9, 1.42], "max": [-0.05, 2.8, 1.48]},
+          {"name": "DOOR_5_LEAF", "min": [-0.95, 0.9, 1.42], "max": [-0.05, 2.8, 1.48]}
+        ],
+        "animated": ["DOOR_5_ROT"],
+        "doors": [{"id": "door_1", "min": [-1.0, 0.86375, 1.4], "max": [0.0, 2.86375, 1.5]}]
+      },
+      "expected": {"keys": [], "leaves": []}
+    },
+    {
+      "name": "a BOGEY_ object of no bogie",
+      "input": {
+        "objects": [{"name": "BOGEY_MIDDLE_DOOR_6_ROT_45", "min": [-0.95, 0.9, 1.42], "max": [-0.05, 2.8, 1.48]}],
+        "doors": [{"id": "door_1", "min": [-1.0, 0.86375, 1.4], "max": [0.0, 2.86375, 1.5]}]
+      },
+      "expected": {
+        "keys": ["DOOR_6"],
+        "leaves": [{"key": "DOOR_6", "objects": ["BOGEY_MIDDLE_DOOR_6_ROT_45"], "drawn": true, "door": "door_1"}]
+      }
+    },
+    {
+      "name": "doors in the order their objects come",
+      "input": {
+        "objects": [
+          {"name": "DOOR_7_LEAF", "min": [-0.95, 0.9, -1.48], "max": [-0.05, 2.8, -1.42]},
+          {"name": "DOOR_1_ROT_90", "min": [-0.95, 0.9, 1.42], "max": [-0.05, 2.8, 1.48]},
+          {"name": "DOOR_7_ROT_-90", "min": [-1.0, 0.9, -1.45], "max": [-1.0, 2.8, -1.45]}
+        ],
+        "doors": [
+          {"id": "door_1", "min": [-1.0, 0.86375, 1.4], "max": [0.0, 2.86375, 1.5]},
+          {"id": "door_2", "min": [-1.0, 0.86375, -1.5], "max": [0.0, 2.86375, -1.4]}
+        ]
+      },
+      "expected": {
+        "keys": ["DOOR_1", "DOOR_7"],
+        "leaves": [
+          {"key": "DOOR_7", "objects": ["DOOR_7_LEAF", "DOOR_7_ROT_-90"], "drawn": true, "door": "door_2"},
+          {"key": "DOOR_1", "objects": ["DOOR_1_ROT_90"], "drawn": true, "door": "door_1"}
+        ]
+      }
+    },
+    {
+      "name": "no doors in the type",
+      "input": {"objects": [{"name": "DOOR_1_ROT_90", "min": [-0.95, 0.9, 1.42], "max": [-0.05, 2.8, 1.48]}]},
+      "expected": {
+        "keys": ["DOOR_1"],
+        "leaves": [{"key": "DOOR_1", "objects": ["DOOR_1_ROT_90"], "drawn": true, "door": null}]
+      }
+    }
+  ]
+}
