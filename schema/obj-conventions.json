@@ -7,9 +7,9 @@
   "code_root": "src/main/java/com/muzhik17/trainsmod/",
   "naming": {
     "object_name": {
-      "description": "An object's name is the first whitespace-separated token after 'o ' or 'g ' in the OBJ (a space cuts the name). Every later face belongs to it until the next o/g.",
-      "x-description-ru": "Имя объекта — первый токен после «o » или «g » в OBJ (пробел обрезает имя). Все следующие грани принадлежат ему до следующего o/g.",
-      "code": ["client/render/model/ObjLoader.java#loadParts"]
+      "description": "An object's name is the whole rest of its 'o' or 'g' line in the OBJ, the blanks at its ends dropped and those inside kept ('o Door Leaf' is Door Leaf; blanks are the characters up to U+0020, a tab too), as Blender's importer and Immersive Railroading read it; Blender's exporter writes a blank in a name as _. Every later face belongs to it until the next o/g line. Faces before any o/g line, or after one that names nothing, belong to the object 'default'.",
+      "x-description-ru": "Имя объекта — весь остаток его строки «o» или «g» в OBJ без пробелов по краям, пробелы внутри сохраняются («o Door Leaf» — это Door Leaf; пробелом считаются символы до U+0020, табуляция тоже), так имя читают импорт Blender и Immersive Railroading; экспорт Blender пишет пробел в имени как _. Все следующие грани принадлежат объекту до следующей строки o/g. Грани до первой строки o/g или после строки без имени принадлежат объекту «default».",
+      "code": ["convention/ObjectRole.java#objectName", "client/render/model/ObjLoader.java#loadParts", "tools/floorgen.py#object_name_of"]
     },
     "case_sensitive": true,
     "copy_suffix": {
