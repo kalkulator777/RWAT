@@ -137,6 +137,19 @@ final class LoopPlayer<S> {
         }
     }
 
+    /**
+     * Follow the key of a horn or whistle for this tick, at the pitch and
+     * volume its declaration gives: the full end of the range, as the signal
+     * has nothing to follow but the key ({@link SoundLevels}); none declared,
+     * the file as it is.
+     *
+     * @param scale the {@code trainVolume} setting, which multiplies the declared volume
+     */
+    void updateSignal(boolean held, long now, double x, double y, double z, double scale) {
+        update(held, false, now, x, y, z, (float) (SoundLevels.signalVolume(loop) * scale),
+                SoundLevels.signalPitch(loop));
+    }
+
     private void startMain(long now, double x, double y, double z, float volume, float pitch) {
         main = speaker.play(loop.main(), !repeat, x, y, z, volume, pitch);
         nextAt = repeat ? after(now, loop.main()) : -1;

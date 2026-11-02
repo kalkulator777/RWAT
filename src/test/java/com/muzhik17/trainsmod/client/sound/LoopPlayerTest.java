@@ -19,6 +19,8 @@ class LoopPlayerTest {
         final class Voice {
             final String ref;
             boolean active;
+            float volume;
+            float pitch;
 
             Voice(String ref) {
                 this.ref = ref;
@@ -36,12 +38,16 @@ class LoopPlayerTest {
             played.add(ref);
             Voice voice = new Voice(ref);
             voice.active = !full;
+            voice.volume = volume;
+            voice.pitch = pitch;
             voices.add(voice);
             return voice;
         }
 
         @Override
         public void place(Voice sound, double x, double y, double z, float volume, float pitch) {
+            sound.volume = volume;
+            sound.pitch = pitch;
         }
 
         @Override
@@ -163,5 +169,36 @@ class LoopPlayerTest {
         tick(player, false, false, 60);
         assertTrue(engine.voices.get(2).active, "a short blast plays out");
         assertFalse(player.on());
+    }
+
+    /** A horn's declared pitch and volume (the full end of the range) times the setting reach the sound, in every blast. */
+    @Test
+    void aSignalSoundsAtItsDeclaredPitchAndVolumeInEveryBlast() {
+        Engine engine = new Engine();
+        engine.lengths.put("horn", 30);
+        SoundSet.Loop horn = new SoundSet.Loop(null, "horn", null, new float[] {0.8F, 1.2F},
+                new float[] {0.4F, 0.9F});
+        LoopPlayer<Engine.Voice> player = new LoopPlayer<>(horn, engine, true);
+        player.updateSignal(true, 0, 0.0, 0.0, 0.0, 1.0);
+        assertEquals(0.9F, engine.voices.get(0).volume, 1.0e-6F);
+        assertEquals(1.2F, engine.voices.get(0).pitch, 1.0e-6F);
+        player.updateSignal(true, 10, 0.0, 0.0, 0.0, 2.0); // the setting moved to 2
+        assertEquals(1.8F, engine.voices.get(0).volume, 1.0e-6F);
+        assertEquals(1.2F, engine.voices.get(0).pitch, 1.0e-6F);
+        player.updateSignal(true, 29, 0.0, 0.0, 0.0, 2.0); // the next blast
+        assertEquals(2, engine.voices.size());
+        assertEquals(1.8F, engine.voices.get(1).volume, 1.0e-6F);
+        assertEquals(1.2F, engine.voices.get(1).pitch, 1.0e-6F);
+    }
+
+    /** No range in the pack: the signal is the file as it was, at the setting's volume. */
+    @Test
+    void aSignalWithoutRangesSoundsAsItsFileDoes() {
+        Engine engine = new Engine();
+        LoopPlayer<Engine.Voice> player = new LoopPlayer<>(new SoundSet.Loop(null, "horn", null, null, null),
+                engine, true);
+        player.updateSignal(true, 0, 0.0, 0.0, 0.0, 0.7);
+        assertEquals(0.7F, engine.voices.get(0).volume, 1.0e-6F);
+        assertEquals(1.0F, engine.voices.get(0).pitch, 1.0e-6F);
     }
 }
