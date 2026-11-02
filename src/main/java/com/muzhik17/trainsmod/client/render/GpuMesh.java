@@ -14,7 +14,9 @@ import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexBuffer;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.muzhik17.trainsmod.client.render.model.Mesh;
+import com.muzhik17.trainsmod.compat.IrisCompat;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.client.renderer.texture.OverlayTexture;
@@ -33,7 +35,8 @@ import net.minecraft.client.renderer.texture.OverlayTexture;
  * relative to the model — a known, deliberate approximation.
  *
  * <p>Several meshes drawn together go through a {@link Batch}, which sets each
- * render type's state up once for all its meshes instead of once per mesh.
+ * render type's state and shader up once for all its meshes instead of once
+ * per mesh.
  */
 public final class GpuMesh implements AutoCloseable {
 
@@ -120,15 +123,23 @@ public final class GpuMesh implements AutoCloseable {
 
     /**
      * Draws collected over one pass, issued grouped by render type: each
-     * type's state (shader, textures, lightmap…) is set up once for all its
-     * meshes rather than per mesh. Opaque cutout geometry is order-independent,
-     * so regrouping changes nothing on screen. Reusable — {@link #flush}
-     * leaves it empty. Render thread only.
+     * type's render state (blending, depth, textures, lightmap…) and its
+     * shader's program, samplers and uniforms are set up once for all its
+     * meshes; between two meshes only the model-view matrix (and a
+     * terrain shader's {@code ChunkOffset}) is uploaded (M29: a DR1 or a
+     * VL80 has 78–92 controls and door pieces, each set up whole before). Opaque
+     * cutout geometry is order-independent, so regrouping changes nothing on
+     * screen. Reusable — {@link #flush} leaves it empty. Render thread only.
      *
      * <p>Each draw gets modelview = global MV × pose (the current
      * {@code PoseStack.last().pose()}) — exactly what the same vertices would
      * get through the CPU path, where the pose is applied per-vertex before
      * the global MV uniform.
+     *
+     * <p>Under a shader pack ({@link IrisCompat#shaderPackInUse}) every mesh
+     * is still set up whole: a pack's programs take more from the model-view
+     * than the vanilla ones do (Iris works its inverse and the normal matrix
+     * out of it as it applies a program), and nothing here can test them.
      */
     public static final class Batch {
 
@@ -161,8 +172,24 @@ public final class GpuMesh implements AutoCloseable {
                     .add(new Entry(mesh, modelView, offsetX, offsetY, offsetZ));
         }
 
-        /** Issue every queued draw, one render-state setup per type. */
+        /** True if nothing is queued. */
+        public boolean isEmpty() {
+            for (List<Entry> entries : byType.values()) {
+                if (!entries.isEmpty()) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        /** Drop every queued draw unissued (the meshes are about to be freed). */
+        public void clear() {
+            byType.values().forEach(List::clear);
+        }
+
+        /** Issue every queued draw, one render-state and shader setup per type. */
         public void flush() {
+            boolean whole = IrisCompat.shaderPackInUse();
             for (Map.Entry<RenderType, List<Entry>> group : byType.entrySet()) {
                 List<Entry> entries = group.getValue();
                 if (entries.isEmpty()) {
@@ -172,13 +199,10 @@ public final class GpuMesh implements AutoCloseable {
                 type.setupRenderState();
                 ShaderInstance shader = RenderSystem.getShader();
                 if (shader != null) {
-                    for (Entry entry : entries) {
-                        if (shader.CHUNK_OFFSET != null) {
-                            shader.CHUNK_OFFSET.set(entry.offsetX, entry.offsetY, entry.offsetZ);
-                        }
-                        entry.mesh.buffer.bind();
-                        entry.mesh.buffer.drawWithShader(entry.modelView,
-                                RenderSystem.getProjectionMatrix(), shader);
+                    if (whole) {
+                        drawEachWhole(entries, shader);
+                    } else {
+                        drawSharing(type, entries, shader);
                     }
                     VertexBuffer.unbind();
                     if (shader.CHUNK_OFFSET != null) {
@@ -187,6 +211,41 @@ public final class GpuMesh implements AutoCloseable {
                 }
                 type.clearRenderState();
                 entries.clear();
+            }
+        }
+
+        /**
+         * The shader set up once — samplers, fog, lights, projection, all
+         * uniforms uploaded, the program bound — then per mesh only its
+         * model-view (and chunk offset) uploaded before the draw.
+         */
+        private static void drawSharing(RenderType type, List<Entry> entries, ShaderInstance shader) {
+            shader.setDefaultUniforms(type.mode(), entries.get(0).modelView, RenderSystem.getProjectionMatrix(),
+                    Minecraft.getInstance().getWindow());
+            shader.apply();
+            for (Entry entry : entries) {
+                if (shader.MODEL_VIEW_MATRIX != null) {
+                    shader.MODEL_VIEW_MATRIX.set(entry.modelView);
+                    shader.MODEL_VIEW_MATRIX.upload();
+                }
+                if (shader.CHUNK_OFFSET != null) {
+                    shader.CHUNK_OFFSET.set(entry.offsetX, entry.offsetY, entry.offsetZ);
+                    shader.CHUNK_OFFSET.upload();
+                }
+                entry.mesh.buffer.bind();
+                entry.mesh.buffer.draw();
+            }
+            shader.clear();
+        }
+
+        /** Every mesh with the shader set up, applied and cleared for it alone (a shader pack). */
+        private static void drawEachWhole(List<Entry> entries, ShaderInstance shader) {
+            for (Entry entry : entries) {
+                if (shader.CHUNK_OFFSET != null) {
+                    shader.CHUNK_OFFSET.set(entry.offsetX, entry.offsetY, entry.offsetZ);
+                }
+                entry.mesh.buffer.bind();
+                entry.mesh.buffer.drawWithShader(entry.modelView, RenderSystem.getProjectionMatrix(), shader);
             }
         }
     }

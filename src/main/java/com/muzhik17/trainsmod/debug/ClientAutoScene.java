@@ -39,7 +39,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *
  * <p>Some scenes keep a class of their own, on the same property: {@code
  * access} — who may touch a wagon — is {@link AccessScene}; {@code railperf},
- * {@code railedge} and {@code railfar} — the rail renderer — are {@link RailRenderScene}.
+ * {@code railedge} and {@code railfar} — the rail renderer — are {@link RailRenderScene};
+ * {@code depot} — the wagon renderer under load — is {@link DepotScene};
+ * {@code ride} is {@link RideScene}, and there are others.
  */
 @EventBusSubscriber(modid = RailsWheelsAndTrains.MODID, value = Dist.CLIENT)
 public final class ClientAutoScene {
