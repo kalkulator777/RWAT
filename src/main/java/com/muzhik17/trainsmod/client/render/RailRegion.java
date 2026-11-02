@@ -10,10 +10,13 @@ import com.muzhik17.trainsmod.client.render.TileSweeper.Tile;
 /**
  * One region of drawn track ({@link #SHIFT 64×64 blocks}, 4×4 chunks): the
  * tiles the {@link RailRenderer} bakes into the region's GPU meshes (one per
- * texture), grouped by segment so a graph edit replaces just the affected
- * segments' tiles, and the box the region is culled by. {@code dirty} marks
- * the meshes stale after a graph edit or a light change — the stale meshes
- * keep drawing until the re-bake lands. Pure (no MC imports); the
+ * texture), and the box the region is culled by. The static track is grouped
+ * by segment, so a graph edit replaces just the affected segments' tiles;
+ * the switch blades lying here, by their switch's node, so a throw re-sweeps
+ * and re-uploads just that switch's blades — they bake into meshes of their
+ * own, apart from the static track. {@code dirty} and {@code bladesDirty}
+ * mark either stale after an edit, a throw or a light change — the stale
+ * meshes keep drawing until the re-bake lands. Pure (no MC imports); the
  * renderer's subclass holds the meshes.
  */
 class RailRegion {
@@ -34,10 +37,15 @@ class RailRegion {
 
     /** {@link #key} of the region. */
     final long key;
+    /** Static track, by segment. */
     final Map<Integer, List<Tile>> bySegment = new HashMap<>();
+    /** Switch blades, by their switch's node. */
+    final Map<Integer, List<Tile>> bladesByNode = new HashMap<>();
     boolean dirty = true;
+    boolean bladesDirty = true;
+    /** Vertices of the static track (the bake budget's measure). */
     int vertexCount;
-    /** Bounds of the tile centres. */
+    /** Bounds of the tile centres, blades included. */
     double minX;
     double minY;
     double minZ;
@@ -62,38 +70,46 @@ class RailRegion {
 
     /** Add or replace one segment's tiles here. */
     void put(int segmentId, List<Tile> tiles) {
-        if (bySegment.put(segmentId, tiles) != null) {
-            recomputeBounds(); // replaced, not added: don't double-count
-        } else {
-            for (Tile tile : tiles) {
-                include(tile);
-            }
-        }
-        boundsChanged();
+        put(bySegment, segmentId, tiles);
         dirty = true;
     }
 
     /** Take one segment's tiles out. */
     void remove(int segmentId) {
-        if (bySegment.remove(segmentId) == null) {
-            return;
+        if (remove(bySegment, segmentId)) {
+            dirty = true;
         }
-        recomputeBounds();
-        boundsChanged();
-        dirty = true;
+    }
+
+    /** Add or replace the blades of the switch at {@code nodeId} lying here. */
+    void putBlades(int nodeId, List<Tile> tiles) {
+        put(bladesByNode, nodeId, tiles);
+        bladesDirty = true;
+    }
+
+    /** Take the blades of the switch at {@code nodeId} out. */
+    void removeBlades(int nodeId) {
+        if (remove(bladesByNode, nodeId)) {
+            bladesDirty = true;
+        }
     }
 
     boolean isEmpty() {
-        return bySegment.isEmpty();
+        return bySegment.isEmpty() && bladesByNode.isEmpty();
     }
 
-    /** Every tile of the region. */
+    boolean hasBlades() {
+        return !bladesByNode.isEmpty();
+    }
+
+    /** Every tile of the static track. */
     List<Tile> tiles() {
-        List<Tile> tiles = new ArrayList<>();
-        for (List<Tile> segmentTiles : bySegment.values()) {
-            tiles.addAll(segmentTiles);
-        }
-        return tiles;
+        return all(bySegment);
+    }
+
+    /** Every blade tile. */
+    List<Tile> bladeTiles() {
+        return all(bladesByNode);
     }
 
     /** The box the region is culled by, {minX, minY, minZ, maxX, maxY, maxZ}. */
@@ -106,21 +122,56 @@ class RailRegion {
     void boundsChanged() {
     }
 
-    private void include(Tile tile) {
+    private void put(Map<Integer, List<Tile>> map, int id, List<Tile> tiles) {
+        if (map.put(id, tiles) != null) {
+            recomputeBounds(); // replaced, not added: don't double-count
+        } else {
+            for (Tile tile : tiles) {
+                include(tile, map == bySegment);
+            }
+        }
+        boundsChanged();
+    }
+
+    private boolean remove(Map<Integer, List<Tile>> map, int id) {
+        if (map.remove(id) == null) {
+            return false;
+        }
+        recomputeBounds();
+        boundsChanged();
+        return true;
+    }
+
+    private static List<Tile> all(Map<Integer, List<Tile>> map) {
+        List<Tile> tiles = new ArrayList<>();
+        for (List<Tile> some : map.values()) {
+            tiles.addAll(some);
+        }
+        return tiles;
+    }
+
+    private void include(Tile tile, boolean counted) {
         minX = Math.min(minX, tile.cx);
         minY = Math.min(minY, tile.cy);
         minZ = Math.min(minZ, tile.cz);
         maxX = Math.max(maxX, tile.cx);
         maxY = Math.max(maxY, tile.cy);
         maxZ = Math.max(maxZ, tile.cz);
-        vertexCount += tile.template.vertexCount;
+        if (counted) {
+            vertexCount += tile.template.vertexCount;
+        }
     }
 
     private void recomputeBounds() {
         resetBounds();
         for (List<Tile> tiles : bySegment.values()) {
             for (Tile tile : tiles) {
-                include(tile);
+                include(tile, true);
+            }
+        }
+        for (List<Tile> tiles : bladesByNode.values()) {
+            for (Tile tile : tiles) {
+                include(tile, false);
             }
         }
     }
