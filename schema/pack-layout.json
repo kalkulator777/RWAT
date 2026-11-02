@@ -159,14 +159,14 @@
     "ru": "Не переводятся: id ливрей, подписи _LABEL_, названия стилей рельсов от конвертера (только en_us)."
   },
   "keywords": [
-    {"keyword": "description", "en": "English description (standard JSON Schema).", "ru": "Описание по-английски (стандарт JSON Schema)."},
+    {"keyword": "description", "en": "English description.", "ru": "Описание по-английски."},
     {"keyword": "x-description-ru", "en": "The same description in Russian.", "ru": "То же описание по-русски."},
     {"keyword": "default", "en": "The value the engine takes when the key is absent, when it is a constant.", "ru": "Значение, которое движок берёт без ключа, если это константа."},
     {"keyword": "x-engine-default", "en": "The engine's value when the key is absent and it is figured from other fields (a formula). x-engine-default-ru is its Russian wording where it needs words.", "ru": "Значение движка без ключа, когда оно считается из других полей (формула). x-engine-default-ru — русская формулировка, где нужны слова."},
     {"keyword": "x-unit", "en": "The unit of a number (see units).", "ru": "Единица числа (см. units)."},
     {"keyword": "x-frame", "en": "The coordinate frame of a point or box (see frames).", "ru": "Кадр координат точки или коробки (см. frames)."},
     {"keyword": "x-status", "en": "How far the engine follows the field: reserved or pending-engine (see statuses); x-status-note / x-status-note-ru say what exactly.", "ru": "Насколько движок следует полю: reserved или pending-engine (см. statuses); x-status-note / x-status-note-ru говорят, что именно."},
-    {"keyword": "deprecated", "en": "An old form the engine still reads; write the new one (standard JSON Schema).", "ru": "Старая форма, которую движок ещё читает; пишите новую (стандарт JSON Schema)."},
+    {"keyword": "deprecated", "en": "An old form the engine still reads; write the new one.", "ru": "Старая форма, которую движок ещё читает; пишите новую."},
     {"keyword": "x-file", "en": "Where the file a schema describes lives in a pack.", "ru": "Где в паке лежит файл, который описывает схема."},
     {"keyword": "x-code", "en": "The code that reads the file, relative to src/main/java/com/muzhik17/trainsmod/ or tools/.", "ru": "Код, который читает файл, — от src/main/java/com/muzhik17/trainsmod/ или tools/."}
   ],
