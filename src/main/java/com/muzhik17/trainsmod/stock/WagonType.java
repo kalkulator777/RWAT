@@ -175,7 +175,8 @@ public record WagonType(
      * A driver's chair (SPEC §9) in the <b>model's local frame</b>: the point
      * on top of the cushion a seated driver sits on, and which way they face
      * ({@code yaw} degrees, 0 = model +Z forward, +90 = towards −X, the
-     * entity yaw sense).
+     * entity yaw sense). A pack gives the point in the OBJ frame and the
+     * parser turns it ({@link ObjFrame}); the yaw is the same in both.
      */
     public record Seat(double x, double y, double z, float yaw) {
 
@@ -232,7 +233,8 @@ public record WagonType(
     /**
      * The walkable floor (SPEC v1.5-б, §9.1): one or more axis-aligned
      * <b>zones</b> in the <b>model's local frame</b> (+Z forward, +Y up, as the
-     * renderer uses). A rider boards as a passenger and walks the zones in
+     * renderer uses; a pack writes them in the OBJ frame and the parser turns
+     * them, {@link ObjFrame}). A rider boards as a passenger and walks the zones in
      * local coordinates, the body pose carrying them along for free. A
      * passenger car is one zone (the saloon); a locomotive is its cab plus the
      * walkways and end platforms of the frame. Each zone's {@code minY} is the
@@ -481,7 +483,8 @@ public record WagonType(
     /**
      * One doorway (SPEC v1.5, doors): the door leaf's box in the <b>model's
      * local frame</b> (+Z forward, +Y up), as measured from the asset's
-     * {@code DOOR_n} object. The box is thin along the wall it sits in — that
+     * {@code DOOR_n} object — a pack writes it in the OBJ frame and the
+     * parser turns it ({@link ObjFrame}). The box is thin along the wall it sits in — that
      * thinnest horizontal extent is the wall normal ({@link #axis}), and the
      * side of the body centre it lies on is the outward direction
      * ({@link #outward}). Closed, the door is part of the hull wall; open, the

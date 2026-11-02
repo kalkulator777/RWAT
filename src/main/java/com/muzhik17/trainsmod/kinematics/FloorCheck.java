@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Locale;
 
 import com.muzhik17.trainsmod.stock.FloorRegion;
+import com.muzhik17.trainsmod.stock.ObjFrame;
 import com.muzhik17.trainsmod.stock.WagonType;
 
 /**
@@ -22,7 +23,9 @@ import com.muzhik17.trainsmod.stock.WagonType;
  * (or at the wrong height for the floor there). The parts of the floor are
  * those with every door between zones shut ({@link
  * WagonType.Interior#region(double, List, int)}), joined where one opens.
- * Pure; the type
+ * A line that names a place or a size gives it in the OBJ frame, where the
+ * author measured it ({@link ObjFrame}): a chair at its {@code at}, a zone
+ * as its x (along the car) by z (across) extent. Pure; the type
  * registry logs what it finds on load, and a unit test runs it over every
  * type of the generated packs.
  */
@@ -78,9 +81,10 @@ public final class FloorCheck {
                 fits |= piece.touches(z.minX(), z.minZ(), z.maxX(), z.maxZ());
             }
             if (!fits && !pieces.isEmpty()) {
+                // x along the car by z across, as the OBJ frame has them
                 out.add(String.format(Locale.ROOT, "zone %d holds no place a player fits (%.2f x %.2f):"
                         + " widen it to %.1f or join it to a wider zone",
-                        i, z.maxX() - z.minX(), z.maxZ() - z.minZ(), 2 * M));
+                        i, z.maxZ() - z.minZ(), z.maxX() - z.minX(), 2 * M));
             }
         }
         // joined: by the floor alone (every door between zones shut), then by open doors too
@@ -208,9 +212,10 @@ public final class FloorCheck {
             }
             double height = seat.y() - floor;
             if (!(reach <= RiderWalk.SEAT_REACH) || !(height >= MIN_SEAT_HEIGHT && height <= MAX_SEAT_HEIGHT)) {
+                double[] at = ObjFrame.toObj(seat.x(), seat.y(), seat.z());
                 out.add(String.format(Locale.ROOT, "cab.seats[%d] (%.2f, %.2f, %.2f): the nearest place to stand"
                         + " is %.2f off (sitting reaches %.1f), its floor %.2f below the cushion (%.1f..%.1f;"
-                        + " the seat is the top of the cushion)", i, seat.x(), seat.y(), seat.z(), reach,
+                        + " the seat is the top of the cushion)", i, at[0], at[1], at[2], reach,
                         RiderWalk.SEAT_REACH, height, MIN_SEAT_HEIGHT, MAX_SEAT_HEIGHT));
             }
         }

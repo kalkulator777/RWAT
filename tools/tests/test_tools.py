@@ -114,7 +114,9 @@ class ConverterParityTest(unittest.TestCase):
     def test_floorgen_maps_the_coach(self):
         status, out, err = irpack.quiet(floorgen.main, [str(self.recipe), "test_coach", "--ascii", "--json"])
         self.assertEqual(status, 0, err)
-        self.assertIn("test_coach: level(s) [1.336]", out)
+        # the floor at OBJ y 0.9, found in the engine's frame and rounded there (1.336): 0.89975
+        self.assertIn("test_coach: level(s) [0.89975]", out)
+        self.assertIn("level 0.89975 (OBJ frame)", out)
 
 
 class FloorConfigTest(unittest.TestCase):
@@ -145,10 +147,14 @@ class FloorConfigTest(unittest.TestCase):
                 self.assertIsInstance(caught.exception, ValueError)
 
     def test_good_options(self):
-        config = floorgen.FloorConfig({"level": 1.81, "clearance": 0, "slab": [0.3, 1.8], "ignore": ["SEAT_.*"],
-                                       "add": [{"min": [0, 1.81, 0], "max": [1, 1.81, 1]}]})
-        self.assertEqual(config.levels, [1.81])
+        config = floorgen.FloorConfig({"level": 1.375, "clearance": 0, "slab": [0.3, 1.8], "ignore": ["SEAT_.*"],
+                                       "add": [{"min": [-1, 1.375, 0.5], "max": [2, 1.375, 1]}],
+                                       "remove": [{"min": [3, 1.375, -1], "max": [4, 1.375, 1]}]})
         self.assertEqual(config.clearance, 0.0)
+        # written in the OBJ frame, kept in the engine's: x = z, y + 0.43625, z = -x (min and max trade along it)
+        self.assertEqual(config.levels, [1.81125])
+        self.assertEqual(config.add, [{"min": [0.5, 1.81125, -2.0], "max": [1.0, 1.81125, 1.0]}])
+        self.assertEqual(config.remove, [{"min": [-1.0, 1.81125, -4.0], "max": [1.0, 1.81125, -3.0]}])
 
 
 class CommandLineTest(unittest.TestCase):

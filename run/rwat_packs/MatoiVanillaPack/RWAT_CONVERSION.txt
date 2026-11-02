@@ -1,5 +1,8 @@
 Matoi Vanilla Pack — converted for Rails, Wheels & Trains (RWAT)
 
+Namespace: mvp (the stock and the rail styles are mvp:<id>).
+RWAT pack format: 1.
+
 Converted by tools/ir2rwat.py from the Immersive Railroading pack(s):
   - MVP-IR-1.8-mc1.12.2-by-FrozeRain.zip (MVP 1.8) → assets/mvp/stock/
   - MVP-IR-1.7-bugfix-mc1.12.2-by-FrozeRain.zip (MVP 1.7 bugfix) → assets/mvp/stock_17/

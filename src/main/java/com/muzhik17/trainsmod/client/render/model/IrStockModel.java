@@ -15,6 +15,7 @@ import org.joml.Vector3f;
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.convention.ObjectRole;
 import com.muzhik17.trainsmod.convention.PivotAxis;
+import com.muzhik17.trainsmod.stock.ObjFrame;
 
 import net.minecraft.resources.ResourceLocation;
 
@@ -44,7 +45,8 @@ import net.minecraft.resources.ResourceLocation;
  * {@code WINDOW_n_…_INTERIOR_…}), and those must not vanish with distance.
  *
  * <p>Render model space is +Z forward (see {@link WagonModel}), so vertices
- * and normals are rotated +90° about Y at load: {@code (x,y,z) → (z,y,−x)}.
+ * and normals are rotated +90° about Y at load, the OBJ frame into the model
+ * frame of {@link ObjFrame}: {@code (x,y,z) → (z,y,−x)}.
  * (The first articulation play-test caught the sign: assuming +X front swapped
  * the bogie pivots, so each bogie orbited the other one's point.) Y is lifted
  * so the wheel <b>tread</b> — not the flange tip — sits on the railhead: the
@@ -70,16 +72,13 @@ import net.minecraft.resources.ResourceLocation;
  */
 public final class IrStockModel {
 
-    /** Railhead height above the path spline: RailRenderer.RAIL_Y_OFFSET (0.0) + rail 0.40625. */
-    private static final float RAIL_TOP = 0.0F + 0.40625F;
     /**
-     * Source y where the wheel tread (rolling circle, r = 0.53 around the axle
-     * at y = 0.5) bottoms out. The meshes' lowest wheel point is the flange tip
-     * at −0.0625; seating THAT on the railhead floated the whole train by the
-     * flange height 0.0325 (second ChME3 play-test fix).
+     * The lift of the source onto the railhead, {@link ObjFrame#Y_LIFT}: the
+     * wheel tread (source y = −0.03) onto the railhead (0.40625 above the path
+     * spline) — the same lift that puts a pack's markup, written in the OBJ
+     * frame, into this model space.
      */
-    private static final float TREAD_BOTTOM = -0.03F;
-    private static final float Y_LIFT = RAIL_TOP - TREAD_BOTTOM;
+    private static final float Y_LIFT = (float) ObjFrame.Y_LIFT;
 
     /** Rolling (tread) radius, blocks — wheel spin angle = rolled distance / radius. */
     private static final float WHEEL_RADIUS = 0.53F;

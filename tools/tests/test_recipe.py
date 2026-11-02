@@ -78,6 +78,69 @@ class RecipeTest(unittest.TestCase):
         self.assertIn("sources[0]: unknown key \"lable\", ignored — did you mean \"label\"?", out)
         self.assertIn("\"copy_root_files\": Credits.txt is not in ir.zip", out)
 
+    def test_comment_keys_are_dropped_silently_at_any_depth(self):
+        self.per_type("test_coach", {
+            "_comment": "the coach of the test pack",
+            "name": {"_why": "a note", "ru_ru": "Вагон"},
+            "floor": {"_comment": "the defaults", "clearance": 0.1},
+            "type": {"_comment": "heavier", "mass_t": 31.0,
+                     "doors": {"_comment": "not a door", "door_3": {"_why": "a note", "inner": None}}},
+            "model": {"_comment": "a note", "sway": 1.5},
+        })
+        recipe = self.recipe(overrides_dir="tp", _comment="the recipe's own note",
+                             rail_overrides={"rail_a": {"_comment": "a note", "tile_length": 2.0}},
+                             sound_defaults={"_comment": "none", "clack": "sounds/coach/hum.ogg"})
+        data = json.loads(recipe.read_text("utf-8"))
+        data["sources"][0]["_comment"] = "the only source"
+        recipe.write_text(json.dumps(data), encoding="utf-8")
+        status, out, err = irpack.convert(recipe)
+        self.assertEqual(status, 0, out + err)
+        self.assertNotIn("unknown key", out)
+        self.assertNotIn("_comment", out + err)
+        wagon = self.wagon("test_coach")
+        self.assertEqual(wagon["mass_t"], 31.0)
+        self.assertEqual({d["id"]: d.get("inner") for d in wagon["doors"]}["door_3"], None)
+        written = [p.read_text("utf-8") for p in self.pack.rglob("*.json")] + [(self.pack / "pack.mcmeta").read_text()]
+        self.assertFalse(any("_comment" in text or "_why" in text for text in written))
+        rail = json.loads((self.pack / "assets/tp/rail_models/rail_a.json").read_text("utf-8"))
+        self.assertEqual(rail["tile_length"], 2.0)
+
+    def test_a_comment_key_is_no_language_no_id_and_no_field_of_a_listed_object(self):
+        # where a key is a language, a light group or a door id, a comment would become one;
+        # in an object inside a list it would be merged as a field
+        self.per_type("test_coach", {
+            "name": {"_c": "a note", "ru_ru": "Вагон"},
+            "lights": {"_c": {"en_us": "not a group"}},
+            "type": {
+                "interior": [{"_c": "the saloon", "min": [-4.5, 0.9, -1.3], "max": [4.5, 3.4, 1.3]}],
+                "doors": [{"_c": "a note", "id": "door_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]}],
+                "cab": {"seats": [{"_c": "the driver", "at": [-4.0, 1.4, 0.6]}]},
+            },
+            "model": {"animations": {"_c": "not a door"}},
+        })
+        status, out, err = irpack.convert(self.recipe(overrides_dir="tp"))
+        self.assertEqual(status, 0, out + err)
+        self.assertEqual(sorted(p.name for p in (self.pack / "assets/tp/lang").iterdir()), ["en_us.json", "ru_ru.json"])
+        for lang in ("en_us", "ru_ru"):
+            keys = json.loads((self.pack / f"assets/tp/lang/{lang}.json").read_text("utf-8"))
+            self.assertFalse([k for k in keys if "_c" in k.split(".")], keys)
+        wagon = self.wagon("test_coach")
+        self.assertEqual(wagon["interior"], [{"min": [-4.5, 0.9, -1.3], "max": [4.5, 3.4, 1.3]}])
+        self.assertEqual(wagon["doors"], [{"id": "door_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]}])
+        self.assertEqual(wagon["cab"], {"seats": [{"at": [-4.0, 1.4, 0.6]}]})
+        model = json.loads((self.pack / "assets/tp/wagon_models/test_coach.json").read_text("utf-8"))
+        self.assertNotIn("_c", model.get("animations", {}))
+
+    def test_without_comments_reaches_into_lists(self):
+        self.assertEqual(ir2rwat.without_comments({"_a": 1, "b": [{"_c": 2, "d": [{"_e": 3, "f": 4}]}, "_g"]}),
+                         {"b": [{"d": [{"f": 4}]}, "_g"]})
+
+    def test_unknown_sound_defaults_key_is_warned(self):
+        status, out, err = irpack.convert(self.recipe(sound_defaults={"clak": "sounds/coach/hum.ogg"}))
+        self.assertEqual(status, 0, out + err)
+        self.assertIn("recipe.json: \"sound_defaults\": unknown key \"clak\", ignored — did you mean \"clack\"?", out)
+        self.assertEqual(ir2rwat.SOUND_DEFAULTS_KEYS, ("clack", "wheels"))
+
     # ------------------------------------------------------------- null and layering
 
     def test_null_in_the_per_type_file_survives_the_inline_override(self):
@@ -169,8 +232,9 @@ class RecipeTest(unittest.TestCase):
         self.assertEqual(status, 1, out + err)
         self.assertIn("ERROR: test_coach: no generated floor — \"floor\": unknown key(s) ['clearence']", out)
         interior = self.wagon("test_coach")["interior"]
-        self.assertIsInstance(interior, dict)  # IR's passenger area: one zone
-        self.assertEqual(interior["min"][2], -4.5)
+        self.assertIsInstance(interior, dict)  # IR's passenger area: one zone, in the OBJ frame
+        self.assertEqual(interior["min"][0], -4.5)
+        self.assertEqual(interior["max"][2], 1.3)
 
     def test_floor_false_keeps_the_ir_floor_without_complaint(self):
         self.per_type("test_coach", {"floor": False})
