@@ -16,8 +16,9 @@ import net.minecraft.resources.ResourceLocation;
  * {@code exit} edge (right-click) requesting
  * dismount. Sent every client tick while riding a boardable interior so the
  * server has a continuous signal; the server validates the sender actually
- * rides a boardable wagon and is authoritative over the resulting local
- * position (it clamps against the interior walls).
+ * rides a boardable wagon, steps it one input a tick ({@code WalkBudget}: a
+ * client sending more walks no faster) and is authoritative over the
+ * resulting local position (it clamps against the interior walls).
  *
  * <p>{@code seq} numbers the client's walk inputs: the server says with each
  * rider sync which one its feet are after ({@code RiderSyncPayload}), and

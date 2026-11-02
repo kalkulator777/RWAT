@@ -13,7 +13,9 @@ import com.muzhik17.trainsmod.client.render.model.StockModels;
 import com.muzhik17.trainsmod.consist.CabAccess;
 import com.muzhik17.trainsmod.consist.Consist;
 import com.muzhik17.trainsmod.consist.Handles;
+import com.muzhik17.trainsmod.consist.TouchRules;
 import com.muzhik17.trainsmod.consist.WagonEntity;
+import com.muzhik17.trainsmod.consist.WagonTouch;
 import com.muzhik17.trainsmod.convention.ControlValue;
 import com.muzhik17.trainsmod.convention.ObjectRole;
 import com.muzhik17.trainsmod.kinematics.HullCollision;
@@ -53,9 +55,10 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * controls (SPEC §9.7: in the driver's chair) and, while nobody sits at the
  * controls of the train, for one standing in the cab (SPEC §9.2); elsewhere
  * they are named with the reason. Right-clicking the driver's chair sits
- * down. What the server would refuse isn't sent: a car with a cab wants the
- * driver's key if the server says so — the label says it, and a click on
- * the action bar.
+ * down. What the server would refuse isn't sent ({@link TouchRules}, as the
+ * server decides): a car with a cab wants the driver's key if the server says
+ * so — the label says it, and a click on the action bar; the handbrake wheel
+ * turns only for a rider of its car; a spectator works nothing.
  *
  * <p>Controls are picked like doors: the look ray goes into the wagon's local
  * frame (and the model's, for a turned wagon) and is tested against each
@@ -96,6 +99,10 @@ public final class ClientCabInteract {
     private static String hoverRefusal;
     /** The refusal that names the driver's key (SPEC §9.2). */
     private static final String KEY_NEEDED = "message.railswheelsandtrains.need_key";
+    /** A handle lever away from the cab it is in. */
+    private static final String FROM_CAB = "control.railswheelsandtrains.from_cab";
+    /** The handbrake wheel of a car the player doesn't ride. */
+    private static final String FROM_INSIDE = "control.railswheelsandtrains.from_inside";
     /**
      * False after a click until the use button is released: vanilla repeats
      * use while it is held, and the repeats go nowhere ({@link ClientWagonRay#onUseHeld}).
@@ -205,32 +212,52 @@ public final class ClientCabInteract {
 
     /**
      * Why the local player can't work this control or chair ({@code control}
-     * null) now, as a translation key; null if they can. Anything of a car
-     * with a cab wants the driver's key, if the server wants it (SPEC §9.2).
-     * A handle lever moves from the controls of its own wagon — the
-     * driver's chair, a cab without a walkable interior — or standing in its
-     * cab while nobody sits at any controls of the train (the server takes
-     * handles from its driver, SPEC §9.2, §9.7); switches, windows and the
-     * rest from anywhere in reach.
+     * null) now, as a translation key; null if they can. First as the server
+     * decides ({@link TouchRules}; a pick is within reach): anything of a car
+     * with a cab wants the driver's key, if the server wants it (SPEC §9.2);
+     * the handbrake wheel turns only for a rider of its car (the crowbar in
+     * hand: from wherever it reaches the car); switches, windows and the rest
+     * from anywhere in reach. Then a handle lever moves from the controls of
+     * its own wagon — the driver's chair, a cab without a walkable interior —
+     * or standing in its cab while nobody sits at any controls of the train
+     * (the server takes handles from its driver, SPEC §9.2, §9.7).
      */
     private static String refusal(WagonEntity wagon, StockModel.Control control) {
         LocalPlayer player = Minecraft.getInstance().player;
         if (player == null) {
             return KEY_NEEDED;
         }
-        ConsistComposition.Slot slot = ClientConsists.slot(wagon.getConsistId(), wagon.getWagonIndex());
-        if (slot != null && slot.type().drivable() && !CabAccess.mayWork(player)) {
+        TouchRules.Action action = action(control);
+        TouchRules.Refusal refusal = TouchRules.check(action, WagonTouch.facts(player, wagon).inReach(true));
+        if (refusal == TouchRules.Refusal.NEED_KEY) {
             return KEY_NEEDED;
         }
-        if (control == null || ControlValue.handle(control.role().kind()) == null
-                || player.getVehicle() == wagon && ClientDriveInput.atControls(wagon, player)) {
+        if (refusal != null) {
+            return action == TouchRules.Action.HANDBRAKE ? FROM_INSIDE : FROM_CAB;
+        }
+        if (action != TouchRules.Action.LEVER || ClientDriveInput.atControls(wagon, player)) {
             return null;
         }
-        if (player.getVehicle() != wagon || wagon.cabOf(player) < 0) {
-            return "control.railswheelsandtrains.from_cab";
+        if (wagon.cabOf(player) < 0) {
+            return FROM_CAB;
         }
         return ClientDriveInput.anyoneAtControls(wagon.getConsistId())
                 ? "control.railswheelsandtrains.driver_seated" : null;
+    }
+
+    /** What working a control (a chair: {@code control} null) does to its wagon, as the server reads it. */
+    private static TouchRules.Action action(StockModel.Control control) {
+        if (control == null) {
+            return TouchRules.Action.SEAT;
+        }
+        ObjectRole.Control role = control.role();
+        if (role.kind() == ObjectRole.Kind.HANDBRAKE) {
+            return TouchRules.Action.HANDBRAKE;
+        }
+        if (ControlValue.handle(role.kind()) != null) {
+            return TouchRules.Action.LEVER;
+        }
+        return role.global() ? TouchRules.Action.GLOBAL_SWITCH : TouchRules.Action.SWITCH;
     }
 
     /**
@@ -323,7 +350,7 @@ public final class ClientCabInteract {
     static void frame(Minecraft mc, LocalPlayer player, ClientWagonRay.Look look) {
         Grab current = grab;
         if (current == null) {
-            hover = mc.screen == null && !player.isSpectator() ? pick(mc, player, look) : null;
+            hover = mc.screen == null && WagonTouch.present(player) ? pick(mc, player, look) : null;
             hoverRefusal = hover == null ? null : refusal(hover.wagon, hover.control);
             return;
         }

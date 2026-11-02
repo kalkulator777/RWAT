@@ -6,11 +6,12 @@ import com.muzhik17.trainsmod.client.ClientPackCheck;
 import com.muzhik17.trainsmod.client.ClientRailGraph;
 import com.muzhik17.trainsmod.client.ClientRiderSync;
 import com.muzhik17.trainsmod.client.ClientWalk;
-import com.muzhik17.trainsmod.consist.CabAccess;
 import com.muzhik17.trainsmod.consist.Consist;
 import com.muzhik17.trainsmod.consist.ConsistManager;
 import com.muzhik17.trainsmod.consist.RollingStockItem;
+import com.muzhik17.trainsmod.consist.TouchRules;
 import com.muzhik17.trainsmod.consist.WagonEntity;
+import com.muzhik17.trainsmod.consist.WagonTouch;
 import com.muzhik17.trainsmod.rail.BedMaterial;
 import com.muzhik17.trainsmod.stock.WagonType;
 import com.muzhik17.trainsmod.stock.WagonTypes;
@@ -26,6 +27,11 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 /**
  * Payload registration. Wired from the main mod class constructor
  * (mod event bus).
+ *
+ * <p>Everything a client sends about a wagon the server decides by one rule
+ * ({@link WagonTouch}, {@link TouchRules}): in the game (not a spectator, not
+ * dead), aboard or within reach of what is touched, the right to build for
+ * what changes the world, the driver's key for a cab. A refusal is quiet.
  */
 public final class RwatNetwork {
 
@@ -79,7 +85,7 @@ public final class RwatNetwork {
      * of its front-most manned cab — so a passenger or a second cab can't
      * fight the driver. With nobody at the controls, by anyone standing in
      * the leading cab (SPEC §9.2: the levers are worked standing too); the
-     * driver's key, if the server wants it, either way.
+     * driver's key, if the server wants it, either way ({@link TouchRules.Action#LEVER}).
      */
     private static void handleCabLever(CabLeverPayload payload, IPayloadContext context) {
         Consist.Handle handle = Consist.Handle.byOrdinal(payload.handle());
@@ -90,7 +96,8 @@ public final class RwatNetwork {
             return;
         }
         Consist consist = ConsistManager.get(level).byId(wagon.getConsistId());
-        if (consist != null && CabAccess.check(player) && ConsistManager.mayMoveHandles(level, consist, player)) {
+        if (consist != null && WagonTouch.allows(player, wagon, TouchRules.Action.LEVER,
+                WagonTouch.facts(player, wagon)) && ConsistManager.mayMoveHandles(level, consist, player)) {
             consist.setHandle(handle, payload.value());
         }
     }
@@ -101,7 +108,7 @@ public final class RwatNetwork {
      * the group on every wagon of its train, as IR does. A switch of a car
      * with a cab wants the driver's key if the server wants it (SPEC §9.2).
      * A light group for the whole train (the driver's panel): only by its
-     * driver at the controls (SPEC §9.7).
+     * driver at the controls (SPEC §9.7). Decided by {@link TouchRules}.
      */
     private static void handleControlGroup(ControlGroupPayload payload, IPayloadContext context) {
         if (!(context.player() instanceof ServerPlayer player)
@@ -110,23 +117,23 @@ public final class RwatNetwork {
         }
         Consist consist;
         if (payload.scope() != ControlGroupPayload.Scope.PANEL) {
-            if (!(level.getEntity(payload.targetId()) instanceof WagonEntity wagon)
-                    || (player.getVehicle() != wagon && !wagon.withinReach(player))) {
+            if (!(level.getEntity(payload.targetId()) instanceof WagonEntity wagon)) {
                 return;
             }
-            WagonType type = wagon.typeNow();
-            if (type != null && type.drivable() && !CabAccess.check(player)) {
+            boolean global = payload.scope() == ControlGroupPayload.Scope.GLOBAL_SWITCH;
+            TouchRules.Facts facts = WagonTouch.facts(player, wagon);
+            if (!WagonTouch.allows(player, wagon, global ? TouchRules.Action.GLOBAL_SWITCH : TouchRules.Action.SWITCH,
+                    facts.inReach(!facts.aboard() && wagon.withinReach(player)))) {
                 return;
             }
-            consist = payload.scope() == ControlGroupPayload.Scope.GLOBAL_SWITCH
-                    ? ConsistManager.get(level).byId(wagon.getConsistId()) : null;
+            consist = global ? ConsistManager.get(level).byId(wagon.getConsistId()) : null;
             if (consist == null) {
                 wagon.setControl(payload.group(), payload.value());
                 return;
             }
         } else {
             consist = ConsistManager.get(level).byId(payload.targetId());
-            if (consist == null || !ConsistManager.atPanel(level, consist, player)) {
+            if (consist == null || !atPanel(level, consist, player)) {
                 return;
             }
         }
@@ -151,7 +158,7 @@ public final class RwatNetwork {
         }
         Consist consist = ConsistManager.get(level).byId(payload.consistId());
         ConsistManager.Driver driver = consist == null ? null : ConsistManager.driverOf(level, consist);
-        if (driver == null || !driver.seated() || driver.player() != player) {
+        if (driver == null || !atPanel(level, consist, player)) {
             return;
         }
         for (java.util.UUID id : consist.wagonIds()) {
@@ -171,6 +178,18 @@ public final class RwatNetwork {
                 }
             }
         }
+    }
+
+    /**
+     * True if {@code player} is at the driver's panel of the consist — its
+     * driver, seated at the controls ({@link ConsistManager#atPanel}) — and
+     * may work it ({@link TouchRules.Action#PANEL}).
+     */
+    private static boolean atPanel(ServerLevel level, Consist consist, ServerPlayer player) {
+        ConsistManager.Driver driver = ConsistManager.driverOf(level, consist);
+        return driver != null && driver.seated() && driver.player() == player
+                && WagonTouch.allows(player, driver.cab(), TouchRules.Action.PANEL,
+                        WagonTouch.facts(player, driver.cab()));
     }
 
     /** Sit down in / stand up from one of a cab's driver's chairs (SPEC §9). */
@@ -233,14 +252,14 @@ public final class RwatNetwork {
     }
 
     /**
-     * Uncouple at the coupler a crowbar was used on (SPEC §6.12). Only with
-     * the crowbar in hand, and the consist checks the coupler is within the
-     * player's reach — a client can't cut trains across the map.
+     * Uncouple at the coupler a crowbar was used on (SPEC §6.12). The manager
+     * checks the crowbar is in hand, the coupler within the player's reach and
+     * the player may build there ({@link TouchRules.Action#UNCOUPLE}) — a
+     * client can't cut trains across the map, nor a spectator at all.
      */
     private static void handleUncouple(UncouplePayload payload, IPayloadContext context) {
         if (context.player() instanceof ServerPlayer player
                 && player.level() instanceof ServerLevel level
-                && player.getMainHandItem().is(RailsWheelsAndTrains.CROWBAR.get())
                 && level.getEntity(payload.wagonId()) instanceof WagonEntity wagon) {
             ConsistManager.get(level).uncoupleBy(level, player, wagon, payload.front());
         }
@@ -248,20 +267,16 @@ public final class RwatNetwork {
 
     /**
      * Set or release a wagon's handbrake (SPEC §5.3) — the crowbar on its body
-     * from outside, or its handbrake wheel in the cab (or the driving key for
-     * it); either way the manager checks the reach. The wheel of a car with a
-     * cab is a control of the cab: the driver's key if the server wants it
-     * (SPEC §9.2). The crowbar is a tool of its own and works any car's.
+     * within reach, or its handbrake wheel (or the driving key for it) from
+     * aboard the car; the manager checks which ({@link
+     * TouchRules.Action#HANDBRAKE}). The wheel of a car with a cab is a
+     * control of the cab: the driver's key if the server wants it (SPEC
+     * §9.2). The crowbar is a tool of its own and works any car's.
      */
     private static void handleHandbrake(HandbrakePayload payload, IPayloadContext context) {
         if (context.player() instanceof ServerPlayer player
                 && player.level() instanceof ServerLevel level
                 && level.getEntity(payload.wagonId()) instanceof WagonEntity wagon) {
-            WagonType type = wagon.typeNow();
-            if (!player.getMainHandItem().is(RailsWheelsAndTrains.CROWBAR.get())
-                    && type != null && type.drivable() && !CabAccess.check(player)) {
-                return;
-            }
             ConsistManager.get(level).toggleHandbrakeBy(player, wagon);
         }
     }
@@ -309,7 +324,8 @@ public final class RwatNetwork {
         }
         Consist consist = ConsistManager.get(level).byId(payload.consistId());
         ConsistManager.Driver driver = consist == null ? null : ConsistManager.driverOf(level, consist);
-        if (driver != null && driver.seated() && driver.player() == player) {
+        if (driver != null && driver.seated() && driver.player() == player
+                && WagonTouch.allows(player, wagon, TouchRules.Action.LEVER, WagonTouch.facts(player, wagon))) {
             consist.setDriveInput(payload.throttleDir(), payload.brakeDir(), payload.indBrakeDir(),
                     payload.reverserToggle(), payload.signals());
         }

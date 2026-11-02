@@ -8,7 +8,9 @@ import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.client.render.model.StockModel;
 import com.muzhik17.trainsmod.client.render.model.StockModels;
 import com.muzhik17.trainsmod.consist.CabAccess;
+import com.muzhik17.trainsmod.consist.TouchRules;
 import com.muzhik17.trainsmod.consist.WagonEntity;
+import com.muzhik17.trainsmod.consist.WagonTouch;
 import com.muzhik17.trainsmod.kinematics.HullCollision;
 import com.muzhik17.trainsmod.network.DoorTogglePayload;
 import com.muzhik17.trainsmod.stock.WagonType;
@@ -47,8 +49,10 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * button is released — till then the repeats go nowhere
  * ({@link ClientWagonRay#onUseHeld}), wherever the crosshair has gone.
  *
- * <p>A door into a cab, on a server whose cabs want the driver's key (SPEC
- * §9.2), isn't sent without one: the action bar says the key is needed.
+ * <p>What the server would refuse isn't sent ({@link TouchRules}, as the
+ * server decides): a spectator picks no door at all, and a door into a cab,
+ * on a server whose cabs want the driver's key (SPEC §9.2), isn't sent
+ * without one — it is outlined red and the action bar says the key is needed.
  */
 @EventBusSubscriber(modid = RailsWheelsAndTrains.MODID, value = Dist.CLIENT)
 public final class ClientDoorInteract {
@@ -72,9 +76,12 @@ public final class ClientDoorInteract {
     private ClientDoorInteract() {
     }
 
-    /** Pick the door under the crosshair for this frame (SPEC §9.3: as drawn, from the frame's eye). */
+    /**
+     * Pick the door under the crosshair for this frame (SPEC §9.3: as drawn,
+     * from the frame's eye); none for a spectator.
+     */
     static void frame(Minecraft mc, LocalPlayer player, ClientWagonRay.Look look) {
-        framePick = pick(mc, player, look);
+        framePick = WagonTouch.present(player) ? pick(mc, player, look) : null;
     }
 
     /**
@@ -97,8 +104,13 @@ public final class ClientDoorInteract {
     public static boolean highlightLocked() {
         Pick pick = framePick;
         LocalPlayer player = Minecraft.getInstance().player;
-        return pick != null && player != null && pick.wagon().cabArea().cabDoor(pick.door())
-                && !CabAccess.mayWork(player);
+        return pick != null && player != null && refusal(player, pick) == TouchRules.Refusal.NEED_KEY;
+    }
+
+    /** Why the player may not work the picked door ({@link TouchRules}; a pick is within reach), null if they may. */
+    private static TouchRules.Refusal refusal(LocalPlayer player, Pick pick) {
+        return TouchRules.check(TouchRules.Action.DOOR, WagonTouch.facts(player, pick.wagon()).inReach(true)
+                .cabDoor(pick.wagon().cabArea().cabDoor(pick.door())));
     }
 
     @SubscribeEvent(priority = EventPriority.LOW) // after the cab's controls (ClientCabInteract)
@@ -116,13 +128,14 @@ public final class ClientDoorInteract {
             return;
         }
         event.setCanceled(true); // the click belongs to the door, not an item or block
-        // a door into a cab wants the driver's key, if the server wants it (SPEC §9.2): not sent
-        boolean locked = pick.wagon().cabArea().cabDoor(pick.door()) && !CabAccess.mayWork(player);
-        event.setSwingHand(!locked);
+        // what the server would refuse isn't sent: a door into a cab wants the driver's key,
+        // if the server wants it (SPEC §9.2)
+        TouchRules.Refusal refusal = refusal(player, pick);
+        event.setSwingHand(refusal == null);
         armed = false; // a new click: the repeats of a held one never get here
-        if (locked) {
+        if (refusal == TouchRules.Refusal.NEED_KEY) {
             CabAccess.refuse(player);
-        } else {
+        } else if (refusal == null) {
             PacketDistributor.sendToServer(new DoorTogglePayload(pick.wagon().getId(), pick.door()));
         }
     }
