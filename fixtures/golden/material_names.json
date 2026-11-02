@@ -1,0 +1,75 @@
+{
+  "$comment": "MTL newmtl / OBJ usemtl line -> the material's name (MtlParser.materialName; tools/ir2rwat.py material_name). input.line, input.keyword; expected: the name, or null if the line isn't a keyword line or names nothing.",
+  "cases": [
+    {
+      "name": "newmtl",
+      "input": {"line": "newmtl body", "keyword": "newmtl"},
+      "expected": "body"
+    },
+    {
+      "name": "a blank inside",
+      "input": {"line": "newmtl Dark Wood", "keyword": "newmtl"},
+      "expected": "Dark Wood"
+    },
+    {
+      "name": "usemtl with a copy suffix",
+      "input": {"line": "usemtl Dark Wood.001", "keyword": "usemtl"},
+      "expected": "Dark Wood.001"
+    },
+    {
+      "name": "blanks inside kept, ends dropped",
+      "input": {"line": "  newmtl   Dark   Wood  ", "keyword": "newmtl"},
+      "expected": "Dark   Wood"
+    },
+    {
+      "name": "a tab after the keyword",
+      "input": {"line": "newmtl\tDark Wood", "keyword": "newmtl"},
+      "expected": "Dark Wood"
+    },
+    {
+      "name": "a hash is part of the name",
+      "input": {"line": "usemtl Wood # not a comment", "keyword": "usemtl"},
+      "expected": "Wood # not a comment"
+    },
+    {
+      "name": "a CR at the end",
+      "input": {"line": "newmtl glass\r", "keyword": "newmtl"},
+      "expected": "glass"
+    },
+    {
+      "name": "Cyrillic",
+      "input": {"line": "newmtl Тёмное дерево", "keyword": "newmtl"},
+      "expected": "Тёмное дерево"
+    },
+    {
+      "name": "naming nothing",
+      "input": {"line": "newmtl", "keyword": "newmtl"},
+      "expected": null
+    },
+    {
+      "name": "blanks naming nothing",
+      "input": {"line": "newmtl   ", "keyword": "newmtl"},
+      "expected": null
+    },
+    {
+      "name": "a longer keyword",
+      "input": {"line": "newmtlx body", "keyword": "newmtl"},
+      "expected": null
+    },
+    {
+      "name": "another keyword",
+      "input": {"line": "usemtl body", "keyword": "newmtl"},
+      "expected": null
+    },
+    {
+      "name": "a comment",
+      "input": {"line": "# newmtl body", "keyword": "newmtl"},
+      "expected": null
+    },
+    {
+      "name": "mtllib",
+      "input": {"line": "mtllib body.mtl", "keyword": "usemtl"},
+      "expected": null
+    }
+  ]
+}

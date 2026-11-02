@@ -14,6 +14,7 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
+import com.muzhik17.trainsmod.convention.DoorLeaves;
 import com.muzhik17.trainsmod.convention.GroupName;
 import com.muzhik17.trainsmod.convention.ObjectRole;
 import com.muzhik17.trainsmod.convention.PivotAxis;
@@ -69,8 +70,8 @@ import net.minecraft.resources.ResourceLocation;
  * materials without a diffuse map. Groups listed under the declaration's
  * {@code animations} are animated from their IR {@code .anim} ({@link IrAnim});
  * cab controls ({@code THROTTLE_*}, {@code WIDGET_*}, {@code GAUGE_*}…) and
- * door leaves moved by name ({@code DOOR_<n>} with {@code ROT_}/{@code TL_})
- * are split out to move by their values (SPEC §9.3, §9.5).
+ * door leaves moved by name ({@code DOOR_<n>} with {@code ROT_}/{@code TL_},
+ * {@link DoorLeaves}) are split out to move by their values (SPEC §9.3, §9.5).
  */
 public final class IrStockModel {
 
@@ -130,34 +131,32 @@ public final class IrStockModel {
 
     /**
      * Accumulates one cab control (SPEC §9.3): the objects sharing its IR key,
-     * the merged naming flags, and its pivot marker's points (source space).
+     * the merged naming flags, and the corners of its hinge marker (source space, file order).
      */
     private static final class ControlBuilder {
         ObjectRole.Control role;
         final Map<ResourceLocation, Mesh> meshes = new LinkedHashMap<>();
         boolean interior;
-        boolean hasPivot;
+        /** The control's hinge marker: its first object named …_ROT…, all of whose faces count. */
+        String pivotObject;
         float degrees;
-        final List<float[]> pivotPoints = new ArrayList<>();
+        final List<float[]> pivotCorners = new ArrayList<>();
         final float[] box = {Float.MAX_VALUE, Float.MAX_VALUE, Float.MAX_VALUE,
                 -Float.MAX_VALUE, -Float.MAX_VALUE, -Float.MAX_VALUE};
 
         void add(ObjectRole objectRole, String object, ObjLoader.Part part) {
             role = role == null ? objectRole.control() : merge(role, objectRole.control());
             interior |= ObjectRole.hasToken(object, "INTERIOR");
-            if (objectRole.pivot() && !hasPivot) {
+            if (objectRole.pivot() && pivotObject == null) {
                 // IR takes the first object of the control named …_ROT…
-                hasPivot = true;
+                pivotObject = object;
                 degrees = objectRole.pivotDegrees();
-                Set<Long> seen = new HashSet<>();
+            }
+            if (object.equals(pivotObject)) {
+                // every face of it, whatever its material: the corners in file order (PivotAxis)
                 for (Mesh.Quad q : part.mesh().quads()) {
                     for (Mesh.Vertex v : new Mesh.Vertex[]{q.v0(), q.v1(), q.v2(), q.v3()}) {
-                        long key = (long) Math.round(v.x() * 1.0e4F) * 73856093L
-                                ^ (long) Math.round(v.y() * 1.0e4F) * 19349663L
-                                ^ (long) Math.round(v.z() * 1.0e4F) * 83492791L;
-                        if (seen.add(key)) {
-                            pivotPoints.add(new float[]{v.x(), v.y(), v.z()});
-                        }
+                        pivotCorners.add(new float[]{v.x(), v.y(), v.z()});
                     }
                 }
             }
@@ -178,11 +177,11 @@ public final class IrStockModel {
             }
             Vector3f pivot = null;
             Vector3f axis = new Vector3f(0.0F, 1.0F, 0.0F);
-            if (hasPivot && !pivotPoints.isEmpty()) {
-                float[][] pa = PivotAxis.of(pivotPoints);
+            if (!pivotCorners.isEmpty()) {
+                double[][] pa = PivotAxis.of(pivotCorners);
                 // source → model space: (x, y, z) → (z, y + lift, −x); axes turn alike
-                pivot = new Vector3f(pa[0][2], pa[0][1] + Y_LIFT, -pa[0][0]);
-                axis = new Vector3f(pa[1][2], pa[1][1], -pa[1][0]);
+                pivot = new Vector3f((float) pa[0][2], (float) (pa[0][1] + ObjFrame.Y_LIFT), (float) -pa[0][0]);
+                axis = new Vector3f((float) pa[1][2], (float) pa[1][1], (float) -pa[1][0]);
             }
             Vector3f slide = new Vector3f(role.slideZ(), role.slideY(), -role.slideX());
             return new StockModel.Control(role, meshes, interior, pivot, axis, degrees, slide,
@@ -318,7 +317,8 @@ public final class IrStockModel {
         Map<String, DoorBuilder> doors = new LinkedHashMap<>();
         Map<String, ControlBuilder> controls = new LinkedHashMap<>();
         Map<String, ControlBuilder> leaves = new LinkedHashMap<>();
-        Set<String> movingDoors = movingDoors(obj.parts(), skipPrefixes, animated);
+        DoorLeaves doorLeaves = DoorLeaves.of(obj.parts().stream().map(ObjLoader.Part::object).toList(),
+                skipPrefixes, animated.keySet());
         List<String> lightGroups = new ArrayList<>();
         Set<Integer> interiorGroups = new HashSet<>();
         List<StockModel.Lamp> lampCandidates = new ArrayList<>();
@@ -351,11 +351,9 @@ public final class IrStockModel {
                 continue;
             }
             AnimTrack track = bogie == null && coupler == null ? animated.get(object) : null;
-            // a door leaf moved by name is built like a control (SPEC §9.5)
-            ObjectRole leafRole = bogie == null && track == null && coupler == null ? ObjectRole.door(object) : null;
-            if (leafRole != null && !movingDoors.contains(leafRole.control().key())) {
-                leafRole = null; // a door the asset doesn't move: part of the body
-            }
+            // a door leaf moved by name is built like a control (SPEC §9.5); a DOOR_<n>
+            // object the asset doesn't move is part of the body
+            ObjectRole leafRole = doorLeaves.leaf(object);
             ControlBuilder control = leafRole != null
                     ? leaves.computeIfAbsent(leafRole.control().key(), k -> new ControlBuilder())
                     : bogie == null && track == null && role.control() != null
@@ -666,30 +664,6 @@ public final class IrStockModel {
             }
         }
         return tracks;
-    }
-
-    /**
-     * The {@code DOOR_<n>} keys the asset moves by name: any object of the
-     * door, drawn and not animated by an {@code .anim}, is its hinge
-     * ({@code DOOR_<n>_ROT…}) or slides ({@code TL_<f>_<axis>}). IR reads a
-     * door's flags from any of its objects, so the whole door moves.
-     */
-    private static Set<String> movingDoors(List<ObjLoader.Part> parts, List<String> skipPrefixes,
-            Map<String, AnimTrack> animated) {
-        Set<String> moving = new HashSet<>();
-        for (ObjLoader.Part part : parts) {
-            String object = part.object();
-            if (object.contains("HIDE") || startsWithAny(object, skipPrefixes)
-                    || object.startsWith("BOGEY_") || animated.containsKey(object)) {
-                continue;
-            }
-            ObjectRole leaf = ObjectRole.door(object);
-            if (leaf != null && (leaf.pivot() || leaf.control().slideX() != 0.0F
-                    || leaf.control().slideY() != 0.0F || leaf.control().slideZ() != 0.0F)) {
-                moving.add(leaf.control().key());
-            }
-        }
-        return moving;
     }
 
     private static boolean startsWithAny(String name, List<String> prefixes) {

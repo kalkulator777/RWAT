@@ -399,7 +399,8 @@ def ir_location_to_zip(location):
 
 
 def parse_obj(raw):
-    """mtllib references, object names, the travel-axis extent of the visible
+    """mtllib references, object names (floorgen.object_name_of: the rest of the
+    o/g line, as the engine reads it), the travel-axis extent of the visible
     model, and every object's bounding box in the engine's model frame
     ({name: [min_x, min_y, min_z, max_x, max_y, max_z]}; floorgen.flat_box_to_obj
     gives it in the OBJ frame)."""
@@ -410,15 +411,18 @@ def parse_obj(raw):
     min_x, max_x = math.inf, -math.inf
     visible = True
     for line in io.TextIOWrapper(io.BytesIO(raw), encoding="utf-8", errors="replace"):
+        name = floorgen.object_name_of(line)
         if line.startswith("v "):
             parts = line.split()
             positions.append((float(parts[1]), float(parts[2]), float(parts[3])))
-        elif line.startswith(("o ", "g ")):
-            name = line[2:].strip()
+        elif name is not None:
             objects.append(name)
             visible = "HIDE" not in name
             box = boxes.setdefault(name, [math.inf] * 3 + [-math.inf] * 3)
         elif line.startswith("f "):
+            if box is None:  # faces before any o/g line: the engine's default object
+                objects.append(floorgen.DEFAULT_OBJECT)
+                box = boxes.setdefault(floorgen.DEFAULT_OBJECT, [math.inf] * 3 + [-math.inf] * 3)
             for token in line.split()[1:]:
                 index = int(token.split("/")[0])
                 x, y, z = positions[index - 1 if index > 0 else len(positions) + index]
@@ -445,14 +449,15 @@ def floor_levels(raw, x_range=(-math.inf, math.inf), z_range=(-math.inf, math.in
     centre lies in the plan window, levels of at least min_area. A floor is a
     big area at one height; a vestibule a step lower, a cab deck higher."""
     positions = []
-    name = None
+    name = floorgen.DEFAULT_OBJECT
     levels = {}
     for line in io.TextIOWrapper(io.BytesIO(raw), encoding="utf-8", errors="replace"):
+        named = floorgen.object_name_of(line)
         if line.startswith("v "):
             parts = line.split()
             positions.append((float(parts[1]), float(parts[2]), float(parts[3])))
-        elif line.startswith(("o ", "g ")):
-            name = line[2:].strip()
+        elif named is not None:
+            name = named
         elif line.startswith("f "):
             corners = []
             for token in line.split()[1:]:
@@ -891,9 +896,18 @@ def light_groups(boxes):
 
 
 def anim_objects(raw):
-    """The objects an IR .anim moves (its "O <name>" lines)."""
+    """The objects an IR .anim moves (its "O <name>" lines), each once, in order: read as
+    the engine reads them (IrAnim.parse: the line stripped of blanks, the name the rest after
+    "O ", stripped too; an object named again goes on with the same track)."""
     text = raw.decode("utf-8", errors="replace")
-    return [line[2:].strip() for line in text.splitlines() if line.startswith("O ")]
+    names = []
+    for line in text.splitlines():
+        line = line.strip(floorgen.BLANKS)
+        if line.startswith("O "):
+            name = line[2:].strip(floorgen.BLANKS)
+            if name not in names:
+                names.append(name)
+    return names
 
 
 def deep_merge(base, override):

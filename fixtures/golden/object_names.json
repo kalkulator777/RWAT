@@ -1,0 +1,105 @@
+{
+  "$comment": "OBJ o/g line -> the name of the object its faces belong to (ObjectRole.objectName; tools/floorgen.py object_name_of). input.line: the line; expected: the name, or null if the line is no o/g line.",
+  "cases": [
+    {
+      "name": "o",
+      "input": {"line": "o BODY"},
+      "expected": "BODY"
+    },
+    {
+      "name": "g",
+      "input": {"line": "g BODY"},
+      "expected": "BODY"
+    },
+    {
+      "name": "a blank inside",
+      "input": {"line": "o Door Leaf"},
+      "expected": "Door Leaf"
+    },
+    {
+      "name": "blanks inside kept, ends dropped",
+      "input": {"line": "o  Door   Leaf  "},
+      "expected": "Door   Leaf"
+    },
+    {
+      "name": "a tab after the keyword",
+      "input": {"line": "o\tDOOR_1_ROT_90"},
+      "expected": "DOOR_1_ROT_90"
+    },
+    {
+      "name": "an indented line with a CR",
+      "input": {"line": "  o BODY\r"},
+      "expected": "BODY"
+    },
+    {
+      "name": "a copy suffix stays",
+      "input": {"line": "o DOOR_3.001"},
+      "expected": "DOOR_3.001"
+    },
+    {
+      "name": "g with two words",
+      "input": {"line": "g a b"},
+      "expected": "a b"
+    },
+    {
+      "name": "Cyrillic",
+      "input": {"line": "o Тележка"},
+      "expected": "Тележка"
+    },
+    {
+      "name": "o naming nothing",
+      "input": {"line": "o"},
+      "expected": "default"
+    },
+    {
+      "name": "o and blanks naming nothing",
+      "input": {"line": "o   "},
+      "expected": "default"
+    },
+    {
+      "name": "a no-break space ends the name",
+      "input": {"line": "o BODY "},
+      "expected": "BODY "
+    },
+    {
+      "name": "a no-break space is no blank",
+      "input": {"line": "o BODY"},
+      "expected": null
+    },
+    {
+      "name": "off is no o line",
+      "input": {"line": "off"},
+      "expected": null
+    },
+    {
+      "name": "obj is no o line",
+      "input": {"line": "obj BODY"},
+      "expected": null
+    },
+    {
+      "name": "no blank after the keyword",
+      "input": {"line": "oBODY"},
+      "expected": null
+    },
+    {
+      "name": "a comment",
+      "input": {"line": "# o BODY"},
+      "expected": null
+    },
+    {
+      "name": "a vertex",
+      "input": {"line": "v 1 2 3"},
+      "expected": null
+    },
+    {
+      "name": "usemtl",
+      "input": {"line": "usemtl body"},
+      "expected": null
+    },
+    {
+      "name": "empty",
+      "input": {"line": ""},
+      "expected": null
+    }
+  ]
+}

@@ -11,12 +11,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
+import com.muzhik17.trainsmod.convention.ObjectRole;
+
 /**
  * Minimal Wavefront {@code .obj} → {@link Mesh} loader (SPEC §2.4: the model
  * source is swappable behind {@link Mesh}). Reads {@code v}/{@code vt}/{@code vn}
- * and triangular/quad {@code f} faces, splitting by {@code o} object and
- * {@code usemtl} material into {@link Part}s, and records {@code mtllib}
- * references. The {@code .mtl} file, and what a material's name is, by {@link MtlParser}.
+ * and triangular/quad {@code f} faces, splitting by {@code o}/{@code g} object
+ * and {@code usemtl} material into {@link Part}s, and records {@code mtllib}
+ * references. What an object's name is, by {@link ObjectRole#objectName}; the
+ * {@code .mtl} file, and what a material's name is, by {@link MtlParser}.
  *
  * <p>Quad faces are kept as quads; triangles are stored as degenerate quads
  * (4th vertex = 3rd) since the render type draws quads; larger n-gons are
@@ -75,7 +78,7 @@ public final class ObjLoader {
 
         List<Part> parts = new ArrayList<>();
         List<String> materialLibraries = new ArrayList<>();
-        String object = "default";
+        String object = ObjectRole.DEFAULT_OBJECT;
         String material = "";
         Mesh current = new Mesh();
         float[] color = colorByObject.apply(object);
@@ -87,6 +90,17 @@ public final class ObjLoader {
                 if (line.isEmpty() || line.charAt(0) == '#') {
                     continue;
                 }
+                String objectName = ObjectRole.objectName(line);
+                if (objectName != null) {
+                    // an o/g line: the faces after it are this object's
+                    if (!current.quads().isEmpty()) {
+                        parts.add(new Part(object, material, current));
+                        current = new Mesh();
+                    }
+                    object = objectName;
+                    color = colorByObject.apply(object);
+                    continue;
+                }
                 String[] t = line.split("\\s+");
                 switch (t[0]) {
                     case "v" -> positions.add(new float[]{
@@ -95,14 +109,6 @@ public final class ObjLoader {
                             Float.parseFloat(t[1]), Float.parseFloat(t[2])});
                     case "vn" -> normals.add(new float[]{
                             Float.parseFloat(t[1]), Float.parseFloat(t[2]), Float.parseFloat(t[3])});
-                    case "o", "g" -> {
-                        if (!current.quads().isEmpty()) {
-                            parts.add(new Part(object, material, current));
-                            current = new Mesh();
-                        }
-                        object = t.length > 1 ? t[1] : "default";
-                        color = colorByObject.apply(object);
-                    }
                     case "usemtl" -> {
                         if (!current.quads().isEmpty()) {
                             parts.add(new Part(object, material, current));

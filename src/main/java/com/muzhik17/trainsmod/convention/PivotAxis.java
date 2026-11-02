@@ -1,52 +1,103 @@
 package com.muzhik17.trainsmod.convention;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
- * A control's hinge from its {@code …_ROT…} marker (SPEC §9.3), the way IR
- * gets it from UniversalModCore's {@code ModelGroup}: the point is the centre
- * of the marker's bounding box; the axis is its long direction — the vertex
- * furthest from the centre, the vertex furthest from that one, the points
- * split by which of the two they are nearer, and the axis runs from the
- * centroid of the half whose extreme is nearer the origin to the other's.
- * That sign matters: it decides which way a lever turns. Pure.
+ * A control's hinge from its {@code …_ROT…} marker (SPEC §9.3), exactly as
+ * Immersive Railroading gets it from UniversalModCore: {@code
+ * ModelGroup.buildGroup}, and before it the 1.12.2 {@code
+ * cam72cam.mod.model.obj.OBJParser} the MVP pack was made for. Step by step:
+ * <ol>
+ *   <li>the points: the corners of the marker's faces in file order (face by
+ *       face, each face's corners as written), each position once, where it
+ *       first comes;</li>
+ *   <li>the hinge: the centre of their bounding box;</li>
+ *   <li>end A: the point furthest from the centre; end B: the point furthest
+ *       from A — a tie goes to the earlier point;</li>
+ *   <li>the near end: B if {@code |B|² < |A|²}, else A; the other is the far end;</li>
+ *   <li>the axis: from the centroid of the points nearer the near end to the
+ *       centroid of those nearer the far end (a point as near to both is in
+ *       neither), unit length; +Z if a half is empty (UMC's default normal).</li>
+ * </ol>
+ * In double, as UMC does it, from the coordinates as the OBJ loader reads
+ * them (float). The axis sign decides which way the part turns.
+ *
+ * <p>For a rod (a line of two points, a thin cylinder, a long box seen from
+ * the origin along its length) the axis runs along it, from the end nearer
+ * the OBJ origin to the farther one. A marker symmetric about its centre — a
+ * box, whose eight corners are all equally far from it — has several
+ * candidates for A, and the first of them in the file wins: the sign then
+ * comes from the order of the vertices, not from the shape. In the MVP pack
+ * that is most of the markers (302 of 336, every one turning as in IR — the
+ * pack was set up there). A marker of two points comes out the same either
+ * way round — from the point nearer the origin to the other — so that is the
+ * one to draw for a hinge whose sign matters. Pure.
  */
 public final class PivotAxis {
 
     private PivotAxis() {
     }
 
+    /** A position, as a set key: 0 and −0 are one. */
+    private record Position(float x, float y, float z) {
+        Position {
+            x += 0.0F;
+            y += 0.0F;
+            z += 0.0F;
+        }
+    }
+
     /**
-     * @param points the marker's distinct vertex positions, in file order
-     * @return {@code {centre, axis}}; the axis defaults to +Z when the points
-     *         can't be split (UMC's default normal)
+     * The distinct points of a marker: each position once, where it first
+     * comes in {@code corners} (the corners of its faces in file order).
      */
-    public static float[][] of(List<float[]> points) {
+    public static List<float[]> points(List<float[]> corners) {
+        Set<Position> seen = new HashSet<>();
+        List<float[]> points = new ArrayList<>();
+        for (float[] c : corners) {
+            if (seen.add(new Position(c[0], c[1], c[2]))) {
+                points.add(c);
+            }
+        }
+        return points;
+    }
+
+    /**
+     * @param corners the corners of the marker's faces, in file order (repeats
+     *                are dropped, {@link #points}); at least one
+     * @return {@code {centre, axis}}; the axis is +Z when the points can't be
+     *         split (UMC's default normal)
+     */
+    public static double[][] of(List<float[]> corners) {
+        List<float[]> points = points(corners);
         float[] first = points.get(0);
-        float[] min = first.clone();
-        float[] max = first.clone();
+        double[] min = {first[0], first[1], first[2]};
+        double[] max = min.clone();
         for (float[] p : points) {
             for (int i = 0; i < 3; i++) {
                 min[i] = Math.min(min[i], p[i]);
                 max[i] = Math.max(max[i], p[i]);
             }
         }
-        float[] centre = {(min[0] + max[0]) * 0.5F, (min[1] + max[1]) * 0.5F, (min[2] + max[2]) * 0.5F};
+        double[] centre = {(max[0] + min[0]) * 0.5, (max[1] + min[1]) * 0.5, (max[2] + min[2]) * 0.5};
 
-        float[] far = first;      // furthest from the centre (first one wins a tie)
+        float[] endA = first;     // furthest from the centre (the earlier point wins a tie)
         for (float[] p : points) {
-            if (dist2(far, centre) < dist2(p, centre)) {
-                far = p;
+            if (dist2(endA, centre) < dist2(p, centre)) {
+                endA = p;
             }
         }
-        float[] other = first;    // furthest from that
+        float[] endB = first;     // furthest from that
         for (float[] p : points) {
-            if (dist2(other, far) < dist2(p, far)) {
-                other = p;
+            if (dist2(endB, endA) < dist2(p, endA)) {
+                endB = p;
             }
         }
-        float[] nearEnd = len2(other) < len2(far) ? other : far;
-        float[] farEnd = len2(other) < len2(far) ? far : other;
+        float[] nearEnd = len2(endB) < len2(endA) ? endB : endA;
+        float[] farEnd = len2(endB) < len2(endA) ? endA : endB;
         double[] nearSum = new double[3];
         double[] farSum = new double[3];
         int nearCount = 0;
@@ -66,20 +117,27 @@ public final class PivotAxis {
                 farCount++;
             }
         }
-        float[] axis = {0.0F, 0.0F, 1.0F};
+        double[] axis = {0.0, 0.0, 1.0};
         if (nearCount > 0 && farCount > 0) {
             double x = farSum[0] / farCount - nearSum[0] / nearCount;
             double y = farSum[1] / farCount - nearSum[1] / nearCount;
             double z = farSum[2] / farCount - nearSum[2] / nearCount;
             double len = Math.sqrt(x * x + y * y + z * z);
             if (len > 1.0e-9) {
-                axis = new float[]{(float) (x / len), (float) (y / len), (float) (z / len)};
+                axis = new double[]{x / len, y / len, z / len};
             }
         }
-        return new float[][]{centre, axis};
+        return new double[][]{centre, axis};
     }
 
     private static double dist2(float[] a, float[] b) {
+        double x = (double) a[0] - b[0];
+        double y = (double) a[1] - b[1];
+        double z = (double) a[2] - b[2];
+        return x * x + y * y + z * z;
+    }
+
+    private static double dist2(float[] a, double[] b) {
         double x = a[0] - b[0];
         double y = a[1] - b[1];
         double z = a[2] - b[2];
