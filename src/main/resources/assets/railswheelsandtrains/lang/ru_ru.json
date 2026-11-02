@@ -92,7 +92,7 @@
   "railswheelsandtrains.configuration.cameraSway": "Тряска камеры",
   "railswheelsandtrains.configuration.cameraSway.tooltip": "Какая доля качки вагона наклоняет ваш взгляд в поездке: 1 — вся (камера — часть вагона), 0 — горизонт не качается.",
   "railswheelsandtrains.configuration.trainVolume": "Громкость поездов",
-  "railswheelsandtrains.configuration.trainVolume.tooltip": "Двигатели, колёса, стыки, тифоны, двери и органы управления — поверх ползунка «Дружелюбные существа».",
+  "railswheelsandtrains.configuration.trainVolume.tooltip": "Двигатели, колёса, стыки, тифоны, двери и органы управления — поверх ползунка «Дружелюбные существа». Выше 1 громче становятся только тихие звуки, до уровня их файлов; громкие остаются как есть, а дальше, чем при 1, поезда не слышны.",
   "railswheelsandtrains.configuration.interiorDrawDistance": "Дальность салона, блоков",
   "railswheelsandtrains.configuration.interiorDrawDistance.tooltip": "С какого расстояния до вагона, в блоках, через окна виден салон (кресла, перегородки, оборудование кабины). 0 — рисовать всегда (дороже по кадрам, когда в виду много вагонов).",
   "railswheelsandtrains.configuration.physics": "Физика",
