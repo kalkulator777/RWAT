@@ -1,0 +1,355 @@
+/*
+ * The shell's look: fonts, colours, the layout grid of docs/proposals/editor.md §6.1.
+ *
+ * Fonts are the editor's own files (public/fonts/, SIL OFL 1.1, licence texts next to
+ * them): Inter and JetBrains Mono, variable weight, Latin and Cyrillic subsets, taken
+ * from Fontsource 5.3.0 (@fontsource-variable/inter, @fontsource-variable/jetbrains-mono).
+ * Own files rather than system fonts: Cyrillic and tabular digits everywhere, and the
+ * same screenshots on every machine.
+ */
+
+@font-face {
+  font-family: 'Inter Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('/fonts/inter-cyrillic-wght-normal.woff2') format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+
+@font-face {
+  font-family: 'Inter Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('/fonts/inter-latin-wght-normal.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 800;
+  src: url('/fonts/jetbrains-mono-cyrillic-wght-normal.woff2') format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 800;
+  src: url('/fonts/jetbrains-mono-latin-wght-normal.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+  --font-ui: 'Inter Variable', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --surface-sunken: #eceef2;
+  --border: #c9ced6;
+  --text: #1b1f24;
+  --text-muted: #4b5563;
+  --accent: #1d5bbf;
+  --accent-text: #ffffff;
+  --focus: #1d5bbf;
+  --banner-bg: #fff4d6;
+  --banner-border: #d9a520;
+
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17191d;
+    --surface: #1f2227;
+    --surface-sunken: #13151a;
+    --border: #3a3f48;
+    --text: #e6e8eb;
+    --text-muted: #a9b0bb;
+    --accent: #6ea2ff;
+    --accent-text: #0d1117;
+    --focus: #8db6ff;
+    --banner-bg: #3a2f12;
+    --banner-border: #b8891a;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.4;
+  /* Numbers line up in columns: tabular digits in the interface font too. */
+  font-variant-numeric: tabular-nums;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* ------------------------------------------------------------ layout */
+
+.shell {
+  display: grid;
+  height: 100vh;
+  height: 100dvh;
+  /* The stored sizes are preferences; the window caps them so the view keeps its room. */
+  grid-template-columns:
+    clamp(160px, var(--tree-width), 35vw) 6px minmax(0, 1fr) 6px
+    clamp(240px, var(--inspector-width), 40vw);
+  grid-template-rows: auto auto minmax(0, 1fr) 6px clamp(96px, var(--bottom-height), 60vh);
+  grid-template-areas:
+    'top top top top top'
+    'banner banner banner banner banner'
+    'tree split-tree view split-inspector inspector'
+    'tree split-tree split-bottom split-inspector inspector'
+    'tree split-tree bottom split-inspector inspector';
+}
+
+.topbar {
+  grid-area: top;
+}
+.banner {
+  grid-area: banner;
+}
+.area-tree {
+  grid-area: tree;
+}
+.splitter-tree {
+  grid-area: split-tree;
+}
+.area-view {
+  grid-area: view;
+}
+.splitter-inspector {
+  grid-area: split-inspector;
+}
+.area-inspector {
+  grid-area: inspector;
+}
+.splitter-bottom {
+  grid-area: split-bottom;
+}
+.area-bottom {
+  grid-area: bottom;
+}
+
+.area {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+}
+
+.area-view {
+  background: var(--surface-sunken);
+}
+
+.slot-single,
+.slot-tabs {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.slot-empty {
+  margin: auto;
+  padding: 16px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* ------------------------------------------------------------ top bar */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  min-height: 44px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.brand-name {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.pack-status {
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.toggle-button {
+  border: 0;
+  background: transparent;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.toggle-button + .toggle-button {
+  border-left: 1px solid var(--border);
+}
+
+.toggle-button[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.toggle-button:focus-visible {
+  outline-offset: -2px;
+}
+
+/* ------------------------------------------------------------ new version notice */
+
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  background: var(--banner-bg);
+  border-bottom: 1px solid var(--banner-border);
+}
+
+.banner span {
+  flex: 1;
+}
+
+/* ------------------------------------------------------------ splitters */
+
+.splitter {
+  position: relative;
+  background: var(--bg);
+  touch-action: none;
+}
+
+.splitter::after {
+  content: '';
+  position: absolute;
+  background: var(--border);
+}
+
+.splitter-x {
+  cursor: col-resize;
+}
+
+.splitter-x::after {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+}
+
+.splitter-y {
+  cursor: row-resize;
+}
+
+.splitter-y::after {
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+}
+
+.splitter:hover::after,
+.splitter:focus-visible::after {
+  background: var(--accent);
+}
+
+.splitter:focus-visible {
+  outline-offset: -2px;
+}
+
+/* ------------------------------------------------------------ tabs */
+
+.tablist {
+  display: flex;
+  gap: 2px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.tab {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  padding: 6px 10px;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.tab[aria-selected='true'] {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.tab:focus-visible {
+  outline-offset: -2px;
+}
+
+.tabpanel {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
