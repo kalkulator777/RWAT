@@ -39,12 +39,27 @@ import com.google.gson.JsonPrimitive;
  * <li>a descriptive field of the wrong type, or a key the format doesn't know:
  *     a warning, the value is ignored.</li>
  * </ul>
- * The problems name the pack ({@code rwat/<folder>}) and {@code pack.mcmeta},
+ * A pack that is not loaded for its {@code format} is still described: its
+ * {@code name}, {@code version} and the rest are read as for any pack, so the
+ * listing can say which pack it is that was left out. Their problems are not
+ * reported then: a newer format may well have keys and meanings this RWAT
+ * doesn't know, and the one error says what to do. Only a block that cannot
+ * be read at all (no {@code pack.mcmeta}, not JSON, the block not an object)
+ * leaves nothing to describe.
+ *
+ * <p>The problems name the pack ({@code rwat/<folder>}) and {@code pack.mcmeta},
  * as every loader's do: they go to the pack report ({@link PackReport}) with
  * the rest. Pure Java (Gson only), so the rules are unit-tested.
  */
 public record RwatPackMeta(int format, String name, String version, List<String> authors,
         String license, String description) {
+
+    /**
+     * The {@code format} of a pack that is not loaded for it when no format
+     * number could be read: not a number, not a whole number of 1 or more, or
+     * too large for an {@code int}.
+     */
+    public static final int UNKNOWN_FORMAT = 0;
 
     /** The newest pack format this RWAT reads. */
     public static final int SUPPORTED_FORMAT = 1;
@@ -70,22 +85,32 @@ public record RwatPackMeta(int format, String name, String version, List<String>
         authors = List.copyOf(authors);
     }
 
-    /** What reading a pack's block gave: the block, or {@code null} when the pack must not load; and the problems found. */
-    public record Result(RwatPackMeta meta, List<PackProblem> problems) {
+    /**
+     * What reading a pack's block gave.
+     *
+     * @param meta     the block, also when the pack must not load for its
+     *                 {@code format} (then with {@link #UNKNOWN_FORMAT} if no
+     *                 number could be read); {@code null} when there is no
+     *                 block to read at all
+     * @param accepted the pack may be loaded: no error was found
+     * @param problems what was found wrong, in order
+     */
+    public record Result(RwatPackMeta meta, boolean accepted, List<PackProblem> problems) {
 
         public Result {
             problems = List.copyOf(problems);
         }
 
-        /** The pack may be loaded: no error was found. */
-        public boolean accepted() {
-            return meta != null;
+        /** A pack that is left out, with nothing to describe it by. */
+        private static Result rejected(PackOrigin origin, List<PackProblem> problems, String error) {
+            return rejected(null, origin, problems, error);
         }
 
-        private static Result rejected(PackOrigin origin, List<PackProblem> problems, String error) {
+        private static Result rejected(RwatPackMeta meta, PackOrigin origin, List<PackProblem> problems,
+                String error) {
             List<PackProblem> all = new ArrayList<>(problems);
             all.add(origin.error(error));
-            return new Result(null, all);
+            return new Result(meta, false, all);
         }
     }
 
@@ -131,7 +156,8 @@ public record RwatPackMeta(int format, String name, String version, List<String>
         if (!mcmeta.has(BLOCK)) {
             problems.add(origin.warning("no \"" + BLOCK + "\" block in " + MCMETA
                     + ", assuming format " + SUPPORTED_FORMAT));
-            return new Result(new RwatPackMeta(SUPPORTED_FORMAT, null, null, List.of(), null, null), problems);
+            return new Result(new RwatPackMeta(SUPPORTED_FORMAT, null, null, List.of(), null, null), true,
+                    problems);
         }
         JsonElement element = mcmeta.get(BLOCK);
         if (!element.isJsonObject()) {
@@ -147,20 +173,26 @@ public record RwatPackMeta(int format, String name, String version, List<String>
         } else {
             JsonElement value = block.get("format");
             BigDecimal number = number(value);
+            String refusal = null;
+            format = UNKNOWN_FORMAT;
             if (number == null) {
-                return Result.rejected(origin, problems, "\"" + BLOCK + ".format\" must be a number, not "
-                        + quote(value));
+                refusal = "\"" + BLOCK + ".format\" must be a number, not " + quote(value);
+            } else if (number.stripTrailingZeros().scale() > 0 || number.compareTo(BigDecimal.ONE) < 0) {
+                refusal = "\"" + BLOCK + ".format\" must be a whole number of 1 or more, not " + quote(value);
+            } else {
+                if (number.compareTo(BigDecimal.valueOf(Integer.MAX_VALUE)) <= 0) {
+                    format = number.intValueExact();
+                }
+                if (number.compareTo(BigDecimal.valueOf(SUPPORTED_FORMAT)) > 0) {
+                    refusal = "pack format " + number.toPlainString() + " is newer than this version of RWAT"
+                            + " reads (up to " + SUPPORTED_FORMAT + "): update the mod";
+                }
             }
-            if (number.stripTrailingZeros().scale() > 0 || number.compareTo(BigDecimal.ONE) < 0) {
-                return Result.rejected(origin, problems, "\"" + BLOCK
-                        + ".format\" must be a whole number of 1 or more, not " + quote(value));
+            if (refusal != null) {
+                // left out, but still told by name: its descriptive fields are read, their problems are not
+                return Result.rejected(described(format, block, origin, new ArrayList<>()), origin, problems,
+                        refusal);
             }
-            if (number.compareTo(BigDecimal.valueOf(SUPPORTED_FORMAT)) > 0) {
-                return Result.rejected(origin, problems, "pack format " + number.toPlainString()
-                        + " is newer than this version of RWAT reads (up to " + SUPPORTED_FORMAT
-                        + "): update the mod");
-            }
-            format = number.intValueExact();
         }
 
         for (Map.Entry<String, JsonElement> entry : block.entrySet()) {
@@ -169,12 +201,18 @@ public record RwatPackMeta(int format, String name, String version, List<String>
                         + "\" ignored; known keys: " + String.join(", ", KEYS)));
             }
         }
-        return new Result(new RwatPackMeta(format,
+        return new Result(described(format, block, origin, problems), true, problems);
+    }
+
+    /** The block's descriptive fields with the given format; what is wrong with them goes to {@code problems}. */
+    private static RwatPackMeta described(int format, JsonObject block, PackOrigin origin,
+            List<PackProblem> problems) {
+        return new RwatPackMeta(format,
                 string(block, "name", origin, problems),
                 string(block, "version", origin, problems),
                 authors(block, origin, problems),
                 string(block, "license", origin, problems),
-                string(block, "description", origin, problems)), problems);
+                string(block, "description", origin, problems));
     }
 
     /** Where the problems of a pack's block are: its {@code pack.mcmeta}. */

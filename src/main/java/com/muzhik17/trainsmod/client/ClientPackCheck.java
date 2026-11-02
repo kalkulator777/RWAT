@@ -1,11 +1,13 @@
 package com.muzhik17.trainsmod.client;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.network.PackManifestPayload;
 import com.muzhik17.trainsmod.pack.PackManifest;
+import com.muzhik17.trainsmod.pack.PackReport;
 import com.muzhik17.trainsmod.pack.RwatPacks;
 
 import net.minecraft.ChatFormatting;
@@ -19,7 +21,9 @@ import net.minecraft.server.packs.PackType;
  * The client's half of the pack check (roadmap R15, {@link PackManifest}):
  * the server's RWAT packs, as it sent them on join, against the packs this
  * client loaded as resource packs. A difference — a server pack missing here,
- * or here with other files — is one line in chat and the details in the log;
+ * or here with other files — is one line in chat and the details in the log,
+ * and a warning each in the client's pack report ({@code /rwatc packs},
+ * {@link PackReport.Source#PACK_SYNC}, forgotten when the connection ends);
  * the game goes on (wagons without their model are boxes, SPEC §6.5).
  *
  * <p>Skipped on an integrated server's own client (singleplayer, LAN host):
@@ -56,6 +60,7 @@ public final class ClientPackCheck {
     private static void report(Minecraft minecraft, List<PackManifest.Entry> server,
             List<PackManifest.Entry> local) {
         List<PackManifest.Mismatch> mismatches = PackManifest.compare(server, local);
+        PackReport.CLIENT.replace(PackReport.Source.PACK_SYNC, Map.of(), PackReport.packMismatches(mismatches));
         if (mismatches.isEmpty()) {
             RailsWheelsAndTrains.LOGGER.info("RWAT pack check: all {} server pack(s) are here as on the server",
                     server.size());

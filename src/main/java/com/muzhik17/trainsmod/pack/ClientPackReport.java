@@ -27,14 +27,20 @@ import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
  * <ul>
  * <li>{@code /rwatc packs} — the RWAT packs this client loaded as resource
  *     packs and what its loaders found (wagon models and their sounds, rail
- *     styles, models without a type, the model files' check); in a
- *     single-player world the server's part too, since the owner may have no
- *     cheats for {@code /rwat packs};</li>
+ *     styles, models without a type and types without a model, the model
+ *     files' check); in a game that is its own server (single player, the
+ *     host of a LAN game) the server's part too, since the owner may have no
+ *     cheats for {@code /rwat packs} — one list for both sides, as they read
+ *     the same pack files ({@link PackReportView#showShared}). On another
+ *     player's server it also holds the check of this client's packs
+ *     against the server's by hash ({@link PackReport.Source#PACK_SYNC},
+ *     made on joining by {@code client.ClientPackCheck});</li>
  * <li>{@code /rwatc packs validate} — load and check every declared model
  *     now ({@link StockModels#checkFiles}), in the background, and report;</li>
  * <li>after each wagon type sync and each resource reload: the models
- *     declared for no type the server sent (fix list D4), to the log and the
- *     report.</li>
+ *     declared for no type the server sent (fix list D4), and the types it
+ *     sent that no model is declared for (they are drawn as a box), to the
+ *     log and the report.</li>
  * </ul>
  */
 @EventBusSubscriber(modid = RailsWheelsAndTrains.MODID, value = Dist.CLIENT)
@@ -64,9 +70,10 @@ public final class ClientPackReport {
     private static int show(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
         if (Minecraft.getInstance().hasSingleplayerServer()) {
-            PackReportView.show(source, PackReport.SERVER, true);
+            PackReportView.showShared(source);
+        } else {
+            PackReportView.show(source, PackReport.CLIENT, false);
         }
-        PackReportView.show(source, PackReport.CLIENT, false);
         if (!PackReport.CLIENT.has(PackReport.Source.MODEL_FILES)) {
             source.sendSuccess(() -> Component.translatable("rwat.packs.validate.hint")
                     .withStyle(ChatFormatting.GRAY), false);
@@ -106,11 +113,11 @@ public final class ClientPackReport {
     }
 
     /**
-     * Models without a type, checked whenever the type layer or the model
-     * declarations change (the sync replaces the layer wholesale, a resource
-     * reload the declarations): cheap identity checks every tick, the check
-     * itself only on a change, and only in a world, against a layer this
-     * server sent.
+     * Models without a type and types without a model, checked whenever the
+     * type layer or the model declarations change (the sync replaces the
+     * layer wholesale, a resource reload the declarations): cheap identity
+     * checks every tick, the check itself only on a change, and only in a
+     * world, against a layer this server sent.
      */
     @SubscribeEvent
     static void onClientTick(ClientTickEvent.Post event) {
@@ -126,7 +133,7 @@ public final class ClientPackReport {
         checkedModels = models;
         // no types at all: no sync yet, or a server without stock — every model would be "without type"
         List<PackProblem> problems = types.isEmpty() ? List.of()
-                : PackReport.modelsWithoutType(models, types.keySet());
+                : PackReport.modelTypeProblems(models, types.keySet());
         if (!problems.equals(logged)) {
             PackReportView.log(problems);
             logged = problems;
@@ -142,5 +149,6 @@ public final class ClientPackReport {
         checkedModels = null;
         logged = List.of();
         PackReport.CLIENT.clear(PackReport.Source.MODEL_TYPES);
+        PackReport.CLIENT.clear(PackReport.Source.PACK_SYNC); // the server's packs were that connection's
     }
 }

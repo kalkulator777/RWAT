@@ -30,7 +30,9 @@ public final class ClientConfig {
             .defineInRange("cameraSway", 1.0, 0.0, 1.0);
 
     private static final ModConfigSpec.DoubleValue VOLUME = BUILDER
-            .comment("Volume of trains (engines, wheels, horns, controls) on top of the 'Friendly Creatures' slider")
+            .comment("Volume of trains (engines, wheels, horns, controls) on top of the 'Friendly Creatures' slider. "
+                    + "Above 1 only the quiet sounds get louder, up to the level of their sound files; the loud ones stay "
+                    + "as they are, and trains are heard no further away")
             .defineInRange("trainVolume", 1.0, 0.0, 2.0);
 
     /** The interior distance by default (SPEC §2.4): covers riding — a camera inside a car is at most ~13 from its centre. */
@@ -73,7 +75,12 @@ public final class ClientConfig {
         return SPEC.isLoaded() ? CAMERA_SWAY.get() : 1.0;
     }
 
-    /** Train sound volume, 0..2 (SPEC §10). */
+    /**
+     * Train sound volume, 0..2 (SPEC §10): a factor on each sound's own level.
+     * The sound engine limits the product to what the file plays at full, so
+     * above 1 it lifts the quiet sounds up to that level and leaves the loud
+     * ones; it never changes how far a sound is heard ({@code SoundLevels}).
+     */
     public static double trainVolume() {
         return SPEC.isLoaded() ? VOLUME.get() : 1.0;
     }

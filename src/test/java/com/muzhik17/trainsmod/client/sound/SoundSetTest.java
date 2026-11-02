@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
 import com.muzhik17.trainsmod.client.render.model.WagonModelDecl;
+import com.muzhik17.trainsmod.convention.ObjectRole;
 
 /** A wagon's sounds as its model declaration names them (SPEC §10), and the Ogg facts read from the files. */
 class SoundSetTest {
@@ -96,9 +97,43 @@ class SoundSetTest {
                 "THROTTLE_2", "THROTTLE_1", "IND_BRAKE_1"), List.copyOf(sounds.controls().keySet()));
         assertEquals(List.of("d9", "d8", "d7", "d6", "d5", "d4", "d3", "d2", "d1", "d0"),
                 List.copyOf(sounds.doors().keySet()));
-        assertEquals("mvp:t2.ogg", sounds.control("THROTTLE_", null).move());
-        assertEquals("mvp:ind.ogg", sounds.control("INDEPENDENT_BRAKE_", "IND_BRAKE_").engage());
-        assertNull(sounds.control("REVERSER_", null));
+        assertEquals("mvp:t2.ogg", sounds.control(ObjectRole.Kind.THROTTLE).move());
+        assertEquals("mvp:ind.ogg", sounds.control(ObjectRole.Kind.INDEPENDENT_BRAKE).engage());
+        assertNull(sounds.control(ObjectRole.Kind.REVERSER));
+    }
+
+    /**
+     * A control's sound is found by the kind its key names, as an object's name
+     * is read, not by the key's first letters: {@code THROTTLE_BRAKE_1}
+     * (declared first) used to play on the throttle because it starts with
+     * {@code THROTTLE_}.
+     */
+    @Test
+    void aControlIsFoundByItsKindNotItsPrefix() {
+        SoundSet sounds = parse("""
+                {
+                  "controls": { "THROTTLE_BRAKE_1": { "move": "combined.ogg" },
+                                "GAUGE_THROTTLE_1": { "move": "gauge.ogg" },
+                                "IND_BRAKE_2": { "move": "ind.ogg" },
+                                "THROTTLE_1": { "move": "throttle.ogg" },
+                                "MY_LEVER": { "move": "mine.ogg" },
+                                "TRAIN_BRAKE_1": { "move": "brake.ogg" } }
+                }""");
+        assertEquals("mvp:throttle.ogg", sounds.control(ObjectRole.Kind.THROTTLE).move());
+        assertEquals("mvp:combined.ogg", sounds.control(ObjectRole.Kind.THROTTLE_BRAKE).move());
+        assertEquals("mvp:gauge.ogg", sounds.control(ObjectRole.Kind.GAUGE_THROTTLE).move());
+        assertEquals("mvp:ind.ogg", sounds.control(ObjectRole.Kind.INDEPENDENT_BRAKE).move());
+        assertEquals("mvp:brake.ogg", sounds.control(ObjectRole.Kind.TRAIN_BRAKE).move());
+        assertNull(sounds.control(ObjectRole.Kind.REVERSER));
+
+        // a combined handle alone gives the throttle no sound
+        assertNull(parse("{ \"controls\": { \"THROTTLE_BRAKE_1\": { \"move\": \"c.ogg\" } } }")
+                .control(ObjectRole.Kind.THROTTLE));
+        // both spellings of the independent brake, and a Blender copy suffix, are that kind
+        assertEquals("mvp:i.ogg", parse("{ \"controls\": { \"INDEPENDENT_BRAKE_1\": { \"move\": \"i.ogg\" } } }")
+                .control(ObjectRole.Kind.INDEPENDENT_BRAKE).move());
+        assertEquals("mvp:i.ogg", parse("{ \"controls\": { \"ind_brake_1.001\": { \"move\": \"i.ogg\" } } }")
+                .control(ObjectRole.Kind.INDEPENDENT_BRAKE).move());
     }
 
     @Test

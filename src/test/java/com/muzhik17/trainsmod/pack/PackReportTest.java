@@ -79,6 +79,102 @@ class PackReportTest {
                 "the scan counts nothing");
     }
 
+    /**
+     * A game that is its own server lists its two reports as one: both pack
+     * scans read the same pack.mcmeta and report the same rwat-block problem,
+     * which is told once; what only one side found, and what each side
+     * loaded, stays.
+     */
+    @Test
+    void mergedSides_tellAProblemBothFoundOnce() {
+        PackOrigin mcmeta = new PackOrigin("rwat/Old", "pack.mcmeta");
+        PackProblem noFormat = mcmeta.warning("the rwat block has no format number");
+        PackReport server = new PackReport();
+        PackReport client = new PackReport();
+        server.replace(PackReport.Source.PACKS, Map.of(), List.of(noFormat));
+        client.replace(PackReport.Source.PACKS, Map.of(), List.of(noFormat));
+        server.replace(PackReport.Source.WAGON_TYPES, Map.of("rwat/Old", 2), List.of(TYPE_A.error("bad type")));
+        client.replace(PackReport.Source.WAGON_MODELS, Map.of("rwat/Old", 3), List.of(MODEL.warning("bad model")));
+
+        PackReport merged = PackReport.merged(server, client);
+        assertEquals(1, merged.errors());
+        assertEquals(2, merged.warnings(), "the rwat block's warning once, not once per side");
+        assertEquals(List.of("bad type", "bad model", "the rwat block has no format number"),
+                merged.problems().stream().map(PackProblem::message).toList());
+        assertEquals(Map.of("rwat/Old", Map.of(PackReport.Source.WAGON_TYPES, 2, PackReport.Source.WAGON_MODELS, 3)),
+                merged.loaded());
+        assertEquals(Set.of("rwat/A", "rwat/B", "rwat/Old"), merged.packs());
+
+        // the sides themselves are untouched: each still has its own copy of the problem
+        assertEquals(1, server.problems(PackReport.Source.PACKS).size());
+        assertEquals(1, client.problems(PackReport.Source.PACKS).size());
+        assertEquals(2, server.errors() + server.warnings());
+
+        // a snapshot: a side reloading later doesn't reach it
+        client.replace(PackReport.Source.WAGON_MODELS, Map.of(), List.of());
+        assertEquals(2, merged.warnings());
+    }
+
+    /** The same files read twice give one count, not their sum; a different problem with the same text is another. */
+    @Test
+    void mergedSides_dontAddUpACountBothGave() {
+        PackReport server = new PackReport();
+        PackReport client = new PackReport();
+        server.replace(PackReport.Source.PACKS, Map.of("rwat/Old", 1), List.of(MODEL.warning("same text")));
+        client.replace(PackReport.Source.PACKS, Map.of("rwat/Old", 1), List.of(TYPE_A.warning("same text")));
+        PackReport merged = PackReport.merged(server, client);
+        assertEquals(Map.of("rwat/Old", Map.of(PackReport.Source.PACKS, 1)), merged.loaded());
+        assertEquals(2, merged.warnings(), "another file is another problem");
+        assertEquals(0, PackReport.merged(new PackReport(), new PackReport()).packs().size());
+    }
+
+    private static String hash(char c) {
+        return String.valueOf(c).repeat(PackManifest.HASH_LENGTH);
+    }
+
+    /**
+     * The client's packs against the server's (R15): each pack the client
+     * lacks or holds other files of is one warning in the client's report, as
+     * well as the line in chat, and the report holds it as its own source so
+     * a reconnect or a new check replaces it.
+     */
+    @Test
+    void packMismatches_areWarningsInTheClientsReport() {
+        List<PackManifest.Entry> server = List.of(
+                new PackManifest.Entry("MVP.zip", "Matoi Vanilla Pack", "1.0", hash('a')),
+                new PackManifest.Entry("Extra.zip", "Extra", "", hash('b')),
+                new PackManifest.Entry("Same.zip", "Same", "", hash('c')));
+        List<PackManifest.Entry> client = List.of(
+                new PackManifest.Entry("MVP.zip", "Matoi Vanilla Pack", "0.9", hash('d')),
+                new PackManifest.Entry("Same.zip", "Same", "", hash('c')));
+
+        List<PackProblem> problems = PackReport.packMismatches(PackManifest.compare(server, client));
+        assertEquals(2, problems.size());
+        PackProblem different = problems.get(0);
+        assertFalse(different.isError());
+        assertEquals(List.of("rwat/MVP.zip", "rwat_packs/MVP.zip"), List.of(different.pack(), different.file()));
+        assertTrue(different.message().contains("differs from the one here"), different.message());
+        assertTrue(different.message().contains("Matoi Vanilla Pack 1.0"), different.message());
+        PackProblem missing = problems.get(1);
+        assertEquals(List.of("rwat/Extra.zip", "rwat_packs/Extra.zip"), List.of(missing.pack(), missing.file()));
+        assertTrue(missing.message().contains("is not installed here"), missing.message());
+
+        PackReport report = new PackReport();
+        report.replace(PackReport.Source.PACK_SYNC, Map.of(), problems);
+        assertEquals(2, report.warnings());
+        assertEquals(0, report.errors());
+        assertEquals(Set.of("rwat/MVP.zip", "rwat/Extra.zip"), report.packs());
+
+        // the next check says all is well: the warnings go with it; leaving the server forgets the check
+        report.replace(PackReport.Source.PACK_SYNC, Map.of(),
+                PackReport.packMismatches(PackManifest.compare(server, server)));
+        assertEquals(0, report.warnings());
+        assertTrue(report.has(PackReport.Source.PACK_SYNC));
+        report.clear(PackReport.Source.PACK_SYNC);
+        assertFalse(report.has(PackReport.Source.PACK_SYNC));
+        assertTrue(PackReport.packMismatches(List.of()).isEmpty());
+    }
+
     /** D4: a model is tied to its type only by the id; one without a type is never drawn. */
     @Test
     void modelsWithoutType_areWarnedAboutBySortedId() {
@@ -91,5 +187,39 @@ class PackReportTest {
         assertEquals(other.file(), problem.file());
         assertTrue(problem.message().startsWith("no wagon type 'a:chme3_old' on the server"), problem.message());
         assertTrue(PackReport.modelsWithoutType(Map.of("a:m", MODEL), Set.of("a:m")).isEmpty());
+    }
+
+    /**
+     * The reverse: a type the server sent and this client declares no model
+     * for is drawn as a box. It is named by the server's file for the type,
+     * under the pack "server", in sorted order, one warning each.
+     */
+    @Test
+    void typesWithoutModel_areWarnedAboutBySortedId() {
+        List<PackProblem> problems = PackReport.typesWithoutModel(Set.of("a:m", "b:tank/big", "a:chme3"),
+                Set.of("a:m"));
+        assertEquals(2, problems.size());
+        PackProblem first = problems.get(0);
+        assertFalse(first.isError());
+        assertEquals(PackReport.SERVER_PACK, first.pack());
+        assertEquals("data/a/wagon_types/chme3.json", first.file());
+        assertTrue(first.message().startsWith("wagon type 'a:chme3' has no model on this client"), first.message());
+        assertTrue(first.message().contains("assets/a/wagon_models/chme3.json"), first.message());
+        assertEquals("data/b/wagon_types/tank/big.json", problems.get(1).file());
+        assertTrue(PackReport.typesWithoutModel(Set.of("a:m"), Set.of("a:m", "a:spare")).isEmpty(),
+                "a model for a type nobody has is the other check's");
+        assertTrue(PackReport.typesWithoutModel(Set.of(), Set.of()).isEmpty());
+    }
+
+    /** One list for the client's report and log: the models without a type first, then the types without a model. */
+    @Test
+    void theModelTypeCheckReportsBothDirections() {
+        List<PackProblem> problems = PackReport.modelTypeProblems(
+                Map.of("a:m", MODEL, "a:orphan", MODEL), Set.of("a:m", "a:boxed"));
+        assertEquals(2, problems.size());
+        assertTrue(problems.get(0).message().startsWith("no wagon type 'a:orphan'"), problems.get(0).message());
+        assertTrue(problems.get(1).message().startsWith("wagon type 'a:boxed' has no model"),
+                problems.get(1).message());
+        assertTrue(PackReport.modelTypeProblems(Map.of("a:m", MODEL), Set.of("a:m")).isEmpty());
     }
 }

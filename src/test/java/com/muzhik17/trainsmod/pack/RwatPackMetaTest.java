@@ -106,11 +106,90 @@ class RwatPackMetaTest {
         RwatPackMeta.Result result = parse("{ \"format\": 2, \"name\": \"Future Pack\" }");
 
         assertFalse(result.accepted());
-        assertNull(result.meta());
         PackProblem problem = only(result);
         assertTrue(problem.isError());
         assertTrue(problem.message().contains("format 2"), problem.message());
         assertTrue(problem.message().contains("up to " + RwatPackMeta.SUPPORTED_FORMAT), problem.message());
+    }
+
+    /**
+     * A pack that is not loaded is still named in the listing: the
+     * descriptive fields are read whatever the format says, and the format
+     * itself when it is a number.
+     */
+    @Test
+    void aPackLeftOutForItsFormatIsStillDescribed() {
+        RwatPackMeta.Result result = parse("""
+                { "format": 2, "name": "Future Pack", "version": "3.0", "authors": ["Ann"],
+                  "license": "CC0-1.0", "description": "Needs a newer RWAT" }""");
+
+        assertFalse(result.accepted());
+        assertEquals(new RwatPackMeta(2, "Future Pack", "3.0", List.of("Ann"), "CC0-1.0", "Needs a newer RWAT"),
+                result.meta());
+        PackProblem problem = only(result);
+        assertTrue(problem.isError());
+        assertEquals(ID, problem.pack());
+
+        // the scan's record of the pack says which pack it is
+        PackInfo info = new PackInfo("Future.zip", Path.of("Future.zip"), result.meta(), result.problems(), false);
+        assertEquals("Future Pack 3.0", info.label());
+        assertEquals("Future Pack", info.displayName());
+    }
+
+    /**
+     * Whatever is wrong with the format, the name and version are read; the
+     * format is kept only when it is a number this RWAT can hold. A refused
+     * pack's other fields are not scolded about: the one error is the news.
+     */
+    @Test
+    void aBrokenFormatStillLeavesTheNameAndVersion() {
+        for (String format : List.of("\"1\"", "true", "null", "[1]", "1.5", "0", "-1", "1e30")) {
+            RwatPackMeta.Result result = parse("{ \"format\": " + format
+                    + ", \"name\": \"Odd Pack\", \"version\": \"7\" }");
+
+            assertFalse(result.accepted(), format);
+            assertEquals("Odd Pack", result.meta().name(), format);
+            assertEquals("7", result.meta().version(), format);
+            assertEquals(RwatPackMeta.UNKNOWN_FORMAT, result.meta().format(), format);
+            assertTrue(only(result).isError(), format);
+        }
+        // a format past any int is not a number to show; one that fits is
+        assertEquals(3, parse("{ \"format\": 3, \"name\": \"N\" }").meta().format());
+
+        // keys and values this RWAT may not know the meaning of, in a format it doesn't read: no warnings
+        RwatPackMeta.Result future = parse("""
+                { "format": 2, "name": "Future", "version": 5, "livery_sets": [], "authors": 7 }""");
+        assertFalse(future.accepted());
+        assertEquals("Future", future.meta().name());
+        assertNull(future.meta().version(), "a version that is no string reads as not given");
+        only(future);
+    }
+
+    /** With no block to read there is nothing to describe the pack by. */
+    @Test
+    void anUnreadableBlockLeavesNoDescription() {
+        for (String block : List.of("1", "\"mvp\"", "null", "[]")) {
+            assertNull(parse(block).meta(), block);
+        }
+        assertNull(RwatPackMeta.parse("{ \"pack\": ", ID).meta());
+        assertNull(RwatPackMeta.parse("[]", ID).meta());
+    }
+
+    /** Accepted or not, a pack read from disk carries its description: a zip with a newer format is named. */
+    @Test
+    void aZipLeftOutForItsFormatIsNamedWhenReadFromDisk(@TempDir Path temp) throws IOException {
+        Path zip = temp.resolve("Future.zip");
+        try (ZipOutputStream out = new ZipOutputStream(Files.newOutputStream(zip))) {
+            out.putNextEntry(new ZipEntry("pack.mcmeta"));
+            out.write(("{ " + PACK + ", \"rwat\": { \"format\": 9, \"name\": \"From Zip\", \"version\": \"1\" } }")
+                    .getBytes(StandardCharsets.UTF_8));
+            out.closeEntry();
+        }
+
+        RwatPackMeta.Result result = RwatPackMeta.read(zip, ID);
+        assertFalse(result.accepted());
+        assertEquals("From Zip", result.meta().name());
+        assertEquals(9, result.meta().format());
     }
 
     /** A number past any int is still "newer", not a crash. */
