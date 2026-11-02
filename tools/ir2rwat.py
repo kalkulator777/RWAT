@@ -94,9 +94,10 @@ lists every file renamed or rewritten. Two files that would land on one path
 are an error.
 
 Warnings, errors, refusals. A warning (a missing sound or texture, an
-unknown era, an unknown key in the recipe or a per-type file, a per-type file
-or an exclude for an id the packs don't have, an "overrides_dir" that isn't a
-folder) changes nothing else. An error refuses one stock type or rail style
+unknown era, an unknown key in the recipe — at its top, in a source, in
+"sound_defaults" — or in a per-type file, a per-type file or an exclude for
+an id the packs don't have, an "overrides_dir" that isn't a folder) changes
+nothing else. An error refuses one stock type or rail style
 and the rest is converted: an unreadable definition, a missing model, two IR
 files (or two liveries of one type) converting to one id, two files landing
 on one path — and a per-type "floor" that isn't valid (that type is written
@@ -164,6 +165,7 @@ RECIPE_KEYS = ("authors", "copy_root_files", "description", "exclude", "id_strip
                "namespace", "out", "overrides", "overrides_dir", "pack_dir", "rail_exclude", "rail_overrides",
                "sound_defaults", "sources", "version")
 SOURCE_KEYS = ("label", "root", "zip")
+SOUND_DEFAULTS_KEYS = ("clack", "wheels")
 OVERRIDE_KEYS = ("floor", "lights", "model", "name", "sway", "type")
 
 HP_TO_KW = 0.745699872
@@ -1066,6 +1068,7 @@ class Converter:
         self.rail_exclude = set(self.recipe.get("rail_exclude", []))
         self.rail_overrides = self.recipe.get("rail_overrides", {})
         self.sources = []
+        self.check_keys(self.recipe.get("sound_defaults", {}), SOUND_DEFAULTS_KEYS, f"{name}: \"sound_defaults\"")
         for index, spec in enumerate(self.recipe["sources"]):
             self.check_keys(spec, SOURCE_KEYS, f"{name}: sources[{index}]")
             self.sources.append(open_source(base, index, spec, name))
