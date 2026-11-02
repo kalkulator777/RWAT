@@ -440,6 +440,16 @@ class WagonTypeParserTest {
         assertNull(new WagonType.Door("x", 0, 0, 0, 1, 1, 1, false, false, false, "").group());
     }
 
+    /** {@code "group": null} still reads as no group, but format v1 has no null there: a warning says to leave it out. */
+    @Test
+    void nullDoorGroup_isWarnedAsObsolete() {
+        String door = ", \"doors\": [ { \"id\": \"c\", \"min\": [1, 1, 4], \"max\": [1.1, 3, 4.8], \"group\": %s } ]";
+        assertEquals(List.of("'doors[0].group' is null: obsolete, leave the field out for a door on its own"),
+                warnings(SMALL + door.formatted("null")));
+        assertEquals(List.of(), warnings(SMALL + door.formatted("\"\"")));
+        assertEquals(List.of(), warnings(SMALL + door.formatted("\"L\"")));
+    }
+
     /** A door group matches case aside everywhere, as the control group working it does. */
     @Test
     void doorGroups_matchCaseAside() {

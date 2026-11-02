@@ -52,8 +52,9 @@ import com.muzhik17.trainsmod.pack.PackJson;
  * public {@code *_KEYS} sets below; a key a section doesn't know is a warning
  * with the nearest known one as a hint, never an error. A JSON {@code null}
  * or a value of the wrong type is an error naming the field and the type
- * expected; only {@code doors[].group} takes {@code null} (= no group, as
- * {@code ""} does). The geometry must make a wagon: {@code length > 0}, the
+ * expected; only {@code doors[].group} still takes {@code null} (= no group,
+ * as {@code ""} does), with a warning that it is obsolete — format v1 has no
+ * null there. The geometry must make a wagon: {@code length > 0}, the
  * {@code bogies} strictly front to back and inside {@code ±length/2},
  * each coupler offset under {@code length/2} in size. An error throws
  * {@link JsonSyntaxException} and the loader skips the whole file.
@@ -285,8 +286,9 @@ public final class WagonTypeParser {
      * {@code "fixed": true} — an always-open opening without a leaf;
      * {@code "connecting": true} (SPEC §9.5) — an end door onto the gangway
      * to the coupled neighbour; {@code "group": "<name>"} — doors of one group
-     * open and close together, the name matched case aside; {@code ""} or
-     * {@code null} is no group.
+     * open and close together, the name matched case aside; {@code ""} is no
+     * group, and so is {@code null}, warned about as obsolete (leave the field
+     * out).
      */
     private static List<WagonType.Door> doors(JsonObject json, Consumer<String> warnings) {
         JsonArray array = PackJson.optionalArray(json, "doors", "");
@@ -302,6 +304,10 @@ public final class WagonTypeParser {
             double[] min = vec3(door, "min", where);
             double[] max = vec3(door, "max", where);
             JsonElement group = door.get("group");
+            if (group != null && group.isJsonNull()) {
+                warnings.accept("'" + PackJson.at(where, "group") + "' is null: obsolete, leave the field out"
+                        + " for a door on its own");
+            }
             doors.add(new WagonType.Door(id, min[0], min[1], min[2], max[0], max[1], max[2],
                     PackJson.optionalBool(door, "inner", where, false),
                     PackJson.optionalBool(door, "fixed", where, false),
