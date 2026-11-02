@@ -317,9 +317,9 @@
      "x-description-ru": "Грани объекта освещаются лампами салона; его группа света становится группой света салона.",
      "code": ["client/render/model/IrStockModel.java#load"]},
     {"id": "HEADLIGHT", "name": "HEADLIGHT_<n>", "regex": "(?:^|_)HEADLIGHT_\\d+(?=_|$)", "input": "normalized",
-     "effect": "A headlight: flare, 16-block beam and a pool of light on the track. A lamp in the front half of the model shines forward, in the rear half backward (not settable). Its effects show only while some light group of the car is lit.",
-     "x-description-ru": "Фара: ореол, луч на 16 блоков и пятно на пути. Фара в передней половине модели светит вперёд, в задней — назад (не задаётся). Эффекты видны, только пока горит какая-нибудь группа света вагона.",
-     "code": ["convention/ObjectRole.java#HEADLIGHT", "client/render/model/IrStockModel.java#headlight", "client/render/LampEffects.java#BEAM_LENGTH", "client/render/WagonRenderer.java#render"]},
+     "effect": "A headlight: flare, 16-block beam and a pool of light on the track. A lamp in the front half of the model shines forward, in the rear half backward (not settable). It shines while its light group (LCG) is lit; a headlight of no light group always shines.",
+     "x-description-ru": "Фара: ореол, луч на 16 блоков и пятно на пути. Фара в передней половине модели светит вперёд, в задней — назад (не задаётся). Светит, пока горит её группа света (LCG); фара без группы светит всегда.",
+     "code": ["convention/ObjectRole.java#HEADLIGHT", "client/render/model/IrStockModel.java#headlight", "client/render/HeadlightBeam.java#LENGTH", "client/render/LampEffects.java#collect", "client/render/WagonRenderer.java#render"]},
     {"id": "RGB", "name": "_0X<RRGGBB>", "regex": "_0[xX]([0-9A-Fa-f]{6})(?=_|$)", "captures": ["rgb"], "input": "normalized", "default": "FFFFFF",
      "effect": "The headlight's colour.",
      "x-description-ru": "Цвет фары.",
@@ -377,6 +377,6 @@
     {"what": "door animation, ticks", "value": 40, "x-description-ru": "ход двери, тики", "code": ["consist/WagonEntity.java#DOOR_ANIM_TICKS"]},
     {"what": "coupler head turn, degrees", "value": 22, "x-description-ru": "поворот головы сцепки, градусы", "code": ["kinematics/CouplerAim.java#LIMIT_DEGREES"]},
     {"what": "cabin lamp island diagonal, blocks", "value": 0.3, "x-description-ru": "диагональ острова лампы салона, блоки", "code": ["client/render/model/LampIslands.java#MIN_LAMP_SIZE"]},
-    {"what": "headlight beam, blocks", "value": 16, "x-description-ru": "луч фары, блоки", "code": ["client/render/LampEffects.java#BEAM_LENGTH"]}
+    {"what": "headlight beam, blocks", "value": 16, "x-description-ru": "луч фары, блоки", "code": ["client/render/HeadlightBeam.java#LENGTH"]}
   ]
 }
