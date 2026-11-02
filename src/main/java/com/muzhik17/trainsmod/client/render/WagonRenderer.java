@@ -1,6 +1,8 @@
 package com.muzhik17.trainsmod.client.render;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.joml.Matrix4d;
 import org.joml.Matrix4f;
@@ -39,10 +41,12 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -66,7 +70,8 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
  * pack, wagon by wagon); the interior is skipped beyond the client's
  * {@link ClientConfig#interiorDrawDistance}.
  * Doors swing with their IR animation, keyed by each door's open progress
- * ({@link WagonEntity#doorAnim}).
+ * ({@link WagonEntity#doorAnim}). A car out of view whose lit headlights'
+ * light may be in it is still drawn — its light only ({@link #shouldRender}).
  */
 @EventBusSubscriber(modid = RailsWheelsAndTrains.MODID, value = Dist.CLIENT)
 public class WagonRenderer extends EntityRenderer<WagonEntity> {
@@ -136,6 +141,11 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
      * bakes it holds are drawn this frame, so the cache keeps them till then.
      */
     private static final GpuMesh.Batch BATCH = new GpuMesh.Batch();
+    /**
+     * Entity ids of the wagons the latest {@link #shouldRender} passed for
+     * their headlights' light alone, the body out of view (render thread only).
+     */
+    private static final Set<Integer> LIGHT_ONLY = new HashSet<>();
     /** Scratch for an interpolated door keyframe (render thread only). */
     private static final Matrix4f DOOR_FRAME = new Matrix4f();
 
@@ -183,6 +193,69 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
         super(context);
     }
 
+    /**
+     * Drawn if its body is in view, as vanilla tests it; or else, its body
+     * out of view, if the light of its lit headlights may be — then only
+     * that light is drawn (M28: a car behind the camera took its light on
+     * the track ahead with it). Each pass asks before it draws.
+     */
+    @Override
+    public boolean shouldRender(WagonEntity wagon, Frustum frustum, double camX, double camY, double camZ) {
+        LIGHT_ONLY.remove(wagon.getId());
+        if (super.shouldRender(wagon, frustum, camX, camY, camZ)) {
+            return true;
+        }
+        AABB light = wagon.shouldRender(camX, camY, camZ) ? headlightBox(wagon) : null;
+        if (light != null && frustum.isVisible(light)) {
+            LIGHT_ONLY.add(wagon.getId());
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * The world box all the light of {@code wagon}'s lit headlights may reach
+     * ({@link HeadlightBeam#reach}), or null if none is lit. Placed by the
+     * car's tick pose: the drawn one is up to two ticks behind it (SPEC §2.1),
+     * so the box reaches as far again as the car runs in two ticks, like the
+     * car's own culling box.
+     */
+    private static AABB headlightBox(WagonEntity wagon) {
+        ConsistComposition.Slot slot = ClientConsists.slot(wagon.getConsistId(), wagon.getWagonIndex());
+        StockModel model = slot == null ? null : StockModels.model(slot.type().id());
+        if (model == null || model.headlights().isEmpty()) {
+            return null;
+        }
+        long litMask = model.litMask(wagon::controlValue);
+        float[] box = null;
+        for (StockModel.Headlight lamp : model.headlights()) {
+            if (StockModel.tagLit(StockModel.tag(lamp.group(), false, false, false), litMask)) {
+                box = HeadlightBeam.reach(lamp.x(), lamp.y(), lamp.z(), lamp.dirZ(), lamp.radius(), box);
+            }
+        }
+        if (box == null) {
+            return null;
+        }
+        // the model frame turned 180° on a flipped car (SPEC §5.5)
+        double flip = slot.flipped() ? -1.0 : 1.0;
+        Vector3d body = new Vector3d(wagon.getX(), wagon.getY(), wagon.getZ());
+        double[] lo = {Double.MAX_VALUE, Double.MAX_VALUE, Double.MAX_VALUE};
+        double[] hi = {-Double.MAX_VALUE, -Double.MAX_VALUE, -Double.MAX_VALUE};
+        for (int corner = 0; corner < 8; corner++) {
+            Vector3d world = PoseMath.localToWorld(body, wagon.getYRot(), wagon.getXRot(), new Vector3d(
+                    box[(corner & 1) == 0 ? 0 : 3] * flip, box[(corner & 2) == 0 ? 1 : 4],
+                    box[(corner & 4) == 0 ? 2 : 5] * flip));
+            lo[0] = Math.min(lo[0], world.x);
+            lo[1] = Math.min(lo[1], world.y);
+            lo[2] = Math.min(lo[2], world.z);
+            hi[0] = Math.max(hi[0], world.x);
+            hi[1] = Math.max(hi[1], world.y);
+            hi[2] = Math.max(hi[2], world.z);
+        }
+        double lag = Math.abs(ClientConsists.speed(wagon.getConsistId())) * 2.0;
+        return new AABB(lo[0], lo[1], lo[2], hi[0], hi[1], hi[2]).inflate(lag + 0.5);
+    }
+
     @Override
     public void render(WagonEntity wagon, float entityYaw, float partialTick,
             PoseStack poseStack, MultiBufferSource buffers, int packedLight) {
@@ -227,9 +300,11 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
         }
         // which of the model's light groups are on (SPEC §8): part of the bake
         long litMask = model.litMask(wagon::controlValue);
-        // null: the frame's bake is spent and no other bake of this model and livery
+        // null: the car is out of view, only its headlights' light in it (shouldRender);
+        // or the frame's bake is spent and no other bake of this model and livery
         // can stand in — the car shows up a frame or two later (BakeCache)
-        BakedStockModel baked = bakedAt(model, slot.livery(), packedLight, litMask);
+        BakedStockModel baked = LIGHT_ONLY.contains(wagon.getId()) ? null
+                : bakedAt(model, slot.livery(), packedLight, litMask);
 
         // the body, oriented by the chord between the two bogies (SPEC §2.4);
         // a flipped wagon turns its model 180° in its own local frame (§5.5 step 3)
@@ -262,8 +337,9 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
             BATCH.flush();
         }
 
-        // headlight flares, beams and track light (SPEC §8): queued, drawn after translucents
-        if (litMask != 0L && !model.headlights().isEmpty()) {
+        // headlight flares, beams and track light (SPEC §8): queued, drawn after translucents;
+        // a lamp of no light group is lit with none of the groups on
+        if (!model.headlights().isEmpty()) {
             float skyDarken = wagon.level() instanceof net.minecraft.client.multiplayer.ClientLevel client
                     ? client.getSkyDarken(partialTick) : 1.0F;
             float dayLight = Math.clamp((skyDarken - 0.2F) / 0.8F, 0.0F, 1.0F);
@@ -352,6 +428,7 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
     static void onFrameStart(RenderFrameEvent.Pre event) {
         BATCH.clear();
         BAKED.nextFrame();
+        LIGHT_ONLY.clear();
     }
 
     /**
