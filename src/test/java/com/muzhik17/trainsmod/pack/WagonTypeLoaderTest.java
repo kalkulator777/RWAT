@@ -89,7 +89,7 @@ class WagonTypeLoaderTest {
     void warningsKeepTheType() {
         WagonTypeLoader.Result result = WagonTypeLoader.load(List.of(file("t:car", "{" + CAR + """
                 , "max_speed": 95,
-                  "interior": { "min": [-0.2, 1, -4], "max": [0.2, 3, 4] } }""")));
+                  "interior": { "min": [-4, 1, -0.2], "max": [4, 3, 0.2] } }""")));
         assertTrue(result.types().containsKey("t:car"));
         List<String> messages = messages(result);
         assertEquals("warning rwat/Test data/t/wagon_types/car.json: unknown key 'max_speed' (ignored)"

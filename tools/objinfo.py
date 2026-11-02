@@ -2,13 +2,15 @@
 """objinfo — measure a stock model for its RWAT declaration (SPEC §9.6).
 
 Prints what a pack author needs to write a wagon's walkable floor, doors and
-driver's chair, in the RWAT model frame the type JSON uses (+Z forward, +Y up,
-X across; the railhead at y 0.406):
+driver's chair, in the OBJ frame the type JSON uses from format 1 (roadmap R6)
+— the model's own coordinates, as Blender shows them: X along the car, the
+front towards -X; Y up, the wheel tread at y -0.03; Z across, +Z the left
+side. Numbers read here go into the pack as they are:
 
     python tools/objinfo.py amendorf                  objects and their boxes
     python tools/objinfo.py amendorf --controls       grouped by IR control (DOOR_5, WIDGET_3, …)
     python tools/objinfo.py amendorf --grep "DOOR|SEAT"
-    python tools/objinfo.py chme3 --floors --z -6 -3  floor heights in a window of the plan
+    python tools/objinfo.py chme3 --floors --x 3 6    floor heights in a window of the plan
     python tools/objinfo.py amendorf --doors          the doors ir2rwat derives (JSON)
     python tools/objinfo.py er2h --lights             light groups: lamps, headlights, switches
 
@@ -24,7 +26,8 @@ counts only if the IR definition animates its control group. For a bare
 
 --floors lists the up-facing horizontal surfaces by height, with their area
 and plan extent — a floor shows up as a big area at one height (a vestibule
-floor a step lower, a cab deck higher). Narrow it with --x/--z.
+floor a step lower, a cab deck higher). Narrow it with --x (along the car)
+and --z (across).
 
 Python 3.9+, standard library only.
 """
@@ -37,7 +40,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import ir2rwat  # noqa: E402  (shares the IR → RWAT frame and the door rules)
+import floorgen  # noqa: E402  (the OBJ frame and the engine's)
+import ir2rwat  # noqa: E402  (the door rules)
 
 CONTROL_KEY = re.compile(
     r"(?:^|_)((?:DOOR|WIDGET|WINDOW|SEAT|THROTTLE|REVERSER|TRAIN_BRAKE|INDEPENDENT_BRAKE|IND_BRAKE"
@@ -64,14 +68,16 @@ def find_obj(model, pack):
 
 
 def floors(raw, x_range, z_range, min_area):
-    """Print the up-facing horizontal surface area by height inside the plan window."""
+    """Print the up-facing horizontal surface area by height inside the plan window (OBJ frame)."""
     for y, area, box, objects in ir2rwat.floor_levels(raw, x_range, z_range, min_area):
         shown = ", ".join(objects[:3]) + (f" … +{len(objects) - 3}" if len(objects) > 3 else "")
         print(f"  y {y:7.3f}  area {area:7.2f}  x {box[0]:7.3f}..{box[2]:7.3f}"
               f"  z {box[1]:8.3f}..{box[3]:8.3f}  {shown}")
 
 
-def fmt(box):
+def fmt(model_box):
+    """A box of parse_obj (the engine's model frame) as the pack would have it, in the OBJ frame."""
+    box = floorgen.flat_box_to_obj(model_box)
     return (f"[{box[0]:7.3f}, {box[1]:7.3f}, {box[2]:8.3f}] .. [{box[3]:7.3f}, {box[4]:7.3f}, {box[5]:8.3f}]"
             f"  size {box[3] - box[0]:6.3f} x {box[4] - box[1]:6.3f} x {box[5] - box[2]:6.3f}")
 

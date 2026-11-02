@@ -28,7 +28,8 @@ import com.google.gson.JsonParser;
 /**
  * The MVP recipe's doors and light names against the models, without the IR
  * packs (SPEC §8, §9.5, §9.6) — from the geometry digests and the per-type
- * override files, like {@link RecipeFloorTest}:
+ * override files, like {@link RecipeFloorTest} (both in the OBJ frame, the
+ * digest's object boxes too):
  * <ul>
  *   <li>a door leaf the model moves by name ({@code DOOR_<n>} with
  *       {@code ROT_}/{@code TL_}) must lie in one of the type's door boxes
@@ -124,7 +125,8 @@ class RecipeDoorsAndLightsTest {
                 if (c == null) {
                     continue;
                 }
-                int door = type.doorHolding(c[0], c[1], c[2]);
+                double[] model = ObjFrame.point(c[0], c[1], c[2]); // the digest is in the OBJ frame
+                int door = type.doorHolding(model[0], model[1], model[2]);
                 if (!moves.equals("anim") && door < 0) {
                     problems.add(String.format(Locale.ROOT,
                             "%s (%s) lies in no door's box, centre (%.2f, %.2f, %.2f): it is drawn shut",
@@ -183,7 +185,10 @@ class RecipeDoorsAndLightsTest {
         return false;
     }
 
-    /** The centre of every object of {@code DOOR_<n>} together (the leaf the engine builds), or null. */
+    /**
+     * The centre of every object of {@code DOOR_<n>} together (the leaf the
+     * engine builds), in the digest's OBJ frame, or null.
+     */
     private static double[] leafCentre(JsonObject objects, String key) {
         double[] box = {Double.MAX_VALUE, Double.MAX_VALUE, Double.MAX_VALUE,
                 -Double.MAX_VALUE, -Double.MAX_VALUE, -Double.MAX_VALUE};

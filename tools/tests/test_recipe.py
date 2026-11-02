@@ -196,8 +196,9 @@ class RecipeTest(unittest.TestCase):
         self.assertEqual(status, 1, out + err)
         self.assertIn("ERROR: test_coach: no generated floor — \"floor\": unknown key(s) ['clearence']", out)
         interior = self.wagon("test_coach")["interior"]
-        self.assertIsInstance(interior, dict)  # IR's passenger area: one zone
-        self.assertEqual(interior["min"][2], -4.5)
+        self.assertIsInstance(interior, dict)  # IR's passenger area: one zone, in the OBJ frame
+        self.assertEqual(interior["min"][0], -4.5)
+        self.assertEqual(interior["max"][2], 1.3)
 
     def test_floor_false_keeps_the_ir_floor_without_complaint(self):
         self.per_type("test_coach", {"floor": False})

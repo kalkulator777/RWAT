@@ -162,7 +162,7 @@ class WagonTypeParserTest {
                 json("{" + base + ", \"mass_t\": 20, \"traction\": {\"power_kw\": 100}}")));
     }
 
-    /** The shipped plazkart.json door list: order is the door index, ids kept. */
+    /** The old shipped plazkart.json door list (in the OBJ frame): order is the door index, ids kept. */
     @Test
     void parsesDoorsInOrder() {
         WagonType type = WagonTypeParser.parse("rwat:plazkart", json("""
@@ -171,10 +171,10 @@ class WagonTypeParserTest {
                   "bogies": [8.5, -8.5],
                   "mass_t": 53.0,
                   "max_speed_kmh": 120.0,
-                  "interior": { "min": [-1.35, 1.81, -11.75], "max": [1.35, 4.55, 11.75] },
+                  "interior": { "min": [-11.75, 1.37375, -1.35], "max": [11.75, 4.11375, 1.35] },
                   "doors": [
-                    { "id": "door1", "min": [1.47, 1.81, 10.87], "max": [1.56, 3.81, 11.69] },
-                    { "id": "door3", "min": [-1.56, 1.81, -11.69], "max": [-1.47, 3.81, -10.87] }
+                    { "id": "door1", "min": [-11.69, 1.37375, 1.47], "max": [-10.87, 3.37375, 1.56] },
+                    { "id": "door3", "min": [10.87, 1.37375, -1.56], "max": [11.69, 3.37375, -1.47] }
                   ]
                 }
                 """));
@@ -228,14 +228,14 @@ class WagonTypeParserTest {
                   "bogies": [4.4375, -4.4375],
                   "mass_t": 123.0,
                   "max_speed_kmh": 95.0,
-                  "cab": { "seat": [-1.062, 3.092, -4.654], "seat_yaw": 0 },
+                  "cab": { "seat": [4.654, 2.65575, -1.062], "seat_yaw": 0 },
                   "interior": [
-                    { "min": [-1.44, 2.311, -5.5], "max": [1.44, 4.37, -4.45] },
-                    { "min": [0.875, 2.311, -3.44], "max": [1.625, 5.0, 8.312] }
+                    { "min": [4.45, 1.87475, -1.44], "max": [5.5, 3.93375, 1.44] },
+                    { "min": [-8.312, 1.87475, 0.875], "max": [3.44, 4.56375, 1.625] }
                   ],
                   "doors": [
-                    { "id": "door2", "min": [0.938, 2.374, -3.562], "max": [1.5, 4.382, -3.438], "inner": true },
-                    { "id": "step1", "min": [1.56, 1.0, 7.6], "max": [1.66, 3.0, 8.31], "fixed": true }
+                    { "id": "door2", "min": [3.438, 1.93775, 0.938], "max": [3.562, 3.94575, 1.5], "inner": true },
+                    { "id": "step1", "min": [-8.31, 0.56375, 1.56], "max": [-7.6, 2.56375, 1.66], "fixed": true }
                   ]
                 }"""));
 
@@ -262,10 +262,10 @@ class WagonTypeParserTest {
                 {
                   "length": 17.5, "bogies": [4.4, -4.4], "mass_t": 116,
                   "cab": { "seats": [
-                    { "at": [-0.84, 2.937, 7.5] },
-                    { "at": [1.106, 2.937, 7.487], "yaw": 0 },
-                    { "at": [0.856, 2.937, -7.512], "yaw": 180 },
-                    { "at": [1.074, 3.153, -3.942], "yaw": 90 }
+                    { "at": [-7.5, 2.50075, -0.84] },
+                    { "at": [-7.487, 2.50075, 1.106], "yaw": 0 },
+                    { "at": [7.512, 2.50075, 0.856], "yaw": 180 },
+                    { "at": [3.942, 2.71675, 1.074], "yaw": 90 }
                   ] }
                 }"""));
         assertEquals(4, type.cab().seats().size());
@@ -287,11 +287,79 @@ class WagonTypeParserTest {
         WagonType type = WagonTypeParser.parse("x:y", json("""
                 {
                   "length": 10, "bogies": [3, -3], "mass_t": 10, "max_speed_kmh": 50,
-                  "interior": { "min": [-1, 1, -4], "max": [1, 3, 4] },
-                  "doors": [ { "id": "d", "min": [0.9, 1, 0], "max": [1.0, 3, 0.8], "inner": true } ]
+                  "interior": { "min": [-4, 1, -1], "max": [4, 3, 1] },
+                  "doors": [ { "id": "d", "min": [-0.8, 1, 0.9], "max": [0, 3, 1.0], "inner": true } ]
                 }"""));
         assertFalse(type.doorsOnly());
         assertEquals(1, type.interior().zones().size());
+    }
+
+    // ---- the OBJ frame (roadmap R6) ----------------------------------------------
+
+    private static final double LIFT = ObjFrame.Y_LIFT;
+
+    /**
+     * Zones, doors and chairs are written as Blender shows the model — X along
+     * the car, the front towards −X, Y as in the model, +Z the left side — and
+     * held in the model frame: x = z_obj, y = y_obj + 0.43625, z = −x_obj.
+     * Along the car a box's min and max trade places.
+     */
+    @Test
+    void markupIsReadInTheObjFrame() {
+        WagonType type = WagonTypeParser.parse("test:car", json("""
+                {
+                  "length": 20, "bogies": [6, -6], "mass_t": 30,
+                  "interior": [ { "min": [-9.5, 1.375, -1.25], "max": [8.0, 3.875, 1.5] } ],
+                  "doors": [ { "id": "d", "min": [-7.25, 1.375, 1.45], "max": [-6.0, 3.5, 1.55] } ],
+                  "cab": { "seats": [ { "at": [-8.75, 1.9, 0.6], "yaw": 30 } ] }
+                }"""));
+        assertEquals(new WagonType.Interior.Zone(-1.25, 1.375 + LIFT, -8.0, 1.5, 3.875 + LIFT, 9.5),
+                type.interior().zones().get(0));
+        WagonType.Door door = type.doors().get(0);
+        assertEquals(1.45, door.minX(), 1.0e-12);
+        assertEquals(1.55, door.maxX(), 1.0e-12);
+        assertEquals(1.375 + LIFT, door.minY(), 1.0e-12);
+        assertEquals(3.5 + LIFT, door.maxY(), 1.0e-12);
+        assertEquals(6.0, door.minZ(), 1.0e-12, "min z is minus the OBJ's max x");
+        assertEquals(7.25, door.maxZ(), 1.0e-12, "max z is minus the OBJ's min x");
+        WagonType.Seat seat = type.cab().seats().get(0);
+        assertEquals(0.6, seat.x(), 1.0e-12);
+        assertEquals(1.9 + LIFT, seat.y(), 1.0e-12);
+        assertEquals(8.75, seat.z(), 1.0e-12);
+        assertEquals(30.0F, seat.yaw(), "a yaw is the same in both frames: 0 forward, +90 the right side");
+    }
+
+    /**
+     * What the frame means to the engine: a door in the OBJ's +Z wall is a
+     * side door on the left (+X), one in the wall at the OBJ's −X end is the
+     * front end door (+Z); a chair at the −X end facing yaw 0 looks forward,
+     * one at the +X end facing 180 drives the train the other way.
+     */
+    @Test
+    void theObjFramesFront_isTheEnginesFront() {
+        WagonType type = WagonTypeParser.parse("test:car", json("""
+                {
+                  "length": 20, "bogies": [6, -6], "mass_t": 30,
+                  "interior": { "min": [-9.5, 1.375, -1.25], "max": [9.5, 3.875, 1.25] },
+                  "doors": [
+                    { "id": "left", "min": [3.0, 1.375, 1.25], "max": [4.0, 3.375, 1.35] },
+                    { "id": "front", "min": [-9.6, 1.375, -0.4], "max": [-9.5, 3.375, 0.4], "connecting": true }
+                  ],
+                  "cab": { "seat": [-8.75, 1.9, 0.6] }
+                }"""));
+        WagonType.Door left = type.doors().get(0);
+        assertEquals(0, left.axis(), "a side door: thin across the car");
+        assertEquals(1, left.outward(), "on the left side, +X");
+        WagonType.Door front = type.doors().get(1);
+        assertEquals(2, front.axis(), "an end door: thin along the car");
+        assertEquals(1, front.outward(), "at the front end, +Z");
+        assertEquals(9.6, front.outerFace(), 1.0e-12);
+        WagonType.Seat chair = type.cab().seats().get(0);
+        assertEquals(8.75, chair.z(), 1.0e-12, "the one-chair form is read in the OBJ frame too");
+        assertFalse(chair.facesBack());
+        assertTrue(WagonTypeParser.parse("test:car", json("""
+                { "length": 20, "bogies": [6, -6], "mass_t": 30,
+                  "cab": { "seats": [ { "at": [8.75, 1.9, 0.6], "yaw": 180 } ] } }""")).cab().seats().get(0).facesBack());
     }
 
     // ---- strict reading (fix list D3, D4) ----------------------------------------

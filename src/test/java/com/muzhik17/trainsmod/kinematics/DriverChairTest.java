@@ -72,7 +72,8 @@ class DriverChairTest {
         WagonType.Seat low = new WagonType.Seat(-1.2, FLOOR + 0.1, 9.3, 0.0F);
         List<String> problems = FloorCheck.problems(type(CAB, List.of(CAB_DOOR), List.of(DRIVER, far, low)));
         assertEquals(2, problems.size(), problems.toString());
-        assertTrue(problems.get(0).startsWith("cab.seats[1]"), problems.get(0));
+        // the chair named where the pack has it: in the OBJ frame (x = −z, y − 0.43625, z = x)
+        assertTrue(problems.get(0).startsWith("cab.seats[1] (-12.50, 1.94, 1.20): "), problems.get(0));
         assertTrue(problems.get(1).startsWith("cab.seats[2]"), problems.get(1));
     }
 

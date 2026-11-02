@@ -18,6 +18,7 @@ from pathlib import Path
 TOOLS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(TOOLS))
 
+import floorgen  # noqa: E402
 import ir2rwat  # noqa: E402
 
 IR = "assets/immersiverailroading/"
@@ -53,7 +54,7 @@ def obj(objects, mtllib=None, material="body"):
     return ("\n".join(lines) + "\n").encode("utf-8")
 
 
-# the coach's floor: IR y 0.9 → RWAT 0.9 + Y_LIFT; IR's passenger centre_y sits 0.1 under it
+# the coach's floor: OBJ y 0.9 (the engine's 0.9 + Y_LIFT); IR's passenger centre_y sits 0.1 under the latter
 FLOOR_Y = 0.9
 COACH_OBJ = obj([
     ("FLOOR", floor_quad(-5.0, 5.0, FLOOR_Y, -1.4, 1.4)),
@@ -83,7 +84,7 @@ def coach_json(**extra):
         "properties": {"weight_kg": 30000, "max_speed_kmh": 100},
         "trucks": {"front": 3.0, "rear": -3.0},
         "couplers": {"front_offset": 0.0, "rear_offset": 0.0},
-        "passenger": {"center_x": 0.0, "center_y": FLOOR_Y + ir2rwat.Y_LIFT - ir2rwat.IR_FLOOR_OFFSET,
+        "passenger": {"center_x": 0.0, "center_y": FLOOR_Y + floorgen.Y_LIFT - ir2rwat.IR_FLOOR_OFFSET,
                       "length": 4.5, "width": 2.6},
         "tex_variants": {"Red Line": "L_Red"},
         "animations": [{"control_group": "DoorA",

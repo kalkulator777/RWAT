@@ -48,7 +48,7 @@ class ShutDoorTest {
                 new WagonType.Brakes(100.0, 0.0, 0.0, 0.0, 0.0), floor, doors);
     }
 
-    /** The platzkart's conductor's compartment and the aisle past it, as amendorf.json had them. */
+    /** The platzkart's conductor's compartment and the aisle past it, as amendorf.json had them (model space). */
     private static final WagonType.Interior PLATZKART = new WagonType.Interior(List.of(
             zone(0.35, -10.78, 1.0, 9.25),     // the aisle
             zone(-0.65, 6.78, 0.375, 7.55)));  // the compartment: 0.025 into the aisle

@@ -48,6 +48,14 @@ import com.muzhik17.trainsmod.pack.PackJson;
  * {@code couplers} (optional, default 0): where each coupler engages
  * relative to its frame end, + outward (SPEC §6.12).
  *
+ * <p><b>Frames</b> (roadmap R6, {@link ObjFrame}): the markup — the
+ * {@code interior} zones, the {@code doors} boxes, the {@code cab} chairs —
+ * is written in the OBJ frame, as Blender shows the model (the front towards
+ * −X, Y as in the model), and turned into the engine's model frame here, so
+ * a {@link WagonType} holds model-frame geometry only. {@code length},
+ * {@code bogies} and {@code couplers} are distances along the car, + forward,
+ * in either frame; a chair's {@code yaw} is the same in both.
+ *
  * <p><b>Strict reading</b> ({@link PackJson}): each section's keys are the
  * public {@code *_KEYS} sets below; a key a section doesn't know is a warning
  * with the nearest known one as a hint, never an error. A JSON {@code null}
@@ -281,7 +289,8 @@ public final class WagonTypeParser {
     /**
      * Optional {@code doors} list (SPEC v1.5, doors):
      * {@code "doors": [ { "id": "door1", "min": [x,y,z], "max": [x,y,z] } ]} —
-     * each door leaf's box in model space. Order = door index. Optional flags
+     * each door leaf's box in the OBJ frame, turned into the model frame
+     * ({@link ObjFrame#box}). Order = door index. Optional flags
      * (SPEC §9.1): {@code "inner": true} — a door between floor zones,
      * {@code "fixed": true} — an always-open opening without a leaf;
      * {@code "connecting": true} (SPEC §9.5) — an end door onto the gangway
@@ -301,14 +310,13 @@ public final class WagonTypeParser {
             JsonObject door = PackJson.object(array.get(i), where);
             PackJson.checkKeys(door, DOOR_KEYS, where, warnings);
             String id = PackJson.requiredString(door, "id", where);
-            double[] min = vec3(door, "min", where);
-            double[] max = vec3(door, "max", where);
+            double[] box = ObjFrame.box(vec3(door, "min", where), vec3(door, "max", where));
             JsonElement group = door.get("group");
             if (group != null && group.isJsonNull()) {
                 warnings.accept("'" + PackJson.at(where, "group") + "' is null: obsolete, leave the field out"
                         + " for a door on its own");
             }
-            doors.add(new WagonType.Door(id, min[0], min[1], min[2], max[0], max[1], max[2],
+            doors.add(new WagonType.Door(id, box[0], box[1], box[2], box[3], box[4], box[5],
                     PackJson.optionalBool(door, "inner", where, false),
                     PackJson.optionalBool(door, "fixed", where, false),
                     PackJson.optionalBool(door, "connecting", where, false),
@@ -321,16 +329,18 @@ public final class WagonTypeParser {
     /**
      * The {@code cab} section (SPEC §5.1, §9): presence = drivable; optional
      * driver's chairs {@code "seats": [ {"at": [x,y,z], "yaw": deg}, … ]} —
-     * {@code at} the top of the cushion (model space), facing {@code yaw}
-     * degrees (0 = forward, 180 = the other end's cab; default 0). The older
-     * one-chair form {@code "seat": [x,y,z], "seat_yaw": deg} still reads.
+     * {@code at} the top of the cushion in the OBJ frame, turned into the
+     * model frame ({@link ObjFrame#point}), facing {@code yaw} degrees (0 =
+     * forward, 180 = the other end's cab, +90 the right side; default 0 — the
+     * same in either frame). The older one-chair form
+     * {@code "seat": [x,y,z], "seat_yaw": deg} still reads, in the same frame.
      */
     private static WagonType.Cab cab(JsonObject cab, Consumer<String> warnings) {
         if (cab.has("seat") && cab.has("seats")) {
             throw new JsonSyntaxException("'cab' has both 'seat' and 'seats': list every chair in 'seats'");
         }
         if (cab.has("seat")) {
-            double[] seat = vec3(cab, "seat", "cab");
+            double[] seat = point(vec3(cab, "seat", "cab"));
             return new WagonType.Cab(List.of(new WagonType.Seat(seat[0], seat[1], seat[2],
                     (float) PackJson.optionalNumber(cab, "seat_yaw", "cab", 0.0))));
         }
@@ -346,7 +356,7 @@ public final class WagonTypeParser {
             String where = PackJson.at("cab.seats", i);
             JsonObject seat = PackJson.object(array.get(i), where);
             PackJson.checkKeys(seat, SEAT_KEYS, where, warnings);
-            double[] at = vec3(seat, "at", where);
+            double[] at = point(vec3(seat, "at", where));
             seats.add(new WagonType.Seat(at[0], at[1], at[2],
                     (float) PackJson.optionalNumber(seat, "yaw", where, 0.0)));
         }
@@ -356,8 +366,9 @@ public final class WagonTypeParser {
     /**
      * Optional {@code interior} (SPEC v1.5-б, §9.1): one box
      * {@code "interior": { "min": [x,y,z], "max": [x,y,z] }} or a list of
-     * floor zones {@code "interior": [ {min,max}, … ]}, in model space.
-     * Absent → not walk-boardable.
+     * floor zones {@code "interior": [ {min,max}, … ]}, in the OBJ frame,
+     * turned into the model frame ({@link ObjFrame#box}). Absent → not
+     * walk-boardable.
      */
     private static WagonType.Interior interior(JsonObject json, Consumer<String> warnings) {
         JsonElement element = json.get("interior");
@@ -384,9 +395,13 @@ public final class WagonTypeParser {
 
     private static WagonType.Interior.Zone zone(JsonObject box, String where, Consumer<String> warnings) {
         PackJson.checkKeys(box, ZONE_KEYS, where, warnings);
-        double[] min = vec3(box, "min", where);
-        double[] max = vec3(box, "max", where);
-        return new WagonType.Interior.Zone(min[0], min[1], min[2], max[0], max[1], max[2]);
+        double[] zone = ObjFrame.box(vec3(box, "min", where), vec3(box, "max", where));
+        return new WagonType.Interior.Zone(zone[0], zone[1], zone[2], zone[3], zone[4], zone[5]);
+    }
+
+    /** A point {@code [x, y, z]} of the OBJ frame in the model frame. */
+    private static double[] point(double[] obj) {
+        return ObjFrame.point(obj[0], obj[1], obj[2]);
     }
 
     private static double[] vec3(JsonObject json, String field, String where) {

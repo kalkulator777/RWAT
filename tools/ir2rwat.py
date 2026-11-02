@@ -40,6 +40,15 @@ turns the derived doors off. "doors" as an object edits them by id instead
 names are read as the engine reads them: without Blender's copy suffix
 (DOOR_3.001 is DOOR_3).
 
+Frames (roadmap R6): every coordinate the converter writes or reads — the
+generated floor zones and doors, the per-type file's "interior", "doors",
+"cab" chairs and "floor" options, the --geometry digests — is in the OBJ
+frame, as Blender shows the model: X along the car, the front towards -X, Y
+as in the model, +Z the left side. The heuristics work in the engine's model
+frame (parse_obj, tools/floorgen.py; stock.ObjFrame: x = z_obj,
+y = y_obj + floorgen.Y_LIFT, z = -x_obj) and round there, then translate at
+the edges, so a derived box is the engine's to the last digit.
+
 Names: a per-type override file may carry "name" ({"ru_ru": "..."}) and
 "lights" ({"<group>": {"en_us": "...", "ru_ru": "..."}}) — the stock's display
 name and its light groups' names in the driver's light menu (SPEC §8), written
@@ -109,8 +118,9 @@ Usage:  python tools/ir2rwat.py packs/mvp.json [--out DIR] [--zip] [--geometry D
 floor is measured from — every object's bounding box, the floor levels (up-
 facing surface area by height), IR's passenger area and the floor and doors
 derived from them, how each door's leaf moves, the IR animations and the
-light groups. No model data, so it can live in the repository and be worked
-from where the IR packs are not (tests/RecipeFloorTest, SPEC §9.6).
+light groups, all in the OBJ frame. No model data, so it can live in the
+repository and be worked from where the IR packs are not
+(tests/RecipeFloorTest, SPEC §9.6).
 
 Python 3.9+, standard library only.
 """
@@ -160,11 +170,12 @@ HP_TO_KW = 0.745699872
 LBF_TO_KN = 0.00444822162
 G_KN_PER_TONNE = 9.81  # weight of a tonne, kN
 
-# IR model space -> RWAT model space (IrStockModel.toModelSpace): x = IR z,
-# y = IR y + lift onto the railhead, z = -IR x (IR's front is -X, RWAT's +Z)
-Y_LIFT = 0.40625 + 0.03
-# IR "passenger.center_y" sits this far under the floor a RWAT rider walks
-# (measured on the ChME3 and the platzkart: 2.2 -> 2.311, 1.71 -> 1.81)
+# The OBJ frame (IR's model space, the pack's markup) -> the engine's model frame
+# (stock.ObjFrame, IrStockModel.toModelSpace): x = IR z, y = IR y + floorgen.Y_LIFT,
+# z = -IR x (IR's front is -X, RWAT's +Z). The heuristics below work in the
+# model frame; the pack, the per-type files and the digests are in the OBJ frame.
+# IR "passenger.center_y" sits this far under the floor a RWAT rider walks, in the
+# model frame (measured on the ChME3 and the platzkart: 2.2 -> 2.311, 1.71 -> 1.81)
 IR_FLOOR_OFFSET = 0.1
 # headroom of a derived floor zone (only the floor height and the plan matter)
 ZONE_HEIGHT = 2.5
@@ -387,8 +398,9 @@ def ir_location_to_zip(location):
 
 def parse_obj(raw):
     """mtllib references, object names, the travel-axis extent of the visible
-    model, and every object's bounding box in RWAT model space
-    ({name: [min_x, min_y, min_z, max_x, max_y, max_z]})."""
+    model, and every object's bounding box in the engine's model frame
+    ({name: [min_x, min_y, min_z, max_x, max_y, max_z]}; floorgen.flat_box_to_obj
+    gives it in the OBJ frame)."""
     libraries, objects = [], []
     positions = []
     boxes = {}
@@ -411,7 +423,7 @@ def parse_obj(raw):
                 if visible:
                     min_x, max_x = min(min_x, x), max(max_x, x)
                 if box is not None:
-                    rx, ry, rz = z, y + Y_LIFT, -x
+                    rx, ry, rz = z, y + floorgen.Y_LIFT, -x
                     if rx < box[0]: box[0] = rx
                     if ry < box[1]: box[1] = ry
                     if rz < box[2]: box[2] = rz
@@ -425,7 +437,8 @@ def parse_obj(raw):
 
 
 def floor_levels(raw, x_range=(-math.inf, math.inf), z_range=(-math.inf, math.inf), min_area=0.25):
-    """Up-facing horizontal surfaces of a model by height (RWAT model space):
+    """Up-facing horizontal surfaces of a model by height, in the OBJ frame (the
+    model's own coordinates, as the pack's markup is written):
     [(y, area, [min_x, min_z, max_x, max_z], [objects])], only faces whose
     centre lies in the plan window, levels of at least min_area. A floor is a
     big area at one height; a vestibule a step lower, a cab deck higher."""
@@ -435,8 +448,7 @@ def floor_levels(raw, x_range=(-math.inf, math.inf), z_range=(-math.inf, math.in
     for line in io.TextIOWrapper(io.BytesIO(raw), encoding="utf-8", errors="replace"):
         if line.startswith("v "):
             parts = line.split()
-            x, y, z = float(parts[1]), float(parts[2]), float(parts[3])
-            positions.append((z, y + Y_LIFT, -x))
+            positions.append((float(parts[1]), float(parts[2]), float(parts[3])))
         elif line.startswith(("o ", "g ")):
             name = line[2:].strip()
         elif line.startswith("f "):
@@ -597,8 +609,9 @@ def derive_handbrake(objects):
 def derive_interior(category, ir):
     """A passenger car's walkable floor (SPEC §9.6): IR's "passenger" area —
     centre_x along the car, length = HALF the length, width = the full width,
-    centre_y just under the floor — as one RWAT floor zone; None otherwise
-    (locomotive cabs need a driver's chair as well: hand-made)."""
+    centre_y just under the floor — as one RWAT floor zone, in the OBJ frame
+    (worked out in the model frame, rounded there); None otherwise (locomotive
+    cabs need a driver's chair as well: hand-made)."""
     area = ir.get("passenger")
     if category != "passenger" or not isinstance(area, dict):
         return None
@@ -608,8 +621,8 @@ def derive_interior(category, ir):
         return None
     centre_z = -area.get("center_x", 0.0)
     floor = area.get("center_y", 0.0) + IR_FLOOR_OFFSET
-    return {"min": [r(-width / 2, 3), r(floor, 3), r(centre_z - half_length, 3)],
-            "max": [r(width / 2, 3), r(floor + ZONE_HEIGHT, 3), r(centre_z + half_length, 3)]}
+    return floorgen.box_to_obj({"min": [r(-width / 2, 3), r(floor, 3), r(centre_z - half_length, 3)],
+                                "max": [r(width / 2, 3), r(floor + ZONE_HEIGHT, 3), r(centre_z + half_length, 3)]})
 
 
 def object_name(name):
@@ -667,7 +680,8 @@ def derive_doors(boxes):
     """The model's doors (SPEC §9.6): every DOOR_<n> object group as a RWAT
     door — EXTERNAL a way in and out, CONNECTING an end door onto the gangway,
     anything else (IR's INTERNAL) a door between floor zones ("inner") — the
-    group's bounding box, id = its control group (CG_<name>, so the IR
+    group's bounding box (in the model frame, as `boxes`; model_doors gives
+    them to the pack), id = its control group (CG_<name>, so the IR
     animation of that group swings it), else door_<n>. The leaves of one
     doorway (ER2's sliding pairs, one CG) make one door; markers and handles
     too small for a doorway are left out. Doorways on one control group get
@@ -723,7 +737,8 @@ def widget_doors(boxes, animated):
     """Inner doors that are control widgets (SPEC §9.8): a WIDGET_<n> of door
     size and thin like a leaf, flagged TOGGLE, whose control group CG_<name>
     has an IR animation (`animated`, lower-case group names) — the platzkart's
-    DoorTambur, DoorToilet and DoorKupe. The door is the box of everything
+    DoorTambur, DoorToilet and DoorKupe; in the model frame, as derive_doors.
+    The door is the box of everything
     named WIDGET_<n> (handles included, as DOOR_<n>'s is), id = the group,
     "inner": true. In WIDGET_<n> order. A leaf that is HIDE-flagged or on a
     group with no animation (the ChME3's cable, a light switch) is no door."""
@@ -755,15 +770,17 @@ def widget_doors(boxes, animated):
 
 
 def model_doors(boxes, animated):
-    """Every door the model carries: its DOOR_<n> doorways, then its WIDGET
-    doors (an id the DOOR_<n> doors already use is left to them)."""
+    """Every door the model carries, as the pack writes it (OBJ frame): its
+    DOOR_<n> doorways, then its WIDGET doors (an id the DOOR_<n> doors already
+    use is left to them). Found in the model frame of `boxes` (parse_obj) and
+    rounded there, so the boxes are the engine's to the last digit."""
     doors = derive_doors(boxes)
     taken = {d["id"].lower() for d in doors}
     for door in widget_doors(boxes, animated):
         if door["id"].lower() not in taken:
             doors.append(door)
             taken.add(door["id"].lower())
-    return doors
+    return [floorgen.box_to_obj(door) for door in doors]
 
 
 def edit_doors(doors, edits, warn):
@@ -1288,8 +1305,9 @@ class Converter:
         """(the doors the model carries, the doors the type gets) — DOOR_<n>
         and WIDGET doors, then the per-type file's "doors": a list replaces
         them, an object edits them by id (and is taken out of type_json).
-        The one place both the converter and tools/objinfo.py --doors read
-        the doors from."""
+        All in the OBJ frame, as the pack and the per-type file are. The one
+        place both the converter and tools/objinfo.py --doors read the doors
+        from."""
         animated = {a.get("control_group", "").lower() for a in ir.get("animations", [])
                     if source.exists(ir_location_to_zip(a["animatrix"]))}
         in_model = model_doors(boxes, animated)
@@ -1317,7 +1335,8 @@ class Converter:
         and WIDGET doors) edited by the file's "doors" — a list replaces them.
         Returns a dict (type_json, doors = the doors the floor was made for,
         floor = floorgen.Floor or None, floor_problem = why there is none,
-        hand_interior = the file's own, ...)."""
+        hand_interior = the file's own, ...); every zone, door and chair in
+        it is in the OBJ frame, as the pack is (boxes: the model frame)."""
         ir = lenient_json(source.read(entry))
         obj_zip = ir_location_to_zip(ir["model"])
         if parsed is None:
@@ -1337,7 +1356,8 @@ class Converter:
             options = dict(floor_options or {})
             options.update(floor_override or {})
             area = ir.get("passenger")
-            ir_floor = area.get("center_y", 0.0) + IR_FLOOR_OFFSET if isinstance(area, dict) and category == "passenger" else None
+            ir_floor = (area.get("center_y", 0.0) + IR_FLOOR_OFFSET - floorgen.Y_LIFT  # OBJ y
+                        if isinstance(area, dict) and category == "passenger" else None)
             try:
                 config = floorgen.FloorConfig(options)
             except floorgen.FloorConfigError as problem:
@@ -1346,7 +1366,7 @@ class Converter:
                            f"valid: the floor is IR's passenger area instead)")
             else:
                 try:
-                    generated = floorgen.generate(source.read(obj_zip), config, doors, ir_floor, Y_LIFT)
+                    generated = floorgen.generate(source.read(obj_zip), config, doors, ir_floor)
                 except Exception as problem:  # a model the generator can't read keeps the IR floor
                     floor_problem = describe(problem)
                     self.warn(f"{type_id}: no generated floor — {floor_problem}")
@@ -1541,13 +1561,15 @@ class Converter:
                 self.langs.setdefault(lang, {})[f"light.{self.namespace}.{type_id}.{group}"] = text
 
     def write_geometry(self, source, plan, type_id, category, ir_animations):
-        """<geometry>/<id>.json: the numbers a floor is measured from (see --geometry); kept until the pack is written."""
+        """<geometry>/<id>.json: the numbers a floor is measured from (see --geometry), in the OBJ
+        frame as the pack's markup is; kept until the pack is written."""
         ir, obj_zip, extent, boxes = plan["ir"], plan["obj_zip"], plan["extent"], plan["boxes"]
         interior = plan["derived_interior"]
         floor = plan["floor"]
         digest = {
-            "_about": "RWAT model space (+Z forward, Y up, X across; railhead y 0.406). Generated by "
-                      "tools/ir2rwat.py --geometry from the IR pack; numbers only. SPEC 9.6.",
+            "_about": "OBJ frame, as the pack's markup (x along the car, the front towards -x; y up as in "
+                      "the model; z across, +z the left side). Generated by tools/ir2rwat.py --geometry "
+                      "from the IR pack; numbers only. SPEC 9.6, roadmap R6.",
             "id": f"{self.namespace}:{type_id}",
             "category": category,
             "length": r(extent[1] - extent[0], 3),
@@ -1560,10 +1582,11 @@ class Converter:
             "floor_levels": [{"y": y, "area": a, "plan_min_x_z": box[:2], "plan_max_x_z": box[2:],
                               "objects": objects[:6]}
                              for y, a, box, objects in floor_levels(source.read(obj_zip))],
-            "objects": {name: [r(v, 3) for v in box] for name, box in sorted(boxes.items())},
+            "objects": {name: [r(v, 3) for v in floorgen.flat_box_to_obj(box)] for name, box in sorted(boxes.items())},
         }
         if floor is not None:
-            digest["derived"]["floor"] = {"levels": floor.levels, "zones": len(floor.interior),
+            digest["derived"]["floor"] = {"levels": [floorgen.y_to_obj(level) for level in floor.levels],
+                                          "zones": len(floor.interior),
                                           "centre_area": r(floor.region.area(), 2)}
         self.digests[type_id] = dump(digest)
 

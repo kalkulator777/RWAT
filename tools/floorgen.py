@@ -4,11 +4,19 @@
 ir2rwat calls this for every passenger car (and for a locomotive whose
 per-type file opts in) that has no hand-made "interior": the result is a list
 of axis-aligned floor boxes, the format the engine reads (stock.FloorRegion).
-How it goes, in RWAT model space (+Z forward, X across, Y up):
+
+Frames (roadmap R6). What goes in and comes out is in the OBJ frame, as the
+pack is written: X along the car, the front towards -X, Y as in the model,
++Z the left side — the per-type "floor" options, the type's doors, the
+generated zones, the command line's numbers and maps. Inside, the generator
+works in the engine's model frame (stock.ObjFrame: x = z_obj,
+y = y_obj + Y_LIFT, z = -x_obj; +Z forward, X across, Y up) and translates at
+the edges: FloorConfig, generate, main. The steps below speak of the model
+frame:
 
  1. Floor level: the big up-facing surface inside the body (platzkart 1.811,
-    69 m2), the one nearest IR's passenger area (center_y + 0.1) — or the
-    level the per-type file names.
+    69 m2; 1.37475 in the OBJ frame), the one nearest IR's passenger area
+    (center_y + 0.1) — or the level the per-type file names.
  2. A grid of 1/16 block cells. A cell is FLOOR if an up-facing triangle at
     the level covers its centre.
  3. A cell is an OBSTACLE if any triangle crosses the player's body slab
@@ -49,9 +57,9 @@ members optional; "floor": {} on a locomotive turns the generator on for it
 (a walkable cab also needs cab.seats, which stay manual); a "type.interior"
 of the same file wins over the generated one:
 
-    "floor": {
+    "floor": {                       heights and boxes in the OBJ frame
       "clearance": 0.1,              how far a body may lean into a wall
-      "level": 1.81,                 floor height (a number) or [heights] for
+      "level": 1.375,                floor height (a number) or [heights] for
                                      steps; default: found (locomotives: required)
       "add":    [{"min": [x, y, z], "max": [x, y, z]}],   free cells (x, z; y picks
                                      the level if there are several), after
@@ -75,6 +83,10 @@ fits / doors; --compare against the type's hand "interior"):
 
     python -I tools/floorgen.py packs/mvp.json amendorf --ascii
     python -I tools/floorgen.py packs/mvp.json amendorf --png SCRATCH/am.png --compare
+    python -I tools/floorgen.py packs/mvp.json chme3 --ascii --x -9 -4 --level 1.875
+
+The map shows the car from above, along it towards the front (-x); --x
+narrows it to a stretch of OBJ x, --level overrides the level (OBJ y).
 
 It says what went wrong without a traceback: exit status 2 for a recipe it
 can't read or a type it can't find, 1 when no floor could be generated (the
@@ -116,14 +128,77 @@ HIGH_SLAB = 1.4
 UP_FACING = 0.95
 MIN_LEVEL_AREA = 1.0
 OPTIONS = {"clearance", "level", "add", "remove", "ignore", "slab", "cell", "step_down"}
+# The OBJ frame → the engine's model frame (stock.ObjFrame): x = z_obj, y = y_obj + Y_LIFT,
+# z = -x_obj — IR's front is -X, RWAT's +Z; the lift seats the wheel tread (OBJ y -0.03) on the
+# railhead (0.40625 over the path). The one copy of the lift in tools/.
+Y_LIFT = 0.40625 + 0.03
+
+
+# ------------------------------------------------------------------ the frames
+
+def _clean(value):
+    """A translated coordinate without the float noise of the sum (and never -0.0)."""
+    return round(value, 9) + 0.0
+
+
+def point_from_obj(p):
+    """[x, y, z] of the OBJ frame in the engine's model frame."""
+    return [_clean(p[2]), _clean(p[1] + Y_LIFT), _clean(-p[0])]
+
+
+def point_to_obj(p):
+    """[x, y, z] of the engine's model frame in the OBJ frame."""
+    return [_clean(-p[2]), _clean(p[1] - Y_LIFT), _clean(p[0])]
+
+
+def y_from_obj(y):
+    return _clean(y + Y_LIFT)
+
+
+def y_to_obj(y):
+    return _clean(y - Y_LIFT)
+
+
+def box_from_obj(box):
+    """A {"min", "max", ...} box (a zone, a door, an add/remove box) of the OBJ frame in the
+    model frame, its other keys as they are. Along the car min and max trade places: the
+    OBJ's greatest x is the model's least z."""
+    lo, hi = box["min"], box["max"]
+    out = dict(box)
+    out["min"] = [_clean(lo[2]), _clean(lo[1] + Y_LIFT), _clean(-hi[0])]
+    out["max"] = [_clean(hi[2]), _clean(hi[1] + Y_LIFT), _clean(-lo[0])]
+    return out
+
+
+def box_to_obj(box):
+    """A {"min", "max", ...} box of the model frame in the OBJ frame (see box_from_obj)."""
+    lo, hi = box["min"], box["max"]
+    out = dict(box)
+    out["min"] = [_clean(-hi[2]), _clean(lo[1] - Y_LIFT), _clean(lo[0])]
+    out["max"] = [_clean(-lo[2]), _clean(hi[1] - Y_LIFT), _clean(hi[0])]
+    return out
+
+
+def interior_from_obj(interior):
+    """An "interior" — a list of zones or one zone — of the OBJ frame in the model frame."""
+    return [box_from_obj(z) for z in interior] if isinstance(interior, list) else box_from_obj(interior)
+
+
+def interior_to_obj(interior):
+    return [box_to_obj(z) for z in interior] if isinstance(interior, list) else box_to_obj(interior)
+
+
+def flat_box_to_obj(box):
+    """[min x, min y, min z, max x, max y, max z] of the model frame in the OBJ frame."""
+    out = box_to_obj({"min": box[:3], "max": box[3:]})
+    return out["min"] + out["max"]
 
 
 # ----------------------------------------------------------------- the model
 
-def read_triangles(raw, y_lift):
-    """([names], [(name index, 9 floats)]) of an OBJ in RWAT model space
-    (rx, ry, rz = z, y + y_lift, -x as ir2rwat maps IR's frame); polygons are
-    fanned into triangles."""
+def read_triangles(raw):
+    """([names], [(name index, 9 floats)]) of an OBJ in the engine's model frame
+    (rx, ry, rz = z, y + Y_LIFT, -x); polygons are fanned into triangles."""
     positions = []
     names = []
     current = -1
@@ -131,7 +206,7 @@ def read_triangles(raw, y_lift):
     for line in io.TextIOWrapper(io.BytesIO(raw), encoding="utf-8", errors="replace"):
         if line.startswith("v "):
             p = line.split()
-            positions.append((float(p[3]), float(p[2]) + y_lift, -float(p[1])))
+            positions.append((float(p[3]), float(p[2]) + Y_LIFT, -float(p[1])))
         elif line.startswith(("o ", "g ")):
             name = line[2:].strip()
             if name in names:
@@ -208,8 +283,10 @@ def _list(options, key):
 
 
 class FloorConfig:
-    """The per-type "floor" object (see the module docstring). Raises
-    FloorConfigError, naming the member, for anything it can't take."""
+    """The per-type "floor" object (see the module docstring), written in the OBJ
+    frame; it keeps level, add and remove in the engine's model frame the
+    generator works in. Raises FloorConfigError, naming the member, for
+    anything it can't take."""
 
     def __init__(self, options=None):
         if options is None:
@@ -229,9 +306,9 @@ class FloorConfig:
             heights = level if isinstance(level, list) else [level]
             if not heights:
                 raise FloorConfigError("\"floor\".level is a height or a list of heights, not []")
-            self.levels = [_number(v, "level") for v in heights]
-        self.add = [self.box(b, "add") for b in _list(options, "add")]
-        self.remove = [self.box(b, "remove") for b in _list(options, "remove")]
+            self.levels = [y_from_obj(_number(v, "level")) for v in heights]
+        self.add = [box_from_obj(self.box(b, "add")) for b in _list(options, "add")]
+        self.remove = [box_from_obj(self.box(b, "remove")) for b in _list(options, "remove")]
         self.ignore = []
         for pattern in _list(options, "ignore"):
             if not isinstance(pattern, str):
@@ -262,7 +339,8 @@ class FloorConfig:
 # ---------------------------------------------------------- the engine's rule
 
 class Door:
-    """A type's door as the engine reads it (WagonType.Door)."""
+    """A type's door as the engine reads it (WagonType.Door), in the model frame
+    (engine_doors makes them of the pack's)."""
 
     def __init__(self, d):
         self.id = d.get("id", "?")
@@ -315,6 +393,11 @@ class Door:
             lo, hi = mid - MIN_CUT * 0.5, mid + MIN_CUT * 0.5
         along_lo, along_hi = self.span[0] - margin, self.span[1] + margin
         return (lo, along_lo, hi, along_hi) if a == 0 else (along_lo, lo, along_hi, hi)
+
+
+def engine_doors(doors):
+    """Door objects, in the model frame, of a type's doors as the pack has them (OBJ frame dicts)."""
+    return [Door(box_from_obj(d)) for d in doors]
 
 
 def shut_cuts(doors, margin=HALF_WIDTH):
@@ -851,8 +934,8 @@ class Floor:
     """What generate() found: the boxes and everything the maps are drawn from."""
 
     def __init__(self):
-        self.interior = []      # [{"min": [x, y, z], "max": [x, y, z]}]
-        self.levels = []        # floor heights used
+        self.interior = []      # [{"min": [x, y, z], "max": [x, y, z]}], in the OBJ frame (the pack's)
+        self.levels = []        # floor heights used, in the model frame (y_to_obj for the pack's)
         self.notes = []         # things worth telling the author
         self.grid = None
         self.floor = {}         # level → mask
@@ -901,11 +984,15 @@ def pick_levels(levels, config, ir_floor, y_range):
     return [round(max(low, key=lambda lv: lv[1])[0], 3)]
 
 
-def generate(raw, config, doors=(), ir_floor=None, y_lift=0.40625 + 0.03):
-    """The walkable floor of the OBJ `raw` (see the module docstring) as a Floor.
-    doors: the type's doors as dicts (hull/gangway ones seed the reachability,
-    inner ones join what they bridge)."""
-    names, triangles = read_triangles(raw, y_lift)
+def generate(raw, config, doors=(), ir_floor=None):
+    """The walkable floor of the OBJ `raw` (see the module docstring) as a Floor,
+    its interior in the OBJ frame. doors: the type's doors as the pack has them,
+    dicts in the OBJ frame (hull/gangway ones seed the reachability, inner ones
+    join what they bridge); ir_floor: the floor height IR's passenger area
+    suggests, OBJ y."""
+    names, triangles = read_triangles(raw)
+    if ir_floor is not None:
+        ir_floor = y_from_obj(ir_floor)
     skip = {i for i, n in enumerate(names) if "HIDE" in n or any(p.search(n) for p in config.ignore)}
     active = [t for t in triangles if t[0] not in skip]
     ys = [v for _, t in active for v in (t[1], t[4], t[7])]
@@ -914,7 +1001,7 @@ def generate(raw, config, doors=(), ir_floor=None, y_lift=0.40625 + 0.03):
     levels = pick_levels(find_levels(active), config, ir_floor, (min(ys), max(ys)))
     result = Floor()
     result.levels = levels
-    door_list = [Door(d) for d in doors]
+    door_list = engine_doors(doors)
 
     # the grid: the extent of the floor-level surfaces
     bounds = [math.inf, math.inf, -math.inf, -math.inf]
@@ -1060,15 +1147,15 @@ def generate(raw, config, doors=(), ir_floor=None, y_lift=0.40625 + 0.03):
     result.region = Region([b[1:] for b in final], cuts=shut_cuts(door_list))
     result.dropped_area -= result.region.area()
     for level, x0, z0, x1, z1 in final:
-        result.interior.append({"min": [round(x0, 4), level, round(z0, 4)],
-                                "max": [round(x1, 4), round(level + ZONE_HEIGHT, 4), round(z1, 4)]})
+        result.interior.append(box_to_obj({"min": [round(x0, 4), level, round(z0, 4)],
+                                           "max": [round(x1, 4), round(level + ZONE_HEIGHT, 4), round(z1, 4)]}))
     return result
 
 
 # ------------------------------------------------------------------- reports
 
 def boxes_of(interior):
-    """[(min x, min z, max x, max z)] of an "interior" (a box or a list of boxes)."""
+    """[(min x, min z, max x, max z)] of an "interior" (a box or a list of boxes) of the model frame."""
     zones = interior if isinstance(interior, list) else [interior]
     return [(z["min"][0], z["min"][2], z["max"][0], z["max"][2]) for z in zones]
 
@@ -1148,11 +1235,12 @@ def cell_class(result, level, ix, iz):
 
 
 def window_rows(grid, window):
-    """Cell rows (Z) inside the --z window (blocks), all by default."""
+    """Cell rows inside the --x window (OBJ x along the car, blocks), all by default."""
     if window is None:
         return 0, grid.nz
-    return (max(0, int(math.floor(window[0] / grid.size)) - grid.iz0),
-            min(grid.nz, int(math.ceil(window[1] / grid.size)) - grid.iz0))
+    lo, hi = sorted((-window[0], -window[1]))  # the rows run along the model's z = -x
+    return (max(0, int(math.floor(lo / grid.size)) - grid.iz0),
+            min(grid.nz, int(math.ceil(hi / grid.size)) - grid.iz0))
 
 
 def ascii_map(result, doors, step=1, window=None):
@@ -1173,12 +1261,15 @@ def ascii_map(result, doors, step=1, window=None):
                 continue
             for ix in range(max(ix0, 0), min(ix1, grid.nx - 1) + 1):
                 rows[(iz - first) // step][ix] = mark
-    out = [f"X from {grid.x(0):.3f} to {grid.x(grid.nx):.3f} (columns), Z down from {grid.z(0):.3f}, "
-           f"{grid.size * step:.4f} per row; level {level}",
+    # in the OBJ frame: the columns run across (z = the model's x), the rows along the car
+    # towards the front (x = minus the model's z)
+    out = [f"z from {grid.x(0):.3f} to {grid.x(grid.nx):.3f} (columns, across), x down from "
+           f"{0.0 - grid.z(first):.3f} towards the front (-x), {grid.size * step:.4f} per row; "
+           f"level {y_to_obj(level)} (OBJ frame)",
            "legend: o centre fits here  + kept floor  , free but dropped (unreachable)  # obstacle on floor"
            "  . floor, not free  D hull door  G gangway  i inner door"]
     for iz, row in enumerate(rows):
-        out.append(f"{grid.z(first + iz * step):8.3f} " + "".join(row))
+        out.append(f"{0.0 - grid.z(first + iz * step):8.3f} " + "".join(row))
     return "\n".join(out)
 
 
@@ -1200,7 +1291,8 @@ def write_png(path, width, height, pixel):
 
 
 def png_map(path, result, doors, hand=None, px=3, window=None):
-    """Top-down map: Z runs left to right, X top to bottom."""
+    """Top-down map: the car runs left to right, its front (OBJ -x) on the right;
+    across it OBJ z grows top to bottom (the left side, +z, at the bottom)."""
     grid = result.grid
     level = max(result.levels)
     colours = {" ": (24, 24, 24), ".": (80, 80, 80), "#": (150, 100, 60), ",": (110, 130, 110),
@@ -1241,13 +1333,14 @@ def main(argv=None):
     parser.add_argument("recipe", help="pack recipe, e.g. packs/mvp.json")
     parser.add_argument("type", help="stock type id, e.g. amendorf")
     parser.add_argument("--ascii", action="store_true", help="print a text map")
-    parser.add_argument("--step", type=int, default=1, help="--ascii: cells per row along Z")
+    parser.add_argument("--step", type=int, default=1, help="--ascii: cells per row along the car")
     parser.add_argument("--png", help="write a top-down map here (keep it out of the repository)")
     parser.add_argument("--px", type=int, default=3, help="--png: pixels per cell")
-    parser.add_argument("--z", type=float, nargs=2, metavar=("FROM", "TO"), help="--ascii/--png: only this Z window")
+    parser.add_argument("--x", type=float, nargs=2, metavar=("FROM", "TO"),
+                        help="--ascii/--png: only this window along the car (OBJ x)")
     parser.add_argument("--compare", action="store_true", help="compare with the type's hand \"interior\"")
     parser.add_argument("--clearance", type=float, help="override the clearance")
-    parser.add_argument("--level", type=float, action="append", help="override the level")
+    parser.add_argument("--level", type=float, action="append", help="override the level (OBJ y)")
     parser.add_argument("--slab", type=float, nargs=2, help="override the body slab (from, to above the floor)")
     parser.add_argument("--json", action="store_true", help="print the generated interior as JSON")
     args = parser.parse_args(argv)
@@ -1268,15 +1361,15 @@ def main(argv=None):
     if floor is None:
         print(f"floorgen: error: {args.type}: no floor generated — {plan['floor_problem']}", file=sys.stderr)
         return 1
-    doors = [Door(d) for d in plan["doors"]]
-    print(f"{args.type}: level(s) {floor.levels}, {len(floor.interior)} box(es), "
+    doors = engine_doors(plan["doors"])
+    print(f"{args.type}: level(s) {[y_to_obj(level) for level in floor.levels]}, {len(floor.interior)} box(es), "
           f"{sum(boxes_area(b) for b in boxes_of(floor.interior)):.3f} m2 of floor, "
           f"centre region {floor.region.area():.3f} m2, "
           f"{floor.dropped_area:.3f} m2 of centre region dropped as unreachable")
     for note in floor.notes:
         print("  note:", note)
     hand_zone = plan["hand_interior"]
-    hand = Region(boxes_of(hand_zone), cuts=shut_cuts(doors)) if hand_zone is not None else None
+    hand = Region(boxes_of(interior_from_obj(hand_zone)), cuts=shut_cuts(doors)) if hand_zone is not None else None
     if args.compare:
         if hand is None:
             print("no hand \"interior\" in the type's file to compare with")
@@ -1285,10 +1378,10 @@ def main(argv=None):
     if args.json:
         print(json.dumps(floor.interior))
     if args.ascii:
-        print(ascii_map(floor, doors, args.step, args.z))
+        print(ascii_map(floor, doors, args.step, args.x))
     if args.png:
         try:
-            png_map(args.png, floor, doors, hand if args.compare else None, args.px, args.z)
+            png_map(args.png, floor, doors, hand if args.compare else None, args.px, args.x)
         except OSError as problem:
             print(f"floorgen: error: cannot write {args.png}: {problem.strerror or problem}", file=sys.stderr)
             return 1
