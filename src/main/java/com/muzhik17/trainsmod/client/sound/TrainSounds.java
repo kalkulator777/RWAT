@@ -64,6 +64,14 @@ import net.neoforged.neoforge.client.event.sound.SoundEngineLoadEvent;
  * its range, {@link SoundLevels}).</li>
  * </ul>
  *
+ * <p><b>Volume</b> is each sound's level (the declaration's range, or the
+ * defaults below) times the {@code trainVolume} setting, 0 to 2. The sound
+ * engine multiplies that by the category slider and limits the product to what
+ * the file plays at full, so above 1 the setting lifts the quiet sounds up to
+ * that ceiling and leaves the loud ones as they are — the game has no gain
+ * beyond the file. The hearing distances below are the same at any setting
+ * ({@link SoundLevels}).
+ *
  * <p>Loops are kept for the nearest wagons only ({@link #MAX_WHEELS},
  * {@link #MAX_ENGINES}): the sound engine has a few hundred channels for the
  * whole game. When it restarts (the sound device changed) or train sounds
