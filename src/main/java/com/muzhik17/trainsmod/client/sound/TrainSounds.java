@@ -59,9 +59,20 @@ import net.neoforged.neoforge.client.event.sound.SoundEngineLoadEvent;
  * if the pack gives none);</li>
  * <li><b>cab controls</b> — the notch of the throttle, brake and reverser in
  * the cab that drives;</li>
- * <li><b>horn and whistle</b> — from that cab, for as long as the driver holds the key.</li>
+ * <li><b>horn and whistle</b> — from that cab, for as long as the driver holds
+ * the key, at the pitch and volume their declaration gives (the full end of
+ * its range, {@link SoundLevels}).</li>
  * </ul>
- * Loops are kept for the nearest wagons only ({@link #MAX_WHEELS},
+ *
+ * <p><b>Volume</b> is each sound's level (the declaration's range, or the
+ * defaults below) times the {@code trainVolume} setting, 0 to 2. The sound
+ * engine multiplies that by the category slider and limits the product to what
+ * the file plays at full, so above 1 the setting lifts the quiet sounds up to
+ * that ceiling and leaves the loud ones as they are — the game has no gain
+ * beyond the file. The hearing distances below are the same at any setting
+ * ({@link SoundLevels}).
+ *
+ * <p>Loops are kept for the nearest wagons only ({@link #MAX_WHEELS},
  * {@link #MAX_ENGINES}): the sound engine has a few hundred channels for the
  * whole game. When it restarts (the sound device changed) or train sounds
  * can't be heard (a slider at 0), everything is dropped and picked up again
@@ -270,10 +281,9 @@ public final class TrainSounds {
         SoundSet.Loop loop = audio.wheels.loop();
         float f = (float) Math.min(kmh / WHEELS_FULL_KMH, 1.2);
         float fade = (float) Math.min(kmh / WHEELS_FADE_KMH, 1.0);
-        float[] pitch = loop.pitch() != null ? loop.pitch() : WHEELS_PITCH;
-        float[] level = loop.volume() != null ? loop.volume() : WHEELS_VOLUME;
+        float level = SoundLevels.at(loop.volume(), WHEELS_VOLUME, Math.min(f, 1.0F));
         audio.wheels.update(on, false, ticks, wagon.getX(), wagon.getY() + 0.5, wagon.getZ(),
-                (float) (lerp(level, Math.min(f, 1.0F)) * fade * volume), lerp(pitch, f));
+                (float) (level * fade * volume), SoundLevels.at(loop.pitch(), WHEELS_PITCH, f));
     }
 
     /**
@@ -294,14 +304,13 @@ public final class TrainSounds {
         float rate = target > audio.throttle ? ENGINE_UP : ENGINE_DOWN;
         audio.throttle = seen ? audio.throttle + Math.clamp(target - audio.throttle, -rate, rate) : target;
         SoundSet.Loop loop = audio.engine.loop();
-        float[] pitch = loop.pitch() != null ? loop.pitch() : ENGINE_PITCH;
-        float[] level = loop.volume() != null ? loop.volume() : ENGINE_VOLUME;
         if (!on && audio.engine.on() && alive) {
             audio.engine.kill(); // out of hearing / over budget: no shutdown sound
             return;
         }
         audio.engine.update(on, !started, ticks, wagon.getX(), wagon.getY() + 2.0, wagon.getZ(),
-                (float) (lerp(level, audio.throttle) * volume), lerp(pitch, audio.throttle));
+                (float) (SoundLevels.at(loop.volume(), ENGINE_VOLUME, audio.throttle) * volume),
+                SoundLevels.at(loop.pitch(), ENGINE_PITCH, audio.throttle));
     }
 
     /** Each bogie that crossed a rail joint this tick knocks, where it is. */
@@ -396,13 +405,14 @@ public final class TrainSounds {
         }
 
         int signals = ClientConsists.signals(consistId);
-        if (audio.horn != null) {
-            audio.horn.update((signals & Consist.HORN) != 0, false, ticks, roof.x, roof.y, roof.z,
-                    (float) volume, 1.0F);
-        }
-        if (audio.bell != null) {
-            audio.bell.update((signals & Consist.BELL) != 0, false, ticks, roof.x, roof.y, roof.z,
-                    (float) volume, 1.0F);
+        signal(audio.horn, (signals & Consist.HORN) != 0, roof, volume);
+        signal(audio.bell, (signals & Consist.BELL) != 0, roof, volume);
+    }
+
+    /** The horn or whistle, held or not: at its declared pitch and volume ({@link LoopPlayer#updateSignal}). */
+    private static void signal(LoopPlayer<TrainSound> signal, boolean held, Vector3d at, double volume) {
+        if (signal != null) {
+            signal.updateSignal(held, ticks, at.x, at.y, at.z, volume);
         }
     }
 
@@ -513,10 +523,6 @@ public final class TrainSounds {
         if (event.getSound() instanceof TrainSound) {
             STARTED.incrementAndGet();
         }
-    }
-
-    private static float lerp(float[] range, float t) {
-        return range[0] + (range[1] - range[0]) * t;
     }
 
     private static void silence(WagonAudio audio) {
