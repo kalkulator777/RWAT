@@ -2,6 +2,7 @@ package com.muzhik17.trainsmod.network;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.client.ClientConsists;
+import com.muzhik17.trainsmod.client.ClientPackCheck;
 import com.muzhik17.trainsmod.client.ClientRailGraph;
 import com.muzhik17.trainsmod.client.ClientRiderSync;
 import com.muzhik17.trainsmod.client.ClientWalk;
@@ -44,6 +45,8 @@ public final class RwatNetwork {
         registrar.playToClient(RiderPlacePayload.TYPE, RiderPlacePayload.STREAM_CODEC,
                 (payload, context) -> ClientWalk.place(payload.wagonId(),
                         new org.joml.Vector3d(payload.x(), payload.y(), payload.z())));
+        registrar.playToClient(PackManifestPayload.TYPE, PackManifestPayload.STREAM_CODEC,
+                (payload, context) -> ClientPackCheck.handle(payload));
         registrar.playToServer(DriveInputPayload.TYPE, DriveInputPayload.STREAM_CODEC,
                 (payload, context) -> context.enqueueWork(() -> handleDriveInput(payload, context)));
         registrar.playToServer(WalkInputPayload.TYPE, WalkInputPayload.STREAM_CODEC,

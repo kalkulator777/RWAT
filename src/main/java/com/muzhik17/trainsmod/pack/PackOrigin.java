@@ -16,10 +16,10 @@ public record PackOrigin(String pack, String file) {
     }
 
     public PackProblem error(String message) {
-        return new PackProblem(PackProblem.Severity.ERROR, pack, file, message);
+        return PackProblem.error(pack, file, message);
     }
 
     public PackProblem warning(String message) {
-        return new PackProblem(PackProblem.Severity.WARNING, pack, file, message);
+        return PackProblem.warning(pack, file, message);
     }
 }

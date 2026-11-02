@@ -57,7 +57,7 @@ class PackReportTest {
                 Map.of("a:m", MODEL, "a:chme3_old", other, "a:chme3", MODEL), Set.of("a:chme3", "a:m"));
         assertEquals(1, problems.size());
         PackProblem problem = problems.get(0);
-        assertFalse(problem.error());
+        assertFalse(problem.isError());
         assertEquals(other.file(), problem.file());
         assertTrue(problem.message().startsWith("no wagon type 'a:chme3_old' on the server"), problem.message());
         assertTrue(PackReport.modelsWithoutType(Map.of("a:m", MODEL), Set.of("a:m")).isEmpty());

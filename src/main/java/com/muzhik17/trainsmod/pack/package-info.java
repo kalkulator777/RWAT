@@ -12,8 +12,14 @@
  * the wagon type load ({@code WagonTypeLoader}), the rail style declaration
  * both sides read ({@code RailStyleDecl}), the model files' check
  * ({@code ModelCheck}) and the report of every loader's problems by pack and
- * file ({@code PackReport}). Shown by {@code PackReportView}
- * ({@code /rwat packs}, the operators' notice) and {@code ClientPackReport}
- * ({@code /rwatc packs [validate]}).
+ * file ({@code PackReport}, one {@code PackProblem} type for all). Shown by
+ * {@code PackReportView} ({@code /rwat packs}, the operators' notice) and
+ * {@code ClientPackReport} ({@code /rwatc packs [validate]}).
+ *
+ * <p>Here too: the pack's {@code "rwat"} block and format version
+ * ({@code RwatPackMeta}), what a scan found about each pack
+ * ({@code RwatPacks.infos()}), and the check of a client's packs against the
+ * server's by content hash ({@code PackHasher}, {@code PackManifest},
+ * {@code PackSyncEvents}).
  */
 package com.muzhik17.trainsmod.pack;

@@ -232,5 +232,9 @@
   "rwat.packs.validate.start": "Загружаю модели: %s…",
   "rwat.packs.validate.done": "Проверено моделей: %s. Ошибок: %s, предупреждений: %s",
   "rwat.packs.validate.busy": "Проверка моделей ещё идёт",
-  "rwat.packs.validate.stale": "Паки перезагрузились во время проверки — запустите её снова"
+  "rwat.packs.validate.stale": "Паки перезагрузились во время проверки — запустите её снова",
+  "rwat.packsync.mismatch": "RWAT-паки отличаются от серверных: %s. Поезда могут выглядеть и звучать не так; подробности в логе.",
+  "rwat.packsync.missing": "%s (не установлен)",
+  "rwat.packsync.different": "%s (другие файлы)",
+  "rwat.packsync.more": "и ещё %s"
 }

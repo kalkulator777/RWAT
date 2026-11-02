@@ -60,7 +60,7 @@ public final class PackReport {
 
     /** Errors first, then by pack and file; a file's problems stay in the order found. */
     private static final Comparator<PackProblem> ORDER = Comparator
-            .comparing((PackProblem p) -> !p.error())
+            .comparing((PackProblem p) -> !p.isError())
             .thenComparing(PackProblem::pack)
             .thenComparing(PackProblem::file);
 
@@ -103,11 +103,11 @@ public final class PackReport {
     }
 
     public synchronized int errors() {
-        return (int) parts.values().stream().flatMap(p -> p.problems().stream()).filter(PackProblem::error).count();
+        return (int) parts.values().stream().flatMap(p -> p.problems().stream()).filter(PackProblem::isError).count();
     }
 
     public synchronized int warnings() {
-        return (int) parts.values().stream().flatMap(p -> p.problems().stream()).filter(p -> !p.error()).count();
+        return (int) parts.values().stream().flatMap(p -> p.problems().stream()).filter(p -> !p.isError()).count();
     }
 
     /** Pack → source → declarations it loaded, both sorted. */

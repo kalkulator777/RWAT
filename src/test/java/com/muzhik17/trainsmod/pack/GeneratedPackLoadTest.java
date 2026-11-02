@@ -84,7 +84,7 @@ class GeneratedPackLoadTest {
         WagonTypeLoader.Result result = WagonTypeLoader.load(declarations);
         print("wagon types", result.problems());
         List<PackProblem> bad = result.problems().stream()
-                .filter(p -> p.error() || p.message().startsWith("unknown key")).toList();
+                .filter(p -> p.isError() || p.message().startsWith("unknown key")).toList();
         assertTrue(bad.isEmpty(), lines(bad));
         assertEquals(declarations.size(), result.types().size());
     }
@@ -155,7 +155,7 @@ class GeneratedPackLoadTest {
             problems.addAll(ModelCheck.check(WagonModelDecl.parse(file.namespace(), json(file)), file.origin(), files));
         }
         print("model files", problems);
-        List<PackProblem> errors = problems.stream().filter(PackProblem::error).toList();
+        List<PackProblem> errors = problems.stream().filter(PackProblem::isError).toList();
         assertTrue(errors.isEmpty(), lines(errors));
     }
 }

@@ -232,5 +232,9 @@
   "rwat.packs.validate.start": "Loading %s models…",
   "rwat.packs.validate.done": "Models checked: %s. Errors: %s, warnings: %s",
   "rwat.packs.validate.busy": "The model check is still running",
-  "rwat.packs.validate.stale": "The packs reloaded during the check: run it again"
+  "rwat.packs.validate.stale": "The packs reloaded during the check: run it again",
+  "rwat.packsync.mismatch": "RWAT packs differ from the server's: %s. Trains may look or sound wrong; details in the log.",
+  "rwat.packsync.missing": "%s (not installed)",
+  "rwat.packsync.different": "%s (different files)",
+  "rwat.packsync.more": "and %s more"
 }

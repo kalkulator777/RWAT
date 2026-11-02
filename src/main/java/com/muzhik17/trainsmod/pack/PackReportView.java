@@ -39,7 +39,7 @@ public final class PackReportView {
     /** Log each problem: errors as errors, warnings as warnings. */
     public static void log(List<PackProblem> problems) {
         for (PackProblem problem : problems) {
-            if (problem.error()) {
+            if (problem.isError()) {
                 RailsWheelsAndTrains.LOGGER.error("Pack {}, {}: {}", problem.pack(), problem.file(), problem.message());
             } else {
                 RailsWheelsAndTrains.LOGGER.warn("Pack {}, {}: {}", problem.pack(), problem.file(), problem.message());
@@ -96,8 +96,8 @@ public final class PackReportView {
 
     /** {@code ✖ pack file: message}, red for an error, yellow for a warning. */
     private static Component line(PackProblem problem) {
-        return Component.literal(problem.error() ? "✖ " : "⚠ ")
-                .withStyle(problem.error() ? ChatFormatting.RED : ChatFormatting.YELLOW)
+        return Component.literal(problem.isError() ? "✖ " : "⚠ ")
+                .withStyle(problem.isError() ? ChatFormatting.RED : ChatFormatting.YELLOW)
                 .append(Component.literal(problem.pack() + " " + problem.file() + ": ").withStyle(ChatFormatting.GRAY))
                 .append(Component.literal(problem.message()).withStyle(ChatFormatting.WHITE));
     }

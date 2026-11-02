@@ -167,7 +167,7 @@ public final class StockModels {
                         new PackOrigin("?", "wagon_models/" + typeId));
                 List<PackProblem> found = ModelCheck.check(decl, origin, files);
                 problems.addAll(found);
-                if (found.stream().noneMatch(PackProblem::error)) {
+                if (found.stream().noneMatch(PackProblem::isError)) {
                     try {
                         IrStockModel.load(typeId, decl, access);
                     } catch (RuntimeException e) {

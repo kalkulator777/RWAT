@@ -93,7 +93,7 @@ public final class ClientPackReport {
             } else {
                 PackReportView.log(check.problems());
                 PackReport.CLIENT.replace(PackReport.Source.MODEL_FILES, check.checked(), check.problems());
-                long errors = check.problems().stream().filter(PackProblem::error).count();
+                long errors = check.problems().stream().filter(PackProblem::isError).count();
                 long warnings = check.problems().size() - errors;
                 source.sendSuccess(() -> Component.translatable("rwat.packs.validate.done", count, errors, warnings)
                         .withStyle(errors > 0 ? ChatFormatting.RED

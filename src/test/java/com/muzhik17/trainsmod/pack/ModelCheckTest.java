@@ -60,7 +60,7 @@ class ModelCheckTest {
     private static List<String> check(String decl, Pack pack) {
         WagonModelDecl parsed = WagonModelDecl.parse("t", JsonParser.parseString(decl).getAsJsonObject());
         return ModelCheck.check(parsed, ORIGIN, pack).stream()
-                .map(p -> (p.error() ? "E " : "W ") + p.message()).toList();
+                .map(p -> (p.isError() ? "E " : "W ") + p.message()).toList();
     }
 
     private static Pack good() {
