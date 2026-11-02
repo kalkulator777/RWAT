@@ -117,4 +117,37 @@ class WagonModelDeclTest {
         assertTrue(parse("""
                 { "obj": "mvp:stock/up4/mvp_ir_up4.obj" }""").handbrake().isEmpty());
     }
+
+    /** Fix list D4: a typo in a model key warns with the key it missed, down into the sounds. */
+    @Test
+    void unknownKeys_warnWithTheNearestKnownOne() {
+        List<String> warnings = new java.util.ArrayList<>();
+        WagonModelDecl decl = WagonModelDecl.parse("mvp", JsonParser.parseString("""
+                { "obj": "a.obj", "livery": { "x": "y" }, "swya": 2,
+                  "sounds": { "horns": "h.ogg", "idle": { "main": "i.ogg", "pich": [1, 2] } } }""")
+                .getAsJsonObject(), warnings::add);
+        assertEquals(List.of(
+                "unknown key 'livery' (ignored) — did you mean 'liveries'?",
+                "unknown key 'swya' (ignored) — did you mean 'sway'?",
+                "unknown key 'sounds.horns' (ignored) — did you mean 'sounds.horn'?",
+                "unknown key 'sounds.idle.pich' (ignored) — did you mean 'sounds.idle.pitch'?"), warnings);
+        assertEquals(1.0, decl.sway(), "the typo's field keeps its default");
+    }
+
+    /** A null or a wrongly typed value is an error naming the field, not a bare exception. */
+    @Test
+    void nullsAndWrongTypes_nameTheField() {
+        assertEquals("'obj' must be a string, got null", assertThrows(JsonSyntaxException.class,
+                () -> parse("{ \"obj\": null }")).getMessage());
+        assertEquals("'skip[1]' must be a string, got the number 3", assertThrows(JsonSyntaxException.class,
+                () -> parse("{ \"obj\": \"a.obj\", \"skip\": [\"A\", 3] }")).getMessage());
+        assertEquals("'liveries.red' must be a string, got null", assertThrows(JsonSyntaxException.class,
+                () -> parse("{ \"obj\": \"a.obj\", \"liveries\": { \"red\": null } }")).getMessage());
+        assertEquals("'animations' must be an object, got an array", assertThrows(JsonSyntaxException.class,
+                () -> parse("{ \"obj\": \"a.obj\", \"animations\": [] }")).getMessage());
+        assertEquals("'sounds' must be an object, got null", assertThrows(JsonSyntaxException.class,
+                () -> parse("{ \"obj\": \"a.obj\", \"sounds\": null }")).getMessage());
+        assertEquals("'bogies[0]' must be a finite number, got null", assertThrows(JsonSyntaxException.class,
+                () -> parse("{ \"obj\": \"a.obj\", \"bogies\": [null] }")).getMessage());
+    }
 }

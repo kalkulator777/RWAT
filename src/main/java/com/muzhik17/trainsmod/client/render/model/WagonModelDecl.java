@@ -5,12 +5,16 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonSyntaxException;
 import com.muzhik17.trainsmod.client.sound.SoundSet;
+import com.muzhik17.trainsmod.pack.PackJson;
 
 /**
  * The client half of a stock declaration (SPEC §6.3): which OBJ draws a wagon
@@ -33,6 +37,8 @@ import com.muzhik17.trainsmod.client.sound.SoundSet;
  * <p>Asset paths without a namespace are in the declaring pack's namespace.
  * Paths stay strings ({@code ns:path}) — GSON only, no MC types, so the
  * parser is unit-testable; the loader turns them into resource locations.
+ * The keys are {@link #KEYS}; one the format doesn't know is a warning, a
+ * {@code null} or a wrongly typed value an error ({@link PackJson}).
  *
  * @param obj        the model, {@code ns:path}
  * @param bogies     bogie pivot offsets in the OBJ, +forward, front first;
@@ -67,6 +73,10 @@ public record WagonModelDecl(
     /** The most a type may scale its rocking by (as much as the client setting allows). */
     public static final double MAX_SWAY = 3.0;
 
+    /** The keys of a model declaration's top level ({@code sounds} has its own, {@link SoundSet#KEYS}). */
+    public static final Set<String> KEYS = PackJson.keys("obj", "bogies", "skip", "animations", "liveries",
+            "handbrake", "sounds", "sway");
+
     public WagonModelDecl {
         skip = List.copyOf(skip);
         animations = Map.copyOf(animations);
@@ -74,69 +84,89 @@ public record WagonModelDecl(
         handbrake = List.copyOf(handbrake);
     }
 
+    /** {@link #parse(String, JsonObject, Consumer)} with the warnings dropped. */
+    public static WagonModelDecl parse(String namespace, JsonObject json) {
+        return parse(namespace, json, warning -> {
+        });
+    }
+
     /**
-     * Parse one declaration.
+     * Parse one declaration, strictly ({@link PackJson}): a key the format
+     * doesn't know ({@link #KEYS}, {@link SoundSet#KEYS}…) is a warning with
+     * the nearest known one as a hint; a {@code null} or a wrongly typed
+     * value is an error naming the field.
      *
      * @param namespace the declaring file's namespace, for unqualified paths
-     * @throws JsonSyntaxException on a missing {@code obj} or a bad shape
+     * @param warnings  told what the declaration says that means nothing
+     * @throws JsonSyntaxException on a missing {@code obj}, a {@code null} or
+     *                             wrongly typed value
      */
-    public static WagonModelDecl parse(String namespace, JsonObject json) {
-        if (!json.has("obj")) {
-            throw new JsonSyntaxException("missing required field 'obj'");
+    public static WagonModelDecl parse(String namespace, JsonObject json, Consumer<String> warnings) {
+        PackJson.checkKeys(json, KEYS, "", warnings);
+        String path = PackJson.requiredString(json, "obj", "");
+        if (path.isEmpty()) {
+            throw new JsonSyntaxException("'obj' is empty");
         }
-        String obj = qualify(namespace, json.get("obj").getAsString());
+        String obj = qualify(namespace, path);
 
         double[] bogies = null;
-        if (json.has("bogies")) {
-            JsonArray array = json.getAsJsonArray("bogies");
+        JsonArray array = PackJson.optionalArray(json, "bogies", "");
+        if (array != null) {
             if (array.isEmpty()) {
                 throw new JsonSyntaxException("'bogies' must list at least one pivot offset");
             }
             bogies = new double[array.size()];
             for (int i = 0; i < bogies.length; i++) {
-                bogies[i] = array.get(i).getAsDouble();
+                bogies[i] = PackJson.number(array.get(i), PackJson.at("bogies", i));
             }
         }
 
-        List<String> skip = new ArrayList<>();
-        if (json.has("skip")) {
-            for (JsonElement prefix : json.getAsJsonArray("skip")) {
-                skip.add(prefix.getAsString());
-            }
-        }
+        List<String> skip = strings(json, "skip");
 
         Map<String, String> animations = new LinkedHashMap<>();
-        if (json.has("animations")) {
-            for (Map.Entry<String, JsonElement> entry : json.getAsJsonObject("animations").entrySet()) {
-                animations.put(entry.getKey().toLowerCase(Locale.ROOT),
-                        qualify(namespace, entry.getValue().getAsString()));
-            }
-        }
+        strings(json, "animations", (group, file) ->
+                animations.put(group.toLowerCase(Locale.ROOT), qualify(namespace, file)));
 
         Map<String, String> liveries = new LinkedHashMap<>();
-        if (json.has("liveries")) {
-            for (Map.Entry<String, JsonElement> entry : json.getAsJsonObject("liveries").entrySet()) {
-                liveries.put(entry.getKey(), entry.getValue().getAsString());
-            }
-        }
-        List<String> handbrake = new ArrayList<>();
-        if (json.has("handbrake")) {
-            for (JsonElement key : json.getAsJsonArray("handbrake")) {
-                handbrake.add(key.getAsString());
-            }
-        }
-        SoundSet sounds = json.has("sounds")
-                ? SoundSet.parse(namespace, json.getAsJsonObject("sounds")) : SoundSet.NONE;
+        strings(json, "liveries", liveries::put);
+
+        List<String> handbrake = strings(json, "handbrake");
+
+        JsonObject soundJson = PackJson.optionalObject(json, "sounds", "");
+        SoundSet sounds = soundJson != null ? SoundSet.parse(namespace, soundJson, warnings) : SoundSet.NONE;
         double sway = 1.0;
         if (json.has("sway")) {
             JsonElement element = json.get("sway");
             sway = element.isJsonPrimitive() && element.getAsJsonPrimitive().isNumber()
                     ? element.getAsDouble() : Double.NaN;
             if (!(sway >= 0.0 && sway <= MAX_SWAY)) {
-                throw new JsonSyntaxException("'sway' must be a number from 0 to " + MAX_SWAY);
+                throw new JsonSyntaxException("'sway' must be a number from 0 to " + MAX_SWAY
+                        + ", got " + PackJson.describe(element));
             }
         }
         return new WagonModelDecl(obj, bogies, skip, animations, liveries, handbrake, sounds, sway);
+    }
+
+    /** The array of strings {@code key}, empty when absent. */
+    private static List<String> strings(JsonObject json, String key) {
+        List<String> strings = new ArrayList<>();
+        JsonArray array = PackJson.optionalArray(json, key, "");
+        if (array != null) {
+            for (int i = 0; i < array.size(); i++) {
+                strings.add(PackJson.string(array.get(i), PackJson.at(key, i)));
+            }
+        }
+        return strings;
+    }
+
+    /** Each entry of the object {@code key} whose values are strings, in order; nothing when absent. */
+    private static void strings(JsonObject json, String key, BiConsumer<String, String> entries) {
+        JsonObject object = PackJson.optionalObject(json, key, "");
+        if (object != null) {
+            for (Map.Entry<String, JsonElement> entry : object.entrySet()) {
+                entries.accept(entry.getKey(), PackJson.string(entry.getValue(), PackJson.at(key, entry.getKey())));
+            }
+        }
     }
 
     /** {@code path} → {@code namespace:path}; an already qualified path is kept. */

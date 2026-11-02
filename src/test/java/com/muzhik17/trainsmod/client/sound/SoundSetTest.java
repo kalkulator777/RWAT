@@ -115,6 +115,39 @@ class SoundSetTest {
                 () -> parse("{ \"idle\": { \"main\": \"a.ogg\", \"pitch\": [1.0] } }"));
     }
 
+    /** Fix list D4: every level of the sounds knows its keys; the pack's own names (doors, controls) aren't checked. */
+    @Test
+    void unknownKeys_warnByTheirPathInTheModel() {
+        List<String> warnings = new java.util.ArrayList<>();
+        SoundSet.parse("mvp", JsonParser.parseString("""
+                { "whistle": "w.ogg",
+                  "wheels": { "main": "w.ogg", "volum": [0, 1] },
+                  "doors": { "AnyDoor": "d.ogg" },
+                  "controls": { "THROTTLE_1": { "mvoe": "n.ogg" }, "MY_LEVER": { "move": "n.ogg" } } }""")
+                .getAsJsonObject(), warnings::add);
+        assertEquals(List.of(
+                "unknown key 'sounds.whistle' (ignored)",
+                "unknown key 'sounds.controls.THROTTLE_1.mvoe' (ignored) — did you mean 'sounds.controls.THROTTLE_1.move'?",
+                "unknown key 'sounds.wheels.volum' (ignored) — did you mean 'sounds.wheels.volume'?"), warnings);
+    }
+
+    /** A null or a wrongly typed sound is an error naming it, not a bare exception. */
+    @Test
+    void nullsAndWrongTypes_nameTheField() {
+        assertEquals("'sounds.idle' must be a sound or an object {start, main, stop, pitch, volume}, got null",
+                assertThrows(JsonSyntaxException.class, () -> parse("{ \"idle\": null }")).getMessage());
+        assertEquals("'sounds.bell' must be a string, got the number 5",
+                assertThrows(JsonSyntaxException.class, () -> parse("{ \"bell\": 5 }")).getMessage());
+        assertEquals("'sounds.doors.door1' must be a string, got null",
+                assertThrows(JsonSyntaxException.class, () -> parse("{ \"doors\": { \"door1\": null } }")).getMessage());
+        assertEquals("'sounds.idle.pitch[1]' must be a finite number, got the string \"hi\"",
+                assertThrows(JsonSyntaxException.class,
+                        () -> parse("{ \"idle\": { \"main\": \"a.ogg\", \"pitch\": [1, \"hi\"] } }")).getMessage());
+        assertEquals("'sounds.controls.THROTTLE_1' must be an object, got the string \"t.ogg\"",
+                assertThrows(JsonSyntaxException.class,
+                        () -> parse("{ \"controls\": { \"THROTTLE_1\": \"t.ogg\" } }")).getMessage());
+    }
+
     /** A minimal Ogg Vorbis file: identification page, then a last page whose granule position counts the samples. */
     private static byte[] ogg(int channels, int rate, long samples) {
         byte[] data = new byte[27 + 1 + 30 + 27 + 1 + 4];

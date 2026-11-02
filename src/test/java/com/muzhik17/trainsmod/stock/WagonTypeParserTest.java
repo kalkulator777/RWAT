@@ -4,8 +4,12 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
@@ -288,5 +292,161 @@ class WagonTypeParserTest {
                 }"""));
         assertFalse(type.doorsOnly());
         assertEquals(1, type.interior().zones().size());
+    }
+
+    // ---- strict reading (fix list D3, D4) ----------------------------------------
+
+    private static final String SMALL = "\"length\": 14.0, \"bogies\": [5.0, -5.0], \"mass_t\": 20.0";
+
+    private static List<String> warnings(String body) {
+        List<String> warnings = new ArrayList<>();
+        WagonTypeParser.parse("test:car", json("{" + body + "}"), warnings::add);
+        return warnings;
+    }
+
+    private static String error(String body) {
+        return assertThrows(JsonSyntaxException.class,
+                () -> WagonTypeParser.parse("test:car", json("{" + body + "}"))).getMessage();
+    }
+
+    /** A typo used to mean the engine's default without a word: now a warning naming the key it missed. */
+    @Test
+    void unknownKey_warnsWithTheNearestKnownOne() {
+        assertEquals(List.of("unknown key 'max_speed' (ignored) — did you mean 'max_speed_kmh'?"),
+                warnings(SMALL + ", \"max_speed\": 95"));
+        assertEquals(List.of("unknown key 'colour' (ignored)"), warnings(SMALL + ", \"colour\": \"red\""));
+        // the type still loads, the typo's field at its default
+        assertEquals(0.0, WagonTypeParser.parse("test:car", json("{" + SMALL + ", \"max_speed\": 95}"))
+                .maxSpeedKmh());
+    }
+
+    /** Every section knows its own keys, and the hint is a key of that section. */
+    @Test
+    void unknownKeysInEverySection_arePathed() {
+        List<String> warnings = warnings(SMALL + """
+                , "resistance": { "c_frnt": 1 },
+                  "traction": { "power_kw": 100, "max_tractive_effort_kn": 50, "ramp": 2 },
+                  "brakes": { "trian_kn": 10 },
+                  "cab": { "seats": [ { "at": [0, 2, 0], "yaww": 90 } ], "chairs": [] },
+                  "interior": [ { "min": [-1, 1, -4], "max": [1, 3, 4], "height": 2 } ],
+                  "doors": [ { "id": "d", "min": [1, 1, 0], "max": [1.1, 3, 0.8], "gruop": "L" } ],
+                  "couplers": { "front": 0, "back": 0 }""");
+        assertEquals(List.of(
+                "unknown key 'resistance.c_frnt' (ignored) — did you mean 'resistance.c_front'?",
+                "unknown key 'traction.ramp' (ignored) — did you mean 'traction.ramp_s'?",
+                "unknown key 'cab.chairs' (ignored)",
+                "unknown key 'cab.seats[0].yaww' (ignored) — did you mean 'cab.seats[0].yaw'?",
+                "unknown key 'brakes.trian_kn' (ignored) — did you mean 'brakes.train_kn'?",
+                "unknown key 'interior[0].height' (ignored)",
+                "unknown key 'doors[0].gruop' (ignored) — did you mean 'doors[0].group'?",
+                "unknown key 'couplers.back' (ignored)"), warnings);
+    }
+
+    /** Roadmap R7: the dynamic brake fields stay, but a pack setting them is told they do nothing. */
+    @Test
+    void reservedBrakeFields_warn() {
+        List<String> warnings = warnings(SMALL + ", \"brakes\": { \"dynamic_kn\": 100, \"dynamic_fade_kmh\": 10 }");
+        assertEquals(2, warnings.size());
+        assertTrue(warnings.get(0).startsWith("'brakes.dynamic_kn' is reserved"), warnings.get(0));
+        assertTrue(warnings.get(1).startsWith("'brakes.dynamic_fade_kmh' is reserved"), warnings.get(1));
+    }
+
+    /** A null used to throw a bare UnsupportedOperationException; now an error names field and type. */
+    @Test
+    void nullOrWrongType_isAnErrorNamingTheField() {
+        assertEquals("'mass_t' must be a finite number, got null",
+                error("\"length\": 14.0, \"bogies\": [5.0, -5.0], \"mass_t\": null"));
+        assertEquals("'brakes.train_kn' must be a finite number, got null",
+                error(SMALL + ", \"brakes\": { \"train_kn\": null }"));
+        assertEquals("'traction' must be an object, got null", error(SMALL + ", \"traction\": null"));
+        assertEquals("'max_speed_kmh' must be a finite number, got the string \"95\"",
+                error(SMALL + ", \"max_speed_kmh\": \"95\""));
+        assertEquals("'doors[0].inner' must be true or false, got the number 1", error(SMALL
+                + ", \"doors\": [ { \"id\": \"d\", \"min\": [1, 1, 0], \"max\": [1.1, 3, 0.8], \"inner\": 1 } ]"));
+        assertEquals("'doors[0].min[2]' must be a finite number, got null", error(SMALL
+                + ", \"doors\": [ { \"id\": \"d\", \"min\": [1, 1, null], \"max\": [1.1, 3, 0.8] } ]"));
+        assertEquals("'cab.seats[1]' must be an object, got the number 3",
+                error(SMALL + ", \"cab\": { \"seats\": [ { \"at\": [0, 2, 0] }, 3 ] }"));
+        assertEquals("'interior' must be an object {min, max} or an array of them, got null",
+                error(SMALL + ", \"interior\": null"));
+        assertEquals("'brakes.system' must be a string, got null", error(SMALL + ", \"brakes\": { \"system\": null }"));
+        assertEquals("'bogies[1]' must be a finite number, got the number 1e999",
+                error("\"length\": 14.0, \"bogies\": [5.0, 1e999], \"mass_t\": 20.0"));
+    }
+
+    /** Broken aliases are an error of the declaration, not an exception from deep in GSON. */
+    @Test
+    void aliasesMustBeStrings() {
+        assertEquals("'aliases[1]' must be a string, got null",
+                assertThrows(JsonSyntaxException.class, () -> WagonTypeParser.aliases(json(
+                        "{ \"aliases\": [\"old:car\", null] }"))).getMessage());
+        assertEquals("'aliases' must be an array, got the string \"old:car\"",
+                assertThrows(JsonSyntaxException.class, () -> WagonTypeParser.aliases(json(
+                        "{ \"aliases\": \"old:car\" }"))).getMessage());
+    }
+
+    /** D3: a length that makes no wagon. */
+    @Test
+    void lengthMustBePositive() {
+        assertEquals("'length' must be a positive number of blocks, got 0",
+                error("\"length\": 0, \"bogies\": [0.0], \"mass_t\": 20.0"));
+        assertTrue(error("\"length\": -14, \"bogies\": [5.0, -5.0], \"mass_t\": 20.0")
+                .startsWith("'length' must be a positive number"));
+    }
+
+    /** D3: the bogies run front to back (the front one first) and stand inside the body. */
+    @Test
+    void bogiesRunFrontToBack_insideTheBody() {
+        assertEquals("'bogies' must run front to back, each pivot behind the one before:"
+                + " 'bogies[1]' = 5 is not behind 'bogies[0]' = -5",
+                error("\"length\": 14.0, \"bogies\": [-5.0, 5.0], \"mass_t\": 20.0"));
+        assertTrue(error("\"length\": 14.0, \"bogies\": [5.0, 5.0], \"mass_t\": 20.0")
+                .startsWith("'bogies' must run front to back"), "two pivots in one place");
+        assertEquals("'bogies[1]' = -7.5 is outside the body: a pivot must lie within ±length/2 = ±7",
+                error("\"length\": 14.0, \"bogies\": [5.0, -7.5], \"mass_t\": 20.0"));
+        assertTrue(error("\"length\": 14.0, \"bogies\": [7.0, -5.0], \"mass_t\": 20.0")
+                .startsWith("'bogies[0]' = 7 is outside the body"), "a pivot on the coupler point");
+        // one bogie, and three, are fine as long as they keep the order
+        WagonTypeParser.parse("test:car", json("{ \"length\": 14.0, \"bogies\": [0.0], \"mass_t\": 20.0 }"));
+        WagonTypeParser.parse("test:car", json("{ \"length\": 30.0, \"bogies\": [12, 0, -12], \"mass_t\": 20.0 }"));
+    }
+
+    /** D3: a coupler can't engage past the body's middle nor stick out further than half a body. */
+    @Test
+    void couplerOffsetsStayUnderHalfTheLength() {
+        assertEquals("'couplers.front' = -7 must be under length/2 = 7 in size",
+                error(SMALL + ", \"couplers\": { \"front\": -7 }"));
+        assertEquals("'couplers.rear' = 8.5 must be under length/2 = 7 in size",
+                error(SMALL + ", \"couplers\": { \"rear\": 8.5 }"));
+        assertEquals(new WagonType.Couplers(-6.9, 6.9), WagonTypeParser.parse("test:car",
+                json("{" + SMALL + ", \"couplers\": { \"front\": -6.9, \"rear\": 6.9 } }")).couplers());
+    }
+
+    /**
+     * {@code "group": ""} is no group: the server used to keep "" and group
+     * every such door together, while the client's sync read null.
+     */
+    @Test
+    void emptyDoorGroup_isNoGroup() {
+        WagonType type = WagonTypeParser.parse("test:car", json("{" + SMALL + """
+                , "doors": [
+                    { "id": "a", "min": [1, 1, 0], "max": [1.1, 3, 0.8], "group": "" },
+                    { "id": "b", "min": [1, 1, 2], "max": [1.1, 3, 2.8], "group": "" },
+                    { "id": "c", "min": [1, 1, 4], "max": [1.1, 3, 4.8], "group": null } ] }"""));
+        for (WagonType.Door door : type.doors()) {
+            assertNull(door.group(), door.id());
+        }
+        assertFalse(type.doors().get(0).groupedWith(type.doors().get(1)));
+        assertNull(new WagonType.Door("x", 0, 0, 0, 1, 1, 1, false, false, false, "").group());
+    }
+
+    /** A door group matches case aside everywhere, as the control group working it does. */
+    @Test
+    void doorGroups_matchCaseAside() {
+        WagonType.Door left = new WagonType.Door("d1", 1, 1, 0, 1.1, 3, 0.8, false, false, false, "DrL");
+        WagonType.Door other = new WagonType.Door("d2", 1, 1, 2, 1.1, 3, 2.8, false, false, false, "drl");
+        WagonType.Door right = new WagonType.Door("d3", -1.1, 1, 2, -1, 3, 2.8, false, false, false, "DrR");
+        assertTrue(left.groupedWith(other) && other.groupedWith(left));
+        assertFalse(left.groupedWith(right));
     }
 }
