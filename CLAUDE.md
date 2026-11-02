@@ -20,7 +20,8 @@ RWAT: мод на поезда для Minecraft 1.21.1 / NeoForge (Java 21) и P
 
 ## Архитектура
 
-- **Чистое ядро без импортов Minecraft и NeoForge:** `path`, `kinematics`, `physics`, `stock`, `convention`, а в `consist` — `Coupling`, `ChunkCover`, `ChunkLease`, `Handles`. Тестовый classpath — только joml, gson и JUnit, поэтому класс с импортом MC в тесты не попадает. Что можно решить без Minecraft — решай в ядре и тестируй там; адаптеры (`consist`, `rail`, `network`, `data`, `client`, `mixin`) держи тонкими. Не расширяй единственную связь наружу: `convention.ControlValue` и `DriverReadout` ссылаются на `consist.Consist` (план — вынести в `Handles`, E5).
+- **Чистое ядро без импортов Minecraft и NeoForge:** `path`, `kinematics`, `physics`, `stock`, `convention` (в нём и `GroupName` — предел имени группы), а в адаптерах отдельные чистые классы: в `consist` — `Coupling`, `ChunkCover`, `ChunkLease`, `Handles`, `TouchRules` (кто и откуда может трогать вагон), `WalkBudget` (шаг ходьбы за тик); в `network` — `PacketNumbers` (числа из пакета). Что можно решить без Minecraft — решай в ядре и тестируй там; адаптеры (`consist`, `rail`, `network`, `data`, `client`, `mixin`) держи тонкими. Не расширяй единственную связь наружу: `convention.ControlValue` и `DriverReadout` ссылаются на `consist.Consist` (план — вынести в `Handles`, E5).
+- **Класс с импортом MC в тесты не попадает:** тестовый classpath — только joml, gson и JUnit, и тест, которому такой класс нужен, упадёт с `NoClassDefFoundError`. Известное исключение случайное: `client/render/model/Mesh.java` импортирует `OverlayTexture`, `PoseStack` и `VertexConsumer`, но через `ObjLoader` грузится в тестах, потому что JVM связывает классы лениво и дотягивается до MC только в `emit*`, которые тесты не зовут (`OverlayTexture.NO_OVERLAY` — не константа времени компиляции, а `getstatic`). Так делать не надо: класс, который нужен тесту, держи без таких импортов.
 - Общий код не тянет `client.*`: клиентские классы не должны грузиться на выделенном сервере. Нынешние нарушения (`WagonEntity`, `RwatNetwork`, `RollingStockItem`, `RailItem`) не множь.
 - `debug/` (команды `/rwat`, автосцены) продакшен-код не использует.
 - Статика, общая для интегрированного сервера и клиента (`WagonTypes`), — ловушка: клиентская загрузка не должна менять серверное состояние.
@@ -49,7 +50,7 @@ RWAT: мод на поезда для Minecraft 1.21.1 / NeoForge (Java 21) и P
 ## Одна логика — одна реализация
 
 - Не копируй математику и правила: найди существующую (`PoseMath`, `HullCollision`, `FloorRegion`) и вызови. Нужно общее — вынеси в общее место, не делай четвёртую копию. Константы, связанные только комментарием «столько же, сколько там», — одна константа.
-- Если у логики есть порт (Java, TypeScript в редакторе, Python в `tools/`: разбор имён `ObjectRole`, пол `FloorRegion`/`FloorCheck`, ось шарнира `PivotAxis`, `.anim`, пересчёт координат), меняй все порты сразу. Эталонные данные общие (`fixtures/golden/`, появятся с редактором), и их проверяет тест каждого порта. Конвертацию IR в браузере не портируем: там тот же Python через Pyodide.
+- Если у логики есть порт (Java, TypeScript в редакторе, Python в `tools/`: разбор имён `ObjectRole`, пол `FloorRegion`/`FloorCheck`, ось шарнира `PivotAxis`, `.anim`, пересчёт координат), меняй все порты сразу. Эталонные данные общие (`fixtures/golden/`, есть: `fixtures/golden/README.md`), и их проверяет тест каждого порта. Конвертацию IR в браузере не портируем: там тот же Python через Pyodide.
 
 ## Формат паков
 

@@ -94,10 +94,11 @@ lists every file renamed or rewritten. Two files that would land on one path
 are an error.
 
 Warnings, errors, refusals. A warning (a missing sound or texture, an
-unknown era, an unknown key in the recipe — at its top, in a source, in
-"sound_defaults" — or in a per-type file, a per-type file or an exclude for
-an id the packs don't have, an "overrides_dir" that isn't a folder) changes
-nothing else. An error refuses one stock type or rail style
+unknown era, a control or light group named longer than the engine takes —
+MAX_GROUP_LENGTH, which it drops as the model loads — an unknown key in the
+recipe — at its top, in a source, in "sound_defaults" — or in a per-type
+file, a per-type file or an exclude for an id the packs don't have, an
+"overrides_dir" that isn't a folder) changes nothing else. An error refuses one stock type or rail style
 and the rest is converted: an unreadable definition, a missing model, two IR
 files (or two liveries of one type) converting to one id, two files landing
 on one path — and a per-type "floor" that isn't valid (that type is written
@@ -193,6 +194,13 @@ COPY_SUFFIX = re.compile(r"\.\d{3}$")
 # IR flags a careless name puts where a control group goes (DOOR_7_EXTERNAL_CG_NOINTERACT)
 FLAG_WORDS = {"NOINTERACT", "NOTOUCH", "TOGGLE", "PRESS", "INVERT", "HIDE", "GLOBAL",
               "EXTERNAL", "INTERIOR", "CONNECTING", "INTERNAL", "FULLBRIGHT"}
+# The longest control or light group name the engine sends and keeps: GroupName.MAX_LENGTH, in
+# UTF-16 code units as Java counts them. A longer group is dropped as the model loads.
+MAX_GROUP_LENGTH = 32
+# The control kinds whose group travels to the server: what GroupName.worksGroup lets through (not a
+# gauge, a handle lever, the handbrake wheel or a door leaf).
+GROUP_KINDS = re.compile(r"(?:^|_)(?:WIDGET|WINDOW|BELL_CONTROL|WHISTLE_CONTROL|HORN_CONTROL|ENGINE_START"
+                         r"|THROTTLE_BRAKE)_\d+(?=_|$)")
 # a DOOR_<n> smaller than this is a marker or a handle, no doorway (2TE116's DOOR_2_CONNECTING)
 MIN_DOOR_HEIGHT = 1.2
 MIN_DOOR_SPAN = 0.3
@@ -659,6 +667,28 @@ def control_group(names):
         if m and m.group(1) not in FLAG_WORDS:
             return m.group(1)
     return None
+
+
+def utf16_length(text):
+    """Java's String.length(): UTF-16 code units, two for a character beyond the BMP."""
+    return len(text.encode("utf-16-le")) // 2
+
+
+def groups_too_long(names):
+    """The group names the engine drops as the model loads (GroupName.tooLong), each once, in the
+    order the objects come: a switch's _CG_<name> (a control kind in GROUP_KINDS) and a light's
+    _LCG_<name> longer than MAX_GROUP_LENGTH. Read as the engine reads an object: without the copy
+    suffix. One simplification: an object that also matches an earlier control kind (a gauge, a
+    handle lever) is taken for a switch here, as no model names one so."""
+    found = {}
+    for raw in names:
+        name = object_name(raw)
+        cg, lcg = CONTROL_GROUP.search(name), LIGHT_GROUP.search(name)
+        if cg and GROUP_KINDS.search(name) and utf16_length(cg.group(1)) > MAX_GROUP_LENGTH:
+            found[cg.group(1)] = None
+        if lcg and utf16_length(lcg.group(1)) > MAX_GROUP_LENGTH:
+            found[lcg.group(1)] = None
+    return list(found)
 
 
 def door_groups(boxes):
@@ -1420,6 +1450,9 @@ class Converter:
         obj_name, obj_destination, objects, extent, boxes = self.copy_model(source, obj_zip, type_id)
         obj_folder = posixpath.dirname(obj_name)
         here = posixpath.dirname(obj_destination)
+        for group in groups_too_long(objects):
+            self.warn(f"{type_id}: control group '{group}' is longer than {MAX_GROUP_LENGTH} characters and the "
+                      f"engine drops it: its switches can't be worked, its lights stay off (an LINVERT one on)")
 
         plan = self.prepare(source, category, entry, type_id, parsed=(extent, boxes))
         overrides, type_json = plan["overrides"], plan["type_json"]

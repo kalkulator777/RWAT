@@ -327,7 +327,7 @@ pack.mcmeta в корне пака: секция pack самого Minecraft п�
 
 | Модификатор | Выражение | Без него | Что делает | Код |
 |---|---|---|---|---|
-| `_CG_<group>` | `_CG_([^_]+)` | собственный ключ `<KIND>_<n>` | Группа управления, которую орган ставит или читает; без неё группа — собственный ключ органа. | [ObjectRole.java#CG](../src/main/java/com/muzhik17/trainsmod/convention/ObjectRole.java) |
+| `_CG_<group>` | `_CG_([^_]+)` | собственный ключ `<KIND>_<n>` | Группа управления, которую орган ставит или читает; без неё группа — собственный ключ органа. Не длиннее 32 символов у тумблера, окна и кнопки: их группа уходит на сервер. Более длинное имя отбрасывается при загрузке модели — орган рисуется, но не работает; конвертер и проверка пака предупреждают. | [ObjectRole.java#CG](../src/main/java/com/muzhik17/trainsmod/convention/ObjectRole.java), [GroupName.java#fit](../src/main/java/com/muzhik17/trainsmod/convention/GroupName.java), [ir2rwat.py#groups_too_long](../tools/ir2rwat.py) |
 | `_LABEL_<text>` | `_LABEL_([^_]+)` | — | Подпись органа под прицелом; ^ означает пробел. Название группы из lang (`light.<ns>.<type>.<группа>`) важнее. | [ObjectRole.java#LABEL](../src/main/java/com/muzhik17/trainsmod/convention/ObjectRole.java), [ClientCabInteract.java#controlName](../src/main/java/com/muzhik17/trainsmod/client/ClientCabInteract.java) |
 | `_OFFSET_<f>` | `_OFFSET_([^_]+)` | 0 | Прибавляется к положению органа до INVERT: значение = положение + смещение. | [ObjectRole.java#OFFSET](../src/main/java/com/muzhik17/trainsmod/convention/ObjectRole.java), [ControlValue.java#value](../src/main/java/com/muzhik17/trainsmod/convention/ControlValue.java) |
 | `_RANGE_<min>_<max>` | `_RANGE_([^_]*)_([^_]*)` | 0 … 1 | Диапазон прибора: показание переводится из [min, max] в 0…1 (действует последний RANGE в имени). | [ObjectRole.java#RANGE](../src/main/java/com/muzhik17/trainsmod/convention/ObjectRole.java), [ControlValue.java#position](../src/main/java/com/muzhik17/trainsmod/convention/ControlValue.java) |
@@ -349,7 +349,7 @@ pack.mcmeta в корне пака: секция pack самого Minecraft п�
 
 | Имя | Выражение | Что делает | Код |
 |---|---|---|---|
-| `_LCG_<group>` | `_LCG_([^_]+)` | Объект светится с группой управления `<группа>`: рисуется освещённым, пока группа включена. У вагона не больше 64 групп света. | [ObjectRole.java#LCG](../src/main/java/com/muzhik17/trainsmod/convention/ObjectRole.java), [StockModel.java#tagLit](../src/main/java/com/muzhik17/trainsmod/client/render/model/StockModel.java) |
+| `_LCG_<group>` | `_LCG_([^_]+)` | Объект светится с группой управления `<группа>`: рисуется освещённым, пока группа включена. У вагона не больше 64 групп света. Имя не длиннее 32 символов, как у группы управления: более длинное отбрасывается при загрузке модели, и свет ведёт себя как при группе, которую никто не переключает, — не горит (с LINVERT горит всегда); конвертер и проверка пака предупреждают. | [ObjectRole.java#LCG](../src/main/java/com/muzhik17/trainsmod/convention/ObjectRole.java), [StockModel.java#tagLit](../src/main/java/com/muzhik17/trainsmod/client/render/model/StockModel.java), [GroupName.java#fit](../src/main/java/com/muzhik17/trainsmod/convention/GroupName.java), [ir2rwat.py#groups_too_long](../tools/ir2rwat.py) |
 | `LINVERT` | `(?:^\|_)LINVERT(?:_\|$)` | Горит при выключенной группе. | [ObjectRole.java#parse](../src/main/java/com/muzhik17/trainsmod/convention/ObjectRole.java) |
 | `FULLBRIGHT` | `(?:^\|_)FULLBRIGHT(?:_\|$)` | Светится в полную яркость, пока горит; без LCG — всегда. Остров FULLBRIGHT (диагональ ≥ 0.3) в группе, где есть объект с токеном INTERIOR, — лампа салона, освещает внутри (без цвета). | [ObjectRole.java#parse](../src/main/java/com/muzhik17/trainsmod/convention/ObjectRole.java), [IrStockModel.java#load](../src/main/java/com/muzhik17/trainsmod/client/render/model/IrStockModel.java), [LampIslands.java#MIN_LAMP_SIZE](../src/main/java/com/muzhik17/trainsmod/client/render/model/LampIslands.java) |
 | INTERIOR (токен) | `(?:^\|_)INTERIOR(?:_\|$)` | Грани объекта освещаются лампами салона; его группа света становится группой света салона. | [IrStockModel.java#load](../src/main/java/com/muzhik17/trainsmod/client/render/model/IrStockModel.java) |
@@ -387,7 +387,7 @@ pack.mcmeta в корне пака: секция pack самого Minecraft п�
 | Что | Значение | Код |
 |---|---|---|
 | групп управления на вагон | 64 | [WagonEntity.java#MAX_CONTROL_GROUPS](../src/main/java/com/muzhik17/trainsmod/consist/WagonEntity.java) |
-| длина имени группы управления | 32 | [WagonEntity.java#MAX_CONTROL_NAME](../src/main/java/com/muzhik17/trainsmod/consist/WagonEntity.java) |
+| длина имени группы управления и света (`_CG_`, `_LCG_`), символы | 32 | [GroupName.java#MAX_LENGTH](../src/main/java/com/muzhik17/trainsmod/convention/GroupName.java), [ir2rwat.py#MAX_GROUP_LENGTH](../tools/ir2rwat.py) |
 | групп света на вагон | 64 | [StockModel.java#tagLit](../src/main/java/com/muzhik17/trainsmod/client/render/model/StockModel.java) |
 | радиус круга катания колеса, блоки | 0.53 | [IrStockModel.java#WHEEL_RADIUS](../src/main/java/com/muzhik17/trainsmod/client/render/model/IrStockModel.java) |
 | ход двери, тики | 40 | [WagonEntity.java#DOOR_ANIM_TICKS](../src/main/java/com/muzhik17/trainsmod/consist/WagonEntity.java) |

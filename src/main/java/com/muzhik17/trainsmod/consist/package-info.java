@@ -21,6 +21,14 @@
  * {@code ChunkCover} and {@code ChunkLease}), and coupling is decided on the
  * track whether the chunks are loaded or not.
  *
+ * <p>Who may touch a wagon is one rule, the pure {@code TouchRules}: it
+ * decides from the facts each side gathers ({@code WagonTouch}: in the game,
+ * the right to build, the driver's key, the crowbar, aboard, the cabs) and the
+ * reach the caller knows. The server decides every click, drag and step of a
+ * player on a wagon by it; the client asks the same rule before it sends, so
+ * what the server would refuse isn't sent. A walking rider's pace is the pure
+ * {@code WalkBudget}: one step a server tick, a few ticks' worth kept.
+ *
  * <p>Only {@code s} and {@code v} are synchronized; clients deterministically
  * unroll everything else (see {@code kinematics} and {@code network}).
  */
