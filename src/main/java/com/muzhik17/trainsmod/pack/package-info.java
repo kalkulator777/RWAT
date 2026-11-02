@@ -1,7 +1,19 @@
 /**
- * Content packs (SPEC §6): discovery of the {@code rwat_packs/} folder.
+ * Content packs (SPEC §6): discovery of the {@code rwat_packs/} folder
+ * ({@code RwatPacks}) and what is shared by every loader of a pack's files.
  * A pack is a plain Minecraft pack carrying wagon types ({@code data/}) and
- * their models ({@code assets/}); the loaders for each half live with their
- * consumers ({@code data.WagonTypeReloadListener}, {@code client.render.model}).
+ * their models and rail styles ({@code assets/}); the loaders for each half
+ * live with their consumers ({@code data.WagonTypeReloadListener},
+ * {@code data.RailFootprintReloadListener}, {@code client.render.model}).
+ *
+ * <p>Shared here, plain Java without MC types so the core parsers and the
+ * tests use them: strict JSON reading ({@code PackJson}: unknown keys warn
+ * with a hint, {@code null} and wrong types are errors naming the field),
+ * the wagon type load ({@code WagonTypeLoader}), the rail style declaration
+ * both sides read ({@code RailStyleDecl}), the model files' check
+ * ({@code ModelCheck}) and the report of every loader's problems by pack and
+ * file ({@code PackReport}). Shown by {@code PackReportView}
+ * ({@code /rwat packs}, the operators' notice) and {@code ClientPackReport}
+ * ({@code /rwatc packs [validate]}).
  */
 package com.muzhik17.trainsmod.pack;

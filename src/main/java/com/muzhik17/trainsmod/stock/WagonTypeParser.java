@@ -2,11 +2,14 @@ package com.muzhik17.trainsmod.stock;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.function.Consumer;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonSyntaxException;
+import com.muzhik17.trainsmod.pack.PackJson;
 
 /**
  * JSON → {@link WagonType} (SPEC §5.5 step 5). The declaration format is the
@@ -45,6 +48,16 @@ import com.google.gson.JsonSyntaxException;
  * {@code couplers} (optional, default 0): where each coupler engages
  * relative to its frame end, + outward (SPEC §6.12).
  *
+ * <p><b>Strict reading</b> ({@link PackJson}): each section's keys are the
+ * public {@code *_KEYS} sets below; a key a section doesn't know is a warning
+ * with the nearest known one as a hint, never an error. A JSON {@code null}
+ * or a value of the wrong type is an error naming the field and the type
+ * expected; only {@code doors[].group} takes {@code null} (= no group, as
+ * {@code ""} does). The geometry must make a wagon: {@code length > 0}, the
+ * {@code bogies} strictly front to back and inside {@code ±length/2},
+ * each coupler offset under {@code length/2} in size. An error throws
+ * {@link JsonSyntaxException} and the loader skips the whole file.
+ *
  * <p>Uses GSON only (ships with the game, not an MC class) so the stock
  * package stays engine-free and the parser unit-testable.
  */
@@ -53,77 +66,173 @@ public final class WagonTypeParser {
     /** Driver's chairs a cab may have at most (network sanity: each is synced as who sits there). */
     public static final int MAX_SEATS = 16;
 
+    /** The keys of a declaration's top level. */
+    public static final Set<String> KEYS = PackJson.keys("length", "bogies", "mass_t", "max_speed_kmh",
+            "resistance", "traction", "brakes", "cab", "interior", "doors", "couplers", "aliases");
+    /** The keys of {@code resistance}. */
+    public static final Set<String> RESISTANCE_KEYS = PackJson.keys("a", "b", "c", "c_front");
+    /** The keys of {@code traction}. */
+    public static final Set<String> TRACTION_KEYS =
+            PackJson.keys("power_kw", "max_tractive_effort_kn", "adhesion", "ramp_s");
+    /** The keys of {@code brakes}. */
+    public static final Set<String> BRAKES_KEYS = PackJson.keys("system", "train_kn", "independent_kn",
+            "parking_kn", "apply_s", "release_s", "dynamic_kn", "dynamic_fade_kmh");
+    /**
+     * Brake keys read and synced but not modelled yet (roadmap R7): the
+     * dynamic brake has no control and no force in the physics. A pack that
+     * sets them is warned, so its author doesn't count on them.
+     */
+    public static final Set<String> RESERVED_BRAKES_KEYS = PackJson.keys("dynamic_kn", "dynamic_fade_kmh");
+    /** The keys of {@code cab}; {@code seat}/{@code seat_yaw} are the older one-chair form. */
+    public static final Set<String> CAB_KEYS = PackJson.keys("seats", "seat", "seat_yaw");
+    /** The keys of each {@code cab.seats[]} chair. */
+    public static final Set<String> SEAT_KEYS = PackJson.keys("at", "yaw");
+    /** The keys of each {@code interior} zone. */
+    public static final Set<String> ZONE_KEYS = PackJson.keys("min", "max");
+    /** The keys of each {@code doors[]} door. */
+    public static final Set<String> DOOR_KEYS =
+            PackJson.keys("id", "min", "max", "inner", "fixed", "connecting", "group");
+    /** The keys of {@code couplers}. */
+    public static final Set<String> COUPLERS_KEYS = PackJson.keys("front", "rear");
+
     private WagonTypeParser() {
+    }
+
+    /** {@link #parse(String, JsonObject, Consumer)} with the warnings dropped. */
+    public static WagonType parse(String id, JsonObject json) {
+        return parse(id, json, warning -> {
+        });
     }
 
     /**
      * Parse one declaration. {@code id} comes from the file's resource
      * location, not the JSON body — files can't lie about their identity.
      *
-     * @throws JsonSyntaxException on a missing required field or a bad shape
+     * @param warnings told what the declaration says that the engine ignores
+     *                 (unknown keys, reserved fields) — the type still loads
+     * @throws JsonSyntaxException on a missing required field, a {@code null}
+     *                             or wrongly typed value, or impossible geometry
      */
-    public static WagonType parse(String id, JsonObject json) {
-        double length = requiredDouble(json, "length");
+    public static WagonType parse(String id, JsonObject json, Consumer<String> warnings) {
+        PackJson.checkKeys(json, KEYS, "", warnings);
+        double length = PackJson.requiredNumber(json, "length", "");
         double[] bogies = bogies(json);
-        double massT = requiredDouble(json, "mass_t");
-        if (!(massT > 0.0) || Double.isInfinite(massT)) {
-            throw new JsonSyntaxException("'mass_t' must be a positive number");
+        double massT = PackJson.requiredNumber(json, "mass_t", "");
+        if (!(massT > 0.0)) {
+            throw new JsonSyntaxException("'mass_t' must be a positive number, got " + format(massT));
         }
-        double maxSpeedKmh = amount(json, "max_speed_kmh", 0.0);
+        double maxSpeedKmh = amount(json, "max_speed_kmh", "", 0.0);
 
         WagonType.Resistance resistance = StockDefaults.resistance(massT);
-        if (json.has("resistance")) {
-            JsonObject r = json.getAsJsonObject("resistance");
+        JsonObject r = section(json, "resistance", RESISTANCE_KEYS, warnings);
+        if (r != null) {
             resistance = new WagonType.Resistance(
-                    amount(r, "a", resistance.a()), amount(r, "b", resistance.b()),
-                    amount(r, "c", resistance.c()), amount(r, "c_front", resistance.cFront()));
+                    amount(r, "a", "resistance", resistance.a()),
+                    amount(r, "b", "resistance", resistance.b()),
+                    amount(r, "c", "resistance", resistance.c()),
+                    amount(r, "c_front", "resistance", resistance.cFront()));
         }
 
         WagonType.Traction traction = null;
-        if (json.has("traction")) {
-            JsonObject t = json.getAsJsonObject("traction");
+        JsonObject t = section(json, "traction", TRACTION_KEYS, warnings);
+        if (t != null) {
             traction = new WagonType.Traction(
-                    amount(t, "power_kw", Double.NaN),
-                    amount(t, "max_tractive_effort_kn", Double.NaN),
-                    amount(t, "adhesion", StockDefaults.ADHESION),
-                    amount(t, "ramp_s", StockDefaults.TRACTION_RAMP_S));
+                    amount(t, "power_kw", "traction", Double.NaN),
+                    amount(t, "max_tractive_effort_kn", "traction", Double.NaN),
+                    amount(t, "adhesion", "traction", StockDefaults.ADHESION),
+                    amount(t, "ramp_s", "traction", StockDefaults.TRACTION_RAMP_S));
         }
 
-        WagonType.Cab cab = json.has("cab") ? cab(json.getAsJsonObject("cab")) : null;
+        JsonObject c = section(json, "cab", CAB_KEYS, warnings);
+        WagonType.Cab cab = c != null ? cab(c, warnings) : null;
 
-        JsonObject b = json.has("brakes") ? json.getAsJsonObject("brakes") : new JsonObject();
+        JsonObject b = section(json, "brakes", BRAKES_KEYS, warnings);
+        if (b == null) {
+            b = new JsonObject();
+        }
+        for (String reserved : RESERVED_BRAKES_KEYS) {
+            if (b.has(reserved)) {
+                warnings.accept("'brakes." + reserved + "' is reserved: the dynamic brake isn't modelled"
+                        + " yet, the value is kept but does nothing");
+            }
+        }
         WagonType.Brakes defaults = StockDefaults.brakes(brakeSystem(b), massT, cab != null);
         WagonType.Brakes brakes = new WagonType.Brakes(
-                amount(b, "train_kn", defaults.trainKn()),
-                amount(b, "independent_kn", defaults.independentKn()),
-                amount(b, "dynamic_kn", defaults.dynamicKn()),
-                amount(b, "dynamic_fade_kmh", defaults.dynamicFadeKmh()),
-                amount(b, "parking_kn", defaults.parkingKn()),
-                amount(b, "apply_s", defaults.applyS()),
-                amount(b, "release_s", defaults.releaseS()));
+                amount(b, "train_kn", "brakes", defaults.trainKn()),
+                amount(b, "independent_kn", "brakes", defaults.independentKn()),
+                amount(b, "dynamic_kn", "brakes", defaults.dynamicKn()),
+                amount(b, "dynamic_fade_kmh", "brakes", defaults.dynamicFadeKmh()),
+                amount(b, "parking_kn", "brakes", defaults.parkingKn()),
+                amount(b, "apply_s", "brakes", defaults.applyS()),
+                amount(b, "release_s", "brakes", defaults.releaseS()));
 
-        WagonType.Interior interior = interior(json);
-        List<WagonType.Door> doors = doors(json);
+        WagonType.Interior interior = interior(json, warnings);
+        List<WagonType.Door> doors = doors(json, warnings);
 
         WagonType.Couplers couplers = WagonType.Couplers.AT_ENDS;
-        if (json.has("couplers")) {
-            JsonObject c = json.getAsJsonObject("couplers");
-            couplers = new WagonType.Couplers(optionalDouble(c, "front"), optionalDouble(c, "rear"));
+        JsonObject k = section(json, "couplers", COUPLERS_KEYS, warnings);
+        if (k != null) {
+            couplers = new WagonType.Couplers(PackJson.optionalNumber(k, "front", "couplers", 0.0),
+                    PackJson.optionalNumber(k, "rear", "couplers", 0.0));
         }
+        checkGeometry(length, bogies, couplers);
 
         return new WagonType(id, length, bogies, massT, maxSpeedKmh,
                 resistance, traction, cab, brakes, interior, doors, couplers);
     }
 
+    /**
+     * The geometry must make a wagon (fix list D3): a positive length; bogie
+     * pivots strictly front to back (the first is the front one, SPEC §5.1)
+     * and inside the body, {@code |pivot| < length/2}; each coupler offset
+     * under {@code length/2} in size — a coupler can't engage past the body's
+     * middle, nor stick out further than half a body.
+     */
+    private static void checkGeometry(double length, double[] bogies, WagonType.Couplers couplers) {
+        if (!(length > 0.0)) {
+            throw new JsonSyntaxException("'length' must be a positive number of blocks, got " + format(length));
+        }
+        double half = length / 2.0;
+        for (int i = 0; i < bogies.length; i++) {
+            if (!(Math.abs(bogies[i]) < half)) {
+                throw new JsonSyntaxException("'bogies[" + i + "]' = " + format(bogies[i])
+                        + " is outside the body: a pivot must lie within ±length/2 = ±" + format(half));
+            }
+            if (i > 0 && !(bogies[i] < bogies[i - 1])) {
+                throw new JsonSyntaxException("'bogies' must run front to back, each pivot behind the one"
+                        + " before: 'bogies[" + i + "]' = " + format(bogies[i]) + " is not behind 'bogies["
+                        + (i - 1) + "]' = " + format(bogies[i - 1]));
+            }
+        }
+        checkCoupler("front", couplers.front(), half);
+        checkCoupler("rear", couplers.rear(), half);
+    }
+
+    private static void checkCoupler(String end, double offset, double half) {
+        if (!(Math.abs(offset) < half)) {
+            throw new JsonSyntaxException("'couplers." + end + "' = " + format(offset)
+                    + " must be under length/2 = " + format(half) + " in size");
+        }
+    }
+
+    /** The section object {@code key} with its keys checked, or null when absent. */
+    private static JsonObject section(JsonObject json, String key, Set<String> keys, Consumer<String> warnings) {
+        JsonObject section = PackJson.optionalObject(json, key, "");
+        if (section != null) {
+            PackJson.checkKeys(section, keys, key, warnings);
+        }
+        return section;
+    }
+
     /** The {@code brakes.system} named, or the default one. */
     private static StockDefaults.BrakeSystem brakeSystem(JsonObject brakes) {
-        if (!brakes.has("system")) {
+        String name = PackJson.optionalString(brakes, "system", "brakes");
+        if (name == null) {
             return StockDefaults.DEFAULT_BRAKE_SYSTEM;
         }
-        String name = brakes.get("system").getAsString();
         StockDefaults.BrakeSystem system = StockDefaults.BrakeSystem.byName(name);
         if (system == null) {
-            throw new JsonSyntaxException("unknown brake system '" + name
+            throw new JsonSyntaxException("unknown brake system 'brakes.system' = '" + name
                     + "' (passenger, freight or ep)");
         }
         return system;
@@ -134,16 +243,17 @@ public final class WagonTypeParser {
      * else a finite number ≥ 0 — a negative force or speed is a typo that
      * would otherwise reach the physics.
      */
-    private static double amount(JsonObject json, String field, double fallback) {
+    private static double amount(JsonObject json, String field, String where, double fallback) {
         if (!json.has(field)) {
             if (Double.isNaN(fallback)) {
-                throw new JsonSyntaxException("missing required field '" + field + "'");
+                throw new JsonSyntaxException("missing required field '" + PackJson.at(where, field) + "'");
             }
             return fallback;
         }
-        double value = json.get(field).getAsDouble();
-        if (!(value >= 0.0) || Double.isInfinite(value)) {
-            throw new JsonSyntaxException("'" + field + "' must be a number ≥ 0, got " + value);
+        double value = PackJson.number(json.get(field), PackJson.at(where, field));
+        if (!(value >= 0.0)) {
+            throw new JsonSyntaxException("'" + PackJson.at(where, field) + "' must be a number ≥ 0, got "
+                    + format(value));
         }
         return value;
     }
@@ -152,14 +262,17 @@ public final class WagonTypeParser {
      * Optional {@code aliases} (SPEC §6.4): old type ids this declaration
      * takes over, e.g. {@code "aliases": ["rwat:chme3"]} — saves that reference
      * an old id load as this type. A registry concern, not part of the type.
+     *
+     * @throws JsonSyntaxException if it isn't an array of strings
      */
     public static List<String> aliases(JsonObject json) {
-        if (!json.has("aliases")) {
+        JsonArray array = PackJson.optionalArray(json, "aliases", "");
+        if (array == null) {
             return List.of();
         }
         List<String> aliases = new ArrayList<>();
-        for (JsonElement alias : json.getAsJsonArray("aliases")) {
-            aliases.add(alias.getAsString());
+        for (int i = 0; i < array.size(); i++) {
+            aliases.add(PackJson.string(array.get(i), PackJson.at("aliases", i)));
         }
         return aliases;
     }
@@ -172,27 +285,29 @@ public final class WagonTypeParser {
      * {@code "fixed": true} — an always-open opening without a leaf;
      * {@code "connecting": true} (SPEC §9.5) — an end door onto the gangway
      * to the coupled neighbour; {@code "group": "<name>"} — doors of one group
-     * open and close together.
+     * open and close together, the name matched case aside; {@code ""} or
+     * {@code null} is no group.
      */
-    private static List<WagonType.Door> doors(JsonObject json) {
-        if (!json.has("doors")) {
+    private static List<WagonType.Door> doors(JsonObject json, Consumer<String> warnings) {
+        JsonArray array = PackJson.optionalArray(json, "doors", "");
+        if (array == null) {
             return List.of();
         }
         List<WagonType.Door> doors = new ArrayList<>();
-        for (JsonElement element : json.getAsJsonArray("doors")) {
-            JsonObject door = element.getAsJsonObject();
-            if (!door.has("id")) {
-                throw new JsonSyntaxException("every door needs an 'id'");
-            }
-            double[] min = vec3(door, "min");
-            double[] max = vec3(door, "max");
-            doors.add(new WagonType.Door(door.get("id").getAsString(),
-                    min[0], min[1], min[2], max[0], max[1], max[2],
-                    door.has("inner") && door.get("inner").getAsBoolean(),
-                    door.has("fixed") && door.get("fixed").getAsBoolean(),
-                    door.has("connecting") && door.get("connecting").getAsBoolean(),
-                    door.has("group") && !door.get("group").isJsonNull()
-                            ? door.get("group").getAsString() : null));
+        for (int i = 0; i < array.size(); i++) {
+            String where = PackJson.at("doors", i);
+            JsonObject door = PackJson.object(array.get(i), where);
+            PackJson.checkKeys(door, DOOR_KEYS, where, warnings);
+            String id = PackJson.requiredString(door, "id", where);
+            double[] min = vec3(door, "min", where);
+            double[] max = vec3(door, "max", where);
+            JsonElement group = door.get("group");
+            doors.add(new WagonType.Door(id, min[0], min[1], min[2], max[0], max[1], max[2],
+                    PackJson.optionalBool(door, "inner", where, false),
+                    PackJson.optionalBool(door, "fixed", where, false),
+                    PackJson.optionalBool(door, "connecting", where, false),
+                    group == null || group.isJsonNull() ? null
+                            : PackJson.string(group, PackJson.at(where, "group"))));
         }
         return doors;
     }
@@ -204,27 +319,30 @@ public final class WagonTypeParser {
      * degrees (0 = forward, 180 = the other end's cab; default 0). The older
      * one-chair form {@code "seat": [x,y,z], "seat_yaw": deg} still reads.
      */
-    private static WagonType.Cab cab(JsonObject cab) {
+    private static WagonType.Cab cab(JsonObject cab, Consumer<String> warnings) {
         if (cab.has("seat") && cab.has("seats")) {
             throw new JsonSyntaxException("'cab' has both 'seat' and 'seats': list every chair in 'seats'");
         }
         if (cab.has("seat")) {
-            double[] seat = vec3(cab, "seat");
+            double[] seat = vec3(cab, "seat", "cab");
             return new WagonType.Cab(List.of(new WagonType.Seat(seat[0], seat[1], seat[2],
-                    (float) optionalDouble(cab, "seat_yaw"))));
+                    (float) PackJson.optionalNumber(cab, "seat_yaw", "cab", 0.0))));
         }
-        if (!cab.has("seats")) {
+        JsonArray array = PackJson.optionalArray(cab, "seats", "cab");
+        if (array == null) {
             return new WagonType.Cab();
         }
-        JsonArray array = cab.getAsJsonArray("seats");
         if (array.size() > MAX_SEATS) {
-            throw new JsonSyntaxException("'seats' lists more than " + MAX_SEATS + " chairs");
+            throw new JsonSyntaxException("'cab.seats' lists more than " + MAX_SEATS + " chairs");
         }
         List<WagonType.Seat> seats = new ArrayList<>();
-        for (JsonElement element : array) {
-            JsonObject seat = element.getAsJsonObject();
-            double[] at = vec3(seat, "at");
-            seats.add(new WagonType.Seat(at[0], at[1], at[2], (float) optionalDouble(seat, "yaw")));
+        for (int i = 0; i < array.size(); i++) {
+            String where = PackJson.at("cab.seats", i);
+            JsonObject seat = PackJson.object(array.get(i), where);
+            PackJson.checkKeys(seat, SEAT_KEYS, where, warnings);
+            double[] at = vec3(seat, "at", where);
+            seats.add(new WagonType.Seat(at[0], at[1], at[2],
+                    (float) PackJson.optionalNumber(seat, "yaw", where, 0.0)));
         }
         return new WagonType.Cab(seats);
     }
@@ -235,66 +353,62 @@ public final class WagonTypeParser {
      * floor zones {@code "interior": [ {min,max}, … ]}, in model space.
      * Absent → not walk-boardable.
      */
-    private static WagonType.Interior interior(JsonObject json) {
-        if (!json.has("interior")) {
+    private static WagonType.Interior interior(JsonObject json, Consumer<String> warnings) {
+        JsonElement element = json.get("interior");
+        if (element == null) {
             return null;
         }
-        JsonElement element = json.get("interior");
         List<WagonType.Interior.Zone> zones = new ArrayList<>();
         if (element.isJsonArray()) {
-            for (JsonElement zone : element.getAsJsonArray()) {
-                zones.add(zone(zone.getAsJsonObject()));
+            JsonArray array = element.getAsJsonArray();
+            for (int i = 0; i < array.size(); i++) {
+                zones.add(zone(PackJson.object(array.get(i), PackJson.at("interior", i)),
+                        PackJson.at("interior", i), warnings));
             }
             if (zones.isEmpty()) {
                 throw new JsonSyntaxException("'interior' lists no zones");
             }
+        } else if (element.isJsonObject()) {
+            zones.add(zone(element.getAsJsonObject(), "interior", warnings));
         } else {
-            zones.add(zone(element.getAsJsonObject()));
+            throw PackJson.wrongType("interior", "an object {min, max} or an array of them", element);
         }
         return new WagonType.Interior(zones);
     }
 
-    private static WagonType.Interior.Zone zone(JsonObject box) {
-        double[] min = vec3(box, "min");
-        double[] max = vec3(box, "max");
+    private static WagonType.Interior.Zone zone(JsonObject box, String where, Consumer<String> warnings) {
+        PackJson.checkKeys(box, ZONE_KEYS, where, warnings);
+        double[] min = vec3(box, "min", where);
+        double[] max = vec3(box, "max", where);
         return new WagonType.Interior.Zone(min[0], min[1], min[2], max[0], max[1], max[2]);
     }
 
-    private static double[] vec3(JsonObject json, String field) {
-        if (!json.has(field)) {
-            throw new JsonSyntaxException("missing required field '" + field + "'");
-        }
-        JsonArray array = json.getAsJsonArray(field);
+    private static double[] vec3(JsonObject json, String field, String where) {
+        String path = PackJson.at(where, field);
+        JsonArray array = PackJson.requiredArray(json, field, where);
         if (array.size() != 3) {
-            throw new JsonSyntaxException("'" + field + "' must be a 3-element array");
+            throw new JsonSyntaxException("'" + path + "' must be a 3-element array [x, y, z]");
         }
-        return new double[]{array.get(0).getAsDouble(), array.get(1).getAsDouble(),
-                array.get(2).getAsDouble()};
+        return new double[]{PackJson.number(array.get(0), PackJson.at(path, 0)),
+                PackJson.number(array.get(1), PackJson.at(path, 1)),
+                PackJson.number(array.get(2), PackJson.at(path, 2))};
     }
 
     private static double[] bogies(JsonObject json) {
-        if (!json.has("bogies")) {
-            throw new JsonSyntaxException("missing required field 'bogies'");
-        }
-        JsonArray array = json.getAsJsonArray("bogies");
+        JsonArray array = PackJson.requiredArray(json, "bogies", "");
         if (array.isEmpty()) {
             throw new JsonSyntaxException("'bogies' must list at least one pivot offset");
         }
         double[] bogies = new double[array.size()];
         for (int i = 0; i < bogies.length; i++) {
-            bogies[i] = array.get(i).getAsDouble();
+            bogies[i] = PackJson.number(array.get(i), PackJson.at("bogies", i));
         }
         return bogies;
     }
 
-    private static double requiredDouble(JsonObject json, String field) {
-        if (!json.has(field)) {
-            throw new JsonSyntaxException("missing required field '" + field + "'");
-        }
-        return json.get(field).getAsDouble();
-    }
-
-    private static double optionalDouble(JsonObject json, String field) {
-        return json.has(field) ? json.get(field).getAsDouble() : 0.0;
+    /** A number as a pack author wrote it: {@code 9} rather than {@code 9.0}. */
+    private static String format(double value) {
+        return value == Math.rint(value) && Math.abs(value) < 1.0e15
+                ? Long.toString((long) value) : Double.toString(value);
     }
 }

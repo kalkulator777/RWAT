@@ -23,6 +23,8 @@ import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.consist.Consist;
 import com.muzhik17.trainsmod.consist.ConsistManager;
 import com.muzhik17.trainsmod.consist.WagonEntity;
+import com.muzhik17.trainsmod.pack.PackReport;
+import com.muzhik17.trainsmod.pack.PackReportView;
 import com.muzhik17.trainsmod.stock.ConsistComposition;
 import com.muzhik17.trainsmod.stock.WagonType;
 import com.muzhik17.trainsmod.stock.WagonTypes;
@@ -49,7 +51,8 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
 
 /**
  * {@code /rwat} debug command (SPEC §2.4a): spawn/remove a consist, set its
- * speed, teleport to it, list the installed stock. v0 spawn lays a straight
+ * speed, teleport to it, list the installed stock and what the content packs
+ * got wrong ({@code /rwat packs}). v0 spawn lays a straight
  * debug path from the player along their horizontal look direction.
  *
  * <p>{@code /rwat spawn with <stock>} takes the consist front first as
@@ -92,6 +95,8 @@ public final class RwatCommands {
                                                         parseConsist(StringArgumentType.getString(ctx, "stock"))))))))
                 .then(Commands.literal("types")
                         .executes(RwatCommands::types))
+                .then(Commands.literal("packs")
+                        .executes(RwatCommands::packs))
                 .then(Commands.literal("list")
                         .executes(RwatCommands::list))
                 .then(Commands.literal("speed")
@@ -435,6 +440,17 @@ public final class RwatCommands {
             ctx.getSource().sendSuccess(() -> line, false);
         }
         return all.size();
+    }
+
+    /**
+     * {@code /rwat packs} — the server's content packs: what each loaded
+     * (wagon types, track beds) and every error and warning the loaders
+     * found, by pack and file ({@link PackReport#SERVER}). The client's
+     * half — models, sounds, rail styles — is {@code /rwatc packs}.
+     */
+    private static int packs(CommandContext<CommandSourceStack> ctx) {
+        PackReportView.show(ctx.getSource(), PackReport.SERVER, true);
+        return 1;
     }
 
     /** s on the path closest to the point (coarse 1-block sampling — debug precision). */

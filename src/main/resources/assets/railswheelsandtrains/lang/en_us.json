@@ -215,5 +215,22 @@
   "hud.railswheelsandtrains.handbrakes": "Handbrakes %s/%s",
   "control.railswheelsandtrains.handbrake": "Handbrake",
   "control.railswheelsandtrains.handbrake_set": "set",
-  "control.railswheelsandtrains.handbrake_released": "released"
+  "control.railswheelsandtrains.handbrake_released": "released",
+  "rwat.packs.title.server": "Content packs on the server:",
+  "rwat.packs.title.client": "Content packs on this client:",
+  "rwat.packs.none": "  nothing loaded: put a content pack into the rwat_packs folder of the game directory",
+  "rwat.packs.count.wagon_types": "wagon types: %s",
+  "rwat.packs.count.track_beds": "rail styles (track bed): %s",
+  "rwat.packs.count.wagon_models": "wagon models: %s",
+  "rwat.packs.count.rail_styles": "rail styles: %s",
+  "rwat.packs.count.model_files": "models loaded and checked: %s",
+  "rwat.packs.clean": "No errors or warnings",
+  "rwat.packs.summary": "Errors: %s, warnings: %s",
+  "rwat.packs.more": "…and %s more, see the log",
+  "rwat.packs.join": "RWAT: content packs have errors (%s), see %s",
+  "rwat.packs.validate.hint": "Models load when a wagon is first drawn; /rwatc packs validate loads and checks them all now",
+  "rwat.packs.validate.start": "Loading %s models…",
+  "rwat.packs.validate.done": "Models checked: %s. Errors: %s, warnings: %s",
+  "rwat.packs.validate.busy": "The model check is still running",
+  "rwat.packs.validate.stale": "The packs reloaded during the check: run it again"
 }

@@ -8,10 +8,15 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
-import com.google.gson.JsonObject;
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.client.render.RailRenderer;
+import com.muzhik17.trainsmod.pack.PackOrigin;
+import com.muzhik17.trainsmod.pack.PackProblem;
+import com.muzhik17.trainsmod.pack.PackReport;
+import com.muzhik17.trainsmod.pack.PackReportView;
+import com.muzhik17.trainsmod.pack.RailStyleDecl;
 import com.muzhik17.trainsmod.path.SwitchThroat;
 import com.muzhik17.trainsmod.path.TileFootprint;
 
@@ -30,8 +35,10 @@ import net.minecraft.util.profiling.ProfilerFiller;
  *
  * <pre>{@code { "obj": "tracks/mvp_ir_rail.obj", "tile_length": 1.0 }}</pre>
  *
- * {@code obj} without a namespace is in the declaring pack's namespace;
- * {@code tile_length} (default 1) is how far apart the tile repeats: the rail
+ * read by {@link RailStyleDecl}, the same reading the server's track bed
+ * uses. {@code obj} without a namespace is in the declaring pack's namespace;
+ * {@code tile_length} (default 1, at least {@link RailStyleDecl#MIN_TILE_LENGTH})
+ * is how far apart the tile repeats: the rail
  * objects ({@code RAIL_LEFT}/{@code RAIL_RIGHT}) are stretched to fill each
  * tile end to end, everything else ({@code RAIL_BASE}: sleepers, ballast,
  * embankment) keeps its size, centred in the tile — so an embankment piece
@@ -48,18 +55,25 @@ import net.minecraft.util.profiling.ProfilerFiller;
  * a blade and nothing else. Only a style whose rail objects are its running
  * rails gets blades and frogs ({@link SwitchThroat#profile}).
  *
- * <p>Applying swaps the registry and drops the rail renderer's caches, so
+ * <p>A declaration that fails (bad JSON or field, an OBJ that is missing or
+ * draws nothing) is skipped — its segments draw as the standard rail — and,
+ * like an unknown key, reported to the log and {@link PackReport#CLIENT}.
+ * Applying swaps the registry and drops the rail renderer's caches, so
  * F3+T re-sweeps the network with the new tiles. The object rules (hidden
  * objects, which ones are rails, the stretch) are {@link TileFootprint}'s —
  * the server reads the same OBJ by them for the track bed.
  */
 public final class RailModelReloadListener
-        extends SimplePreparableReloadListener<Map<String, RailStyle>> {
+        extends SimplePreparableReloadListener<RailModelReloadListener.Prepared> {
 
     private static final FileToIdConverter DECLARATIONS = FileToIdConverter.json("rail_models");
 
+    /** A reload's styles and what was wrong with the declarations. */
+    record Prepared(Map<String, RailStyle> styles, List<PackProblem> problems, Map<String, Integer> loaded) {
+    }
+
     @Override
-    protected Map<String, RailStyle> prepare(ResourceManager resources, ProfilerFiller profiler) {
+    protected Prepared prepare(ResourceManager resources, ProfilerFiller profiler) {
         IrStockModel.ResourceAccess access = new IrStockModel.ResourceAccess() {
             @Override
             public InputStream open(ResourceLocation location) throws IOException {
@@ -72,44 +86,53 @@ public final class RailModelReloadListener
             }
         };
         Map<String, RailStyle> styles = new HashMap<>();
+        List<PackProblem> problems = new ArrayList<>();
+        Map<String, Integer> loaded = new TreeMap<>();
         for (Map.Entry<ResourceLocation, Resource> file
                 : DECLARATIONS.listMatchingResources(resources).entrySet()) {
             ResourceLocation id = DECLARATIONS.fileToId(file.getKey());
+            PackOrigin origin = new PackOrigin(file.getValue().sourcePackId(),
+                    PackOrigin.file("assets", file.getKey().getNamespace(), file.getKey().getPath()));
+            List<String> warnings = new ArrayList<>();
             try (Reader reader = file.getValue().openAsReader()) {
-                RailStyle style = load(id, GsonHelper.parse(reader), access);
-                if (style != null) {
-                    styles.put(id.toString(), style);
-                }
+                RailStyleDecl decl = RailStyleDecl.parse(id.getNamespace(), GsonHelper.parse(reader), warnings::add);
+                RailStyle style = load(id, decl, access);
+                styles.put(id.toString(), style);
+                loaded.merge(origin.pack(), 1, Integer::sum);
             } catch (IOException | RuntimeException e) {
-                RailsWheelsAndTrains.LOGGER.error("Skipping bad rail model {}: {}", id, e.getMessage());
+                problems.add(origin.error("rail style " + id + " not loaded: " + PackReportView.reason(e)));
             }
+            warnings.forEach(warning -> problems.add(origin.warning(warning)));
         }
         RailsWheelsAndTrains.LOGGER.info("{} rail style(s) declared by resource packs", styles.size());
-        return styles;
+        return new Prepared(styles, problems, loaded);
     }
 
     @Override
-    protected void apply(Map<String, RailStyle> styles, ResourceManager resources,
-            ProfilerFiller profiler) {
-        RailStyles.reset(styles);
+    protected void apply(Prepared prepared, ResourceManager resources, ProfilerFiller profiler) {
+        PackReportView.log(prepared.problems());
+        RailStyles.reset(prepared.styles());
+        PackReport.CLIENT.replace(PackReport.Source.RAIL_STYLES, prepared.loaded(), prepared.problems());
         RailRenderer.clear();
     }
 
-    /** One style from its declaration; null (logged) if the OBJ has nothing to draw. */
-    private static RailStyle load(ResourceLocation id, JsonObject json, IrStockModel.ResourceAccess access)
+    /**
+     * One style from its declaration ({@link RailStyleDecl}, read the same way
+     * as the server's track bed reads it).
+     *
+     * @throws IOException       if the OBJ can't be read
+     * @throws RuntimeException  if its path is invalid, it is missing or it has nothing to draw
+     */
+    private static RailStyle load(ResourceLocation id, RailStyleDecl decl, IrStockModel.ResourceAccess access)
             throws IOException {
-        String objPath = GsonHelper.getAsString(json, "obj");
-        ResourceLocation objLocation = ResourceLocation.tryParse(
-                objPath.contains(":") ? objPath : id.getNamespace() + ":" + objPath);
+        ResourceLocation objLocation = ResourceLocation.tryParse(decl.obj());
         if (objLocation == null) {
-            RailsWheelsAndTrains.LOGGER.error("{}: invalid rail model path {}", id, objPath);
-            return null;
+            throw new IllegalArgumentException("'obj' = '" + decl.obj() + "' is not a valid resource location");
         }
-        double tileLength = GsonHelper.getAsDouble(json, "tile_length", 1.0);
-        if (!(tileLength > 0.0)) {
-            RailsWheelsAndTrains.LOGGER.error("{}: tile_length must be positive", id);
-            return null;
+        if (!access.exists(objLocation)) {
+            throw new IllegalArgumentException("rail model " + objLocation + " not found");
         }
+        double tileLength = decl.tileLength();
         ObjLoader.Model obj;
         try (InputStream in = access.open(objLocation)) {
             obj = ObjLoader.loadModel(in);
@@ -153,8 +176,7 @@ public final class RailModelReloadListener
                     plusRails.get(texture), minusRails.get(texture)));
         }
         if (parts.isEmpty()) {
-            RailsWheelsAndTrains.LOGGER.error("{}: rail model {} has no textured faces", id, objLocation);
-            return null;
+            throw new IllegalArgumentException("rail model " + objLocation + " has no textured faces");
         }
         RailStyle.Blades blades = blades(plusAll, minusAll);
         if (blades == null) {

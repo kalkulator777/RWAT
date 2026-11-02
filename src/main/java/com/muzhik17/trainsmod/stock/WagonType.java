@@ -503,11 +503,18 @@ public record WagonType(
      * @param group doors of one group open and close together, null = on its
      *              own: IR works all doors of a control group at once (an
      *              EMU's left side, DR1's {@code DL}), and one IR animation may
-     *              swing the leaves of several doorways
+     *              swing the leaves of several doorways. Names match case
+     *              aside, as control groups do ({@link #doorsWorkedBy}); an
+     *              empty name is no group, so the server's parse and the
+     *              client's sync read the same door
      */
     public record Door(String id, double minX, double minY, double minZ,
             double maxX, double maxY, double maxZ, boolean inner, boolean fixed,
             boolean connecting, String group) {
+
+        public Door {
+            group = group == null || group.isEmpty() ? null : group;
+        }
 
         /** An ordinary hull door (every declaration before §9.1). */
         public Door(String id, double minX, double minY, double minZ,
@@ -528,9 +535,9 @@ public record WagonType(
             this(id, minX, minY, minZ, maxX, maxY, maxZ, inner, fixed, connecting, null);
         }
 
-        /** True if this door opens and closes together with {@code other} (same group). */
+        /** True if this door opens and closes together with {@code other} (same group, case aside). */
         public boolean groupedWith(Door other) {
-            return group != null && group.equals(other.group);
+            return group != null && group.equalsIgnoreCase(other.group);
         }
 
         /** True for a way in from outside: neither between zones nor onto a gangway. */
