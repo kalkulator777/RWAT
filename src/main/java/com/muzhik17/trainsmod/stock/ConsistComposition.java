@@ -106,6 +106,38 @@ public record ConsistComposition(List<Slot> slots) {
         return -(rearBogieS(0.0, last));
     }
 
+    /**
+     * The head at which this make-up stands where {@code before} stood with
+     * its head at {@code headS} — the same wagons with their types reloaded
+     * (D1): the middle of the train, halfway between its outer coupler
+     * points, stays put. A car grown longer reaches out at both ends alike,
+     * a car whose bogies moved keeps its body where it was (the head is a
+     * bogie), and no wagon moves further than half the change of the whole
+     * train's length.
+     */
+    public double headKeepingMiddle(ConsistComposition before, double headS) {
+        return headS + before.middleOffset() - middleOffset();
+    }
+
+    /** The middle of the train between its outer coupler points, relative to the head. */
+    private double middleOffset() {
+        int last = slots.size() - 1;
+        double front = bodyCenterS(0.0, 0) + slots.get(0).frontCouplerReach();
+        double rear = bodyCenterS(0.0, last) - slots.get(last).rearCouplerReach();
+        return (front + rear) * 0.5;
+    }
+
+    /**
+     * {@code headS} held where the whole train stays on an open path of
+     * {@code pathLength}: the head no further than its end, the rear bogie
+     * of the last wagon no further back than its start (a train longer than
+     * the path keeps its head at the end). The consist's own rule as it
+     * runs ({@code Consist.advance}); a closed loop has no ends to hold to.
+     */
+    public double headOnPath(double headS, double pathLength) {
+        return Math.clamp(headS, Math.min(totalLength(), pathLength), pathLength);
+    }
+
     /** Total empty mass, tonnes (the physics step reads this; cargo later). */
     public double totalMassT() {
         double mass = 0.0;

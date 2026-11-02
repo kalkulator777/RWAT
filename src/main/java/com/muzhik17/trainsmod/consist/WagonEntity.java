@@ -189,6 +189,8 @@ public class WagonEntity extends Entity {
     private float[] doorAnimO = new float[0];
     /** Client: the first door state seen is adopted as-is, not animated. */
     private boolean doorAnimSeeded;
+    /** Client: the type {@link #doorAnim} is indexed by (a reload brings another: D1). */
+    private WagonType doorAnimType;
     /** Client: the handbrake wheel's turn, this tick and last (0 released … 1 set; SPEC §5.3). */
     private float handbrakeAnim;
     private float handbrakeAnimO;
@@ -692,15 +694,17 @@ public class WagonEntity extends Entity {
     /** True if someone aboard sits in chair {@code chair} (the id of a rider long gone doesn't count). */
     private boolean occupied(int chair) {
         int id = seatedIn(chair);
-        if (id < 0) {
-            return false;
-        }
+        return id >= 0 && passengerById(id) != null;
+    }
+
+    /** The passenger aboard with this entity id, or null. */
+    private Entity passengerById(int id) {
         for (Entity passenger : getPassengers()) {
             if (passenger.getId() == id) {
-                return true;
+                return passenger;
             }
         }
-        return false;
+        return null;
     }
 
     /**
@@ -1271,9 +1275,29 @@ public class WagonEntity extends Entity {
                 new Vector3d(centre.x, centre.y, centre.z)) != null;
     }
 
-    /** Client: advance each door's swing toward its synced state. */
+    /**
+     * Client: advance each door's swing toward its synced state. A type
+     * reloaded under the wagon (D1) keeps each door's swing by id, wherever
+     * the door now is in the list; a door new to it starts as it is.
+     */
     private void tickDoorAnim(WagonType type) {
         int n = Math.min(type.doors().size(), 32);
+        if (type != doorAnimType) {
+            if (doorAnimType != null && n > 0) {
+                float[] anim = new float[n];
+                float[] animO = new float[n];
+                int mask = doorMask();
+                for (int i = 0; i < n; i++) {
+                    int was = doorIndex(doorAnimType, type.doors().get(i).id());
+                    boolean known = doorAnimSeeded && was >= 0 && was < doorAnim.length;
+                    anim[i] = known ? doorAnim[was] : (mask >> i & 1) != 0 ? 1.0F : 0.0F;
+                    animO[i] = known ? doorAnimO[was] : anim[i];
+                }
+                doorAnim = anim;
+                doorAnimO = animO;
+            }
+            doorAnimType = type;
+        }
         if (doorAnim.length != n) {
             doorAnim = new float[n];
             doorAnimO = new float[n];
@@ -1290,6 +1314,16 @@ public class WagonEntity extends Entity {
             doorAnim[i] += Math.clamp(target - doorAnim[i], -step, step);
         }
         doorAnimSeeded = true;
+    }
+
+    /** The index of door {@code id} in {@code type}'s list (the first 32), −1 if it has none. */
+    private static int doorIndex(WagonType type, String id) {
+        for (int i = 0; i < type.doors().size() && i < 32; i++) {
+            if (type.doors().get(i).id().equals(id)) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     /** Client: wind the handbrake wheel toward the synced handbrake state. */
@@ -1403,6 +1437,72 @@ public class WagonEntity extends Entity {
         for (Vector3d local : riderLocal.values()) {
             local.set(-local.x, local.y, -local.z);
         }
+    }
+
+    /**
+     * The packs were reloaded and this wagon's type went from {@code before}
+     * to the one its consist now holds (server, D1; {@code ConsistManager}
+     * calls it once the consist is retyped). What hung on the old type is put
+     * right:
+     * <ul>
+     * <li>open doors by id ({@link WagonTypes#openDoorsAfter}): a door still
+     *     declared stays open wherever it now is in the list, the others are
+     *     shut — as a save keeps them (SPEC §9.8);
+     * <li>a driver whose chair is gone stands up as from a chair ({@link
+     *     #standDriver}): walked from where they sat down from towards where
+     *     it was — the spot their client predicts;
+     * <li>walking riders' feet go onto the floor as it is now — the nearest
+     *     spot a body fits, the floor height there — as a rider coming back
+     *     aboard after a logout ({@link #welcomeBack});
+     * <li>a car no longer walked lets its walkers off beside it; a car walked
+     *     now and not before puts its rider from the vehicle's seat on the
+     *     floor under them.
+     * </ul>
+     */
+    void retyped(WagonType before) {
+        WagonType type = typeNow();
+        if (savedOpenDoors == null) { // doors a save had open are by id yet: they open on the new type
+            this.entityData.set(DATA_DOORS, WagonTypes.openDoorsAfter(before, type, doorMask()));
+        }
+        boolean walked = type != null && type.interior() != null;
+        WagonType.Interior interior = walked ? type.interior().inFrame(isFlipped()) : null;
+        List<WagonType.Door> doors = framedDoors();
+        int open = doorMask();
+        int[] seated = seatedIds();
+        for (int chair = 0; chair < seated.length; chair++) {
+            if (seated[chair] < 0 || seat(chair) != null) {
+                continue;
+            }
+            setSeated(chair, -1);
+            Entity rider = passengerById(seated[chair]);
+            Vector3d satFrom = rider == null ? null : riderLocal.get(rider.getUUID());
+            if (walked && satFrom != null && before != null && before.cab() != null
+                    && chair < before.cab().seats().size()) {
+                WagonType.Seat was = before.cab().seats().get(chair).inFrame(isFlipped());
+                riderLocal.put(rider.getUUID(), RiderWalk.toward(satFrom, was.x(), was.z(), interior, doors, open));
+            }
+        }
+        if (!walked) {
+            for (Entity passenger : List.copyOf(getPassengers())) {
+                if (passenger instanceof ServerPlayer player && riderLocal.containsKey(player.getUUID())) {
+                    exitRider(player); // beside the car (getDismountLocationForPassenger)
+                }
+            }
+            return;
+        }
+        Vector3d body = new Vector3d(getX(), getY(), getZ());
+        for (Entity passenger : getPassengers()) {
+            if (!(passenger instanceof ServerPlayer player)) {
+                continue;
+            }
+            Vector3d local = riderLocal.get(player.getUUID());
+            if (local == null) {
+                local = PoseMath.worldToLocal(body, getYRot(), getXRot(),
+                        new Vector3d(player.getX(), player.getY(), player.getZ()));
+            }
+            riderLocal.put(player.getUUID(), interior.clampFeet(local, RiderWalk.PLAYER_HALF_WIDTH, doors, open));
+        }
+        repositionRiders();
     }
 
     /**
