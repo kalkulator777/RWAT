@@ -35,10 +35,10 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # No build cache: the tests also read schema/ (SchemaKeysTest, RwatPackMetaTest),
-      # which build.gradle doesn't declare as a test input, so a cached test result
-      # would answer a change of the schema alone. A fresh runner has no build/ either,
-      # so every test runs.
+      # No build cache: CI runs every test afresh. build.gradle declares the files the
+      # tests read from disk (packs/, run/rwat_packs/, schema/) as test inputs, but a test
+      # that starts reading another file would be answered by a cached result until it
+      # is declared too. A fresh runner has no build/ either.
       - name: Build with tests
         run: ./gradlew build --no-build-cache --stacktrace
 
