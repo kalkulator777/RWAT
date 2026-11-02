@@ -95,8 +95,8 @@
       "origin": "the car's centre; y = 0 is the track spline, the rail head at y = 0.40625",
       "x-origin-ru": "центр вагона; y = 0 — сплайн пути, головка рельса на y = 0.40625",
       "unit": "block",
-      "en": "The engine's internal frame, the one it computes and renders in; every wagon type before format 1 was written in it. Packs no longer write it: read the files from before format 1 in it.",
-      "ru": "Внутренний кадр движка — в нём он считает и рисует; в нём написаны все типы до формата 1. Паки в нём больше не пишут: в нём читаются файлы до формата 1."
+      "en": "The engine's internal frame, the one it computes and renders in; every wagon type before format 1 was written in it. Packs no longer write it, and the engine reads every type's markup in the OBJ frame, a pack without rwat.format too: a file from before format 1 is translated by the formulas below, or its zones, doors and chairs land turned a quarter round.",
+      "ru": "Внутренний кадр движка — в нём он считает и рисует; в нём написаны все типы до формата 1. Паки в нём больше не пишут, и разметку любого типа движок читает в кадре OBJ, у пака без rwat.format тоже: файл, написанный до формата 1, переводят по формулам ниже, иначе его зоны, двери и кресла встанут повёрнутыми на четверть оборота."
     },
     {
       "id": "rail_tile",
