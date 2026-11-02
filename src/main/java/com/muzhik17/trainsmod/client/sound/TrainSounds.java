@@ -24,6 +24,7 @@ import com.muzhik17.trainsmod.kinematics.PoseMath;
 import com.muzhik17.trainsmod.kinematics.WagonPose;
 import com.muzhik17.trainsmod.stock.ConsistComposition;
 import com.muzhik17.trainsmod.stock.WagonType;
+import com.muzhik17.trainsmod.stock.WagonTypes;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -56,7 +57,8 @@ import net.neoforged.neoforge.client.event.sound.SoundEngineLoadEvent;
  * DR1's engine starts and stops) — the lead-in only when the engine starts
  * here and now, not when a running one comes into hearing;</li>
  * <li><b>doors</b> — each door's sound as it opens or closes (an iron door
- * if the pack gives none);</li>
+ * if the pack gives none); not for a door a pack reload only moved in the
+ * type's list ({@link DoorChanges});</li>
  * <li><b>cab controls</b> — the notch of the throttle, brake and reverser in
  * the cab that drives;</li>
  * <li><b>horn and whistle</b> — from that cab, for as long as the driver holds
@@ -135,7 +137,7 @@ public final class TrainSounds {
         /** The engine ran last tick; null before the first — one found running was started before we came. */
         Boolean alive;
         float throttle;
-        int doorMask = -1;
+        final DoorChanges doors = new DoorChanges();
     }
 
     private static final class ConsistAudio {
@@ -273,7 +275,6 @@ public final class TrainSounds {
         audio.wheels = new LoopPlayer<>(wheels, new GameSpeaker(WHEELS_DISTANCE), false);
         audio.engine = audio.sounds.idle() != null
                 ? new LoopPlayer<>(audio.sounds.idle(), new GameSpeaker(ENGINE_DISTANCE), false) : null;
-        audio.doorMask = -1;
     }
 
     private static void wheels(WagonAudio audio, WagonEntity wagon, boolean on, double kmh,
@@ -338,12 +339,12 @@ public final class TrainSounds {
     /**
      * A door that opened or closed since the last tick sounds at its doorway
      * — if that is in hearing (the far door of a long coach may be, while its
-     * centre is not).
+     * centre is not). The state first seen is no event, nor is the mask
+     * re-indexed under a reloaded type ({@link DoorChanges}).
      */
     private static void doors(WagonAudio audio, WagonEntity wagon, Vec3 ear, double volume) {
         int mask = wagon.doorMask();
-        int changed = audio.doorMask < 0 ? 0 : mask ^ audio.doorMask;
-        audio.doorMask = mask; // the state first seen is no event
+        int changed = audio.doors.update(wagon.typeNow(), WagonTypes.generation(), mask);
         if (changed == 0) {
             return;
         }
