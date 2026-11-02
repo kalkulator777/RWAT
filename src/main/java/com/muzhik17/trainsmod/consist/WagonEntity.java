@@ -707,7 +707,7 @@ public class WagonEntity extends Entity {
         boolean inReach = local != null && Math.hypot(local.x - seat.x(), local.z - seat.z()) <= RiderWalk.SEAT_REACH;
         if (local != null && !inReach && player.getVehicle() == this) {
             // the client offered the chair in reach: the two disagree where the rider stands
-            RailsWheelsAndTrains.LOGGER.info(
+            RailsWheelsAndTrains.LOGGER.debug(
                     "[ride-debug] chair {} of wagon {} out of {}'s reach on the server: feet {} {}, chair {} {}",
                     chair, getId(), player.getGameProfile().getName(), fmt(local.x), fmt(local.z),
                     fmt(seat.x()), fmt(seat.z()));
@@ -1212,7 +1212,7 @@ public class WagonEntity extends Entity {
                 <= reach * reach;
         if (!inReach && WagonTouch.present(player)) {
             // the client drew the door in reach: the two disagree where the player is
-            RailsWheelsAndTrains.LOGGER.info(
+            RailsWheelsAndTrains.LOGGER.debug(
                     "[ride-debug] door {} of wagon {} out of {}'s reach on the server: eye {} {} {}, door {} {} {}"
                             + " (car frame), riding {}",
                     index, getId(), player.getGameProfile().getName(), fmt(eye.x), fmt(eye.y), fmt(eye.z),

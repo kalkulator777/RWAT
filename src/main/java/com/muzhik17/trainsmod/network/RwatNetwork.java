@@ -223,7 +223,7 @@ public final class RwatNetwork {
             }
         } else if (context.player() instanceof ServerPlayer player) {
             // the client walks a car the server doesn't have them on
-            RailsWheelsAndTrains.LOGGER.info("[ride-debug] chair of wagon {} refused: on the server {} rides {}",
+            RailsWheelsAndTrains.LOGGER.debug("[ride-debug] chair of wagon {} refused: on the server {} rides {}",
                     payload.wagonId(), player.getGameProfile().getName(),
                     player.getVehicle() == null ? "nothing" : "entity " + player.getVehicle().getId());
         }
