@@ -10,8 +10,13 @@ import java.util.Objects;
  *
  * @param fileName its folder or zip name in the pack folder
  * @param path     where it lies
- * @param meta     its {@code "rwat"} block; {@code null} when the block kept the
- *                 pack out (an error in {@code problems} says why)
+ * @param meta     its {@code "rwat"} block as read ({@link RwatPackMeta.Result#meta}),
+ *                 also when the block's {@code format} keeps the pack out, so the
+ *                 list still names it; a {@code pack.mcmeta} without the block
+ *                 reads as format 1 with nothing else given. {@code null} only
+ *                 when there is no block to read: no readable {@code pack.mcmeta},
+ *                 an {@code "rwat"} that is no object, or a pack of the same name
+ *                 found first (an error in {@code problems} says which)
  * @param problems what was found wrong, warnings and errors, in order
  * @param loaded   the game loads it: no error, and Minecraft read it as a pack
  */

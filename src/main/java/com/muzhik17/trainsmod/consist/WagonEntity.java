@@ -88,8 +88,10 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *
  * <p><b>Gangways (SPEC §9.5, IR's {@code CONNECTING} doors):</b> a rider
  * walking out through an open connecting door in an end wall goes on into the
- * coupled neighbour on that end, through its connecting door there (opened
- * as they pass), and walks on in its interior ({@link #passGangway}).
+ * coupled neighbour on that end, through its connecting door there, and walks
+ * on in its interior ({@link #passGangway}). Both doors must be open: the
+ * rider opens the neighbour's door themselves, and while it is shut the
+ * gangway is wall ({@link #gangwayArrival}).
  */
 public class WagonEntity extends Entity {
 
