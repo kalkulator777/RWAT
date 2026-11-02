@@ -1,0 +1,253 @@
+{
+  "description": "A type as the pack writes it (OBJ frame) -> its ways out, as the floor check finds them (FloorCheck.walkablePieces): for each door in order, the pieces of the floor with every door between zones shut (FloorRegion by Interior.region(0.3, doors, 0), model frame, Z order: floor_region's pieces) a rider walks out through it from — a player fits in front of it, inside its span, with the floor ending at its inner face; null for a door between zones. input.exits_of: the type; expected: the list, or null if the type has no floor.",
+  "frame": "none",
+  "tolerance": 0,
+  "cases": [
+    {
+      "id": "exits-example-coach",
+      "note": "the ways out of example-coach",
+      "input_file": {"exits_of": "run/rwat_packs/RwatExamplePack/data/rwat_example/wagon_types/coach.json"},
+      "expected": [[15], [15], [1], [1], [14, 15, 16], [0, 1, 2], null, null]
+    },
+    {
+      "id": "exits-example-shunter",
+      "note": "the ways out of example-shunter",
+      "input_file": {"exits_of": "run/rwat_packs/RwatExamplePack/data/rwat_example/wagon_types/shunter.json"},
+      "expected": [[3], [3]]
+    },
+    {
+      "id": "exits-example-gondola",
+      "note": "the ways out of example-gondola",
+      "input_file": {"exits_of": "run/rwat_packs/RwatExamplePack/data/rwat_example/wagon_types/gondola.json"},
+      "expected": null
+    },
+    {
+      "id": "exits-example-coach-door-fl-off-the-wall",
+      "note": "the ways out of example-coach-door-fl-off-the-wall",
+      "input": {
+        "exits_of": {
+          "length": 20.0,
+          "bogies": [7.0, -7.0],
+          "mass_t": 42.0,
+          "max_speed_kmh": 120,
+          "resistance": {"c": 1.1},
+          "brakes": {"system": "ep", "parking_kn": 18.0},
+          "interior": [
+            {"min": [-9.6, 1.15, -1.4], "max": [-7.9, 3.6, 1.4]},
+            {"min": [-7.8, 1.3, -0.55], "max": [7.8, 3.6, 0.55]},
+            {"min": [-1.2, 1.3, -1.4], "max": [1.2, 3.6, 1.4]},
+            {"min": [7.9, 1.15, -1.4], "max": [9.6, 3.6, 1.4]}
+          ],
+          "doors": [
+            {"id": "door_fl", "min": [-9.25, 1.15, 1.95], "max": [-8.25, 3.3, 2.01], "group": "DoorsL"},
+            {"id": "door_fr", "min": [-9.25, 1.15, -1.51], "max": [-8.25, 3.3, -1.45], "group": "DoorsR"},
+            {"id": "door_rl", "min": [8.25, 1.15, 1.45], "max": [9.25, 3.3, 1.51], "group": "DoorsL"},
+            {"id": "door_rr", "min": [8.25, 1.15, -1.51], "max": [9.25, 3.3, -1.45], "group": "DoorsR"},
+            {
+              "id": "gangway_front",
+              "min": [-9.68, 1.15, -0.45],
+              "max": [-9.62, 3.25, 0.45],
+              "connecting": true
+            },
+            {"id": "gangway_rear", "min": [9.62, 1.15, -0.45], "max": [9.68, 3.25, 0.45], "connecting": true},
+            {"id": "salon_door", "min": [-7.88, 1.3, -0.45], "max": [-7.82, 3.3, 0.45], "inner": true},
+            {
+              "id": "salon_arch",
+              "min": [7.82, 1.3, -0.45],
+              "max": [7.88, 3.3, 0.45],
+              "inner": true,
+              "fixed": true
+            }
+          ],
+          "couplers": {"front": -0.05, "rear": -0.05}
+        }
+      },
+      "expected": [[], [15], [1], [1], [14, 15, 16], [0, 1, 2], null, null]
+    },
+    {
+      "id": "exits-example-coach-gangway-front-in-the-side",
+      "note": "the ways out of example-coach-gangway-front-in-the-side",
+      "input": {
+        "exits_of": {
+          "length": 20.0,
+          "bogies": [7.0, -7.0],
+          "mass_t": 42.0,
+          "max_speed_kmh": 120,
+          "resistance": {"c": 1.1},
+          "brakes": {"system": "ep", "parking_kn": 18.0},
+          "interior": [
+            {"min": [-9.6, 1.15, -1.4], "max": [-7.9, 3.6, 1.4]},
+            {"min": [-7.8, 1.3, -0.55], "max": [7.8, 3.6, 0.55]},
+            {"min": [-1.2, 1.3, -1.4], "max": [1.2, 3.6, 1.4]},
+            {"min": [7.9, 1.15, -1.4], "max": [9.6, 3.6, 1.4]}
+          ],
+          "doors": [
+            {"id": "door_fl", "min": [-9.25, 1.15, 1.45], "max": [-8.25, 3.3, 1.51], "group": "DoorsL"},
+            {"id": "door_fr", "min": [-9.25, 1.15, -1.51], "max": [-8.25, 3.3, -1.45], "group": "DoorsR"},
+            {"id": "door_rl", "min": [8.25, 1.15, 1.45], "max": [9.25, 3.3, 1.51], "group": "DoorsL"},
+            {"id": "door_rr", "min": [8.25, 1.15, -1.51], "max": [9.25, 3.3, -1.45], "group": "DoorsR"},
+            {"id": "gangway_front", "min": [-9.5, 1.15, 1.45], "max": [-8.6, 3.25, 1.51], "connecting": true},
+            {"id": "gangway_rear", "min": [9.62, 1.15, -0.45], "max": [9.68, 3.25, 0.45], "connecting": true},
+            {"id": "salon_door", "min": [-7.88, 1.3, -0.45], "max": [-7.82, 3.3, 0.45], "inner": true},
+            {
+              "id": "salon_arch",
+              "min": [7.82, 1.3, -0.45],
+              "max": [7.88, 3.3, 0.45],
+              "inner": true,
+              "fixed": true
+            }
+          ],
+          "couplers": {"front": -0.05, "rear": -0.05}
+        }
+      },
+      "expected": [[15], [15], [1], [1], [15, 16], [0, 1, 2], null, null]
+    },
+    {
+      "id": "exits-example-shunter-steps-off-the-wall",
+      "note": "the ways out of example-shunter-steps-off-the-wall",
+      "input": {
+        "exits_of": {
+          "length": 14.0,
+          "bogies": [4.0, -4.0],
+          "mass_t": 68.0,
+          "max_speed_kmh": 60,
+          "resistance": {"a": 780.0, "b": 18.0, "c": 1.6, "c_front": 7.0},
+          "traction": {"power_kw": 750.0, "max_tractive_effort_kn": 210.0, "adhesion": 1.15, "ramp_s": 6.0},
+          "brakes": {
+            "system": "passenger",
+            "train_kn": 68.0,
+            "independent_kn": 52.0,
+            "parking_kn": 30.0,
+            "apply_s": 5.0,
+            "release_s": 9.0
+          },
+          "cab": {"seats": [{"at": [1.65, 2.1, -0.8], "yaw": 0}, {"at": [2.95, 2.1, 0.8], "yaw": 180}]},
+          "interior": [
+            {"min": [1.25, 1.6, -1.42], "max": [3.35, 3.9, 1.42]},
+            {"min": [3.35, 1.6, -1.42], "max": [3.92, 3.9, 0.0]}
+          ],
+          "doors": [
+            {"id": "steps_left", "min": [2.0, 1.6, 2.02], "max": [2.6, 3.6, 2.1], "fixed": true},
+            {"id": "steps_right", "min": [2.0, 1.6, -1.5], "max": [2.6, 3.6, -1.42], "fixed": true}
+          ],
+          "couplers": {"front": 0.05, "rear": 0.05}
+        }
+      },
+      "expected": [[], [3]]
+    },
+    {
+      "id": "exits-a-gangway-where-the-floor-ends",
+      "note": "the ways out of: a gangway where the floor ends",
+      "input": {
+        "exits_of": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "interior": [
+            {"min": [-11.4, 1.37375, -0.65], "max": [-9.5, 3.87375, 0.125]},
+            {"min": [-11.75, 1.37375, -1.45], "max": [-10.87, 3.87375, 1.45]}
+          ],
+          "doors": [
+            {
+              "id": "Trap1",
+              "min": [-12.044, 1.49975, -0.438],
+              "max": [-11.75, 3.43775, 0.438],
+              "connecting": true
+            }
+          ]
+        }
+      },
+      "expected": [[0, 1, 2, 3, 4, 5, 6, 7, 8]]
+    },
+    {
+      "id": "exits-a-gangway-the-floor-stops-short-of",
+      "note": "the ways out of: a gangway the floor stops short of",
+      "input": {
+        "exits_of": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "interior": [{"min": [-10.75, 1.37375, -1.45], "max": [11.75, 3.87375, 1.45]}],
+          "doors": [
+            {
+              "id": "Trap1",
+              "min": [-12.044, 1.49975, -0.438],
+              "max": [-11.75, 3.43775, 0.438],
+              "connecting": true
+            }
+          ]
+        }
+      },
+      "expected": [[]]
+    },
+    {
+      "id": "exits-a-gangway-in-a-side-wall",
+      "note": "the ways out of: a gangway in a side wall",
+      "input": {
+        "exits_of": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "interior": [{"min": [-5.0, 1.37375, -1.45], "max": [5.0, 3.87375, 1.45]}],
+          "doors": [
+            {
+              "id": "side_gangway",
+              "min": [-0.9, 1.46375, 1.45],
+              "max": [0.0, 3.36375, 1.5],
+              "connecting": true
+            }
+          ]
+        }
+      },
+      "expected": [[1]]
+    },
+    {
+      "id": "exits-a-thick-door-a-narrow-door",
+      "note": "the ways out of: a thick door, a narrow door",
+      "input": {
+        "exits_of": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "interior": [{"min": [-5.0, 1.37375, -1.45], "max": [5.0, 3.87375, 1.45]}],
+          "doors": [
+            {"id": "thick", "min": [-1.0, 1.46375, 1.45], "max": [0.0, 3.36375, 2.25]},
+            {"id": "narrow", "min": [-2.15, 1.46375, 1.45], "max": [-2.0, 3.36375, 1.5]}
+          ]
+        }
+      },
+      "expected": [[1], []]
+    },
+    {
+      "id": "exits-a-side-door-where-the-floor-ends",
+      "note": "the ways out of: a side door where the floor ends",
+      "input": {
+        "exits_of": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "interior": [{"min": [-5.0, 1.37375, -1.45], "max": [5.0, 3.87375, 1.45]}],
+          "doors": [{"id": "door_1", "min": [-0.9, 1.46375, 1.45], "max": [0.0, 3.36375, 1.5]}]
+        }
+      },
+      "expected": [[1]]
+    },
+    {
+      "id": "exits-a-part-of-the-floor-walked-to-by-its-own-door",
+      "note": "the ways out of: a part of the floor walked to by its own door",
+      "input": {
+        "exits_of": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "interior": [
+            {"min": [-5.0, 1.37375, -1.0], "max": [0.0, 3.87375, 1.0]},
+            {"min": [-9.0, 1.37375, -1.45], "max": [-6.0, 3.87375, 1.45]}
+          ],
+          "doors": [{"id": "steps", "min": [-7.9, 1.16375, 1.45], "max": [-7.0, 3.16375, 1.5], "fixed": true}]
+        }
+      },
+      "expected": [[4]]
+    }
+  ]
+}

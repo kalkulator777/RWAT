@@ -1,0 +1,91 @@
+{
+  "description": "An MTL's text -> material -> the path of its diffuse map (client.render.model.MtlParser.parse): map_Kd after a newmtl, the rest of the line trimmed, as written; materials with no map left out; in the order the materials first come. input.text; expected: {material: path}.",
+  "frame": "none",
+  "tolerance": 0,
+  "cases": [
+    {
+      "id": "parse-map-kd-after-newmtl",
+      "note": "map_Kd after newmtl",
+      "input": {"text": "newmtl body\nmap_Kd body.png\n"},
+      "expected": {"body": "body.png"}
+    },
+    {
+      "id": "parse-a-material-with-no-map-is-left-out",
+      "note": "a material with no map is left out",
+      "input": {"text": "newmtl glass\nKd 1 1 1\nnewmtl body\nmap_Kd body.png\n"},
+      "expected": {"body": "body.png"}
+    },
+    {
+      "id": "parse-a-map-before-any-newmtl-is-dropped",
+      "note": "a map before any newmtl is dropped",
+      "input": {"text": "map_Kd lost.png\nnewmtl body\nmap_Kd body.png\n"},
+      "expected": {"body": "body.png"}
+    },
+    {
+      "id": "parse-the-path-as-written-blanks-inside",
+      "note": "the path as written: ../, blanks inside",
+      "input": {"text": "newmtl steel\nmap_Kd ../common/dark steel.png\n"},
+      "expected": {"steel": "../common/dark steel.png"}
+    },
+    {
+      "id": "parse-a-second-map-replaces-the-first",
+      "note": "a second map replaces the first",
+      "input": {"text": "newmtl body\nmap_Kd a.png\nmap_Kd b.png\n"},
+      "expected": {"body": "b.png"}
+    },
+    {
+      "id": "parse-a-material-named-again-keeps-its-place-and-takes-the-new-map",
+      "note": "a material named again keeps its place and takes the new map",
+      "input": {"text": "newmtl a\nmap_Kd a.png\nnewmtl b\nmap_Kd b.png\nnewmtl a\nmap_Kd c.png\n"},
+      "expected": {"a": "c.png", "b": "b.png"}
+    },
+    {
+      "id": "parse-options-before-the-path-are-part-of-it",
+      "note": "options before the path are part of it",
+      "input": {"text": "newmtl body\nmap_Kd -s 1 1 1 body.png\n"},
+      "expected": {"body": "-s 1 1 1 body.png"}
+    },
+    {
+      "id": "parse-map-kd-and-a-tab-is-no-map-line",
+      "note": "map_Kd and a tab is no map line",
+      "input": {"text": "newmtl body\nmap_Kd\tbody.png\n"},
+      "expected": {}
+    },
+    {
+      "id": "parse-indents-and-crlf",
+      "note": "indents and CRLF",
+      "input": {"text": "  newmtl body\r\n  map_Kd body.png  \r\n"},
+      "expected": {"body": "body.png"}
+    },
+    {
+      "id": "parse-newmtl-naming-nothing-keeps-the-material-before-it",
+      "note": "newmtl naming nothing keeps the material before it",
+      "input": {"text": "newmtl a\nnewmtl\nmap_Kd x.png\n"},
+      "expected": {"a": "x.png"}
+    },
+    {
+      "id": "parse-map-ka-and-map-bump-arent-the-diffuse-map",
+      "note": "map_Ka and map_Bump aren't the diffuse map",
+      "input": {"text": "newmtl body\nmap_Ka a.png\nmap_Bump b.png\nmap_Kd d.png\n"},
+      "expected": {"body": "d.png"}
+    },
+    {
+      "id": "parse-map-kd-with-no-path",
+      "note": "map_Kd with no path",
+      "input": {"text": "newmtl body\nmap_Kd \n"},
+      "expected": {}
+    },
+    {
+      "id": "parse-names-and-paths-in-cyrillic",
+      "note": "names and paths in Cyrillic",
+      "input": {"text": "newmtl Тёмное дерево\nmap_Kd дерево.png\n"},
+      "expected": {"Тёмное дерево": "дерево.png"}
+    },
+    {
+      "id": "parse-a-comment-line",
+      "note": "a comment line",
+      "input": {"text": "# newmtl body\nnewmtl glass\nmap_Kd glass.png\n"},
+      "expected": {"glass": "glass.png"}
+    }
+  ]
+}

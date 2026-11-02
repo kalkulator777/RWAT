@@ -1,0 +1,43 @@
+{
+  "description": "From the engine's model frame back to the OBJ frame: stock.ObjFrame.toObj (a box by its corners: the model's (min x, min y, max z) is the OBJ's least). input: point_model [x, y, z] or box_model {min, max}; expected: {obj: the same shape}.",
+  "frame": "obj",
+  "tolerance": 1e-09,
+  "cases": [
+    {
+      "id": "point-back-the-body-centre",
+      "note": "point back: the body centre",
+      "input": {"point_model": [0.0, 0.0, 0.0]},
+      "expected": {"obj": [0.0, -0.43625, 0.0]}
+    },
+    {
+      "id": "point-back-a-chair",
+      "note": "point back: a chair",
+      "input": {"point_model": [0.6, 2.33625, 8.75]},
+      "expected": {"obj": [-8.75, 1.9000000000000001, 0.6]}
+    },
+    {
+      "id": "point-back-the-railhead",
+      "note": "point back: the railhead",
+      "input": {"point_model": [1.0, 0.40625, -3.0]},
+      "expected": {"obj": [3.0, -0.030000000000000027, 1.0]}
+    },
+    {
+      "id": "box-back-the-platzkarts-vestibule-door",
+      "note": "box back: the platzkart's vestibule door",
+      "input": {"box_model": {"min": [0.344, 1.811, -10.844], "max": [1.031, 4.061, -10.781]}},
+      "expected": {"obj": {"min": [10.781, 1.37475, 0.344], "max": [10.844, 3.6247499999999997, 1.031]}}
+    },
+    {
+      "id": "box-back-a-floor-zone",
+      "note": "box back: a floor zone",
+      "input": {"box_model": {"min": [-1.0, 1.0, -4.0], "max": [1.0, 3.0, 4.0]}},
+      "expected": {"obj": {"min": [-4.0, 0.56375, -1.0], "max": [4.0, 2.5637499999999998, 1.0]}}
+    },
+    {
+      "id": "box-back-flat",
+      "note": "box back: flat",
+      "input": {"box_model": {"min": [-1.4, 1.33625, -5.0], "max": [1.4, 1.33625, 5.0]}},
+      "expected": {"obj": {"min": [-5.0, 0.8999999999999999, -1.4], "max": [5.0, 0.8999999999999999, 1.4]}}
+    }
+  ]
+}

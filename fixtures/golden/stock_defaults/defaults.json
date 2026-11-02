@@ -1,0 +1,206 @@
+{
+  "description": "What a type gets for the physics its pack leaves out (stock.StockDefaults): the running resistance of a mass and the brakes of a system for a mass with a cab or without (input mass_t, system, drivable; expected {resistance {a, b, c, c_front}, brakes {train_kn, independent_kn, dynamic_kn, dynamic_fade_kmh, parking_kn, apply_s, release_s}}), a brake system by its name (input system_name; expected its name or null), the constants (input constants; expected {adhesion, traction_ramp_s, default_brake_system, systems}).",
+  "frame": "none",
+  "tolerance": 1e-09,
+  "cases": [
+    {
+      "id": "constants",
+      "note": "the engine's constants: adhesion, traction ramp, the default brake system and each system's figures",
+      "input": {"constants": true},
+      "expected": {
+        "adhesion": 1.0,
+        "traction_ramp_s": 4.0,
+        "default_brake_system": "passenger",
+        "systems": {
+          "passenger": {"kn_per_tonne": 1.0, "apply_s": 4.0, "release_s": 8.0},
+          "freight": {"kn_per_tonne": 0.6, "apply_s": 15.0, "release_s": 30.0},
+          "ep": {"kn_per_tonne": 1.1, "apply_s": 1.5, "release_s": 3.0}
+        }
+      }
+    },
+    {
+      "id": "mass-50-passenger-no-cab",
+      "note": "50 t, passenger, no cab",
+      "input": {"mass_t": 50, "system": "passenger", "drivable": false},
+      "expected": {
+        "resistance": {"a": 550.0, "b": 14.0, "c": 1.3, "c_front": 5.0},
+        "brakes": {
+          "train_kn": 50.0,
+          "independent_kn": 0.0,
+          "dynamic_kn": 0.0,
+          "dynamic_fade_kmh": 0.0,
+          "parking_kn": 20.0,
+          "apply_s": 4.0,
+          "release_s": 8.0
+        }
+      }
+    },
+    {
+      "id": "mass-50-passenger-cab",
+      "note": "50 t, passenger, a cab",
+      "input": {"mass_t": 50, "system": "passenger", "drivable": true},
+      "expected": {
+        "resistance": {"a": 550.0, "b": 14.0, "c": 1.3, "c_front": 5.0},
+        "brakes": {
+          "train_kn": 50.0,
+          "independent_kn": 35.0,
+          "dynamic_kn": 0.0,
+          "dynamic_fade_kmh": 0.0,
+          "parking_kn": 20.0,
+          "apply_s": 4.0,
+          "release_s": 8.0
+        }
+      }
+    },
+    {
+      "id": "mass-80-freight-no-cab",
+      "note": "80 t, freight, no cab",
+      "input": {"mass_t": 80, "system": "freight", "drivable": false},
+      "expected": {
+        "resistance": {"a": 760.0, "b": 14.0, "c": 1.3, "c_front": 5.0},
+        "brakes": {
+          "train_kn": 48.0,
+          "independent_kn": 0.0,
+          "dynamic_kn": 0.0,
+          "dynamic_fade_kmh": 0.0,
+          "parking_kn": 32.0,
+          "apply_s": 15.0,
+          "release_s": 30.0
+        }
+      }
+    },
+    {
+      "id": "mass-42-ep-cab",
+      "note": "42 t, ep, a cab",
+      "input": {"mass_t": 42, "system": "ep", "drivable": true},
+      "expected": {
+        "resistance": {"a": 494.0, "b": 14.0, "c": 1.3, "c_front": 5.0},
+        "brakes": {
+          "train_kn": 46.2,
+          "independent_kn": 29.4,
+          "dynamic_kn": 0.0,
+          "dynamic_fade_kmh": 0.0,
+          "parking_kn": 16.8,
+          "apply_s": 1.5,
+          "release_s": 3.0
+        }
+      }
+    },
+    {
+      "id": "mass-0-5-passenger-cab",
+      "note": "0.5 t, passenger, a cab",
+      "input": {"mass_t": 0.5, "system": "passenger", "drivable": true},
+      "expected": {
+        "resistance": {"a": 203.5, "b": 14.0, "c": 1.3, "c_front": 5.0},
+        "brakes": {
+          "train_kn": 0.5,
+          "independent_kn": 0.35,
+          "dynamic_kn": 0.0,
+          "dynamic_fade_kmh": 0.0,
+          "parking_kn": 0.2,
+          "apply_s": 4.0,
+          "release_s": 8.0
+        }
+      }
+    },
+    {
+      "id": "mass-123-4-freight-cab",
+      "note": "123.4 t, freight, a cab",
+      "input": {"mass_t": 123.4, "system": "freight", "drivable": true},
+      "expected": {
+        "resistance": {"a": 1063.8000000000002, "b": 14.0, "c": 1.3, "c_front": 5.0},
+        "brakes": {
+          "train_kn": 74.04,
+          "independent_kn": 86.38,
+          "dynamic_kn": 0.0,
+          "dynamic_fade_kmh": 0.0,
+          "parking_kn": 49.36000000000001,
+          "apply_s": 15.0,
+          "release_s": 30.0
+        }
+      }
+    },
+    {
+      "id": "mass-1000-ep-no-cab",
+      "note": "1000 t, ep, no cab",
+      "input": {"mass_t": 1000, "system": "ep", "drivable": false},
+      "expected": {
+        "resistance": {"a": 7200.0, "b": 14.0, "c": 1.3, "c_front": 5.0},
+        "brakes": {
+          "train_kn": 1100.0,
+          "independent_kn": 0.0,
+          "dynamic_kn": 0.0,
+          "dynamic_fade_kmh": 0.0,
+          "parking_kn": 400.0,
+          "apply_s": 1.5,
+          "release_s": 3.0
+        }
+      }
+    },
+    {
+      "id": "mass-0-passenger-cab",
+      "note": "0 t, passenger, a cab",
+      "input": {"mass_t": 0, "system": "passenger", "drivable": true},
+      "expected": {
+        "resistance": {"a": 200.0, "b": 14.0, "c": 1.3, "c_front": 5.0},
+        "brakes": {
+          "train_kn": 0.0,
+          "independent_kn": 0.0,
+          "dynamic_kn": 0.0,
+          "dynamic_fade_kmh": 0.0,
+          "parking_kn": 0.0,
+          "apply_s": 4.0,
+          "release_s": 8.0
+        }
+      }
+    },
+    {
+      "id": "system-passenger",
+      "note": "the brake system named 'passenger'",
+      "input": {"system_name": "passenger"},
+      "expected": "passenger"
+    },
+    {
+      "id": "system-freight",
+      "note": "the brake system named 'freight'",
+      "input": {"system_name": "freight"},
+      "expected": "freight"
+    },
+    {
+      "id": "system-ep",
+      "note": "the brake system named 'ep'",
+      "input": {"system_name": "ep"},
+      "expected": "ep"
+    },
+    {
+      "id": "system-ep-upper",
+      "note": "the brake system named 'EP'",
+      "input": {"system_name": "EP"},
+      "expected": null
+    },
+    {
+      "id": "system-passenger-upper",
+      "note": "the brake system named 'Passenger'",
+      "input": {"system_name": "Passenger"},
+      "expected": null
+    },
+    {
+      "id": "system-empty",
+      "note": "the brake system named ''",
+      "input": {"system_name": ""},
+      "expected": null
+    },
+    {
+      "id": "system-electro",
+      "note": "the brake system named 'electro'",
+      "input": {"system_name": "electro"},
+      "expected": null
+    },
+    {
+      "id": "system-ep-blank",
+      "note": "the brake system named ' ep'",
+      "input": {"system_name": " ep"},
+      "expected": null
+    }
+  ]
+}

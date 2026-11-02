@@ -1,73 +1,89 @@
 {
-  "$comment": "MTL newmtl / OBJ usemtl line -> the material's name (MtlParser.materialName; tools/ir2rwat.py material_name). input.line, input.keyword; expected: the name, or null if the line isn't a keyword line or names nothing.",
+  "description": "An MTL newmtl or OBJ usemtl line -> the material's name (client.render.model.MtlParser.materialName): the rest of the line after the keyword and a blank, trimmed, the blanks inside kept; null if the line isn't a keyword line or names nothing. Only ASCII blanks: Java's Character.isWhitespace and Python's str.split part ways on the others. input.line, input.keyword; expected: the name or null.",
+  "frame": "none",
+  "tolerance": 0,
   "cases": [
     {
-      "name": "newmtl",
+      "id": "name-newmtl",
+      "note": "newmtl",
       "input": {"line": "newmtl body", "keyword": "newmtl"},
       "expected": "body"
     },
     {
-      "name": "a blank inside",
+      "id": "name-a-blank-inside",
+      "note": "a blank inside",
       "input": {"line": "newmtl Dark Wood", "keyword": "newmtl"},
       "expected": "Dark Wood"
     },
     {
-      "name": "usemtl with a copy suffix",
+      "id": "name-usemtl-with-a-copy-suffix",
+      "note": "usemtl with a copy suffix",
       "input": {"line": "usemtl Dark Wood.001", "keyword": "usemtl"},
       "expected": "Dark Wood.001"
     },
     {
-      "name": "blanks inside kept, ends dropped",
+      "id": "name-blanks-inside-kept-ends-dropped",
+      "note": "blanks inside kept, ends dropped",
       "input": {"line": "  newmtl   Dark   Wood  ", "keyword": "newmtl"},
       "expected": "Dark   Wood"
     },
     {
-      "name": "a tab after the keyword",
+      "id": "name-a-tab-after-the-keyword",
+      "note": "a tab after the keyword",
       "input": {"line": "newmtl\tDark Wood", "keyword": "newmtl"},
       "expected": "Dark Wood"
     },
     {
-      "name": "a hash is part of the name",
+      "id": "name-a-hash-is-part-of-the-name",
+      "note": "a hash is part of the name",
       "input": {"line": "usemtl Wood # not a comment", "keyword": "usemtl"},
       "expected": "Wood # not a comment"
     },
     {
-      "name": "a CR at the end",
+      "id": "name-a-cr-at-the-end",
+      "note": "a CR at the end",
       "input": {"line": "newmtl glass\r", "keyword": "newmtl"},
       "expected": "glass"
     },
     {
-      "name": "Cyrillic",
+      "id": "name-cyrillic",
+      "note": "Cyrillic",
       "input": {"line": "newmtl Тёмное дерево", "keyword": "newmtl"},
       "expected": "Тёмное дерево"
     },
     {
-      "name": "naming nothing",
+      "id": "name-naming-nothing",
+      "note": "naming nothing",
       "input": {"line": "newmtl", "keyword": "newmtl"},
       "expected": null
     },
     {
-      "name": "blanks naming nothing",
+      "id": "name-blanks-naming-nothing",
+      "note": "blanks naming nothing",
       "input": {"line": "newmtl   ", "keyword": "newmtl"},
       "expected": null
     },
     {
-      "name": "a longer keyword",
+      "id": "name-a-longer-keyword",
+      "note": "a longer keyword",
       "input": {"line": "newmtlx body", "keyword": "newmtl"},
       "expected": null
     },
     {
-      "name": "another keyword",
+      "id": "name-another-keyword",
+      "note": "another keyword",
       "input": {"line": "usemtl body", "keyword": "newmtl"},
       "expected": null
     },
     {
-      "name": "a comment",
+      "id": "name-a-comment",
+      "note": "a comment",
       "input": {"line": "# newmtl body", "keyword": "newmtl"},
       "expected": null
     },
     {
-      "name": "mtllib",
+      "id": "name-mtllib",
+      "note": "mtllib",
       "input": {"line": "mtllib body.mtl", "keyword": "usemtl"},
       "expected": null
     }

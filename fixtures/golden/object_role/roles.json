@@ -1,8 +1,11 @@
 {
-  "$comment": "Object name -> what the convention reads in it (convention.ObjectRole: parse, door, coupled, hasToken INTERIOR). input.name; expected: control (null or kind, gauge, id, key, group, label, flags, offset, range, slide in the OBJ frame), pivot_degrees (null if no hinge marker), light_group, light_invert, fullbright, headlight, rgb, interior_token, door (the name read as a door leaf: control fields and pivot_degrees, or null), coupled (front, shown: COUPLED/UNCOUPLED/ALWAYS, or null).",
+  "description": "An object's name -> what the convention reads in it (convention.ObjectRole: parse, door, coupled, hasToken INTERIOR). input.name; expected: control (null, or kind, gauge, id, key, group, label, flags, offset, range, slide in the OBJ frame), pivot_degrees (null if no hinge marker), light_group, light_invert, fullbright, headlight, rgb, interior_token, door (the name read as a door leaf: control fields and pivot_degrees, or null), coupled (front, shown: COUPLED/UNCOUPLED/ALWAYS, or null).",
+  "frame": "obj",
+  "tolerance": 1e-06,
   "cases": [
     {
-      "name": "a lever",
+      "id": "a-lever",
+      "note": "a lever",
       "input": {"name": "THROTTLE_1_INTERIOR_LCG_IL_mvp_chme3"},
       "expected": {
         "control": {
@@ -34,7 +37,8 @@
       }
     },
     {
-      "name": "a lever's hinge marker",
+      "id": "a-levers-hinge-marker",
+      "note": "a lever's hinge marker",
       "input": {"name": "THROTTLE_1_ROT_-120_INTERIOR_LCG_IL_mvp_chme3"},
       "expected": {
         "control": {
@@ -66,7 +70,8 @@
       }
     },
     {
-      "name": "a gauge is no lever",
+      "id": "a-gauge-is-no-lever",
+      "note": "a gauge is no lever",
       "input": {"name": "GAUGE_THROTTLE_1_FULLBRIGHT_LCG_IL_mvp_chme3"},
       "expected": {
         "control": {
@@ -98,7 +103,8 @@
       }
     },
     {
-      "name": "a needle's hinge",
+      "id": "a-needles-hinge",
+      "note": "a needle's hinge",
       "input": {"name": "GAUGE_SPEED_1_ROT_-270_mvp_chme3"},
       "expected": {
         "control": {
@@ -130,7 +136,8 @@
       }
     },
     {
-      "name": "a range",
+      "id": "a-range",
+      "note": "a range",
       "input": {"name": "GAUGE_SPEED_1_NEEDLE_RANGE_0_1.5"},
       "expected": {
         "control": {
@@ -162,7 +169,8 @@
       }
     },
     {
-      "name": "the last range wins",
+      "id": "the-last-range-wins",
+      "note": "the last range wins",
       "input": {"name": "GAUGE_SPEED_2_RANGE_0_120_RANGE_0_2"},
       "expected": {
         "control": {
@@ -194,7 +202,8 @@
       }
     },
     {
-      "name": "IND_ brake gauge",
+      "id": "ind-brake-gauge",
+      "note": "IND_ brake gauge",
       "input": {"name": "GAUGE_IND_BRAKE_1"},
       "expected": {
         "control": {
@@ -226,7 +235,8 @@
       }
     },
     {
-      "name": "IND_ brake valve hinge",
+      "id": "ind-brake-valve-hinge",
+      "note": "IND_ brake valve hinge",
       "input": {"name": "IND_BRAKE_2_ROT_-90_mvp_chme3"},
       "expected": {
         "control": {
@@ -258,7 +268,8 @@
       }
     },
     {
-      "name": "reverser with a group",
+      "id": "reverser-with-a-group",
+      "note": "reverser with a group",
       "input": {"name": "REVERSER_1_ROT_-60_CG_RVR_mvp_chme3"},
       "expected": {
         "control": {
@@ -290,7 +301,8 @@
       }
     },
     {
-      "name": "combined handle",
+      "id": "combined-handle",
+      "note": "combined handle",
       "input": {"name": "THROTTLE_BRAKE_1"},
       "expected": {
         "control": {
@@ -322,7 +334,8 @@
       }
     },
     {
-      "name": "handbrake",
+      "id": "handbrake",
+      "note": "handbrake",
       "input": {"name": "HANDBRAKE_1_ROT_270"},
       "expected": {
         "control": {
@@ -354,7 +367,8 @@
       }
     },
     {
-      "name": "hand brake",
+      "id": "hand-brake",
+      "note": "hand brake",
       "input": {"name": "HAND_BRAKE_2"},
       "expected": {
         "control": {
@@ -386,7 +400,8 @@
       }
     },
     {
-      "name": "a toggle with a label",
+      "id": "a-toggle-with-a-label",
+      "note": "a toggle with a label",
       "input": {"name": "WIDGET_7_TOGGLE_CG_IL_LABEL_Cab^Light"},
       "expected": {
         "control": {
@@ -418,7 +433,8 @@
       }
     },
     {
-      "name": "press, no touch",
+      "id": "press-no-touch",
+      "note": "press, no touch",
       "input": {"name": "WIDGET_3_PRESS_NOTOUCH"},
       "expected": {
         "control": {
@@ -450,7 +466,8 @@
       }
     },
     {
-      "name": "no interact",
+      "id": "no-interact",
+      "note": "no interact",
       "input": {"name": "WIDGET_4_NOINTERACT"},
       "expected": {
         "control": {
@@ -482,7 +499,8 @@
       }
     },
     {
-      "name": "global",
+      "id": "global",
+      "note": "global",
       "input": {"name": "WIDGET_5_GLOBAL_CG_DrL"},
       "expected": {
         "control": {
@@ -514,7 +532,8 @@
       }
     },
     {
-      "name": "a hidden tail lamp",
+      "id": "a-hidden-tail-lamp",
+      "note": "a hidden tail lamp",
       "input": {"name": "WIDGET_17_HIDE_INVERT_FULLBRIGHT_CG_FEL"},
       "expected": {
         "control": {
@@ -546,7 +565,8 @@
       }
     },
     {
-      "name": "offset and invert",
+      "id": "offset-and-invert",
+      "note": "offset and invert",
       "input": {"name": "WIDGET_2_OFFSET_0.25_INVERT"},
       "expected": {
         "control": {
@@ -578,7 +598,8 @@
       }
     },
     {
-      "name": "a flag word as the group",
+      "id": "a-flag-word-as-the-group",
+      "note": "a flag word as the group",
       "input": {"name": "WIDGET_8_CG_TOGGLE"},
       "expected": {
         "control": {
@@ -610,7 +631,8 @@
       }
     },
     {
-      "name": "a hinge without degrees",
+      "id": "a-hinge-without-degrees",
+      "note": "a hinge without degrees",
       "input": {"name": "WIDGET_9_ROT"},
       "expected": {
         "control": {
@@ -642,7 +664,8 @@
       }
     },
     {
-      "name": "degrees that aren't a number",
+      "id": "degrees-that-arent-a-number",
+      "note": "degrees that aren't a number",
       "input": {"name": "THROTTLE_1_ROT_abc"},
       "expected": {
         "control": {
@@ -674,7 +697,8 @@
       }
     },
     {
-      "name": "a window slides",
+      "id": "a-window-slides",
+      "note": "a window slides",
       "input": {"name": "WINDOW_1_TL_0.6_Y_CG_Win"},
       "expected": {
         "control": {
@@ -706,7 +730,8 @@
       }
     },
     {
-      "name": "a slider gauge",
+      "id": "a-slider-gauge",
+      "note": "a slider gauge",
       "input": {"name": "GAUGE_REVERSER_1_TL_0.08_Y"},
       "expected": {
         "control": {
@@ -738,7 +763,8 @@
       }
     },
     {
-      "name": "horn with a group",
+      "id": "horn-with-a-group",
+      "note": "horn with a group",
       "input": {"name": "HORN_CONTROL_1_CG_Horn"},
       "expected": {
         "control": {
@@ -770,7 +796,8 @@
       }
     },
     {
-      "name": "engine start hinge",
+      "id": "engine-start-hinge",
+      "note": "engine start hinge",
       "input": {"name": "ENGINE_START_1_ROT_-80"},
       "expected": {
         "control": {
@@ -802,7 +829,8 @@
       }
     },
     {
-      "name": "a door's hinge marker",
+      "id": "a-doors-hinge-marker",
+      "note": "a door's hinge marker",
       "input": {"name": "DOOR_3_ROT_90"},
       "expected": {
         "control": null,
@@ -835,7 +863,8 @@
       }
     },
     {
-      "name": "a door object",
+      "id": "a-door-object",
+      "note": "a door object",
       "input": {"name": "DOOR_3_EXTERNAL"},
       "expected": {
         "control": null,
@@ -868,7 +897,8 @@
       }
     },
     {
-      "name": "a sliding leaf",
+      "id": "a-sliding-leaf",
+      "note": "a sliding leaf",
       "input": {"name": "DOOR_5_TL_0.6_Z_LEAF"},
       "expected": {
         "control": null,
@@ -901,7 +931,8 @@
       }
     },
     {
-      "name": "a lit door part with a copy suffix",
+      "id": "a-lit-door-part-with-a-copy-suffix",
+      "note": "a lit door part with a copy suffix",
       "input": {"name": "DOOR_3_INTERIOR_LCG_IL.001"},
       "expected": {
         "control": null,
@@ -934,7 +965,8 @@
       }
     },
     {
-      "name": "a coupler head free",
+      "id": "a-coupler-head-free",
+      "note": "a coupler head free",
       "input": {"name": "COUPLED_FRONT_1_HIDE"},
       "expected": {
         "control": null,
@@ -950,7 +982,8 @@
       }
     },
     {
-      "name": "a coupler head coupled",
+      "id": "a-coupler-head-coupled",
+      "note": "a coupler head coupled",
       "input": {"name": "COUPLED_FRONT_2_HIDE_INVERT"},
       "expected": {
         "control": null,
@@ -966,7 +999,8 @@
       }
     },
     {
-      "name": "a coupler head always",
+      "id": "a-coupler-head-always",
+      "note": "a coupler head always",
       "input": {"name": "COUPLED_REAR_1"},
       "expected": {
         "control": null,
@@ -982,7 +1016,8 @@
       }
     },
     {
-      "name": "a headlight with a colour",
+      "id": "a-headlight-with-a-colour",
+      "note": "a headlight with a colour",
       "input": {"name": "HEADLIGHT_1_LCG_FL_0XFFAA00"},
       "expected": {
         "control": null,
@@ -998,7 +1033,8 @@
       }
     },
     {
-      "name": "a headlight lit while off",
+      "id": "a-headlight-lit-while-off",
+      "note": "a headlight lit while off",
       "input": {"name": "HEADLIGHT_2_0x12ab34_LINVERT"},
       "expected": {
         "control": null,
@@ -1014,7 +1050,8 @@
       }
     },
     {
-      "name": "always lit",
+      "id": "always-lit",
+      "note": "always lit",
       "input": {"name": "LAMP_FULLBRIGHT"},
       "expected": {
         "control": null,
@@ -1030,7 +1067,8 @@
       }
     },
     {
-      "name": "the interior shell",
+      "id": "the-interior-shell",
+      "note": "the interior shell",
       "input": {"name": "INTERIOR_SEATS_LCG_IL"},
       "expected": {
         "control": null,
@@ -1046,7 +1084,8 @@
       }
     },
     {
-      "name": "nothing",
+      "id": "nothing",
+      "note": "nothing",
       "input": {"name": "BODY"},
       "expected": {
         "control": null,
@@ -1062,7 +1101,8 @@
       }
     },
     {
-      "name": "case matters",
+      "id": "case-matters",
+      "note": "case matters",
       "input": {"name": "throttle_1"},
       "expected": {
         "control": null,
@@ -1078,7 +1118,8 @@
       }
     },
     {
-      "name": "a letter before the kind",
+      "id": "a-letter-before-the-kind",
+      "note": "a letter before the kind",
       "input": {"name": "XTHROTTLE_1"},
       "expected": {
         "control": null,
@@ -1094,7 +1135,8 @@
       }
     },
     {
-      "name": "digits past an int",
+      "id": "digits-past-an-int",
+      "note": "digits past an int",
       "input": {"name": "THROTTLE_12345678901"},
       "expected": {
         "control": {

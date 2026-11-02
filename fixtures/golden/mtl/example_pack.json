@@ -1,0 +1,86 @@
+{
+  "description": "The example pack's MTL files -> material -> the path of its diffuse map (MtlParser.parse). input.text read from the file; expected: {material: path}.",
+  "frame": "none",
+  "tolerance": 0,
+  "cases": [
+    {
+      "id": "example-coach",
+      "note": "the example pack's coach.mtl",
+      "input_file": {"text": "run/rwat_packs/RwatExamplePack/assets/rwat_example/stock/coach/coach.mtl"},
+      "expected": {
+        "body": "coach_body.png",
+        "door": "coach_door.png",
+        "roof": "coach_roof.png",
+        "floor": "coach_floor.png",
+        "lining": "coach_lining.png",
+        "seat": "coach_seat.png",
+        "black": "../common/black.png",
+        "steel": "../common/steel.png",
+        "coupler": "../common/dark_steel.png",
+        "bogie": "../common/dark_steel.png",
+        "wheel": "../common/wheel.png",
+        "lamp": "../common/lamp.png",
+        "handwheel": "../common/handwheel.png",
+        "knob": "../common/knob.png",
+        "guide": "../common/guide.png"
+      }
+    },
+    {
+      "id": "example-shunter",
+      "note": "the example pack's shunter.mtl",
+      "input_file": {"text": "run/rwat_packs/RwatExamplePack/assets/rwat_example/stock/shunter/shunter.mtl"},
+      "expected": {
+        "body": "shunter_body.png",
+        "roof": "shunter_roof.png",
+        "hazard": "shunter_hazard.png",
+        "grille": "shunter_grille.png",
+        "desk": "shunter_desk.png",
+        "seat": "shunter_seat.png",
+        "glass": "shunter_glass.png",
+        "dial": "shunter_dial_speed.png",
+        "dial_half": "shunter_dial_brake.png",
+        "needle": "../common/red_lamp.png",
+        "black": "../common/black.png",
+        "steel": "../common/steel.png",
+        "dark_steel": "../common/dark_steel.png",
+        "coupler": "../common/dark_steel.png",
+        "bogie": "../common/dark_steel.png",
+        "wheel": "../common/wheel.png",
+        "lamp": "../common/lamp.png",
+        "lens": "../common/lens.png",
+        "red_lamp": "../common/red_lamp.png",
+        "knob": "../common/knob.png",
+        "handwheel": "../common/handwheel.png",
+        "guide": "../common/guide.png"
+      }
+    },
+    {
+      "id": "example-gondola",
+      "note": "the example pack's gondola.mtl",
+      "input_file": {"text": "run/rwat_packs/RwatExamplePack/assets/rwat_example/stock/gondola/gondola.mtl"},
+      "expected": {
+        "body": "gondola_body.png",
+        "floor": "gondola_floor.png",
+        "coal": "gondola_coal.png",
+        "tarp": "gondola_tarp.png",
+        "black": "../common/black.png",
+        "steel": "../common/steel.png",
+        "coupler": "../common/dark_steel.png",
+        "wheel": "../common/wheel.png",
+        "handwheel": "../common/handwheel.png"
+      }
+    },
+    {
+      "id": "example-wooden-track",
+      "note": "the example pack's wooden-track.mtl",
+      "input_file": {"text": "run/rwat_packs/RwatExamplePack/assets/rwat_example/track/wooden_track.mtl"},
+      "expected": {
+        "rail": "rail.png",
+        "sleeper": "sleeper.png",
+        "ballast": "ballast.png",
+        "plate": "plate.png",
+        "guide": "../stock/common/guide.png"
+      }
+    }
+  ]
+}

@@ -1,0 +1,129 @@
+{
+  "description": "A hinge marker in an OBJ's text -> its hinge and axis (convention.PivotAxis) from the corners the model loader keeps of every face of every part of that object, in order (ObjLoader: four a quad, a triangle's last twice, a polygon fanned) — what IrStockModel's control builder hands it. input.obj (the text), input.object (the marker's name); expected: points, centre, axis (OBJ frame).",
+  "frame": "obj",
+  "tolerance": 1e-09,
+  "cases": [
+    {
+      "id": "obj-one-quad",
+      "note": "a marker of one quad",
+      "input": {
+        "obj": "o WIDGET_1_ROT_90\nv 1 0 0\nv 1 0.01 0\nv 3 0.01 0\nv 3 0 0\nf 1 2 3 4\n",
+        "object": "WIDGET_1_ROT_90"
+      },
+      "expected": {"points": 4, "centre": [2.0, 0.004999999888241291, 0.0], "axis": [1.0, 0.0, 0.0]}
+    },
+    {
+      "id": "obj-triangles",
+      "note": "a marker of two triangles: the corner the two share counts once",
+      "input": {
+        "obj": "o WIDGET_1_ROT_90\nv 1 0 0\nv 1 0.01 0\nv 3 0.01 0\nv 3 0 0\nf 1 2 3\nf 1 3 4\n",
+        "object": "WIDGET_1_ROT_90"
+      },
+      "expected": {"points": 4, "centre": [2.0, 0.004999999888241291, 0.0], "axis": [1.0, 0.0, 0.0]}
+    },
+    {
+      "id": "obj-every-part-of-the-object",
+      "note": "every part of the object counts, whatever its material",
+      "input": {
+        "obj": "o M\nv 1 0 0\nv 1 0.01 0\nv 3 0.01 0\nv 3 0 0\nusemtl a\nf 1 2 3\nusemtl b\nf 1 3 4\nv 5 0 0\nf 3 4 5\n",
+        "object": "M"
+      },
+      "expected": {
+        "points": 5,
+        "centre": [3.0, 0.004999999888241291, 0.0],
+        "axis": [0.9999992187509505, -0.0012499989954990328, 0.0]
+      }
+    },
+    {
+      "id": "obj-not-another-objects",
+      "note": "another object's faces don't count",
+      "input": {
+        "obj": "o OTHER\nv 1 0 0\nv 1 0.01 0\nv 3 0.01 0\nv 3 0 0\nv -9 0 0\nf 5 1 2\no M\nf 1 2 3\nf 1 3 4\n",
+        "object": "M"
+      },
+      "expected": {"points": 4, "centre": [2.0, 0.004999999888241291, 0.0], "axis": [1.0, 0.0, 0.0]}
+    },
+    {
+      "id": "obj-floats",
+      "note": "the corners as floats: 0.1 is the float nearest it",
+      "input": {"obj": "o M\nv 0.1 0.2 0.3\nv 0.7 0.2 0.3\nv 0.7 0.25 0.3\nf 1 2 3\n", "object": "M"},
+      "expected": {
+        "points": 3,
+        "centre": [0.3999999947845936, 0.22500000149011612, 0.30000001192092896],
+        "axis": [0.999133073156859, 0.04163054316401044, 0.0]
+      }
+    },
+    {
+      "id": "obj-polygon",
+      "note": "a pentagon marker: fanned, its corners in file order",
+      "input": {"obj": "o M\nv 0 0 0\nv 2 0 0\nv 2 0.1 0\nv 1 0.2 0\nv 0 0.1 0\nf 1 2 3 4 5\n", "object": "M"},
+      "expected": {
+        "points": 5,
+        "centre": [1.0, 0.10000000149011612, 0.0],
+        "axis": [0.9995503035089738, 0.029986509552103018, 0.0]
+      }
+    },
+    {
+      "id": "example-shunter-throttle-1-rot-50",
+      "note": "the example pack's shunter: THROTTLE_1_ROT_-50",
+      "input": {"object": "THROTTLE_1_ROT_-50"},
+      "input_file": {"obj": "run/rwat_packs/RwatExamplePack/assets/rwat_example/stock/shunter/shunter.obj"},
+      "expected": {
+        "points": 2,
+        "centre": [1.0499999523162842, 2.5199999809265137, -0.45000000298023224],
+        "axis": [0.0, 0.0, -1.0]
+      }
+    },
+    {
+      "id": "example-shunter-reverser-1-rot-60",
+      "note": "the example pack's shunter: REVERSER_1_ROT_-60",
+      "input": {"object": "REVERSER_1_ROT_-60"},
+      "input_file": {"obj": "run/rwat_packs/RwatExamplePack/assets/rwat_example/stock/shunter/shunter.obj"},
+      "expected": {
+        "points": 2,
+        "centre": [1.0499999523162842, 2.5199999809265137, -0.20000000298023224],
+        "axis": [0.0, 0.0, -1.0]
+      }
+    },
+    {
+      "id": "example-shunter-gauge-speed-1-rot-240",
+      "note": "the example pack's shunter: GAUGE_SPEED_1_ROT_-240",
+      "input": {"object": "GAUGE_SPEED_1_ROT_-240"},
+      "input_file": {"obj": "run/rwat_packs/RwatExamplePack/assets/rwat_example/stock/shunter/shunter.obj"},
+      "expected": {
+        "points": 2,
+        "centre": [0.7689999938011169, 2.6700000762939453, -0.7799999713897705],
+        "axis": [1.0, 0.0, 0.0]
+      }
+    },
+    {
+      "id": "example-coach-handbrake-1-rot-270",
+      "note": "the example pack's coach: HANDBRAKE_1_ROT_270",
+      "input": {"object": "HANDBRAKE_1_ROT_270"},
+      "input_file": {"obj": "run/rwat_packs/RwatExamplePack/assets/rwat_example/stock/coach/coach.obj"},
+      "expected": {"points": 2, "centre": [9.519999980926514, 2.299999952316284, 1.0], "axis": [1.0, 0.0, 0.0]}
+    },
+    {
+      "id": "example-coach-door-5-rot-90",
+      "note": "the example pack's coach: DOOR_5_ROT_90",
+      "input": {"object": "DOOR_5_ROT_90"},
+      "input_file": {"obj": "run/rwat_packs/RwatExamplePack/assets/rwat_example/stock/coach/coach.obj"},
+      "expected": {
+        "points": 2,
+        "centre": [-9.649999618530273, 2.199999988079071, -0.44999998807907104],
+        "axis": [0.0, 1.0, 0.0]
+      }
+    },
+    {
+      "id": "example-coach-door-6-rot-90",
+      "note": "the example pack's coach: DOOR_6_ROT_-90",
+      "input": {"object": "DOOR_6_ROT_-90"},
+      "input_file": {"obj": "run/rwat_packs/RwatExamplePack/assets/rwat_example/stock/coach/coach.obj"},
+      "expected": {
+        "points": 2,
+        "centre": [9.649999618530273, 2.199999988079071, -0.44999998807907104],
+        "axis": [0.0, 1.0, 0.0]
+      }
+    }
+  ]
+}

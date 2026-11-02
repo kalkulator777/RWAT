@@ -228,10 +228,13 @@ tasks.named('test', Test).configure {
     inputs.files(fileTree('packs')).withPropertyName('recipePacks').withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.files(fileTree('run/rwat_packs')).withPropertyName('generatedPacks').withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.files(fileTree('schema')).withPropertyName('packSchemas').withPathSensitivity(PathSensitivity.RELATIVE)
-    // the golden data shared with the Python and TypeScript ports (GoldenTest); `./gradlew test
-    // -Dgolden.update=true` rewrites its expected values from the code (fixtures/golden/README.md)
+    // the golden data shared with the Python and TypeScript ports (golden/<Logic>Golden); `./gradlew
+    // test -Pgolden.update` rewrites the expected values of the folders Java is the reference of from
+    // the code (fixtures/golden/README.md). A Gradle property, so its value is a test input: a run
+    // with it and one without never answer each other from the cache.
     inputs.files(fileTree('fixtures')).withPropertyName('goldenFixtures').withPathSensitivity(PathSensitivity.RELATIVE)
-    systemProperty 'golden.update', System.getProperty('golden.update', 'false')
+    def goldenUpdate = project.findProperty('golden.update')
+    systemProperty 'golden.update', goldenUpdate != null && goldenUpdate.toString() != 'false'
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.

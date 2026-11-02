@@ -1,0 +1,407 @@
+{
+  "description": "A control's name, its raw position (0..1: a handle's travel, a switch's group value, a gauge's reading in its range) and its hinge (pivot and unit axis, OBJ frame; none: no turn) -> the value that drives it (convention.ControlValue.value: position + OFFSET, mirrored by INVERT, less 1/2 for the reverser and the combined handle), whether it shows (ControlValue.visible: not with HIDE at value 1) and its transform (StockModel.Control.transform at that value: a slide of value x TL, then a turn of value x the ROT degrees about the hinge; 16 floats row by row, OBJ frame).",
+  "frame": "obj",
+  "tolerance": 1e-06,
+  "cases": [
+    {
+      "id": "pose-0-a-lever-at-rest",
+      "note": "a lever at rest",
+      "input": {"name": "THROTTLE_1_ROT_-50", "position": 0, "pivot": [1.0, 2.0, 0.0], "axis": [0.0, 0.0, 1.0]},
+      "expected": {
+        "value": 0.0,
+        "visible": true,
+        "transform": [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+      }
+    },
+    {
+      "id": "pose-1-a-lever-half-way-turns-half-its-degrees",
+      "note": "a lever half way turns half its degrees",
+      "input": {"name": "THROTTLE_1_ROT_-50", "position": 0.5, "pivot": [1.0, 2.0, 0.0], "axis": [0.0, 0.0, 1.0]},
+      "expected": {
+        "value": 0.5,
+        "visible": true,
+        "transform": [
+          0.90630776,
+          0.42261827,
+          0.0,
+          -0.7515443,
+          -0.42261827,
+          0.90630776,
+          0.0,
+          0.61000276,
+          0.0,
+          0.0,
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "id": "pose-2-a-lever-fully-over",
+      "note": "a lever fully over",
+      "input": {"name": "THROTTLE_1_ROT_-50", "position": 1, "pivot": [1.0, 2.0, 0.0], "axis": [0.0, 0.0, 1.0]},
+      "expected": {
+        "value": 1.0,
+        "visible": true,
+        "transform": [
+          0.64278764,
+          0.76604444,
+          0.0,
+          -1.1748765,
+          -0.76604444,
+          0.64278764,
+          0.0,
+          1.4804692,
+          0.0,
+          0.0,
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "id": "pose-3-the-reverser-in-neutral-value-position-1-2-0",
+      "note": "the reverser in neutral: value position - 1/2, 0",
+      "input": {"name": "REVERSER_1_ROT_-60", "position": 0.5, "pivot": [3.7, 2.9, 0.5], "axis": [0.0, 0.0, -1.0]},
+      "expected": {
+        "value": 0.0,
+        "visible": true,
+        "transform": [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+      }
+    },
+    {
+      "id": "pose-4-the-reverser-back",
+      "note": "the reverser back",
+      "input": {"name": "REVERSER_1_ROT_-60", "position": 0, "pivot": [3.7, 2.9, 0.5], "axis": [0.0, 0.0, -1.0]},
+      "expected": {
+        "value": -0.5,
+        "visible": true,
+        "transform": [
+          0.8660254,
+          0.5,
+          0.0,
+          -0.95429397,
+          -0.5,
+          0.8660254,
+          0.0,
+          2.2385263,
+          0.0,
+          0.0,
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "id": "pose-5-the-reverser-forward",
+      "note": "the reverser forward",
+      "input": {"name": "REVERSER_1_ROT_-60", "position": 1, "pivot": [3.7, 2.9, 0.5], "axis": [0.0, 0.0, -1.0]},
+      "expected": {
+        "value": 0.5,
+        "visible": true,
+        "transform": [
+          0.8660254,
+          -0.5,
+          0.0,
+          1.9457061,
+          0.5,
+          0.8660254,
+          0.0,
+          -1.4614736,
+          0.0,
+          0.0,
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "id": "pose-6-the-combined-handle-is-centred-too",
+      "note": "the combined handle is centred too",
+      "input": {"name": "THROTTLE_BRAKE_1_ROT_30", "position": 0.5, "pivot": [0.0, 2.0, 0.0], "axis": [1.0, 0.0, 0.0]},
+      "expected": {
+        "value": 0.0,
+        "visible": true,
+        "transform": [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+      }
+    },
+    {
+      "id": "pose-7-offset-adds-to-the-position",
+      "note": "OFFSET adds to the position",
+      "input": {
+        "name": "WIDGET_1_ROT_60_OFFSET_-0.5",
+        "position": 1,
+        "pivot": [0.2, 2.5, -0.4],
+        "axis": [1.0, 0.0, 0.0]
+      },
+      "expected": {
+        "value": 0.5,
+        "visible": true,
+        "transform": [
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.8660254,
+          -0.5,
+          0.13493657,
+          0.0,
+          0.5,
+          0.8660254,
+          -1.3035898,
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "id": "pose-8-invert-mirrors-the-value",
+      "note": "INVERT mirrors the value",
+      "input": {"name": "WIDGET_2_ROT_90_INVERT", "position": 0.25, "pivot": [0.0, 0.0, 0.0], "axis": [0.0, 1.0, 0.0]},
+      "expected": {
+        "value": 0.75,
+        "visible": true,
+        "transform": [
+          0.3826835,
+          0.0,
+          0.9238795,
+          0.0,
+          0.0,
+          1.0,
+          0.0,
+          0.0,
+          -0.9238795,
+          0.0,
+          0.3826835,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "id": "pose-9-offset-before-invert",
+      "note": "OFFSET before INVERT",
+      "input": {
+        "name": "WIDGET_2_ROT_90_OFFSET_0.25_INVERT",
+        "position": 0.5,
+        "pivot": [0.0, 0.0, 0.0],
+        "axis": [0.0, 1.0, 0.0]
+      },
+      "expected": {
+        "value": 0.25,
+        "visible": true,
+        "transform": [
+          0.9238795,
+          0.0,
+          0.38268346,
+          0.0,
+          0.0,
+          1.0,
+          0.0,
+          0.0,
+          -0.38268346,
+          0.0,
+          0.9238795,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "id": "pose-10-hide-hides-at-value-1",
+      "note": "HIDE hides at value 1",
+      "input": {"name": "WIDGET_17_HIDE", "position": 1},
+      "expected": {
+        "value": 1.0,
+        "visible": false,
+        "transform": [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+      }
+    },
+    {
+      "id": "pose-11-hide-shows-at-value-0",
+      "note": "HIDE shows at value 0",
+      "input": {"name": "WIDGET_17_HIDE", "position": 0},
+      "expected": {
+        "value": 0.0,
+        "visible": true,
+        "transform": [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+      }
+    },
+    {
+      "id": "pose-12-hide-and-invert-hidden-at-position-0",
+      "note": "HIDE and INVERT: hidden at position 0",
+      "input": {"name": "WIDGET_17_HIDE_INVERT_FULLBRIGHT_CG_FEL", "position": 0},
+      "expected": {
+        "value": 1.0,
+        "visible": false,
+        "transform": [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+      }
+    },
+    {
+      "id": "pose-13-hide-on-a-lever-reads-the-same",
+      "note": "HIDE on a lever reads the same",
+      "input": {"name": "THROTTLE_1_HIDE", "position": 1},
+      "expected": {
+        "value": 1.0,
+        "visible": false,
+        "transform": [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+      }
+    },
+    {
+      "id": "pose-14-a-window-slides-by-value-x-tl",
+      "note": "a window slides by value x TL",
+      "input": {"name": "WINDOW_1_INVERT_TL_0.8_Y", "position": 0.25},
+      "expected": {
+        "value": 0.75,
+        "visible": true,
+        "transform": [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.6, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+      }
+    },
+    {
+      "id": "pose-15-a-slide-on-three-axes",
+      "note": "a slide on three axes",
+      "input": {"name": "WIDGET_3_TL_0.5_X_TL_-0.2_Y_TL_0.1_Z", "position": 1},
+      "expected": {
+        "value": 1.0,
+        "visible": true,
+        "transform": [1.0, 0.0, 0.0, 0.5, 0.0, 1.0, 0.0, -0.2, 0.0, 0.0, 1.0, 0.1, 0.0, 0.0, 0.0, 1.0]
+      }
+    },
+    {
+      "id": "pose-16-a-slide-and-a-turn-the-slide-first-then-the-turn-a",
+      "note": "a slide and a turn: the slide first, then the turn about the hinge",
+      "input": {"name": "WIDGET_4_ROT_90_TL_1_X", "position": 1, "pivot": [0.0, 0.0, 0.0], "axis": [0.0, 1.0, 0.0]},
+      "expected": {
+        "value": 1.0,
+        "visible": true,
+        "transform": [0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+      }
+    },
+    {
+      "id": "pose-17-a-hinge-with-no-degrees-doesnt-turn",
+      "note": "a hinge with no degrees doesn't turn",
+      "input": {"name": "WIDGET_9_ROT", "position": 1, "pivot": [1.0, 1.0, 1.0], "axis": [0.0, 1.0, 0.0]},
+      "expected": {
+        "value": 1.0,
+        "visible": true,
+        "transform": [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+      }
+    },
+    {
+      "id": "pose-18-degrees-but-no-hinge-no-turn",
+      "note": "degrees but no hinge: no turn",
+      "input": {"name": "WIDGET_5_ROT_90", "position": 1},
+      "expected": {
+        "value": 1.0,
+        "visible": true,
+        "transform": [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+      }
+    },
+    {
+      "id": "pose-19-a-needle-about-a-tilted-axis",
+      "note": "a needle about a tilted axis",
+      "input": {"name": "GAUGE_SPEED_1_ROT_-240", "position": 0.3, "pivot": [0.5, 2.0, -0.3], "axis": [0.6, 0.8, 0.0]},
+      "expected": {
+        "value": 0.3,
+        "visible": true,
+        "transform": [
+          0.55777085,
+          0.3316719,
+          -0.76084524,
+          -0.6704828,
+          0.3316719,
+          0.7512461,
+          0.57063395,
+          0.5028621,
+          0.76084524,
+          -0.57063395,
+          0.30901694,
+          0.55355036,
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "id": "pose-20-a-position-past-1-is-taken-as-it-is",
+      "note": "a position past 1 is taken as it is",
+      "input": {"name": "GAUGE_SPEED_1_ROT_-240", "position": 1.5, "pivot": [0.5, 2.0, -0.3], "axis": [0.6, 0.8, 0.0]},
+      "expected": {
+        "value": 1.5,
+        "visible": true,
+        "transform": [
+          1.0,
+          0.0,
+          -1.3987645E-7,
+          -2.9802322E-8,
+          0.0,
+          1.0,
+          1.04907336E-7,
+          0.0,
+          1.3987645E-7,
+          -1.04907336E-7,
+          1.0,
+          1.3987645E-7,
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "id": "pose-21-a-handbrake-wheel-three-quarters-on",
+      "note": "a handbrake wheel three quarters on",
+      "input": {"name": "HANDBRAKE_1_ROT_270", "position": 0.75, "pivot": [-1.2, 1.4, 0.9], "axis": [0.0, 1.0, 0.0]},
+      "expected": {
+        "value": 0.75,
+        "visible": true,
+        "transform": [
+          -0.92387956,
+          0.0,
+          -0.38268343,
+          -1.9642406,
+          0.0,
+          1.0,
+          0.0,
+          0.0,
+          0.38268343,
+          0.0,
+          -0.92387956,
+          2.1907117,
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    }
+  ]
+}
