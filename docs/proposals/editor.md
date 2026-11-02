@@ -429,7 +429,7 @@ editor/
 
 ### 3.13. Контракты
 
-`editor/src/core/contracts.ts` создаётся в M1 первым коммитом (A1.1) по этому эскизу и дальше меняется только дирижёром или назначенным им агентом.
+`editor/src/core/contracts.ts` создаётся в M1 первым коммитом (A1.1) по этому эскизу и дальше меняется только дирижёром или назначенным им агентом. Что вышло — после эскиза.
 
 ```ts
 // files
@@ -494,6 +494,10 @@ export interface ViewApi {
 ```
 
 Подписи портов — в разделе 4.1. Агенты M2 пишут их ровно так, агенты M3–M4 вызывают.
+
+**Создан (A1.1, M1).** Источник правды теперь — сам `editor/src/core/contracts.ts`, эскиз выше оставлен как история. Отличия от эскиза:
+- *решение агента:* `PackSource.kind` — объединение `PackSourceKind` (`'fs-access' | 'dir-input' | 'zip' | 'memory' | 'node'`) вместо `string`; `ObjectInfo.bbox` — `[Vec3, Vec3]`; точка выбора — `PickHit { object?; point?: Vec3 }`; у `Command` необязательные `labelParams` для подписи в журнале («Изменить поле {field}»); у `ViewApi.setTransform` записан порядок матрицы (по столбцам, как `Matrix4.elements` three.js); `insert` в конец массива — указатель с `-` (RFC 6902);
+- *решение дирижёра* (после влития структурированных находок `FloorCheck`, `kinematics/FloorFinding.java`): значения `Problem.params` — `ProblemParam = string | number | number[]` (список целых — `zones` у `ZONES_UNREACHABLE`; `Infinity` и `NaN` бывают у `SEAT_NOT_SITTABLE`, в golden — строками); добавлен тип `FloorFinding { code, subject: 'floor' | 'zone' | 'door' | 'seat' | 'cab', index (−1 — нет предмета), params, text }` — выход порта `floorCheck`, из него `checks/` делает `Problem`.
 
 ---
 
