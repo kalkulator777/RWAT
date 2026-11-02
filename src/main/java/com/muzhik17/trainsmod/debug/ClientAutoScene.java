@@ -38,7 +38,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * rails. Quits the game at the end.
  *
  * <p>Some scenes keep a class of their own, on the same property: {@code
- * access} — who may touch a wagon — is {@link AccessScene}.
+ * access} — who may touch a wagon — is {@link AccessScene}; {@code railperf},
+ * {@code railedge} and {@code railfar} — the rail renderer — are {@link RailRenderScene}.
  */
 @EventBusSubscriber(modid = RailsWheelsAndTrains.MODID, value = Dist.CLIENT)
 public final class ClientAutoScene {

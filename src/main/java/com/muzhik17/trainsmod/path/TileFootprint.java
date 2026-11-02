@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import com.muzhik17.trainsmod.convention.ObjectRole;
+
 /**
  * A rail style's tile as the track bed sees it (SPEC §2.2, §6.10): the drawn
  * triangles in tile space — blocks, Y up, rails along X, the tile centred on
@@ -19,7 +21,8 @@ import java.util.Map;
  * {@link TrackSweep} exactly the way the renderer sweeps the textured tile.
  *
  * <p>{@link #fromObj} reads the very OBJ the client draws, by the client's
- * rules: objects named {@code …HIDE…} are not drawn, quads split into
+ * rules: an object is named by the whole rest of its {@code o}/{@code g}
+ * line ({@link ObjectRole#objectName}), objects named {@code …HIDE…} are not drawn, quads split into
  * (0,1,2)+(2,3,0), other faces fan from their first corner, and the rail
  * objects ({@link #isRailObject}) are stretched along X to fill the tile end
  * to end ({@link #railStretch}). One difference: faces of a material without a
@@ -116,7 +119,7 @@ public final class TileFootprint {
         List<float[]> positions = new ArrayList<>();
         List<int[]> faces = new ArrayList<>();
         List<String> faceObjects = new ArrayList<>();
-        String object = "default";
+        String object = ObjectRole.DEFAULT_OBJECT;
         BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8));
         String line;
         while ((line = reader.readLine()) != null) {
@@ -124,11 +127,15 @@ public final class TileFootprint {
             if (line.isEmpty() || line.charAt(0) == '#') {
                 continue;
             }
+            String objectName = ObjectRole.objectName(line);
+            if (objectName != null) {
+                object = objectName; // an o/g line: the faces after it are this object's
+                continue;
+            }
             String[] t = line.split("\\s+");
             switch (t[0]) {
                 case "v" -> positions.add(new float[] {
                         Float.parseFloat(t[1]), Float.parseFloat(t[2]), Float.parseFloat(t[3])});
-                case "o", "g" -> object = t.length > 1 ? t[1] : "default";
                 case "f" -> {
                     int[] face = new int[t.length - 1];
                     for (int i = 0; i < face.length; i++) {

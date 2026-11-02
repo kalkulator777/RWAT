@@ -19,6 +19,10 @@ import org.joml.Vector3d;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.client.ClientRailGraph;
+import com.muzhik17.trainsmod.client.render.TileSweeper.RailBend;
+import com.muzhik17.trainsmod.client.render.TileSweeper.SubPath;
+import com.muzhik17.trainsmod.client.render.TileSweeper.Template;
+import com.muzhik17.trainsmod.client.render.TileSweeper.Tile;
 import com.muzhik17.trainsmod.client.render.model.Mesh;
 import com.muzhik17.trainsmod.client.render.model.RailStyle;
 import com.muzhik17.trainsmod.client.render.model.RailStyles;
@@ -40,7 +44,6 @@ import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
-import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
@@ -51,16 +54,21 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 /**
  * Draws the rails in the world (SPEC §2.2 visual / §2.4 pipeline): the tile of
  * each segment's {@linkplain RailStyle rail style} (SPEC §6.10) is swept along
- * its spline — every tile is bent to the curve so there are no gaps on bends —
- * and baked into {@link GpuMesh}es (one per texture) per
- * {@link #REGION_BLOCKS_SHIFT 64-block region}, so a frame
+ * its spline ({@link TileSweeper}) — every tile is bent to the curve so there
+ * are no gaps on bends — and baked into {@link GpuMesh}es (one per texture) per
+ * {@link RailRegion 64-block region}, so a frame
  * costs a handful of draw calls for the visible regions (the per-frame CPU
  * emit was a major part of the FPS drop; a single mesh for the whole network
  * meant every re-upload pushed the entire track at once — a ~0.8 s freeze on
  * a ~4000-block network). Regions outside the render distance, outside the
  * view frustum or over unloaded chunks are not drawn — no rails floating over
- * the void. Directional diffuse is baked into the vertex colour (the terrain
- * shader the rails draw with ignores normals — see {@link RwatRenderTypes#rails}).
+ * the void; a region is culled by the box of what its tiles draw. A region's
+ * vertices are kept relative to its corner and drawn with the corner's offset
+ * from the camera, as vanilla's chunk sections are, so they are as precise
+ * 300 000 blocks out as at the origin (as world floats they were 1/32 block
+ * apart there, and the rails shook against the terrain). Directional diffuse
+ * is baked into the vertex colour (the terrain shader the rails draw with
+ * ignores normals — see {@link RwatRenderTypes#rails}).
  *
  * <p>Graph changes are applied <b>per segment</b>: each segment's bent tiles
  * are cached under a key of its curve and end treatment, and a new graph only
@@ -68,6 +76,14 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
  * segment touches that segment and its neighbours, and a switch throw (state
  * only, no geometry) touches nothing. The full re-sweep on every revision used
  * to freeze every client in the dimension on each redstone toggle.
+ *
+ * <p>Switch blades are kept <b>per switch</b>, in the regions they lie in, by
+ * the same visibility rules as the track, and baked into meshes of their own
+ * per region: a throw re-sweeps that switch's blades each frame while they
+ * move — and only while they are in view ({@link BladeAnimator}) — and
+ * re-uploads just their regions' blade meshes. (They were one mesh for the
+ * whole network, drawn whatever the distance and over unloaded chunks, and
+ * every blade of the network was re-swept each frame any switch moved.)
  *
  * <p>World light is baked per tile and refreshed <b>on change</b>, the way
  * vanilla re-meshes chunk sections: the client light engine reports every
@@ -105,20 +121,10 @@ public final class RailRenderer {
      */
     private static final boolean SWITCH_BLADES = true;
 
-    /** Blade throw animation duration, ms. */
-    private static final long BLADE_ANIM_MS = 500;
     /** Plain rail kept between a blade's heel and the frog's wing rails, blocks. */
     private static final double FROG_CLEARANCE = 0.5;
     /** The shortest blade a frog may leave a sharp switch; closer to the toe, no frog. */
     private static final double MIN_BLADE = 1.0;
-
-    /**
-     * Region bucket edge as a power of two (1 << 6 = 64 blocks, 4×4 chunks).
-     * One {@link GpuMesh} per bucket: small enough that a relight or a
-     * streaming chunk re-uploads a sliver of the network instead of all of
-     * it, large enough that the visible set stays a few dozen draw calls.
-     */
-    private static final int REGION_BLOCKS_SHIFT = 6;
 
     /**
      * Vertices baked per frame before the remaining dirty regions wait for
@@ -128,99 +134,59 @@ public final class RailRenderer {
     private static final int BAKE_VERTEX_BUDGET = 131_072;
 
     /**
-     * Frustum-test margin around a region's tile centres: half the sleeper
-     * length (1.31) plus the rail height, rounded up.
-     */
-    private static final double CULL_MARGIN = 2.0;
-
-    /**
-     * One texture's share of a rail style tile, flattened for sweeping:
+     * One texture's share of a rail style tile as a sweep {@link Template}:
      * triangles (rail OBJs are mostly triangles, stored as degenerate quads in
      * {@link Mesh} — emitting them as triangles saves a quarter of the
-     * vertices), with each vertex tied to one of a handful of along-track
-     * <i>stations</i> (distinct local X — 7 in MVP's rail). Bending then
-     * samples the spline frame once per station, not twice per vertex.
+     * vertices).
      */
-    private static final class TileTemplate {
-        final RenderType renderType;
-        /** Repeat distance along the track, blocks (the style's tile length). */
-        final double tileLength;
-        /** Distinct along-tile fractions 0..1, one path frame each. */
-        final double[] stations;
-        final int[] station; // per vertex: index into stations
-        final float[] y;     // per vertex: local height (up)
-        final float[] z;     // per vertex: local cross-track (right)
-        final float[] nx;    // per vertex: local normal, X = along
-        final float[] ny;
-        final float[] nz;
-        final float[] u;
-        final float[] v;
-        final float[] rgba;  // per vertex: base colour, 4 floats
-        /** Per vertex: the vertex whose bent normal shades it (its quad's first corner). */
-        final int[] shadeFrom;
-        final int vertexCount;
-
-        TileTemplate(Mesh mesh, RenderType renderType, double tileLength) {
-            this.renderType = renderType;
-            this.tileLength = tileLength;
-            List<Mesh.Vertex> verts = new ArrayList<>();
-            List<Mesh.Quad> owners = new ArrayList<>();
-            List<Integer> shadeSrc = new ArrayList<>();
-            for (Mesh.Quad q : mesh.quads()) {
-                int first = verts.size();
-                // QUADS index order is (0,1,2)(2,3,0); a triangle is (0,1,2) only
-                for (Mesh.Vertex vx : new Mesh.Vertex[]{q.v0(), q.v1(), q.v2()}) {
+    private static Template template(Mesh mesh, RenderType renderType, double tileLength) {
+        List<Mesh.Vertex> verts = new ArrayList<>();
+        List<Mesh.Quad> owners = new ArrayList<>();
+        List<Integer> shadeSrc = new ArrayList<>();
+        for (Mesh.Quad q : mesh.quads()) {
+            int first = verts.size();
+            // QUADS index order is (0,1,2)(2,3,0); a triangle is (0,1,2) only
+            for (Mesh.Vertex vx : new Mesh.Vertex[]{q.v0(), q.v1(), q.v2()}) {
+                verts.add(vx);
+                owners.add(q);
+                shadeSrc.add(first);
+            }
+            if (!sameCorner(q.v2(), q.v3())) {
+                for (Mesh.Vertex vx : new Mesh.Vertex[]{q.v2(), q.v3(), q.v0()}) {
                     verts.add(vx);
                     owners.add(q);
                     shadeSrc.add(first);
                 }
-                if (!sameCorner(q.v2(), q.v3())) {
-                    for (Mesh.Vertex vx : new Mesh.Vertex[]{q.v2(), q.v3(), q.v0()}) {
-                        verts.add(vx);
-                        owners.add(q);
-                        shadeSrc.add(first);
-                    }
-                }
-            }
-            vertexCount = verts.size();
-            Map<Float, Integer> stationOf = new LinkedHashMap<>();
-            station = new int[vertexCount];
-            y = new float[vertexCount];
-            z = new float[vertexCount];
-            nx = new float[vertexCount];
-            ny = new float[vertexCount];
-            nz = new float[vertexCount];
-            u = new float[vertexCount];
-            v = new float[vertexCount];
-            rgba = new float[vertexCount * 4];
-            shadeFrom = new int[vertexCount];
-            for (int i = 0; i < vertexCount; i++) {
-                Mesh.Vertex vx = verts.get(i);
-                Mesh.Quad q = owners.get(i);
-                station[i] = stationOf.computeIfAbsent(vx.x(), k -> stationOf.size());
-                y[i] = vx.y();
-                z[i] = vx.z();
-                nx[i] = vx.nx();
-                ny[i] = vx.ny();
-                nz[i] = vx.nz();
-                u[i] = vx.u();
-                v[i] = vx.v();
-                rgba[i * 4] = q.r();
-                rgba[i * 4 + 1] = q.g();
-                rgba[i * 4 + 2] = q.b();
-                rgba[i * 4 + 3] = q.a();
-                shadeFrom[i] = shadeSrc.get(i);
-            }
-            stations = new double[stationOf.size()];
-            for (Map.Entry<Float, Integer> entry : stationOf.entrySet()) {
-                // 0..1 along the tile, which is centred on x = 0
-                stations[entry.getValue()] = entry.getKey() / tileLength + 0.5;
             }
         }
+        int vertexCount = verts.size();
+        float[] position = new float[vertexCount * 3];
+        float[] normal = new float[vertexCount * 3];
+        float[] uv = new float[vertexCount * 2];
+        float[] rgba = new float[vertexCount * 4];
+        int[] shadeFrom = new int[vertexCount];
+        for (int i = 0; i < vertexCount; i++) {
+            Mesh.Vertex vx = verts.get(i);
+            Mesh.Quad q = owners.get(i);
+            position[i * 3] = vx.x();
+            position[i * 3 + 1] = vx.y();
+            position[i * 3 + 2] = vx.z();
+            normal[i * 3] = vx.nx();
+            normal[i * 3 + 1] = vx.ny();
+            normal[i * 3 + 2] = vx.nz();
+            uv[i * 2] = vx.u();
+            uv[i * 2 + 1] = vx.v();
+            rgba[i * 4] = q.r();
+            rgba[i * 4 + 1] = q.g();
+            rgba[i * 4 + 2] = q.b();
+            rgba[i * 4 + 3] = q.a();
+            shadeFrom[i] = shadeSrc.get(i);
+        }
+        return new Template(renderType, tileLength, position, normal, uv, rgba, shadeFrom);
+    }
 
-        private static boolean sameCorner(Mesh.Vertex a, Mesh.Vertex b) {
-            return a == b || a.equals(b);
-        }
+    private static boolean sameCorner(Mesh.Vertex a, Mesh.Vertex b) {
+        return a == b || a.equals(b);
     }
 
     /**
@@ -234,17 +200,17 @@ public final class RailRenderer {
      * loaded — then there is nothing to draw); {@code blades} null if its
      * switches draw as plain track.
      */
-    private record StyleTemplates(String styleId, List<TileTemplate> full, List<TileTemplate> base,
-            List<TileTemplate> plusRails, List<TileTemplate> minusRails,
-            List<TileTemplate> plusBent, List<TileTemplate> minusBent, RailStyle.Blades blades) {
+    private record StyleTemplates(String styleId, List<Template> full, List<Template> base,
+            List<Template> plusRails, List<Template> minusRails,
+            List<Template> plusBent, List<Template> minusBent, RailStyle.Blades blades) {
 
         /** The rail objects on {@code side} ({@link SwitchThroat#PLUS_Z}/{@link SwitchThroat#MINUS_Z}). */
-        List<TileTemplate> rails(int side) {
+        List<Template> rails(int side) {
             return side == SwitchThroat.PLUS_Z ? plusRails : minusRails;
         }
 
         /** The rail objects on {@code side}, cut finer to bend into a blade or a frog's rail. */
-        List<TileTemplate> bent(int side) {
+        List<Template> bent(int side) {
             return side == SwitchThroat.PLUS_Z ? plusBent : minusBent;
         }
 
@@ -252,8 +218,8 @@ public final class RailRenderer {
          * What a leg's blade stretch draws statically: its sleepers if it
          * keeps the throat's, and the rails that aren't blades.
          */
-        List<TileTemplate> throat(ThroatEnd end) {
-            List<TileTemplate> out = new ArrayList<>();
+        List<Template> throat(ThroatEnd end) {
+            List<Template> out = new ArrayList<>();
             if (end.sleepers()) {
                 out.addAll(base);
             }
@@ -285,12 +251,12 @@ public final class RailRenderer {
             return NO_TEMPLATES;
         }
         return styleTemplates.computeIfAbsent(railStyle, s -> {
-            List<TileTemplate> full = new ArrayList<>();
-            List<TileTemplate> base = new ArrayList<>();
-            List<TileTemplate> plusRails = new ArrayList<>();
-            List<TileTemplate> minusRails = new ArrayList<>();
-            List<TileTemplate> plusBent = new ArrayList<>();
-            List<TileTemplate> minusBent = new ArrayList<>();
+            List<Template> full = new ArrayList<>();
+            List<Template> base = new ArrayList<>();
+            List<Template> plusRails = new ArrayList<>();
+            List<Template> minusRails = new ArrayList<>();
+            List<Template> plusBent = new ArrayList<>();
+            List<Template> minusBent = new ArrayList<>();
             float[] planes = new float[BENT_STATIONS - 1];
             for (int k = 1; k < BENT_STATIONS; k++) {
                 planes[k - 1] = (float) (s.tileLength() * (k / (double) BENT_STATIONS - 0.5));
@@ -311,132 +277,57 @@ public final class RailRenderer {
     }
 
     /** A template of the mesh, unless it has no faces (a texture only the other objects use). */
-    private static void addTemplate(List<TileTemplate> out, Mesh mesh, RenderType type, double tileLength) {
+    private static void addTemplate(List<Template> out, Mesh mesh, RenderType type, double tileLength) {
         if (!mesh.quads().isEmpty()) {
-            out.add(new TileTemplate(mesh, type, tileLength));
+            out.add(template(mesh, type, tileLength));
         }
     }
 
     /**
-     * One bent tile, compact: world positions plus a packed normal and baked
-     * diffuse shade per vertex — UV and base colour stay in the shared
-     * {@link TileTemplate} (~4 KB per tile, where a bent {@link Mesh} of
-     * records was ~22 KB, ~85 MB of heap for a 3800-block network). The
-     * geometry depends only on the rail graph; {@code light} is the one field
-     * a relight may touch (sampled one block above the tile centre, in
-     * section {@code lightSection}).
+     * A {@link RailRegion} with its GPU meshes (one per texture) — of the
+     * static track and, apart, of the switch blades — baked lazily once the
+     * region is in range (a region the player never approaches is never
+     * uploaded) and freed once the player leaves it far behind.
      */
-    private static final class Tile {
-        final TileTemplate template;
-        final float[] xyz;
-        /** Per vertex: normal as three signed bytes (bits 0–23) + shade 0–255 (bits 24–31). */
-        final int[] normalShade;
-        final double cx;
-        final double cy;
-        final double cz;
-        /** Region bucket holding the tile. */
-        final long bucketKey;
-        /** {@link SectionPos#asLong} of the light sample point ({@link #tileLight}). */
-        final long lightSection;
-        int light = -1; // never sampled
-
-        Tile(TileTemplate template, float[] xyz, int[] normalShade, Vector3d centre) {
-            this.template = template;
-            this.xyz = xyz;
-            this.normalShade = normalShade;
-            this.cx = centre.x;
-            this.cy = centre.y;
-            this.cz = centre.z;
-            this.bucketKey = RailRenderer.bucketKey(cx, cz);
-            this.lightSection = SectionPos.asLong(SectionPos.blockToSectionCoord(cx),
-                    SectionPos.blockToSectionCoord(cy + 1.0), SectionPos.blockToSectionCoord(cz));
-        }
-    }
-
-    /**
-     * The tiles and GPU meshes of one region of track, grouped by segment so
-     * a graph edit replaces just the affected segments' tiles. {@code meshes}
-     * (one per texture) are baked lazily once the region is in range (a
-     * region the player never approaches is never uploaded); {@code dirty}
-     * marks them stale after a graph edit or a light change — the stale
-     * meshes keep drawing until the re-bake lands. Freed once the player
-     * leaves the region far behind.
-     */
-    private static final class Bucket {
-        final Map<Integer, List<Tile>> bySegment = new HashMap<>();
+    private static final class Bucket extends RailRegion {
         List<GpuMesh> meshes;
-        boolean dirty = true;
-        int vertexCount;
-        double minX;
-        double minY;
-        double minZ;
-        double maxX;
-        double maxY;
-        double maxZ;
-        AABB cullBox;
+        List<GpuMesh> bladeMeshes;
+        /** {@link #cullBox()} as an AABB, null until asked for after a change. */
+        private AABB cullAabb;
         // per-frame scratch for the bake ordering
         double distSq;
         boolean inView;
+        /** Drawn in the last frame: in range, over a loaded chunk and in view. */
+        boolean drawn;
 
-        Bucket() {
-            resetBounds();
+        Bucket(long key) {
+            super(key);
         }
 
-        void put(int segmentId, List<Tile> tiles) {
-            if (bySegment.put(segmentId, tiles) != null) {
-                recomputeBounds(); // replaced, not added: don't double-count
-            } else {
-                for (Tile tile : tiles) {
-                    include(tile);
-                }
+        /** Free the GPU meshes; they are baked again when the region is next drawn. */
+        void closeMeshes() {
+            if (meshes != null) {
+                closeAll(meshes);
+                meshes = null;
+                dirty = true;
             }
-            cullBox = null;
-            dirty = true;
-        }
-
-        void remove(int segmentId) {
-            if (bySegment.remove(segmentId) == null) {
-                return;
-            }
-            recomputeBounds();
-            cullBox = null;
-            dirty = true;
-        }
-
-        boolean isEmpty() {
-            return bySegment.isEmpty();
-        }
-
-        AABB cullBox() {
-            if (cullBox == null) {
-                cullBox = new AABB(minX, minY, minZ, maxX, maxY, maxZ).inflate(CULL_MARGIN);
-            }
-            return cullBox;
-        }
-
-        private void include(Tile tile) {
-            minX = Math.min(minX, tile.cx);
-            minY = Math.min(minY, tile.cy);
-            minZ = Math.min(minZ, tile.cz);
-            maxX = Math.max(maxX, tile.cx);
-            maxY = Math.max(maxY, tile.cy);
-            maxZ = Math.max(maxZ, tile.cz);
-            vertexCount += tile.template.vertexCount;
-        }
-
-        private void recomputeBounds() {
-            resetBounds();
-            for (List<Tile> tiles : bySegment.values()) {
-                for (Tile tile : tiles) {
-                    include(tile);
-                }
+            if (bladeMeshes != null) {
+                closeAll(bladeMeshes);
+                bladeMeshes = null;
             }
         }
 
-        private void resetBounds() {
-            minX = minY = minZ = Double.POSITIVE_INFINITY;
-            maxX = maxY = maxZ = Double.NEGATIVE_INFINITY;
-            vertexCount = 0;
+        AABB cullAabb() {
+            if (cullAabb == null) {
+                double[] box = cullBox();
+                cullAabb = new AABB(box[0], box[1], box[2], box[3], box[4], box[5]);
+            }
+            return cullAabb;
+        }
+
+        @Override
+        void boundsChanged() {
+            cullAabb = null;
         }
     }
 
@@ -455,7 +346,7 @@ public final class RailRenderer {
      * §2.2 v1): the first {@code bladeLength} from the node draws the sleepers
      * only on the throat's sleeper leg ({@code sleepers}) and leaves out the
      * blade rails ({@code bladeSides}, {@link SwitchThroat} side bits) —
-     * {@link #rebuildBlades} draws those; further in, the {@code frog} (null
+     * {@link #sweepBlades} draws those; further in, the {@code frog} (null
      * if none) bends the inner rail into a wing rail and a point rail.
      */
     private record ThroatEnd(double bladeLength, boolean sleepers, int bladeSides, SwitchFrog frog) {
@@ -466,42 +357,57 @@ public final class RailRenderer {
     }
 
     /**
-     * A blade found at sweep time: the rail on {@code side} of
+     * A blade found at layout time: the rail on {@code side} of
      * {@code segmentId}'s end at {@code nodeId}, {@code length} long, in a
      * throat of co-directional legs ({@code groupIds}, sorted — a switch's
      * diverging side); {@code separation} is how far its stock rail is from
-     * it, {@code stretch} the stretch of the leg's sweep path it lies along
-     * (the one the static sweep leaves out, so the tiles line up), its tip
-     * first if {@code tipAtStart}.
+     * it, its tip first if {@code tipAtStart}. It lies along the stretch of
+     * the leg's sweep path the static sweep leaves out ({@link #bladeStretch}),
+     * so the tiles line up.
      */
     private record BladeSpec(int nodeId, int segmentId, List<Integer> groupIds, int side, double length,
-            SwitchThroat.Separation separation, boolean tipAtStart, TrackPath stretch) {
+            SwitchThroat.Separation separation, boolean tipAtStart) {
+    }
+
+    /**
+     * The blades of the switch at one node, as the last graph sync laid them
+     * out: what they depend on ({@code key} — the node's throats and their
+     * legs' {@link SegmentKey}s: an equal key on the next sync keeps the
+     * blades as they are), the blades, the stretches they lie along (made on
+     * their first sweep) and the regions holding their tiles.
+     */
+    private static final class NodeBlades {
+        final List<Object> key;
+        final List<BladeSpec> specs;
+        List<TrackPath> stretches;
+        Set<Long> regionKeys = Set.of();
+
+        NodeBlades(List<Object> key, List<BladeSpec> specs) {
+            this.key = key;
+            this.specs = specs;
+        }
     }
 
     /** Throat geometry of the last graph revision, by what it depends on — a switch throw reuses it all. */
     private static final Map<ThroatKey, ThroatGeometry> throatCache = new HashMap<>();
     /** Scratch: the throats of the revision being laid out. */
     private static final Map<ThroatKey, ThroatGeometry> liveThroats = new HashMap<>();
-    /** Region buckets keyed by {@link ChunkPos#asLong} of the region coords. */
+    /** Scratch: the blades of the revision being laid out, by node, and the throats they belong to. */
+    private static final Map<Integer, List<BladeSpec>> liveBlades = new HashMap<>();
+    private static final Map<Integer, List<ThroatKey>> liveBladeThroats = new HashMap<>();
+    /** Region buckets by {@link RailRegion#key}. */
     private static final Map<Long, Bucket> buckets = new HashMap<>();
     /** Segment id → its cached sweep (the tiles live in {@link #buckets}). */
     private static final Map<Integer, SegmentEntry> segmentCache = new HashMap<>();
     /** Static tiles by the section their light is sampled in — the relight index. */
     private static final Map<Long, List<Tile>> tilesBySection = new HashMap<>();
+    /** Blade tiles by the section their light is sampled in. */
+    private static final Map<Long, List<Tile>> bladeTilesBySection = new HashMap<>();
     /** Light-changed sections holding rail tiles, waiting to be re-sampled (FIFO). */
     private static final Set<Long> lightDirty = new LinkedHashSet<>();
-    private static final List<Tile> bladeTiles = new ArrayList<>();
-    /** Light sections of the blade tiles. */
-    private static final Set<Long> bladeSections = new HashSet<>();
-    private static final List<BladeSpec> bladeSpecs = new ArrayList<>();
-    /** Switch selection counters as currently displayed (animation reference). */
-    private static final Map<Integer, Integer> shownSelection = new HashMap<>();
-    /** Selection counters from before the latest change, per animating node. */
-    private static final Map<Integer, Integer> prevSelection = new HashMap<>();
-    /** Animation start (Util.getMillis()) per animating node. */
-    private static final Map<Integer, Long> animStart = new HashMap<>();
-    private static List<GpuMesh> bladeMeshes;
-    private static boolean bladesDirty;
+    /** Switch node → its blades (the tiles live in {@link #buckets}). */
+    private static final Map<Integer, NodeBlades> nodeBlades = new HashMap<>();
+    private static final BladeAnimator animator = new BladeAnimator();
     private static int cachedGeneration = -1;
     /** The level the cache was built in — a new one (dimension change) starts over. */
     private static ClientLevel cachedLevel;
@@ -545,57 +451,51 @@ public final class RailRenderer {
             return;
         }
         long now = Util.getMillis();
-        if (SWITCH_BLADES && cachedGeneration != ClientRailGraph.generation()) {
-            trackSelectionChanges(graph, now, cachedGeneration == -1);
-        }
         if (cachedGeneration != ClientRailGraph.generation()) {
-            syncSegments(level, graph);
+            if (SWITCH_BLADES) {
+                animator.adopt(graph.switchSelections(), now, cachedGeneration == -1);
+            }
+            syncSegments(graph, now);
             cachedGeneration = ClientRailGraph.generation();
         }
         relightDirtySections(level);
-        if (SWITCH_BLADES) {
-            boolean finished = animStart.values().removeIf(start -> now - start >= BLADE_ANIM_MS);
-            if (bladesDirty || finished || !animStart.isEmpty()) {
-                rebuildBlades(level, graph, now);
-                bladesDirty = false;
+        // the blades of the switches being thrown, and of those whose throw just ended (BladeAnimator)
+        for (int nodeId : animator.due(now, RailRenderer::bladesDrawn)) {
+            NodeBlades blades = nodeBlades.get(nodeId);
+            if (blades != null) {
+                sweepBlades(graph, nodeId, blades, now);
             }
         }
-        if (buckets.isEmpty() && bladeTiles.isEmpty()) {
+        if (buckets.isEmpty()) {
             return;
         }
         drawTerrainPath(event, level);
     }
 
-    /**
-     * Record switch selection changes for the blade animation: a changed node
-     * remembers its previous counter and the change time; the blades then
-     * lerp between the two states. The first sync after login just adopts the
-     * state — no throw animation for switches that were already set.
-     */
-    private static void trackSelectionChanges(RailGraph graph, long now, boolean firstSync) {
-        Map<Integer, Integer> current = new HashMap<>();
-        for (Map.Entry<Integer, Integer> entry : graph.switchSelections().entrySet()) {
-            current.put(entry.getKey(), entry.getValue());
+    /** Whether any region holding the blades of the switch at {@code nodeId} was drawn in the last frame. */
+    private static boolean bladesDrawn(int nodeId) {
+        NodeBlades blades = nodeBlades.get(nodeId);
+        if (blades == null) {
+            return false;
         }
-        for (Integer node : shownSelection.keySet()) {
-            current.putIfAbsent(node, 0);
-        }
-        for (Map.Entry<Integer, Integer> entry : current.entrySet()) {
-            int shown = shownSelection.getOrDefault(entry.getKey(), 0);
-            if (entry.getValue() != shown && !firstSync) {
-                prevSelection.put(entry.getKey(), shown);
-                animStart.put(entry.getKey(), now);
+        for (long key : blades.regionKeys) {
+            Bucket bucket = buckets.get(key);
+            if (bucket != null && bucket.drawn) {
+                return true;
             }
         }
-        shownSelection.clear();
-        shownSelection.putAll(current);
+        return false;
     }
 
     /**
-     * Terrain shader, diffuse baked in, ChunkOffset = −camera for fog. Picks
-     * the regions in range (render distance, loaded centre chunk), re-bakes
-     * the stale ones within the frame budget — visible and nearest first —
-     * and draws those in the view frustum.
+     * Terrain shader, diffuse baked in, ChunkOffset = region corner − camera
+     * ({@link RailRegion#drawOffset}): the vertices are region-relative, so
+     * they and the fog are precise however far out. Picks the regions in
+     * range (render distance, loaded centre chunk), re-bakes the stale ones
+     * within the frame budget — visible and nearest first — and draws those
+     * in the view frustum, their switch blades with them (re-baked at once
+     * when stale: a throw moves them every frame, and a region's blades are
+     * a sliver of its track).
      */
     private static void drawTerrainPath(RenderLevelStageEvent event, ClientLevel level) {
         // no −cam translate: the camera offset goes through ChunkOffset, so the
@@ -610,20 +510,20 @@ public final class RailRenderer {
         inRange.clear();
         bakeQueue.clear();
         for (Bucket bucket : buckets.values()) {
+            bucket.drawn = false;
             double dx = Math.max(0.0, Math.max(bucket.minX - cam.x, cam.x - bucket.maxX));
             double dz = Math.max(0.0, Math.max(bucket.minZ - cam.z, cam.z - bucket.maxZ));
             double distSq = dx * dx + dz * dz;
             if (distSq > limit * limit || !centreChunkLoaded(level, bucket)) {
                 // free the GPU memory of regions left far behind
-                if (bucket.meshes != null && distSq > evict * evict) {
-                    closeAll(bucket.meshes);
-                    bucket.meshes = null;
-                    bucket.dirty = true;
+                if (distSq > evict * evict) {
+                    bucket.closeMeshes();
                 }
                 continue;
             }
             bucket.distSq = distSq;
-            bucket.inView = frustum == null || frustum.isVisible(bucket.cullBox());
+            bucket.inView = frustum == null || frustum.isVisible(bucket.cullAabb());
+            bucket.drawn = bucket.inView;
             inRange.add(bucket);
             if (bucket.meshes == null || bucket.dirty) {
                 bakeQueue.add(bucket);
@@ -641,23 +541,23 @@ public final class RailRenderer {
             }
         }
         Matrix4f pose = event.getPoseStack().last().pose();
-        float offX = (float) -cam.x;
-        float offY = (float) -cam.y;
-        float offZ = (float) -cam.z;
         for (Bucket bucket : inRange) {
-            if (bucket.inView && bucket.meshes != null) {
+            if (!bucket.inView) {
+                continue;
+            }
+            float[] offset = bucket.drawOffset(cam.x, cam.y, cam.z);
+            if (bucket.meshes != null) {
                 for (GpuMesh mesh : bucket.meshes) {
-                    BATCH.add(mesh, pose, offX, offY, offZ);
+                    BATCH.add(mesh, pose, offset[0], offset[1], offset[2]);
                 }
             }
-        }
-        if (bladeMeshes == null && !bladeTiles.isEmpty()) {
-            refreshLight(level, bladeTiles);
-            bladeMeshes = uploadByTexture(bladeTiles);
-        }
-        if (bladeMeshes != null) {
-            for (GpuMesh mesh : bladeMeshes) {
-                BATCH.add(mesh, pose, offX, offY, offZ);
+            if (bucket.bladesDirty || bucket.bladeMeshes == null && bucket.hasBlades()) {
+                bakeBlades(level, bucket);
+            }
+            if (bucket.bladeMeshes != null) {
+                for (GpuMesh mesh : bucket.bladeMeshes) {
+                    BATCH.add(mesh, pose, offset[0], offset[1], offset[2]);
+                }
             }
         }
         BATCH.flush();
@@ -676,10 +576,7 @@ public final class RailRenderer {
      * first visible frame is exactly when the truth is available.
      */
     private static void bakeBucket(ClientLevel level, Bucket bucket) {
-        List<Tile> tiles = new ArrayList<>();
-        for (List<Tile> segmentTiles : bucket.bySegment.values()) {
-            tiles.addAll(segmentTiles);
-        }
+        List<Tile> tiles = bucket.tiles();
         refreshLight(level, tiles);
         List<GpuMesh> baked = uploadByTexture(tiles);
         if (bucket.meshes != null) {
@@ -689,11 +586,23 @@ public final class RailRenderer {
         bucket.dirty = false;
     }
 
+    /** (Re-)upload one bucket's blade meshes, light re-sampled first as in {@link #bakeBucket}. */
+    private static void bakeBlades(ClientLevel level, Bucket bucket) {
+        List<Tile> tiles = bucket.bladeTiles();
+        refreshLight(level, tiles);
+        List<GpuMesh> baked = uploadByTexture(tiles);
+        if (bucket.bladeMeshes != null) {
+            closeAll(bucket.bladeMeshes);
+        }
+        bucket.bladeMeshes = baked;
+        bucket.bladesDirty = false;
+    }
+
     /** Upload tiles as one terrain-shader GPU mesh per texture (render type). */
     private static List<GpuMesh> uploadByTexture(List<Tile> tiles) {
         Map<RenderType, List<Tile>> byType = new LinkedHashMap<>();
         for (Tile tile : tiles) {
-            byType.computeIfAbsent(tile.template.renderType, t -> new ArrayList<>()).add(tile);
+            byType.computeIfAbsent((RenderType) tile.template.renderType, t -> new ArrayList<>()).add(tile);
         }
         List<GpuMesh> meshes = new ArrayList<>(byType.size());
         for (Map.Entry<RenderType, List<Tile>> entry : byType.entrySet()) {
@@ -713,7 +622,7 @@ public final class RailRenderer {
         GpuMesh.Builder builder = new GpuMesh.Builder(renderType,
                 VertexFormat.Mode.TRIANGLES, vertexCount);
         for (Tile tile : tiles) {
-            TileTemplate t = tile.template;
+            Template t = tile.template;
             for (int i = 0; i < t.vertexCount; i++) {
                 int packed = tile.normalShade[i];
                 float shade = (packed >>> 24) / 255.0F;
@@ -736,47 +645,22 @@ public final class RailRenderer {
         return count;
     }
 
-    /** Key of the region bucket containing the point. */
-    private static long bucketKey(double x, double z) {
-        return ChunkPos.asLong(
-                ((int) Math.floor(x)) >> REGION_BLOCKS_SHIFT,
-                ((int) Math.floor(z)) >> REGION_BLOCKS_SHIFT);
-    }
-
     /** Drop the cached geometry and animation state (e.g. on logout). */
     public static void clear() {
-        dropGeometry();
-        dropBladeGeometry();
-        styleTemplates.clear();
-        throatCache.clear();
-        bladeSpecs.clear();
-        shownSelection.clear();
-        prevSelection.clear();
-        animStart.clear();
-        bladesDirty = false;
-        cachedGeneration = -1;
-        cachedLevel = null;
-    }
-
-    private static void dropGeometry() {
         for (Bucket bucket : buckets.values()) {
-            if (bucket.meshes != null) {
-                closeAll(bucket.meshes);
-            }
+            bucket.closeMeshes();
         }
         buckets.clear();
         segmentCache.clear();
         tilesBySection.clear();
+        bladeTilesBySection.clear();
         lightDirty.clear();
-    }
-
-    private static void dropBladeGeometry() {
-        if (bladeMeshes != null) {
-            closeAll(bladeMeshes);
-            bladeMeshes = null;
-        }
-        bladeTiles.clear();
-        bladeSections.clear();
+        nodeBlades.clear();
+        animator.clear();
+        styleTemplates.clear();
+        throatCache.clear();
+        cachedGeneration = -1;
+        cachedLevel = null;
     }
 
     /** World light sampled one block above a tile's centre. */
@@ -785,22 +669,28 @@ public final class RailRenderer {
                 BlockPos.containing(tile.cx, tile.cy + 1.0, tile.cz));
     }
 
+    /** {@link SectionPos#asLong} of the section a tile's light is sampled in ({@link #tileLight}). */
+    private static long lightSection(Tile tile) {
+        return SectionPos.asLong(SectionPos.blockToSectionCoord(tile.cx),
+                SectionPos.blockToSectionCoord(tile.cy + 1.0), SectionPos.blockToSectionCoord(tile.cz));
+    }
+
     /**
      * Bring the cached segment sweeps in line with a new graph: segments
      * whose {@link SegmentKey} is unchanged keep their tiles (and their
      * regions' GPU meshes stay clean); changed and new segments are re-swept,
      * removed ones dropped — only the regions they touch go dirty. The
      * switch throats are laid out first ({@link #throats}): their blade rails
-     * are left out of the static sweep and recorded as {@link BladeSpec}s —
-     * {@link #rebuildBlades} draws them as the switch is set.
+     * are left out of the static sweep and recorded as {@link BladeSpec}s,
+     * per switch — {@link #syncBlades} sweeps those of the switches whose
+     * blades changed, and only those. A switch throw changes no geometry:
+     * nothing is swept here, its blades move frame by frame (the
+     * {@link BladeAnimator}).
      */
-    private static void syncSegments(ClientLevel level, RailGraph graph) {
-        bladeSpecs.clear();
-        bladesDirty = true;
+    private static void syncSegments(RailGraph graph, long now) {
         Map<Long, ThroatEnd> throats = SWITCH_BLADES ? throats(graph) : Map.of();
-        Set<Integer> alive = new HashSet<>();
+        Map<Integer, SegmentKey> keys = new HashMap<>();
         for (RailSegment segment : graph.segments()) {
-            alive.add(segment.id());
             HermiteSegment curve = graph.hermite(segment);
             StyleTemplates templates = templatesFor(segment.style());
             SegmentKey key = new SegmentKey(
@@ -809,6 +699,7 @@ public final class RailRenderer {
                     graph.overhangAt(segment, segment.nodeB()),
                     throats.get(endKey(segment.id(), true)), throats.get(endKey(segment.id(), false)),
                     templates.styleId());
+            keys.put(segment.id(), key);
             SegmentEntry cached = segmentCache.get(segment.id());
             if (cached != null && cached.key().equals(key)) {
                 continue; // untouched by this edit
@@ -819,12 +710,49 @@ public final class RailRenderer {
             segmentCache.put(segment.id(), sweepSegment(segment.id(), curve, key, templates));
         }
         segmentCache.entrySet().removeIf(entry -> {
-            if (alive.contains(entry.getKey())) {
+            if (keys.containsKey(entry.getKey())) {
                 return false;
             }
             evictSegment(entry.getKey(), entry.getValue());
             return true;
         });
+        syncBlades(graph, keys, now);
+    }
+
+    /**
+     * Bring the switches' blades in line with the throats just laid out: a
+     * switch whose blades depend on what they did before — the same throats,
+     * their legs swept the same ({@link NodeBlades#key}) — keeps its tiles; a
+     * new or changed one is swept, at its throw's current point; one gone is
+     * dropped.
+     */
+    private static void syncBlades(RailGraph graph, Map<Integer, SegmentKey> keys, long now) {
+        for (Map.Entry<Integer, List<BladeSpec>> entry : liveBlades.entrySet()) {
+            int nodeId = entry.getKey();
+            List<Object> key = new ArrayList<>(liveBladeThroats.get(nodeId));
+            for (BladeSpec spec : entry.getValue()) {
+                key.add(keys.get(spec.segmentId()));
+            }
+            NodeBlades cached = nodeBlades.get(nodeId);
+            if (cached != null && cached.key.equals(key)) {
+                continue;
+            }
+            if (cached != null) {
+                evictBlades(nodeId, cached);
+            }
+            NodeBlades blades = new NodeBlades(key, entry.getValue());
+            nodeBlades.put(nodeId, blades);
+            sweepBlades(graph, nodeId, blades, now);
+        }
+        nodeBlades.entrySet().removeIf(entry -> {
+            if (liveBlades.containsKey(entry.getKey())) {
+                return false;
+            }
+            evictBlades(entry.getKey(), entry.getValue());
+            return true;
+        });
+        liveBlades.clear();
+        liveBladeThroats.clear();
     }
 
     /**
@@ -859,7 +787,7 @@ public final class RailRenderer {
                 liveThroats.put(throatKey, geometry);
                 SwitchThroat throat = geometry.throat();
                 ThroatPlan plan = new ThroatPlan(node.id(), cluster, throat, geometry.sleeperLeg(),
-                        new HashMap<>(geometry.frogs()), geometry);
+                        new HashMap<>(geometry.frogs()), throatKey, geometry);
                 plans.add(plan);
                 for (int legId : cluster) {
                     planOfEnd.put(endKey(legId, throat.atStart(legId)), plan);
@@ -888,6 +816,8 @@ public final class RailRenderer {
         Map<Long, ThroatEnd> ends = new HashMap<>();
         for (ThroatPlan plan : plans) {
             SwitchThroat throat = plan.throat();
+            List<BladeSpec> blades = liveBlades.computeIfAbsent(plan.nodeId(), k -> new ArrayList<>());
+            liveBladeThroats.computeIfAbsent(plan.nodeId(), k -> new ArrayList<>()).add(plan.key());
             for (int legId : plan.cluster()) {
                 int sides = throat.bladeSides(legId);
                 SwitchFrog frog = plan.frogs().get(legId);
@@ -895,11 +825,10 @@ public final class RailRenderer {
                         : Math.min(throat.bladeLength(legId), frog.start() - FROG_CLEARANCE);
                 boolean atStart = throat.atStart(legId);
                 ends.put(endKey(legId, atStart), new ThroatEnd(length, legId == plan.sleeperLeg(), sides, frog));
-                TrackPath stretch = bladeStretch(graph, graph.segment(legId), atStart, length);
                 for (int side : new int[] {SwitchThroat.PLUS_Z, SwitchThroat.MINUS_Z}) {
                     if ((sides & side) != 0) {
-                        bladeSpecs.add(new BladeSpec(plan.nodeId(), legId, plan.cluster(), side, length,
-                                plan.geometry().separation(legId, side, length), atStart, stretch));
+                        blades.add(new BladeSpec(plan.nodeId(), legId, plan.cluster(), side, length,
+                                plan.geometry().separation(legId, side, length), atStart));
                     }
                 }
             }
@@ -941,7 +870,7 @@ public final class RailRenderer {
 
     /** A throat as laid out, before its ends are settled: its frogs by leg (empty: none). */
     private record ThroatPlan(int nodeId, List<Integer> cluster, SwitchThroat throat, int sleeperLeg,
-            Map<Integer, SwitchFrog> frogs, ThroatGeometry geometry) {
+            Map<Integer, SwitchFrog> frogs, ThroatKey key, ThroatGeometry geometry) {
 
         /** How far into leg {@code legId} from the node this throat draws its own way. */
         double extent(int legId) {
@@ -1026,26 +955,26 @@ public final class RailRenderer {
         List<Tile> swept = new ArrayList<>();
         if (key.throatA() != null) {
             double heel = startOver + key.throatA().bladeLength();
-            sweepAll(templates.full(), new SubPath(path, 0.0, startOver), swept);
-            sweepAll(templates.throat(key.throatA()), new SubPath(path, startOver, heel), swept);
+            TileSweeper.sweepAll(templates.full(), new SubPath(path, 0.0, startOver), swept);
+            TileSweeper.sweepAll(templates.throat(key.throatA()), new SubPath(path, startOver, heel), swept);
             from = heel;
         }
         if (key.throatB() != null) {
             double tip = startOver + length;
             double heel = tip - key.throatB().bladeLength();
-            sweepAll(templates.throat(key.throatB()), new SubPath(path, heel, tip), swept);
-            sweepAll(templates.full(), new SubPath(path, tip, path.length()), swept);
+            TileSweeper.sweepAll(templates.throat(key.throatB()), new SubPath(path, heel, tip), swept);
+            TileSweeper.sweepAll(templates.full(), new SubPath(path, tip, path.length()), swept);
             to = heel;
         }
         sweepMiddle(templates, path, from, to, startOver, length, key, swept);
 
         Map<Long, List<Tile>> byBucket = new HashMap<>();
         for (Tile tile : swept) {
-            byBucket.computeIfAbsent(tile.bucketKey, k -> new ArrayList<>()).add(tile);
-            tilesBySection.computeIfAbsent(tile.lightSection, k -> new ArrayList<>()).add(tile);
+            byBucket.computeIfAbsent(tile.regionKey, k -> new ArrayList<>()).add(tile);
+            tilesBySection.computeIfAbsent(lightSection(tile), k -> new ArrayList<>()).add(tile);
         }
         for (Map.Entry<Long, List<Tile>> entry : byBucket.entrySet()) {
-            buckets.computeIfAbsent(entry.getKey(), k -> new Bucket())
+            buckets.computeIfAbsent(entry.getKey(), Bucket::new)
                     .put(segmentId, entry.getValue());
         }
         return new SegmentEntry(key, byBucket.keySet());
@@ -1064,10 +993,10 @@ public final class RailRenderer {
         SwitchFrog frogA = key.throatA() == null ? null : key.throatA().frog();
         SwitchFrog frogB = key.throatB() == null ? null : key.throatB().frog();
         if (frogA == null && frogB == null) {
-            sweepAll(templates.full(), new SubPath(path, from, to), out);
+            TileSweeper.sweepAll(templates.full(), new SubPath(path, from, to), out);
             return;
         }
-        sweepAll(templates.base(), new SubPath(path, from, to), out);
+        TileSweeper.sweepAll(templates.base(), new SubPath(path, from, to), out);
         for (int side : new int[] {SwitchThroat.PLUS_Z, SwitchThroat.MINUS_Z}) {
             double plainFrom = from;
             List<double[]> plain = new ArrayList<>();
@@ -1093,11 +1022,11 @@ public final class RailRenderer {
             }
             plain.add(new double[] {plainFrom, to});
             for (double[] piece : plain) {
-                sweepAll(templates.rails(side), new SubPath(path, piece[0], piece[1]), out);
+                TileSweeper.sweepAll(templates.rails(side), new SubPath(path, piece[0], piece[1]), out);
             }
             for (int i = 0; i < bent.size(); i++) {
-                for (TileTemplate rail : templates.bent(side)) {
-                    sweep(rail, bent.get(i), bends.get(i), out);
+                for (Template rail : templates.bent(side)) {
+                    TileSweeper.sweep(rail, bent.get(i), bends.get(i), out);
                 }
             }
         }
@@ -1119,21 +1048,29 @@ public final class RailRenderer {
                 evicted.addAll(tiles);
             }
             bucket.remove(segmentId);
-            if (bucket.isEmpty()) {
-                if (bucket.meshes != null) {
-                    closeAll(bucket.meshes);
-                }
-                buckets.remove(bucketKey);
-            }
+            dropIfEmpty(bucket);
         }
+        unindex(tilesBySection, evicted);
+    }
+
+    /** Free an emptied bucket. */
+    private static void dropIfEmpty(Bucket bucket) {
+        if (bucket.isEmpty()) {
+            bucket.closeMeshes();
+            buckets.remove(bucket.key);
+        }
+    }
+
+    /** Take the tiles out of a light index. */
+    private static void unindex(Map<Long, List<Tile>> index, Set<Tile> tiles) {
         Set<Long> sections = new HashSet<>();
-        for (Tile tile : evicted) {
-            sections.add(tile.lightSection);
+        for (Tile tile : tiles) {
+            sections.add(lightSection(tile));
         }
         for (long section : sections) {
-            List<Tile> indexed = tilesBySection.get(section);
-            if (indexed != null && indexed.removeIf(evicted::contains) && indexed.isEmpty()) {
-                tilesBySection.remove(section);
+            List<Tile> indexed = index.get(section);
+            if (indexed != null && indexed.removeIf(tiles::contains) && indexed.isEmpty()) {
+                index.remove(section);
             }
         }
     }
@@ -1166,45 +1103,71 @@ public final class RailRenderer {
     }
 
     /**
-     * Rebuild the blade tiles against the current switch states: every blade
-     * rail is swept planed against its stock rail ({@link SwitchThroat}) —
-     * closed (pressed against it) on the selected leg, where the route runs,
-     * thrown {@link SwitchThroat#BLADE_THROW} off it at the tip on the
-     * others. A selection change lerps the throws over {@link #BLADE_ANIM_MS}
-     * (smoothstep), so the blades visibly move when the switch is thrown —
-     * all of a throat's blades together, like blades on one tie bar.
+     * Sweep the blades of the switch at {@code nodeId} against its current
+     * state and file them into their regions, in place of the ones there:
+     * every blade rail is swept planed against its stock rail
+     * ({@link SwitchThroat}) — closed (pressed against it) on the selected
+     * leg, where the route runs, thrown {@link SwitchThroat#BLADE_THROW} off
+     * it at the tip on the others; during a throw, as far as the
+     * {@link BladeAnimator} has it at {@code now}. Only those regions' blade
+     * meshes go stale; their static track is untouched.
      */
-    private static void rebuildBlades(ClientLevel level, RailGraph graph, long now) {
-        dropBladeGeometry();
-        for (BladeSpec spec : bladeSpecs) {
+    private static void sweepBlades(RailGraph graph, int nodeId, NodeBlades blades, long now) {
+        if (blades.stretches == null) {
+            List<TrackPath> stretches = new ArrayList<>();
+            for (BladeSpec spec : blades.specs) {
+                RailSegment segment = graph.segment(spec.segmentId());
+                stretches.add(segment == null ? null
+                        : bladeStretch(graph, segment, spec.tipAtStart(), spec.length()));
+            }
+            blades.stretches = stretches;
+        }
+        List<Tile> swept = new ArrayList<>();
+        for (int i = 0; i < blades.specs.size(); i++) {
+            BladeSpec spec = blades.specs.get(i);
             RailSegment segment = graph.segment(spec.segmentId());
             StyleTemplates templates = segment == null ? NO_TEMPLATES : templatesFor(segment.style());
-            if (templates.blades() == null) {
+            TrackPath stretch = blades.stretches.get(i);
+            if (templates.blades() == null || stretch == null) {
                 continue; // gone or restyled under us; the next sync drops the spec
             }
-            List<Integer> ids = spec.groupIds();
-            int current = graph.switchSelection(spec.nodeId());
-            int previous = prevSelection.getOrDefault(spec.nodeId(), current);
-            Long start = animStart.get(spec.nodeId());
-            double progress = start == null ? 1.0
-                    : Math.clamp((now - start) / (double) BLADE_ANIM_MS, 0.0, 1.0);
-            int selectedId = ids.get(Math.floorMod(current, ids.size()));
-            int prevSelectedId = ids.get(Math.floorMod(previous, ids.size()));
-
-            double target = spec.segmentId() == selectedId ? 0.0 : 1.0;
-            double from = spec.segmentId() == prevSelectedId ? 0.0 : 1.0;
-            double eased = progress * progress * (3.0 - 2.0 * progress);
-            double open = from + (target - from) * eased;
-
+            double open = animator.open(nodeId, spec.segmentId(), spec.groupIds(), graph.switchSelection(nodeId),
+                    now);
             BladeBend bend = new BladeBend(spec.side(), templates.blades().face(spec.side()), spec.length(),
                     spec.tipAtStart(), spec.separation(), open);
-            for (TileTemplate rail : templates.bent(spec.side())) {
-                sweep(rail, spec.stretch(), bend, bladeTiles);
+            for (Template rail : templates.bent(spec.side())) {
+                TileSweeper.sweep(rail, stretch, bend, swept);
             }
         }
-        for (Tile tile : bladeTiles) {
-            bladeSections.add(tile.lightSection);
+        evictBlades(nodeId, blades);
+        Map<Long, List<Tile>> byBucket = new HashMap<>();
+        for (Tile tile : swept) {
+            byBucket.computeIfAbsent(tile.regionKey, k -> new ArrayList<>()).add(tile);
+            bladeTilesBySection.computeIfAbsent(lightSection(tile), k -> new ArrayList<>()).add(tile);
         }
+        for (Map.Entry<Long, List<Tile>> entry : byBucket.entrySet()) {
+            buckets.computeIfAbsent(entry.getKey(), Bucket::new).putBlades(nodeId, entry.getValue());
+        }
+        blades.regionKeys = byBucket.keySet();
+    }
+
+    /** Take the blades of the switch at {@code nodeId} out of their buckets and the light index. */
+    private static void evictBlades(int nodeId, NodeBlades blades) {
+        Set<Tile> evicted = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (long key : blades.regionKeys) {
+            Bucket bucket = buckets.get(key);
+            if (bucket == null) {
+                continue;
+            }
+            List<Tile> tiles = bucket.bladesByNode.get(nodeId);
+            if (tiles != null) {
+                evicted.addAll(tiles);
+            }
+            bucket.removeBlades(nodeId);
+            dropIfEmpty(bucket);
+        }
+        unindex(bladeTilesBySection, evicted);
+        blades.regionKeys = Set.of();
     }
 
     /**
@@ -1261,43 +1224,6 @@ public final class RailRenderer {
     }
 
     /**
-     * A rail of a switch bent along its stretch, station by station: the
-     * side it's on, its gauge face, and per station {floor, cut, shift,
-     * drop} for {@link SwitchThroat#bend} (and the height).
-     */
-    private interface RailBend {
-
-        int side();
-
-        double gaugeFace();
-
-        /** Fill {floor, cut, shift, drop} at {@code s} into the stretch. */
-        void station(double s, double[] out, int offset);
-    }
-
-    /**
-     * A contiguous stretch {@code [from, to]} of another path, re-parametrized
-     * from zero — lets the sweep lay a switch throat's blade stretch apart.
-     */
-    private record SubPath(TrackPath inner, double from, double to) implements TrackPath {
-
-        @Override
-        public double length() {
-            return to - from;
-        }
-
-        @Override
-        public Vector3d samplePosition(double s) {
-            return inner.samplePosition(from + s);
-        }
-
-        @Override
-        public Vector3d sampleTangent(double s) {
-            return inner.sampleTangent(from + s);
-        }
-    }
-
-    /**
      * A chunk section's light changed on the client (called from the light
      * mixins, on the render thread — where vanilla's light engine and packet
      * handling run). Cheap and frequent — every light change and every
@@ -1307,7 +1233,7 @@ public final class RailRenderer {
      */
     public static void onSectionLightChanged(int sectionX, int sectionY, int sectionZ) {
         long key = SectionPos.asLong(sectionX, sectionY, sectionZ);
-        if (tilesBySection.containsKey(key) || bladeSections.contains(key)) {
+        if (tilesBySection.containsKey(key) || bladeTilesBySection.containsKey(key)) {
             lightDirty.add(key);
         }
     }
@@ -1315,39 +1241,41 @@ public final class RailRenderer {
     /**
      * Re-sample the tiles of light-changed sections, up to
      * {@link #LIGHT_TILE_BUDGET} this frame. A tile whose value actually
-     * changed marks its region dirty for a re-upload within the bake budget —
-     * a torch costs one small region, not the whole network, and the old mesh
-     * stays on screen until then. No geometry is touched.
+     * changed marks its region's meshes (static or blades) dirty for a
+     * re-upload — a torch costs one small region, not the whole network, and
+     * the old mesh stays on screen until then. No geometry is touched.
      */
     private static void relightDirtySections(ClientLevel level) {
         if (lightDirty.isEmpty()) {
             return;
         }
         int budget = LIGHT_TILE_BUDGET;
-        boolean blades = false;
         Iterator<Long> it = lightDirty.iterator();
         while (budget > 0 && it.hasNext()) {
             long section = it.next();
             it.remove();
-            blades |= bladeSections.contains(section);
-            List<Tile> tiles = tilesBySection.get(section);
-            if (tiles == null) {
-                continue; // the segment went away since it was flagged
-            }
-            for (Tile tile : tiles) {
-                if (refreshTile(level, tile)) {
-                    Bucket bucket = buckets.get(tile.bucketKey);
-                    if (bucket != null) {
-                        bucket.dirty = true;
-                    }
+            // the tiles may have gone away since the section was flagged
+            budget -= relight(level, tilesBySection.get(section), false);
+            budget -= relight(level, bladeTilesBySection.get(section), true);
+        }
+    }
+
+    /** Re-sample the tiles (null: none), marking the regions of those that changed; how many there were. */
+    private static int relight(ClientLevel level, List<Tile> tiles, boolean blades) {
+        if (tiles == null) {
+            return 0;
+        }
+        for (Tile tile : tiles) {
+            if (refreshTile(level, tile)) {
+                Bucket bucket = buckets.get(tile.regionKey);
+                if (bucket != null && blades) {
+                    bucket.bladesDirty = true;
+                } else if (bucket != null) {
+                    bucket.dirty = true;
                 }
             }
-            budget -= tiles.size();
         }
-        if (blades && refreshLight(level, bladeTiles) && bladeMeshes != null) {
-            closeAll(bladeMeshes);
-            bladeMeshes = null;
-        }
+        return tiles.size();
     }
 
     /** Refresh {@code Tile.light} in place; true if any value changed. */
@@ -1376,108 +1304,5 @@ public final class RailRenderer {
         }
         tile.light = light;
         return true;
-    }
-
-    /**
-     * Repeat the tile along the path, bending each copy to the spline — laid
-     * by the {@link TrackSweep} rules the track bed rasterizes with.
-     */
-    private static void sweep(TileTemplate template, TrackPath path, List<Tile> out) {
-        sweep(template, path, null, out);
-    }
-
-    /** {@link #sweep(TileTemplate, TrackPath, List)} with every tile bent (a blade, a frog rail) unless null. */
-    private static void sweep(TileTemplate template, TrackPath path, RailBend bend, List<Tile> out) {
-        double length = path.length();
-        if (length < 1.0e-6) {
-            return;
-        }
-        int n = TrackSweep.tileCount(length, template.tileLength);
-        double tileLen = length / n;
-        for (int i = 0; i < n; i++) {
-            Vector3d centre = path.samplePosition((i + 0.5) * tileLen);
-            out.add(bendTile(template, i, tileLen, path, centre, bend));
-        }
-    }
-
-    /** Sweep every template along the path. */
-    private static void sweepAll(List<TileTemplate> templates, TrackPath path, List<Tile> out) {
-        for (TileTemplate template : templates) {
-            sweep(template, path, out);
-        }
-    }
-
-    /** Light0/Light1 of {@code Lighting.setupLevel}, normalized. */
-    private static final float[] DIFFUSE_LIGHT_0 = {0.16169F, 0.80845F, -0.56592F};
-    private static final float[] DIFFUSE_LIGHT_1 = {-0.16169F, 0.80845F, 0.56592F};
-
-    /**
-     * The entity shader's {@code minecraft_mix_light} factor, baked at build
-     * time: the terrain shader the rails draw with ignores normals (vanilla
-     * bakes terrain shade the same way), so without this the rails would lose
-     * the shading an entity shader would give them from the normals.
-     */
-    private static float diffuseShade(float nx, float ny, float nz) {
-        float light0 = Math.max(0.0F,
-                DIFFUSE_LIGHT_0[0] * nx + DIFFUSE_LIGHT_0[1] * ny + DIFFUSE_LIGHT_0[2] * nz);
-        float light1 = Math.max(0.0F,
-                DIFFUSE_LIGHT_1[0] * nx + DIFFUSE_LIGHT_1[1] * ny + DIFFUSE_LIGHT_1[2] * nz);
-        return Math.min(1.0F, (light0 + light1) * 0.6F + 0.4F);
-    }
-
-    /**
-     * Bend one copy of the tile onto the spline at tile index {@code i}: each
-     * template station (local <b>X</b>, the rails' length) picks a distance
-     * {@code s} along the path and gets the path frame there; a vertex's
-     * local Z rides the frame's right axis (gauge) and local Y its up axis;
-     * the normal is rotated into the same frame (local X→forward, Z→right,
-     * Y→up). Diffuse shade is taken from each quad's first corner, as the
-     * per-quad shading always was. A {@code bend} (a switch blade or frog rail)
-     * reshapes each vertex's across and height at its station first.
-     */
-    private static Tile bendTile(TileTemplate t, int tileIndex, double tileLen, TrackPath path,
-            Vector3d centre, RailBend bend) {
-        int stations = t.stations.length;
-        double[] frame = new double[stations * TrackSweep.FRAME_STRIDE]; // pos, fwd, right, up
-        double[] bent = bend == null ? null : new double[stations * 4]; // floor, cut, shift, drop
-        for (int k = 0; k < stations; k++) {
-            double s = (tileIndex + t.stations[k]) * tileLen;
-            TrackSweep.frame(path, s, frame, k * TrackSweep.FRAME_STRIDE);
-            if (bend != null) {
-                bend.station(s, bent, k * 4);
-            }
-        }
-        int n = t.vertexCount;
-        float[] xyz = new float[n * 3];
-        float[] normals = new float[n * 3];
-        for (int i = 0; i < n; i++) {
-            int o = t.station[i] * TrackSweep.FRAME_STRIDE;
-            double across = t.z[i]; // local Z is the cross-track (gauge) axis
-            double height = t.y[i] + TrackSweep.RAIL_Y_OFFSET;
-            if (bend != null) {
-                int b = t.station[i] * 4;
-                across = SwitchThroat.bend(across, bend.side(), bend.gaugeFace(), bent[b], bent[b + 1], bent[b + 2]);
-                height -= bent[b + 3];
-            }
-            xyz[i * 3] = (float) (frame[o] + frame[o + 6] * across + frame[o + 9] * height);
-            xyz[i * 3 + 1] = (float) (frame[o + 1] + frame[o + 7] * across + frame[o + 10] * height);
-            xyz[i * 3 + 2] = (float) (frame[o + 2] + frame[o + 8] * across + frame[o + 11] * height);
-            normals[i * 3] = (float) (frame[o + 3] * t.nx[i] + frame[o + 6] * t.nz[i] + frame[o + 9] * t.ny[i]);
-            normals[i * 3 + 1] = (float) (frame[o + 4] * t.nx[i] + frame[o + 7] * t.nz[i] + frame[o + 10] * t.ny[i]);
-            normals[i * 3 + 2] = (float) (frame[o + 5] * t.nx[i] + frame[o + 8] * t.nz[i] + frame[o + 11] * t.ny[i]);
-        }
-        int[] normalShade = new int[n];
-        for (int i = 0; i < n; i++) {
-            int src = t.shadeFrom[i] * 3;
-            float shade = diffuseShade(normals[src], normals[src + 1], normals[src + 2]);
-            normalShade[i] = packNormal(normals[i * 3]) | packNormal(normals[i * 3 + 1]) << 8
-                    | packNormal(normals[i * 3 + 2]) << 16 | Math.round(shade * 255.0F) << 24;
-        }
-        return new Tile(t, xyz, normalShade, centre);
-    }
-
-    /** One normal component as a signed byte, quantized like BufferBuilder's. */
-    private static int packNormal(float component) {
-        return (int) (Math.clamp(component, -1.0F, 1.0F) * 127.0F) & 0xFF;
     }
 }
