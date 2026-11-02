@@ -327,12 +327,12 @@ public final class RailRenderScene {
             String name = "rwat-railedge-" + DECKS[i].substring(DECKS[i].indexOf(':') + 1);
             if (ticks == at) {
                 camera(mc, x, y, z, -90.0F, 50.0F); // facing +X, away from the centre line
-            } else if (ticks == at + 40) {
+            } else if (ticks == at + 40 && !holdForTerrain(mc)) {
                 logFrustum(mc, DECKS[i], x - DECK_CAMERA[i]);
                 shot(mc, name + ".png");
             } else if (ticks == at + 50) {
                 camera(mc, x, y, z, 90.0F, 50.0F); // facing −X, at the track
-            } else if (ticks == at + 90) {
+            } else if (ticks == at + 90 && !holdForTerrain(mc)) {
                 shot(mc, name + "-ref.png");
             }
         }
@@ -418,7 +418,7 @@ public final class RailRenderScene {
                 double step = n * FAR_STEP;
                 camera(mc, FAR + 11.8 + step, origin.getY() + 1.0, FAR + 11.2 + step, -45.0F, 60.0F);
             }
-            if (ticks == at + 15) {
+            if (ticks == at + 15 && !holdForTerrain(mc)) {
                 shot(mc, "rwat-railfar-" + n + ".png");
             }
         }
@@ -426,7 +426,7 @@ public final class RailRenderScene {
         if (ticks == wide) {
             camera(mc, FAR + 4.0, origin.getY() + 4.0, FAR - 3.0, 20.0F, 40.0F);
         }
-        if (ticks == wide + 30) {
+        if (ticks == wide + 30 && !holdForTerrain(mc)) {
             shot(mc, "rwat-railfar-wide.png");
         }
         if (ticks == wide + 50) {
@@ -435,6 +435,24 @@ public final class RailRenderScene {
     }
 
     // --- helpers ---
+
+    /** Ticks a shot has waited for the terrain. */
+    private static int waited;
+
+    /**
+     * Hold the scene's clock (this tick runs again) while vanilla still has
+     * terrain sections to compile, up to 30 s: on a busy machine the rails,
+     * which need only the chunk's data, are drawn before the ground under
+     * them, and the shot would show them over the sky.
+     */
+    private static boolean holdForTerrain(Minecraft mc) {
+        if (!mc.levelRenderer.hasRenderedAllSections() && waited++ < 600) {
+            ticks--;
+            return true;
+        }
+        waited = 0;
+        return false;
+    }
 
     private static void camera(Minecraft mc, double x, double y, double z, float yaw, float pitch) {
         command(mc, String.format(Locale.ROOT, "tp @s %.3f %.3f %.3f %.1f %.1f", x, y, z, yaw, pitch));
