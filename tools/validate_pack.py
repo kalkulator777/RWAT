@@ -25,7 +25,10 @@ schema/obj-conventions.json compile and match the Java ones, and the keys the
 Java parsers and the converter know are the keys the schemas declare: an
 object's "x-keys" names the constant of the code that lists its keys
 ("stock/WagonTypeParser.java#DOOR_KEYS", "tools/ir2rwat.py#RECIPE_KEYS"), read
-from the source (the test SchemaKeysTest holds the Java side by reflection).
+from the source (the test SchemaKeysTest holds the Java side by reflection);
+and every code reference of the schemas names a file that exists and a symbol
+it declares ("convention/ObjectRole.java#COPY_SUFFIX" — never a line number in
+obj-conventions.json).
 
 Usage:
     python -I tools/validate_pack.py run/rwat_packs/MatoiVanillaPack packs/mvp.json
@@ -614,6 +617,80 @@ def check_key_constants(store, problem):
                 problem(f"{file}#{constant}", "named by no x-keys of the schemas")
 
 
+# Schema files whose "code" references must name a symbol: a line number moves with every edit
+# of the file it points into. pack-layout.json still points at lines in places (its lang keys).
+SYMBOL_REFERENCES = ("obj-conventions.json",)
+JAVA_MODIFIERS = r"(?:(?:public|private|protected|static|final|abstract|synchronized|default|native|volatile|transient)\s+)*"
+
+
+def code_file(path):
+    """The file a code reference names: relative to the Java code root, or to the
+    repository for tools/… and src/…."""
+    return ROOT / path if path.startswith(("tools/", "src/")) else JAVA_ROOT / path
+
+
+def declares(text, name, python):
+    """True if a source file's text declares `name`: a class, method, field or enum
+    constant (Java), a function, class or module-level name (Python)."""
+    n = re.escape(name)
+    if python:
+        return re.search(rf"^\s*(?:def|class)\s+{n}\b|^{n}\s*[:=]", text, re.M) is not None
+    patterns = (
+        rf"\b(?:class|interface|enum|record)\s+{n}\b",
+        # a method: modifiers, a type, the name, "(" — a call has no type before its name
+        rf"^\s*(?:@\w+(?:\([^)]*\))?\s+)*{JAVA_MODIFIERS}(?:<[^>]*>\s+)?"
+        rf"(?!(?:return|new|throw|else|case)\b)[\w.$]+(?:<[^;{{}}()]*>)?(?:\[\])*\s+{n}\s*\(",
+        # a field: modifiers, a type, the name, = or ;
+        rf"^\s*{JAVA_MODIFIERS}[\w.$]+(?:<[^;{{}}()]*>)?(?:\[\])*\s+{n}\s*[=;]",
+        # an enum constant: the name alone at the start of a line, then ( , or ;
+        rf"^\s*{n}\s*[(,;]" if re.fullmatch(r"[A-Z][A-Z0-9_]*", name) else None,
+    )
+    return any(p and re.search(p, text, re.M) for p in patterns)
+
+
+def check_code_references(store, problem):
+    """Every code reference of the schemas — "code" in obj-conventions.json and
+    pack-layout.json, "x-code" in the file schemas — names a file that exists, and
+    a symbol after # that it declares (each part of Outer.Inner); obj-conventions.json
+    points by symbol only."""
+    sources = {}
+    references = []  # (schema file, where, reference)
+
+    def collect(node, file, where):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key in ("code", "x-code") and isinstance(value, list):
+                    references.extend((file, f"{where}.{key}", ref) for ref in value)
+                else:
+                    collect(value, file, f"{where}.{key}")
+        elif isinstance(node, list):
+            for i, value in enumerate(node):
+                collect(value, file, f"{where}[{i}]")
+
+    for name in ("obj-conventions.json", "pack-layout.json"):
+        collect(json.loads((store.folder / name).read_text(encoding="utf-8")), name, "$")
+    for uri, document in store.by_id.items():
+        collect(document, uri.rsplit("/", 1)[-1], "$")
+    for file, where, ref in references:
+        label = f"{file} {where}"
+        path, _, symbol = ref.partition("#")
+        path, _, line = path.partition(":")
+        if line and file in SYMBOL_REFERENCES:
+            problem(label, f"{ref!r} points at a line, which moves with every edit: name the symbol, "
+                           f"{path}#<name>")
+        source = code_file(path)
+        if not source.is_file():
+            problem(label, f"{ref!r}: no file {path}")
+            continue
+        if not symbol:
+            continue
+        if path not in sources:
+            sources[path] = source.read_text(encoding="utf-8")
+        for part in symbol.split("."):
+            if not declares(sources[path], part, path.endswith(".py")):
+                problem(label, f"{ref!r}: {path} declares no {part}")
+
+
 def self_check(store):
     problems = []
     validator = Validator(store)
@@ -735,6 +812,8 @@ def self_check(store):
 
     # 4. schema keys = the keys the code knows: the constants x-keys names (Java parsers, converter)
     check_key_constants(store, problem)
+    # 5. the code references point at files and symbols that exist
+    check_code_references(store, problem)
     _, wagon_type = store.root("wagon_type")
     defaults = (JAVA_ROOT / "stock/StockDefaults.java").read_text(encoding="utf-8")
     systems = re.findall(r"^\s+([A-Z]+)\([\d.]+, [\d.]+, [\d.]+\)", defaults, re.M)
