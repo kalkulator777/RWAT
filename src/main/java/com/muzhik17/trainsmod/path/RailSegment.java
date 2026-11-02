@@ -1,5 +1,7 @@
 package com.muzhik17.trainsmod.path;
 
+import java.util.Collection;
+
 import org.joml.Vector3d;
 
 /**
@@ -68,6 +70,19 @@ public record RailSegment(int id, int nodeA, int signA, int nodeB, int signB,
         public Look {
             style = style == null ? DEFAULT_STYLE : style;
             bed = bed == null ? DEFAULT_BED : bed;
+        }
+
+        /**
+         * Whether every one of {@code segments} already looks so — a repaint
+         * in this look would change nothing.
+         */
+        public boolean ofAll(Collection<RailSegment> segments) {
+            for (RailSegment segment : segments) {
+                if (!equals(segment.look())) {
+                    return false;
+                }
+            }
+            return true;
         }
     }
 

@@ -215,24 +215,36 @@ public final class RailNetwork extends SavedData {
     }
 
     /**
+     * What a repaint came to ({@link #restyleStructureAt}): {@link RailEdit#NOTHING}
+     * if the cell is no track (0 segments), else the structure's segment
+     * count with {@link RailEdit#UNCHANGED}, {@link RailEdit#DONE} or
+     * {@link RailEdit#REFUSED}.
+     */
+    public record Repaint(RailEdit edit, int segments) {
+    }
+
+    /**
      * Redraw the structure whose bed occupies {@code cell} in {@code look}'s
      * rail style and bed material (the whole click-built structure, like
      * demolition), on behalf of {@code player}: the bed is re-laid under the
      * new style's tile, in the new material, clearing its way as a build does.
      * The player must be allowed to break in every cell of the structure's
      * bed, all along it, and to place in the cells the new bed adds — one
-     * protected cell, and nothing is repainted. Returns the structure's
-     * segment count; 0 if the cell is no track, −1 if the way can't be
-     * cleared or the player may not change it (they are told where; nothing
-     * changed).
+     * protected cell, and nothing is repainted (refused: they are told where;
+     * nothing changed). A structure that already looks so is left as it is —
+     * no bed laid out, no revision, nothing sent: a held Shift+use repeats
+     * the click every 4 ticks.
      */
-    public int restyleStructureAt(ServerLevel level, ServerPlayer player, BlockPos cell,
+    public Repaint restyleStructureAt(ServerLevel level, ServerPlayer player, BlockPos cell,
             RailSegment.Look look) {
         RailSegment hit = segmentContaining(cell);
         if (hit == null) {
-            return 0;
+            return new Repaint(RailEdit.NOTHING, 0);
         }
         List<RailSegment> structure = graph.structureOf(hit);
+        if (look.ofAll(structure)) {
+            return new Repaint(RailEdit.UNCHANGED, structure.size());
+        }
         Set<BlockPos> own = bedOf(structure);
         Set<BlockPos> stale = new LinkedHashSet<>(own);
         stale.addAll(legacyStrips(structure));
@@ -247,14 +259,14 @@ public final class RailNetwork extends SavedData {
                 graph.setSegmentLook(segment.id(), segment.look());
             }
             reportBlocked(level, player, clearing.blocked());
-            return -1;
+            return new Repaint(RailEdit.REFUSED, structure.size());
         }
         withoutCapture(level, () -> {
             clearWay(level, player, clearing.removed());
             layBed(level, layout);
         });
         markChanged(level);
-        return structure.size();
+        return new Repaint(RailEdit.DONE, structure.size());
     }
 
     /**
