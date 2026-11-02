@@ -646,6 +646,43 @@ public record WagonType(
         return bits;
     }
 
+    /**
+     * The doors that open and close with door {@code index}, as open-door
+     * bits: it and the doors of its {@code group}, case aside (SPEC §9.5: IR
+     * works a control group's doors together). Only doors with a leaf: a
+     * {@code fixed} doorway is always open and never moves, so it takes no bit
+     * even in a group with a door that does, and an animation named after it
+     * never plays. 0 for a fixed door and for an index outside the first 32.
+     */
+    public int doorsOpenedWith(int index) {
+        if (index < 0 || index >= doors.size() || index >= 32 || doors.get(index).fixed()) {
+            return 0;
+        }
+        Door door = doors.get(index);
+        int bits = 0;
+        for (int i = 0; i < doors.size() && i < 32; i++) {
+            Door d = doors.get(i);
+            if (!d.fixed() && (i == index || d.groupedWith(door))) {
+                bits |= 1 << i;
+            }
+        }
+        return bits;
+    }
+
+    /**
+     * The doors with a leaf, as open-door bits (the first 32): the only doors
+     * an open bit is kept for — a {@code fixed} doorway is open without one.
+     */
+    public int leafDoors() {
+        int bits = 0;
+        for (int i = 0; i < doors.size() && i < 32; i++) {
+            if (!doors.get(i).fixed()) {
+                bits |= 1 << i;
+            }
+        }
+        return bits;
+    }
+
     /** Half the stock loading gauge, blocks — body half-width of the collision hull. */
     private static final double HULL_HALF_WIDTH = 1.7;
     /** Hull floor in model space: above the under-frame gap so an entity can't crouch under. */

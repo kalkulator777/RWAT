@@ -239,7 +239,9 @@ public final class WagonTypes {
      * {@code after} (D1): door state lives by id (SPEC §9.8), so each door of
      * {@code after} is open if a door of that id was open in {@code before},
      * wherever the reload put it in the list; a door gone is forgotten, a new
-     * one is shut. Bit {@code i} = door {@code i}, the first 32 as everywhere.
+     * one is shut, and one that is a {@code fixed} doorway now takes no bit
+     * ({@link WagonType#leafDoors}). Bit {@code i} = door {@code i}, the first
+     * 32 as everywhere.
      */
     public static int openDoorsAfter(WagonType before, WagonType after, int openMask) {
         if (before == null || after == null) {
@@ -257,7 +259,7 @@ public final class WagonTypes {
                 mask |= 1 << i;
             }
         }
-        return mask;
+        return mask & after.leafDoors();
     }
 
     /** True if both declare the same ids, each the same way ({@link #sameDeclaration}). */

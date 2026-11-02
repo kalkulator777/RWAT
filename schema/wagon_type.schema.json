@@ -354,8 +354,8 @@
         "fixed": {
           "type": "boolean",
           "default": false,
-          "description": "An opening without a leaf: always open, never clicked (corner steps, a permanent passage).",
-          "x-description-ru": "Проём без створки: всегда открыт, не кликается (подножки, постоянный проход)."
+          "description": "An opening without a leaf: always open, never clicked and never moving — its group and a cab switch leave it alone, an animation named after it doesn't play (corner steps, a permanent passage).",
+          "x-description-ru": "Проём без створки: всегда открыт, не кликается и не движется — ни группа, ни тумблер кабины его не трогают, анимация по его id не играет (подножки, постоянный проход)."
         },
         "connecting": {
           "type": "boolean",

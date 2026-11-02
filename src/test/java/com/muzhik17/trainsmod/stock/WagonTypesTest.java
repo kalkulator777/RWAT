@@ -295,4 +295,18 @@ class WagonTypesTest {
         assertEquals(0, WagonTypes.openDoorsAfter(before, null, open));
         assertEquals(open, WagonTypes.openDoorsAfter(before, before, open), "the same type: as it was");
     }
+
+    /** A door that is a fixed doorway after the reload takes no open bit: it has no leaf to swing. */
+    @Test
+    void anOpenDoorThatIsFixedNowTakesNoBit() {
+        WagonType before = withDoors("a:car", "door1", "steps");
+        WagonType.Door door1 = before.doors().get(0);
+        WagonType.Door steps = before.doors().get(1);
+        WagonType after = new WagonType("a:car", 20.0, new double[]{7.0, -7.0}, 40.0, 100.0,
+                WagonType.Resistance.NONE, null, null, WagonType.Brakes.NONE,
+                new WagonType.Interior(-1, 1, -9, 1, 4, 9), List.of(door1, new WagonType.Door("steps",
+                        steps.minX(), steps.minY(), steps.minZ(), steps.maxX(), steps.maxY(), steps.maxZ(),
+                        false, true)));
+        assertEquals(0b01, WagonTypes.openDoorsAfter(before, after, 0b11));
+    }
 }

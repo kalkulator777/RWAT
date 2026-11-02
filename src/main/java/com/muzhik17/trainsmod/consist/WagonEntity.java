@@ -1207,22 +1207,19 @@ public class WagonEntity extends Entity {
 
     /**
      * Open or close door {@code index} (server) — and the other doors of its
-     * group (SPEC §9.5: IR works a control group's doors together). Each
-     * client sounds the doors that changed, with the pack's own sound (SPEC §10).
+     * group with a leaf ({@link WagonType#doorsOpenedWith}; SPEC §9.5: IR works
+     * a control group's doors together). A fixed doorway in the group takes no
+     * bit and never moves. Each client sounds the doors that changed, with the
+     * pack's own sound (SPEC §10).
      */
     private void setDoorOpen(int index, boolean open) {
-        List<WagonType.Door> doors = framedDoors();
-        if (index < 0 || index >= doors.size() || index >= 32 || isDoorOpen(index) == open) {
+        WagonType type = typeNow();
+        int moved = type == null ? 0 : type.doorsOpenedWith(index);
+        if (moved == 0 || isDoorOpen(index) == open) {
             return;
         }
-        WagonType.Door door = doors.get(index);
         int mask = doorMask();
-        for (int i = 0; i < doors.size() && i < 32; i++) {
-            if (i == index || doors.get(i).groupedWith(door)) {
-                mask = open ? mask | 1 << i : mask & ~(1 << i);
-            }
-        }
-        this.entityData.set(DATA_DOORS, mask);
+        this.entityData.set(DATA_DOORS, open ? mask | moved : mask & ~moved);
     }
 
     /**
@@ -1446,8 +1443,8 @@ public class WagonEntity extends Entity {
      * right:
      * <ul>
      * <li>open doors by id ({@link WagonTypes#openDoorsAfter}): a door still
-     *     declared stays open wherever it now is in the list, the others are
-     *     shut — as a save keeps them (SPEC §9.8);
+     *     declared with a leaf stays open wherever it now is in the list, the
+     *     others are shut — as a save keeps them (SPEC §9.8);
      * <li>a driver whose chair is gone stands up as from a chair ({@link
      *     #standDriver}): walked from where they sat down from towards where
      *     it was — the spot their client predicts;
@@ -1757,7 +1754,10 @@ public class WagonEntity extends Entity {
         return distanceSq < range * range;
     }
 
-    /** Server: open the doors a save had open, once this wagon's type is known (SPEC §9.8). */
+    /**
+     * Server: open the doors a save had open, once this wagon's type is known
+     * (SPEC §9.8) — those with a leaf: a fixed doorway takes no bit.
+     */
     private void reopenSavedDoors() {
         WagonType type = serverType();
         if (type == null) {
@@ -1769,7 +1769,7 @@ public class WagonEntity extends Entity {
                 mask |= 1 << i;
             }
         }
-        this.entityData.set(DATA_DOORS, doorMask() | mask);
+        this.entityData.set(DATA_DOORS, doorMask() | mask & type.leafDoors());
         savedOpenDoors = null;
     }
 
