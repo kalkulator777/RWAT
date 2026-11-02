@@ -6,6 +6,7 @@
   "x-description-ru": "assets/<namespace>/wagon_models/<id>.json: как выглядит и звучит тип вагона <namespace>:<id> — OBJ, анимации дверей, ливреи, маховик ручника, звуки, раскачка кузова. Только клиент. Тип и модель связаны совпадением id; тип без модели рисуется коробкой. Любая ошибка, в том числе в sounds, выбрасывает всю декларацию (в лог).",
   "x-file": "assets/<namespace>/wagon_models/<id>.json",
   "x-code": ["client/render/model/WagonModelDecl.java", "client/sound/SoundSet.java", "client/render/model/IrStockModel.java"],
+  "x-keys": "client/render/model/WagonModelDecl.java#KEYS",
   "type": "object",
   "properties": {
     "obj": {
@@ -95,6 +96,7 @@
         {"$ref": "#/$defs/sound_ref"},
         {
           "type": "object",
+          "x-keys": "client/sound/SoundSet.java#LOOP_KEYS",
           "properties": {
             "start": {
               "$ref": "#/$defs/sound_ref",
@@ -139,6 +141,7 @@
     },
     "control_sounds": {
       "type": "object",
+      "x-keys": "client/sound/SoundSet.java#CONTROL_KEYS",
       "description": "A cab control's sounds.",
       "x-description-ru": "Звуки органа управления.",
       "properties": {
@@ -157,6 +160,7 @@
     },
     "sounds": {
       "type": "object",
+      "x-keys": "client/sound/SoundSet.java#KEYS",
       "description": "Engine, horns, wheels, rail joints, doors and cab controls. The keys are IR's, so a converted pack keeps its meaning.",
       "x-description-ru": "Двигатель, сигналы, колёса, стыки, двери и органы кабины. Ключи — как в IR, так что сконвертированный пак сохраняет смысл.",
       "properties": {

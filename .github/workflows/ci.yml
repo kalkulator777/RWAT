@@ -1,0 +1,86 @@
+# The checks of "ready" (CLAUDE.md, roadmap R4) on every push and pull request:
+# the mod builds and its tests pass; the pack tools' tests pass; the schema in
+# schema/ agrees with itself, with the parsers' and the converter's key lists
+# and with the generated author reference; the MVP recipe and the generated
+# MVP pack follow the schema.
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mod:
+    name: Mod — build and tests (JDK 21)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      # Caches the Gradle distribution, dependencies and the NeoForge/Minecraft artifacts.
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # No build cache: the tests also read schema/ (SchemaKeysTest, RwatPackMetaTest),
+      # which build.gradle doesn't declare as a test input, so a cached test result
+      # would answer a change of the schema alone. A fresh runner has no build/ either,
+      # so every test runs.
+      - name: Build with tests
+        run: ./gradlew build --no-build-cache --stacktrace
+
+      - name: Keep the test report of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: build/reports/tests/test/
+          if-no-files-found: ignore
+
+  pack-format:
+    name: Pack format and tools (Python 3.11)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Tool tests
+        run: python -I -m unittest discover tools/tests
+
+      - name: Schema self-check (keys = the parsers' and the converter's)
+        run: python -I tools/validate_pack.py --self-check
+
+      - name: Author reference is up to date with the schema
+        run: python -I tools/gen_pack_docs.py --check
+
+      - name: MVP recipe and its overrides follow the schema
+        run: python -I tools/validate_pack.py packs/mvp.json
+
+      # The generated pack leaves the repository after phase 2 (R12): then this
+      # step says it was skipped instead of passing silently (E9).
+      - name: Generated MVP pack follows the schema
+        run: |
+          pack=run/rwat_packs/MatoiVanillaPack
+          if [ -d "$pack" ]; then
+            python -I tools/validate_pack.py --group "$pack"
+          else
+            echo "::warning title=MVP pack skipped::$pack is not in the repository, the generated pack was not checked"
+          fi

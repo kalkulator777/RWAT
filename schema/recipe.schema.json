@@ -2,11 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kalkulator777.github.io/RWAT/schema/recipe.schema.json",
   "title": "IR → RWAT conversion recipe",
-  "description": "packs/<name>.json: what tools/ir2rwat.py converts — which Immersive Railroading pack zips, into which RWAT pack, with which corrections. The recipe and its override files carry no assets, so they can be shared where the IR packs' licenses forbid sharing the converted pack. Relative paths are relative to the recipe's folder.",
-  "x-description-ru": "packs/<имя>.json: что конвертирует tools/ir2rwat.py — какие zip-паки Immersive Railroading, в какой пак RWAT и с какими поправками. В рецепте и оверрайдах нет ассетов, поэтому ими можно делиться там, где лицензия IR-пака не разрешает делиться сконвертированным паком. Относительные пути — от папки рецепта.",
+  "description": "packs/<name>.json: what tools/ir2rwat.py converts — which Immersive Railroading pack zips, into which RWAT pack, with which corrections. The recipe and its override files carry no assets, so they can be shared where the IR packs' licenses forbid sharing the converted pack. Relative paths are relative to the recipe's folder. A key starting with _ is a comment, at any level of the recipe and of an override file.",
+  "x-description-ru": "packs/<имя>.json: что конвертирует tools/ir2rwat.py — какие zip-паки Immersive Railroading, в какой пак RWAT и с какими поправками. В рецепте и оверрайдах нет ассетов, поэтому ими можно делиться там, где лицензия IR-пака не разрешает делиться сконвертированным паком. Относительные пути — от папки рецепта. Ключ, начинающийся с _, — комментарий на любом уровне рецепта и файла оверрайда.",
   "x-file": "packs/<name>.json",
   "x-code": ["tools/ir2rwat.py"],
+  "x-keys": "tools/ir2rwat.py#RECIPE_KEYS",
   "type": "object",
+  "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
   "properties": {
     "name": {
       "type": "string",
@@ -17,8 +19,9 @@
     "pack_dir": {
       "type": "string",
       "minLength": 1,
-      "description": "The converted pack's folder name under out (or <pack_dir>.zip with --zip).",
-      "x-description-ru": "Имя папки готового пака внутри out (или <pack_dir>.zip с --zip)."
+      "pattern": "^(?!\\.\\.?$)[^/\\\\:]+$",
+      "description": "The converted pack's folder name under out (or <pack_dir>.zip with --zip): one folder name, not . or .., without / \\ or :.",
+      "x-description-ru": "Имя папки готового пака внутри out (или <pack_dir>.zip с --zip): одно имя папки, не . и не .., без / \\ и :."
     },
     "namespace": {
       "$ref": "common.schema.json#/$defs/namespace",
@@ -53,15 +56,20 @@
       "type": "array",
       "minItems": 1,
       "items": {"$ref": "#/$defs/source"},
-      "description": "The IR pack zips. The first one wins: later ones only add ids the earlier ones lack.",
-      "x-description-ru": "Zip-паки IR. Побеждает первый: следующие только добавляют id, которых нет в предыдущих."
+      "description": "The IR pack zips. The first one wins: later ones only add ids the earlier ones lack. Each needs its own root.",
+      "x-description-ru": "Zip-паки IR. Побеждает первый: следующие только добавляют id, которых нет в предыдущих. У каждого свой root."
     },
     "copy_root_files": {
       "type": "array",
-      "items": {"type": "string", "minLength": 1},
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^(?![A-Za-z]:)(?!(?:[^/]*/)*\\.{0,2}(?:/|$))",
+        "not": {"anyOf": [{"enum": ["pack.mcmeta", "RWAT_CONVERSION.txt"]}, {"pattern": "^(?:assets|data)(?:/|$)"}]}
+      },
       "default": [],
-      "description": "Files at the first source's root copied into the pack as they are (license, credits, readme, icon).",
-      "x-description-ru": "Файлы из корня первого источника, которые копируются в пак как есть (лицензия, авторы, readme, иконка)."
+      "description": "Files at the first source's root copied into the pack as they are (license, credits, readme, icon), to the same path. A path inside the pack: relative, no empty, . or .. parts; not pack.mcmeta or RWAT_CONVERSION.txt (the converter writes them) and nothing under assets/ or data/. The converter refuses the recipe otherwise.",
+      "x-description-ru": "Файлы из корня первого источника, которые копируются в пак как есть (лицензия, авторы, readme, иконка), по тому же пути. Путь внутри пака: относительный, без пустых частей, . и ..; не pack.mcmeta и не RWAT_CONVERSION.txt (их пишет конвертер) и ничего внутри assets/ и data/. Иначе конвертер не принимает рецепт."
     },
     "exclude": {
       "type": "array",
@@ -79,6 +87,7 @@
     },
     "rail_overrides": {
       "type": "object",
+      "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
       "propertyNames": {"minLength": 1},
       "additionalProperties": {"$ref": "#/$defs/rail_patch"},
       "default": {},
@@ -88,6 +97,7 @@
     "sound_defaults": {"$ref": "#/$defs/sound_defaults"},
     "overrides": {
       "type": "object",
+      "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
       "propertyNames": {"minLength": 1},
       "additionalProperties": {"$ref": "recipe_override.schema.json"},
       "default": {},
@@ -106,6 +116,8 @@
   "$defs": {
     "source": {
       "type": "object",
+      "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
+      "x-keys": "tools/ir2rwat.py#SOURCE_KEYS",
       "description": "One IR pack.",
       "x-description-ru": "Один пак IR.",
       "properties": {
@@ -117,9 +129,9 @@
         },
         "root": {
           "type": "string",
-          "pattern": "^[a-z0-9_.-]+(/[a-z0-9_.-]+)*$",
-          "description": "Folder under assets/<namespace>/ the source's models, textures and sounds land in; different roots keep the shared files of different pack versions apart.",
-          "x-description-ru": "Папка внутри assets/<namespace>/, куда ложатся модели, текстуры и звуки источника; разные root не дают общим файлам разных версий пака затирать друг друга."
+          "pattern": "^(?!(?:lang|rail_models|wagon_models)(?:/|$))(?!(?:[^/]+/)*\\.{1,2}(?:/|$))[a-z0-9_.-]+(?:/[a-z0-9_.-]+)*$",
+          "description": "Folder under assets/<namespace>/ the source's models, textures and sounds land in: a-z 0-9 _ . - parts joined by /, no . or .. part, not under lang/, rail_models/ or wagon_models/ (the converter writes those). Every source needs its own root, or their shared files would overwrite each other — a schema can't say that, the converter refuses such a recipe.",
+          "x-description-ru": "Папка внутри assets/<namespace>/, куда ложатся модели, текстуры и звуки источника: части из a-z 0-9 _ . - через /, без частей . и .., не внутри lang/, rail_models/ и wagon_models/ (их пишет конвертер). У каждого источника свой root, иначе общие файлы затёрли бы друг друга — схема этого не выразит, такой рецепт не принимает конвертер."
         },
         "label": {
           "type": "string",
@@ -139,11 +151,13 @@
     },
     "sound_defaults": {
       "type": "object",
+      "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
       "description": "Sounds for what IR leaves to its own built-in ones.",
       "x-description-ru": "Звуки на то, что IR оставляет своим встроенным.",
       "properties": {
         "wheels": {
           "type": "object",
+          "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
           "propertyNames": {"minLength": 1},
           "additionalProperties": {"$ref": "#/$defs/ir_sound"},
           "description": "IR category (the folder under rolling_stock/: locomotives, passenger, freight, tank) → the rolling sound of its stock without one.",
@@ -159,6 +173,7 @@
     },
     "rail_patch": {
       "type": "object",
+      "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
       "description": "Rail style fields over the generated ones.",
       "x-description-ru": "Поля стиля рельсов поверх сгенерированных.",
       "properties": {
@@ -170,6 +185,7 @@
   },
   "examples": [
     {
+      "_about": "Converts MyPack-IR.zip; per-type fixes in mine/.",
       "name": "My IR pack",
       "pack_dir": "MyPack",
       "namespace": "mine",

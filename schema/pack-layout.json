@@ -83,11 +83,8 @@
       "origin": "the model's origin: the car's centre on the track axis; the wheel tread's bottom (the rail head) at y = −0.03, the axles at y = 0.5",
       "x-origin-ru": "начало координат модели: центр вагона на оси пути; низ круга катания колеса (головка рельса) на y = −0.03, оси колёсных пар на y = 0.5",
       "unit": "block",
-      "en": "The frame of the model as Blender exports it (IR convention, 1 unit = 1 block). From format 1 every markup coordinate of a wagon type — floor zones, doors, chairs — and of the converter's floor options is written in this frame, so the numbers read off in Blender go into the JSON unchanged (R6).",
-      "ru": "Кадр модели, как её экспортирует Blender (конвенция IR, 1 единица = 1 блок). С формата 1 все координаты разметки типа — зоны пола, двери, кресла — и параметров пола конвертера пишутся в этом кадре: числа, снятые в Blender, идут в JSON без пересчёта (R6).",
-      "x-status": "pending-engine",
-      "x-status-note": "with tools/ir2rwat.py, tools/floorgen.py and the generated MVP pack, still uses the legacy frame; the R6 wave converts them (the loader will convert markup on load, the MVP overrides are converted once by a script).",
-      "x-status-note-ru": "вместе с tools/ir2rwat.py, tools/floorgen.py и сгенерированным паком MVP работает в старом кадре; их переводит волна R6 (движок будет переводить разметку при загрузке, оверрайды MVP переводятся скриптом один раз)."
+      "en": "The frame of the model as Blender exports it (IR convention, 1 unit = 1 block). From format 1 every markup coordinate of a wagon type — floor zones, doors, chairs — and of the converter's floor options is written in this frame, so the numbers read off in Blender go into the JSON unchanged (R6). The loader converts the markup into the engine's own frame; the converter, floorgen and the generated MVP pack work in this one.",
+      "ru": "Кадр модели, как её экспортирует Blender (конвенция IR, 1 единица = 1 блок). С формата 1 все координаты разметки типа — зоны пола, двери, кресла — и параметров пола конвертера пишутся в этом кадре: числа, снятые в Blender, идут в JSON без пересчёта (R6). Загрузчик сам переводит разметку во внутренний кадр движка; конвертер, floorgen и сгенерированный пак MVP работают в этом."
     },
     {
       "id": "legacy",
@@ -98,8 +95,8 @@
       "origin": "the car's centre; y = 0 is the track spline, the rail head at y = 0.40625",
       "x-origin-ru": "центр вагона; y = 0 — сплайн пути, головка рельса на y = 0.40625",
       "unit": "block",
-      "en": "The frame the engine renders in and every wagon type before format 1 was written in. Read old files and the generated MVP pack in it.",
-      "ru": "Кадр, в котором рисует движок и в котором написаны все типы до формата 1. В нём читаются старые файлы и сгенерированный пак MVP."
+      "en": "The engine's internal frame, the one it computes and renders in; every wagon type before format 1 was written in it. Packs no longer write it: read the files from before format 1 in it.",
+      "ru": "Внутренний кадр движка — в нём он считает и рисует; в нём написаны все типы до формата 1. Паки в нём больше не пишут: в нём читаются файлы до формата 1."
     },
     {
       "id": "rail_tile",
@@ -168,10 +165,11 @@
     {"keyword": "x-status", "en": "How far the engine follows the field: reserved or pending-engine (see statuses); x-status-note / x-status-note-ru say what exactly.", "ru": "Насколько движок следует полю: reserved или pending-engine (см. statuses); x-status-note / x-status-note-ru говорят, что именно."},
     {"keyword": "deprecated", "en": "An old form the engine still reads; write the new one.", "ru": "Старая форма, которую движок ещё читает; пишите новую."},
     {"keyword": "x-file", "en": "Where the file a schema describes lives in a pack.", "ru": "Где в паке лежит файл, который описывает схема."},
-    {"keyword": "x-code", "en": "The code that reads the file, relative to src/main/java/com/muzhik17/trainsmod/ or tools/.", "ru": "Код, который читает файл, — от src/main/java/com/muzhik17/trainsmod/ или tools/."}
+    {"keyword": "x-code", "en": "The code that reads the file, relative to src/main/java/com/muzhik17/trainsmod/ or tools/.", "ru": "Код, который читает файл, — от src/main/java/com/muzhik17/trainsmod/ или tools/."},
+    {"keyword": "x-keys", "en": "The constant of the code that lists an object's keys, <file>#<NAME> (the file as in x-code): any other key is warned about. The test SchemaKeysTest and validate_pack.py --self-check hold the object's properties equal to it; every closed object of a pack file has one.", "ru": "Константа кода, в которой перечислены ключи объекта, <файл>#<ИМЯ> (файл — как в x-code): о любом другом ключе предупреждают. Тест SchemaKeysTest и validate_pack.py --self-check держат свойства объекта равными ей; она есть у каждого закрытого объекта файлов пака."}
   ],
   "statuses": [
-    {"status": "reserved", "label-ru": "Зарезервировано", "en": "parsed but not modelled: setting it changes nothing in game (the loader will warn).", "ru": "разбирается, но не моделируется: в игре ничего не меняет (загрузчик будет предупреждать)."},
+    {"status": "reserved", "label-ru": "Зарезервировано", "en": "parsed but not modelled: setting it changes nothing in game, and the loader warns when it is set.", "ru": "разбирается, но не моделируется: в игре ничего не меняет, загрузчик предупреждает, если поле задано."},
     {"status": "pending-engine", "label-ru": "Движок пока", "en": "format 1 says so and the engine catches up in a coming wave of the roadmap; until then it behaves as the note says.", "ru": "так говорит формат 1, а движок догоняет в ближайшей волне карты; до тех пор он ведёт себя, как сказано в примечании."}
   ],
   "units": [

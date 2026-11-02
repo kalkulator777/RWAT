@@ -5,7 +5,8 @@
   "description": "assets/<namespace>/rail_models/<id>.json: rail style <namespace>:<id> — one track tile repeated along every segment laid in it. The client draws it, the server lays the track bed from the same OBJ (the projection of the whole model, rasterised into bed columns at the rail foot height). The built-in style is railswheelsandtrains:standard. After editing the OBJ: F3+T for the picture, /reload for new beds, /rwat rail rebed for beds already laid.",
   "x-description-ru": "assets/<namespace>/rail_models/<id>.json: стиль рельсов <namespace>:<id> — один тайл пути, повторяемый вдоль каждого участка этого стиля. Клиент его рисует, сервер по тому же OBJ кладёт полотно (проекция всей модели растрируется в столбцы полотна на высоте подошвы рельса). Встроенный стиль — railswheelsandtrains:standard. После правки OBJ: F3+T — картинка, /reload — полотно новых построек, /rwat rail rebed — уже уложенное.",
   "x-file": "assets/<namespace>/rail_models/<id>.json",
-  "x-code": ["client/render/model/RailModelReloadListener.java", "data/RailFootprintReloadListener.java", "path/TileFootprint.java"],
+  "x-code": ["pack/RailStyleDecl.java", "client/render/model/RailModelReloadListener.java", "data/RailFootprintReloadListener.java", "path/TileFootprint.java"],
+  "x-keys": "pack/RailStyleDecl.java#KEYS",
   "type": "object",
   "properties": {
     "obj": {
@@ -15,14 +16,11 @@
     },
     "tile_length": {
       "type": "number",
-      "exclusiveMinimum": 0,
+      "minimum": 0.25,
       "default": 1.0,
       "x-unit": "block",
-      "description": "How far apart the tile repeats. The rail objects are stretched along X to fill [−tile_length/2, tile_length/2] end to end; the base keeps its size, centred in the tile.",
-      "x-description-ru": "Шаг повторения тайла. Рельсы растягиваются по X на [−tile_length/2, tile_length/2] встык; основание сохраняет размер и стоит по центру тайла.",
-      "x-status": "pending-engine",
-      "x-status-note": "takes any tile_length > 0; a lower bound comes with the shared rail style parser (phase 1, D5).",
-      "x-status-note-ru": "принимает любое tile_length > 0; нижняя граница появится с общим разбором стиля рельсов (фаза 1, D5)."
+      "description": "How far apart the tile repeats. The rail objects are stretched along X to fill [−tile_length/2, tile_length/2] end to end; the base keeps its size, centred in the tile. At least a quarter block: both sides work per tile (the client draws each, the server rasterises each into the bed), so a shorter one is refused.",
+      "x-description-ru": "Шаг повторения тайла. Рельсы растягиваются по X на [−tile_length/2, tile_length/2] встык; основание сохраняет размер и стоит по центру тайла. Не меньше четверти блока: обе стороны работают по тайлам (клиент рисует каждый, сервер растрирует каждый в полотно), поэтому более короткий шаг не принимается."
     }
   },
   "required": ["obj"],

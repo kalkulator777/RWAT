@@ -2,14 +2,16 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kalkulator777.github.io/RWAT/schema/recipe_override.schema.json",
   "title": "Conversion override of one stock type",
-  "description": "packs/<name>/<id>.json (the recipe's overrides_dir) or an entry of the recipe's overrides: corrections for stock type <id> on top of what tools/ir2rwat.py derives from the IR pack. type and model are deep-merged into the generated declarations: an object merges key by key, anything else (a list, a number) replaces, null removes the key. The generated pack is never edited by hand: corrections live here.",
-  "x-description-ru": "packs/<имя>/<id>.json (папка overrides_dir рецепта) или запись overrides рецепта: поправки к типу <id> поверх того, что tools/ir2rwat.py выводит из пака IR. type и model глубоко сливаются со сгенерированными декларациями: объект сливается по ключам, всё остальное (список, число) заменяет, null удаляет ключ. Сгенерированный пак руками не правят: поправки живут здесь.",
+  "description": "packs/<name>/<id>.json (the recipe's overrides_dir) or an entry of the recipe's overrides: corrections for stock type <id> on top of what tools/ir2rwat.py derives from the IR pack. type and model are deep-merged into the generated declarations: an object merges key by key, anything else (a list, a number) replaces, null removes the key. The generated pack is never edited by hand: corrections live here. A key starting with _ is a comment, at any level.",
+  "x-description-ru": "packs/<имя>/<id>.json (папка overrides_dir рецепта) или запись overrides рецепта: поправки к типу <id> поверх того, что tools/ir2rwat.py выводит из пака IR. type и model глубоко сливаются со сгенерированными декларациями: объект сливается по ключам, всё остальное (список, число) заменяет, null удаляет ключ. Сгенерированный пак руками не правят: поправки живут здесь. Ключ, начинающийся с _, — комментарий на любом уровне.",
   "x-file": "packs/<name>/<id>.json",
   "x-code": ["tools/ir2rwat.py", "tools/floorgen.py"],
+  "x-keys": "tools/ir2rwat.py#OVERRIDE_KEYS",
   "type": "object",
+  "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
   "properties": {
     "name": {
-      "anyOf": [{"$ref": "common.schema.json#/$defs/lang_texts"}, {"type": "null"}],
+      "anyOf": [{"$ref": "#/$defs/lang_texts"}, {"type": "null"}],
       "description": "The type's display name per language, written to the lang files as wagon.<namespace>.<id>; en_us replaces the IR name.",
       "x-description-ru": "Название типа на каждом языке, пишется в lang-файлы как wagon.<namespace>.<id>; en_us заменяет имя из IR."
     },
@@ -17,8 +19,9 @@
       "anyOf": [
         {
           "type": "object",
+          "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
           "propertyNames": {"minLength": 1},
-          "additionalProperties": {"$ref": "common.schema.json#/$defs/lang_texts"}
+          "additionalProperties": {"$ref": "#/$defs/lang_texts"}
         },
         {"type": "null"}
       ],
@@ -54,6 +57,7 @@
   "$defs": {
     "type_patch": {
       "type": "object",
+      "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
       "description": "Any wagon type field. interior given here replaces the generated floor; doors as a list replaces the derived doors, as an object edits them by id.",
       "x-description-ru": "Любое поле типа вагона. interior здесь заменяет сгенерированный пол; doors списком заменяет выведенные двери, объектом — правит их по id.",
       "properties": {
@@ -65,10 +69,18 @@
         "traction": {"anyOf": [{"$ref": "#/$defs/traction_patch"}, {"type": "null"}]},
         "brakes": {"anyOf": [{"$ref": "#/$defs/brakes_patch"}, {"type": "null"}]},
         "cab": {"anyOf": [{"$ref": "#/$defs/cab_patch"}, {"type": "null"}]},
-        "interior": {"anyOf": [{"$ref": "wagon_type.schema.json#/properties/interior"}, {"type": "null"}]},
+        "interior": {
+          "anyOf": [
+            {"type": "array", "items": {"$ref": "#/$defs/zone"}, "minItems": 1},
+            {"$ref": "#/$defs/zone", "deprecated": true},
+            {"type": "null"}
+          ],
+          "description": "The walkable floor as the wagon type writes it (a list of floor zones); replaces the generated floor.",
+          "x-description-ru": "Пол для ходьбы, как его пишет тип вагона (список зон пола); заменяет сгенерированный пол."
+        },
         "doors": {
           "anyOf": [
-            {"$ref": "wagon_type.schema.json#/properties/doors"},
+            {"type": "array", "items": {"$ref": "#/$defs/door"}, "maxItems": 32},
             {"$ref": "#/$defs/door_edits"},
             {"type": "null"}
           ],
@@ -82,6 +94,7 @@
     },
     "resistance_patch": {
       "type": "object",
+      "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
       "description": "resistance fields over the generated ones.",
       "x-description-ru": "Поля resistance поверх сгенерированных.",
       "properties": {
@@ -94,6 +107,7 @@
     },
     "traction_patch": {
       "type": "object",
+      "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
       "description": "traction fields over the generated ones; a type the converter made unpowered needs power_kw and max_tractive_effort_kn here.",
       "x-description-ru": "Поля traction поверх сгенерированных; типу, который конвертер сделал нетяговым, здесь нужны power_kw и max_tractive_effort_kn.",
       "properties": {
@@ -106,6 +120,7 @@
     },
     "brakes_patch": {
       "type": "object",
+      "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
       "description": "brakes fields over the generated ones.",
       "x-description-ru": "Поля brakes поверх сгенерированных.",
       "properties": {
@@ -122,10 +137,15 @@
     },
     "cab_patch": {
       "type": "object",
+      "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
       "description": "cab fields over the generated ones ({} on a type without a cab adds one).",
       "x-description-ru": "Поля cab поверх сгенерированных ({} у типа без кабины добавляет её).",
       "properties": {
-        "seats": {"anyOf": [{"$ref": "wagon_type.schema.json#/$defs/cab/properties/seats"}, {"type": "null"}]},
+        "seats": {
+          "anyOf": [{"type": "array", "items": {"$ref": "#/$defs/seat"}, "maxItems": 16}, {"type": "null"}],
+          "description": "Driver's chairs as the wagon type writes them; replaces the generated ones.",
+          "x-description-ru": "Кресла машиниста, как их пишет тип вагона; заменяют сгенерированные."
+        },
         "seat": {"anyOf": [{"$ref": "wagon_type.schema.json#/$defs/cab/properties/seat"}, {"type": "null"}]},
         "seat_yaw": {"anyOf": [{"$ref": "wagon_type.schema.json#/$defs/cab/properties/seat_yaw"}, {"type": "null"}]}
       },
@@ -133,6 +153,7 @@
     },
     "couplers_patch": {
       "type": "object",
+      "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
       "description": "couplers fields over the generated ones.",
       "x-description-ru": "Поля couplers поверх сгенерированных.",
       "properties": {
@@ -141,8 +162,60 @@
       },
       "additionalProperties": false
     },
+    "lang_texts": {
+      "type": "object",
+      "propertyNames": {"anyOf": [{"$ref": "common.schema.json#/$defs/lang_code"}, {"pattern": "^_"}]},
+      "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
+      "additionalProperties": {"type": "string"},
+      "description": "One text per language: {\"en_us\": \"…\", \"ru_ru\": \"…\"}.",
+      "x-description-ru": "Текст на каждом языке: {\"en_us\": \"…\", \"ru_ru\": \"…\"}."
+    },
+    "zone": {
+      "type": "object",
+      "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
+      "x-frame": "obj",
+      "description": "A floor zone as the wagon type writes it.",
+      "x-description-ru": "Зона пола, как её пишет тип вагона.",
+      "properties": {
+        "min": {"$ref": "wagon_type.schema.json#/$defs/zone/properties/min"},
+        "max": {"$ref": "wagon_type.schema.json#/$defs/zone/properties/max"}
+      },
+      "required": ["min", "max"],
+      "additionalProperties": false
+    },
+    "door": {
+      "type": "object",
+      "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
+      "x-frame": "obj",
+      "description": "A door as the wagon type writes it.",
+      "x-description-ru": "Дверь, как её пишет тип вагона.",
+      "properties": {
+        "id": {"$ref": "wagon_type.schema.json#/$defs/door/properties/id"},
+        "min": {"$ref": "wagon_type.schema.json#/$defs/door/properties/min"},
+        "max": {"$ref": "wagon_type.schema.json#/$defs/door/properties/max"},
+        "inner": {"$ref": "wagon_type.schema.json#/$defs/door/properties/inner"},
+        "fixed": {"$ref": "wagon_type.schema.json#/$defs/door/properties/fixed"},
+        "connecting": {"$ref": "wagon_type.schema.json#/$defs/door/properties/connecting"},
+        "group": {"$ref": "wagon_type.schema.json#/$defs/door/properties/group"}
+      },
+      "required": ["id", "min", "max"],
+      "additionalProperties": false
+    },
+    "seat": {
+      "type": "object",
+      "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
+      "description": "A driver's chair as the wagon type writes it.",
+      "x-description-ru": "Кресло машиниста, как его пишет тип вагона.",
+      "properties": {
+        "at": {"$ref": "wagon_type.schema.json#/$defs/seat/properties/at"},
+        "yaw": {"$ref": "wagon_type.schema.json#/$defs/seat/properties/yaw"}
+      },
+      "required": ["at"],
+      "additionalProperties": false
+    },
     "door_edits": {
       "type": "object",
+      "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
       "propertyNames": {"minLength": 1},
       "additionalProperties": {
         "anyOf": [{"$ref": "#/$defs/door_patch"}, {"type": "null"}]
@@ -152,6 +225,7 @@
     },
     "door_patch": {
       "type": "object",
+      "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
       "description": "Door fields over the derived ones; a new door needs min and max.",
       "x-description-ru": "Поля двери поверх выведенных; новой двери нужны min и max.",
       "properties": {
@@ -167,6 +241,7 @@
     },
     "model_patch": {
       "type": "object",
+      "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
       "description": "Any wagon model field.",
       "x-description-ru": "Любое поле модели вагона.",
       "properties": {
@@ -183,6 +258,7 @@
     },
     "path_map_patch": {
       "type": "object",
+      "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
       "propertyNames": {"minLength": 1},
       "additionalProperties": {
         "anyOf": [{"$ref": "common.schema.json#/$defs/resource_path"}, {"type": "null"}]
@@ -192,6 +268,7 @@
     },
     "livery_map_patch": {
       "type": "object",
+      "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
       "propertyNames": {"minLength": 1},
       "additionalProperties": {
         "anyOf": [{"$ref": "wagon_model.schema.json#/properties/liveries/additionalProperties"}, {"type": "null"}]
@@ -201,6 +278,7 @@
     },
     "sounds_patch": {
       "type": "object",
+      "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
       "description": "sounds over the generated ones: a loop object merges key by key, a string replaces, null removes.",
       "x-description-ru": "sounds поверх сгенерированных: объект петли сливается по ключам, строка заменяет, null удаляет.",
       "properties": {
@@ -213,6 +291,7 @@
           "anyOf": [
             {
               "type": "object",
+              "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
               "propertyNames": {"minLength": 1},
               "additionalProperties": {"anyOf": [{"$ref": "wagon_model.schema.json#/$defs/sound_ref"}, {"type": "null"}]}
             },
@@ -225,6 +304,7 @@
           "anyOf": [
             {
               "type": "object",
+              "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
               "propertyNames": {"minLength": 1},
               "additionalProperties": {"anyOf": [{"$ref": "#/$defs/control_sounds_patch"}, {"type": "null"}]}
             },
@@ -241,6 +321,7 @@
         {"$ref": "wagon_model.schema.json#/$defs/sound_ref"},
         {
           "type": "object",
+          "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
           "properties": {
             "start": {"anyOf": [{"$ref": "wagon_model.schema.json#/$defs/sound_ref"}, {"type": "null"}]},
             "main": {"anyOf": [{"$ref": "wagon_model.schema.json#/$defs/sound_ref"}, {"type": "null"}]},
@@ -256,6 +337,7 @@
     },
     "control_sounds_patch": {
       "type": "object",
+      "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
       "properties": {
         "move": {"anyOf": [{"$ref": "wagon_model.schema.json#/$defs/sound_ref"}, {"type": "null"}]},
         "engage": {"anyOf": [{"$ref": "wagon_model.schema.json#/$defs/sound_ref"}, {"type": "null"}]}
@@ -266,6 +348,8 @@
     },
     "floor": {
       "type": "object",
+      "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
+      "x-keys": "tools/floorgen.py#OPTIONS",
       "description": "Floor generator options; every member is optional. The generator finds the floor level, marks floor and obstacle cells on a grid, gives the clearance back, applies add and remove, keeps what a rider can reach from a hull or gangway door and tiles it into floor zones.",
       "x-description-ru": "Параметры генератора пола, все необязательны. Генератор находит уровень пола, размечает клетки пола и препятствий на сетке, отдаёт запас clearance, применяет add и remove, оставляет то, куда игрок дойдёт от наружной или переходной двери, и режет это на зоны пола.",
       "x-code": ["tools/floorgen.py"],
@@ -285,9 +369,6 @@
           ],
           "x-unit": "block",
           "x-frame": "obj",
-          "x-status": "pending-engine",
-          "x-status-note": "floorgen reads heights in the legacy RWAT frame (OBJ y + 0.43625); the OBJ frame comes with the R6 wave.",
-          "x-status-note-ru": "floorgen читает высоты в старом кадре RWAT (y OBJ + 0.43625); кадр OBJ — с волны R6.",
           "x-engine-default": "the big up-facing surface nearest IR's passenger area, else the largest low one",
           "x-engine-default-ru": "большая горизонтальная поверхность, ближайшая к зоне passenger из IR, иначе самая большая нижняя",
           "description": "The floor height, or a list of heights for a floor in steps; each must lie within 0.05 of an up-facing surface of the model.",
@@ -345,10 +426,8 @@
     },
     "floor_box": {
       "type": "object",
+      "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
       "x-frame": "obj",
-      "x-status": "pending-engine",
-      "x-status-note": "floorgen reads the legacy RWAT frame; the OBJ frame comes with the R6 wave.",
-      "x-status-note-ru": "floorgen читает старый кадр RWAT; кадр OBJ — с волны R6.",
       "description": "A box of grid cells: x and z are the plan; with several levels, y picks the level (a box spanning several levels acts on each).",
       "x-description-ru": "Коробка клеток сетки: x и z — план; при нескольких уровнях y выбирает уровень (коробка через несколько уровней действует на каждый).",
       "properties": {
@@ -373,7 +452,9 @@
       "lights": {"IL": {"en_us": "Car light", "ru_ru": "Свет в вагоне"}},
       "type": {
         "max_speed_kmh": 120,
-        "doors": {"DoorTambur": {"min": [10.781, 1.375, 0.344], "max": [10.844, 3.625, 1.031], "inner": true}}
+        "doors": {
+          "DoorTambur": {"_why": "the vestibule door, missed by the converter", "min": [10.781, 1.375, 0.344], "max": [10.844, 3.625, 1.031], "inner": true}
+        }
       },
       "floor": {"clearance": 0.1}
     }
