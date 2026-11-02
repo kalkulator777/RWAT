@@ -62,8 +62,13 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
  * meant every re-upload pushed the entire track at once — a ~0.8 s freeze on
  * a ~4000-block network). Regions outside the render distance, outside the
  * view frustum or over unloaded chunks are not drawn — no rails floating over
- * the void. Directional diffuse is baked into the vertex colour (the terrain
- * shader the rails draw with ignores normals — see {@link RwatRenderTypes#rails}).
+ * the void; a region is culled by the box of what its tiles draw. A region's
+ * vertices are kept relative to its corner and drawn with the corner's offset
+ * from the camera, as vanilla's chunk sections are, so they are as precise
+ * 300 000 blocks out as at the origin (as world floats they were 1/32 block
+ * apart there, and the rails shook against the terrain). Directional diffuse
+ * is baked into the vertex colour (the terrain shader the rails draw with
+ * ignores normals — see {@link RwatRenderTypes#rails}).
  *
  * <p>Graph changes are applied <b>per segment</b>: each segment's bent tiles
  * are cached under a key of its curve and end treatment, and a new graph only
@@ -483,12 +488,14 @@ public final class RailRenderer {
     }
 
     /**
-     * Terrain shader, diffuse baked in, ChunkOffset = −camera for fog. Picks
-     * the regions in range (render distance, loaded centre chunk), re-bakes
-     * the stale ones within the frame budget — visible and nearest first —
-     * and draws those in the view frustum, their switch blades with them
-     * (re-baked at once when stale: a throw moves them every frame, and a
-     * region's blades are a sliver of its track).
+     * Terrain shader, diffuse baked in, ChunkOffset = region corner − camera
+     * ({@link RailRegion#drawOffset}): the vertices are region-relative, so
+     * they and the fog are precise however far out. Picks the regions in
+     * range (render distance, loaded centre chunk), re-bakes the stale ones
+     * within the frame budget — visible and nearest first — and draws those
+     * in the view frustum, their switch blades with them (re-baked at once
+     * when stale: a throw moves them every frame, and a region's blades are
+     * a sliver of its track).
      */
     private static void drawTerrainPath(RenderLevelStageEvent event, ClientLevel level) {
         // no −cam translate: the camera offset goes through ChunkOffset, so the
@@ -534,16 +541,14 @@ public final class RailRenderer {
             }
         }
         Matrix4f pose = event.getPoseStack().last().pose();
-        float offX = (float) -cam.x;
-        float offY = (float) -cam.y;
-        float offZ = (float) -cam.z;
         for (Bucket bucket : inRange) {
             if (!bucket.inView) {
                 continue;
             }
+            float[] offset = bucket.drawOffset(cam.x, cam.y, cam.z);
             if (bucket.meshes != null) {
                 for (GpuMesh mesh : bucket.meshes) {
-                    BATCH.add(mesh, pose, offX, offY, offZ);
+                    BATCH.add(mesh, pose, offset[0], offset[1], offset[2]);
                 }
             }
             if (bucket.bladesDirty || bucket.bladeMeshes == null && bucket.hasBlades()) {
@@ -551,7 +556,7 @@ public final class RailRenderer {
             }
             if (bucket.bladeMeshes != null) {
                 for (GpuMesh mesh : bucket.bladeMeshes) {
-                    BATCH.add(mesh, pose, offX, offY, offZ);
+                    BATCH.add(mesh, pose, offset[0], offset[1], offset[2]);
                 }
             }
         }

@@ -99,18 +99,23 @@ final class TileSweeper {
     }
 
     /**
-     * One bent tile, compact: world positions plus a packed normal and baked
+     * One bent tile, compact: positions plus a packed normal and baked
      * diffuse shade per vertex — UV and base colour stay in the shared
      * {@link Template} (~4 KB per tile, where a bent mesh of records was
-     * ~22 KB, ~85 MB of heap for a 3800-block network). The geometry depends
-     * only on the rail graph; {@code light} is the one field a relight may
-     * touch (sampled one block above the tile centre). {@code bounds} is the
-     * box of the bent vertices, {minX, minY, minZ, maxX, maxY, maxZ} — what
-     * the tile really covers, however far its style reaches off the track
-     * (a crossing's deck, a bridge's girders) and however a bend stretches it.
+     * ~22 KB, ~85 MB of heap for a 3800-block network). Positions are kept
+     * relative to the corner of the tile's region in X and Z
+     * ({@link RailRegion#originX(long)}; world Y as is): as world floats they
+     * were 1/32 block apart 300 000 blocks out, and the rails shook against
+     * the terrain. The geometry depends only on the rail graph; {@code light}
+     * is the one field a relight may touch (sampled one block above the tile
+     * centre). {@code bounds} is the box of the bent vertices in the world,
+     * {minX, minY, minZ, maxX, maxY, maxZ} — what the tile really covers,
+     * however far its style reaches off the track (a crossing's deck, a
+     * bridge's girders) and however a bend stretches it.
      */
     public static final class Tile {
         final Template template;
+        /** Per vertex: x − {@link #originX}, y, z − {@link #originZ}. */
         final float[] xyz;
         /** Per vertex: normal as three signed bytes (bits 0–23) + shade 0–255 (bits 24–31). */
         final int[] normalShade;
@@ -120,10 +125,13 @@ final class TileSweeper {
         final double[] bounds;
         /** {@link RailRegion#key} of the region holding the tile: the one its centre lies in. */
         final long regionKey;
+        /** The region's corner, which {@link #xyz} is relative to. */
+        final int originX;
+        final int originZ;
         /** Packed light, -1 until sampled. */
         int light = -1;
 
-        Tile(Template template, float[] xyz, int[] normalShade, Vector3d centre, double[] bounds) {
+        Tile(Template template, float[] xyz, int[] normalShade, Vector3d centre, double[] bounds, long regionKey) {
             this.template = template;
             this.xyz = xyz;
             this.normalShade = normalShade;
@@ -131,12 +139,14 @@ final class TileSweeper {
             this.cy = centre.y;
             this.cz = centre.z;
             this.bounds = bounds;
-            this.regionKey = RailRegion.key(cx, cz);
+            this.regionKey = regionKey;
+            this.originX = RailRegion.originX(regionKey);
+            this.originZ = RailRegion.originZ(regionKey);
         }
 
         /** World X of vertex {@code i}. */
         double x(int i) {
-            return xyz[i * 3];
+            return originX + (double) xyz[i * 3];
         }
 
         /** World Y of vertex {@code i}. */
@@ -146,7 +156,7 @@ final class TileSweeper {
 
         /** World Z of vertex {@code i}. */
         double z(int i) {
-            return xyz[i * 3 + 2];
+            return originZ + (double) xyz[i * 3 + 2];
         }
     }
 
@@ -245,10 +255,14 @@ final class TileSweeper {
      * Y→up). Diffuse shade is taken from each quad's first corner, as the
      * per-quad shading always was. A {@code bend} (a switch blade or frog rail)
      * reshapes each vertex's across and height at its station first. The
-     * tile's bounds are taken over the bent vertices.
+     * world position is worked out in double and stored relative to the
+     * corner of the region the tile's centre lies in; the tile's bounds are
+     * taken over the bent vertices.
      */
     private static Tile bendTile(Template t, int tileIndex, double tileLen, TrackPath path,
             Vector3d centre, RailBend bend) {
+        long regionKey = RailRegion.key(centre.x, centre.z);
+        double[] origin = {RailRegion.originX(regionKey), 0.0, RailRegion.originZ(regionKey)};
         int stations = t.stations.length;
         double[] frame = new double[stations * TrackSweep.FRAME_STRIDE]; // pos, fwd, right, up
         double[] bent = bend == null ? null : new double[stations * 4]; // floor, cut, shift, drop
@@ -275,7 +289,7 @@ final class TileSweeper {
             }
             for (int axis = 0; axis < 3; axis++) {
                 double world = frame[o + axis] + frame[o + 6 + axis] * across + frame[o + 9 + axis] * height;
-                xyz[i * 3 + axis] = (float) world;
+                xyz[i * 3 + axis] = (float) (world - origin[axis]);
                 bounds[axis] = Math.min(bounds[axis], world);
                 bounds[axis + 3] = Math.max(bounds[axis + 3], world);
             }
@@ -293,7 +307,7 @@ final class TileSweeper {
         if (n == 0) {
             bounds = new double[] {centre.x, centre.y, centre.z, centre.x, centre.y, centre.z};
         }
-        return new Tile(t, xyz, normalShade, centre, bounds);
+        return new Tile(t, xyz, normalShade, centre, bounds, regionKey);
     }
 
     /** One normal component as a signed byte, quantized like BufferBuilder's. */

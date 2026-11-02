@@ -16,7 +16,10 @@ import com.muzhik17.trainsmod.client.render.TileSweeper.Tile;
  * and re-uploads just that switch's blades — they bake into meshes of their
  * own, apart from the static track. {@code dirty} and {@code bladesDirty}
  * mark either stale after an edit, a throw or a light change — the stale
- * meshes keep drawing until the re-bake lands. Pure (no MC imports); the
+ * meshes keep drawing until the re-bake lands. The tiles' vertices are kept
+ * relative to the region's corner ({@link #originX()}, {@link #originZ()}),
+ * so a float holds them as precisely 300 000 blocks out as at the origin;
+ * {@link #drawOffset} carries them to the camera. Pure (no MC imports); the
  * renderer's subclass holds the meshes.
  */
 class RailRegion {
@@ -60,6 +63,36 @@ class RailRegion {
     /** Key of region ({@code regionX}, {@code regionZ}), counted in regions. */
     static long keyOf(int regionX, int regionZ) {
         return (regionX & 0xFFFFFFFFL) | (regionZ & 0xFFFFFFFFL) << 32;
+    }
+
+    /** World X of the corner of region {@code key} — the origin its vertices are kept relative to. */
+    static int originX(long key) {
+        return ((int) key) << SHIFT;
+    }
+
+    /** World Z of the corner of region {@code key}. */
+    static int originZ(long key) {
+        return ((int) (key >>> 32)) << SHIFT;
+    }
+
+    int originX() {
+        return originX(key);
+    }
+
+    int originZ() {
+        return originZ(key);
+    }
+
+    /**
+     * The {@code ChunkOffset} the region's meshes draw with from a camera at
+     * (camX, camY, camZ): the region's corner minus the camera, subtracted in
+     * double and only then made a float — small near the camera, so the
+     * shader's {@code vertex + offset} is as precise at 300 000 blocks as at
+     * the origin (vanilla's chunk sections do the same). Vertices keep their
+     * world Y: the world is at most a few thousand blocks high.
+     */
+    float[] drawOffset(double camX, double camY, double camZ) {
+        return new float[] {(float) (originX() - camX), (float) -camY, (float) (originZ() - camZ)};
     }
 
     /** Add or replace one segment's tiles here. */
