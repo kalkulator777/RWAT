@@ -2,8 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kalkulator777.github.io/RWAT/schema/recipe.schema.json",
   "title": "IR → RWAT conversion recipe",
-  "description": "packs/<name>.json: what tools/ir2rwat.py converts — which Immersive Railroading pack zips, into which RWAT pack, with which corrections. The recipe and its override files carry no assets, so they can be shared where the IR packs' licenses forbid sharing the converted pack. Relative paths are relative to the recipe's folder. A key starting with _ is a comment, at any level of the recipe and of an override file.",
-  "x-description-ru": "packs/<имя>.json: что конвертирует tools/ir2rwat.py — какие zip-паки Immersive Railroading, в какой пак RWAT и с какими поправками. В рецепте и оверрайдах нет ассетов, поэтому ими можно делиться там, где лицензия IR-пака не разрешает делиться сконвертированным паком. Относительные пути — от папки рецепта. Ключ, начинающийся с _, — комментарий на любом уровне рецепта и файла оверрайда.",
+  "description": "packs/<name>.json: what tools/ir2rwat.py converts — which Immersive Railroading pack zips, into which RWAT pack, with which corrections. The recipe and its override files carry no assets, so they can be shared where the IR packs' licenses forbid sharing the converted pack. Relative paths are relative to the recipe's folder. A key starting with _ is a comment, at any level of the recipe and of an override file: the converter drops it unread. So a type, a door or a light group whose id starts with _ can't be named by a key here (overrides, doors as an object, lights): such a key is a comment.",
+  "x-description-ru": "packs/<имя>.json: что конвертирует tools/ir2rwat.py — какие zip-паки Immersive Railroading, в какой пак RWAT и с какими поправками. В рецепте и оверрайдах нет ассетов, поэтому ими можно делиться там, где лицензия IR-пака не разрешает делиться сконвертированным паком. Относительные пути — от папки рецепта. Ключ, начинающийся с _, — комментарий на любом уровне рецепта и файла оверрайда: конвертер отбрасывает его, не читая. Поэтому тип, дверь или группу света с id на _ ключом здесь не задать (overrides, doors объектом, lights): такой ключ — комментарий.",
   "x-file": "packs/<name>.json",
   "x-code": ["tools/ir2rwat.py"],
   "x-keys": "tools/ir2rwat.py#RECIPE_KEYS",
@@ -39,6 +39,16 @@
       "default": "see the pack's own license",
       "description": "The license line written to pack.mcmeta.",
       "x-description-ru": "Строка лицензии, которая пишется в pack.mcmeta."
+    },
+    "version": {
+      "$ref": "pack_mcmeta_rwat.schema.json#/$defs/rwat/properties/version",
+      "description": "The pack's own version (e.g. 1.2.0), written to the rwat block of pack.mcmeta; without it the block has none.",
+      "x-description-ru": "Собственная версия пака (например, 1.2.0), пишется в блок rwat в pack.mcmeta; без неё в блоке версии нет."
+    },
+    "authors": {
+      "$ref": "pack_mcmeta_rwat.schema.json#/$defs/rwat/properties/authors",
+      "description": "Who made the pack, written to the rwat block of pack.mcmeta; without it the block has none.",
+      "x-description-ru": "Авторы пака, пишутся в блок rwat в pack.mcmeta; без них в блоке авторов нет."
     },
     "out": {
       "type": "string",
@@ -152,6 +162,7 @@
     "sound_defaults": {
       "type": "object",
       "patternProperties": {"^_": {"$ref": "common.schema.json#/$defs/comment"}},
+      "x-keys": "tools/ir2rwat.py#SOUND_DEFAULTS_KEYS",
       "description": "Sounds for what IR leaves to its own built-in ones.",
       "x-description-ru": "Звуки на то, что IR оставляет своим встроенным.",
       "properties": {

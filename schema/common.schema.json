@@ -58,8 +58,8 @@
       "x-description-ru": "Код языка Minecraft: en_us, ru_ru, …"
     },
     "comment": {
-      "description": "A comment: a key starting with _ holds anything, at any level of a conversion recipe or override file, and means nothing to the converter.",
-      "x-description-ru": "Комментарий: ключ, начинающийся с _, хранит что угодно на любом уровне рецепта конвертера или файла оверрайда и для конвертера ничего не значит."
+      "description": "A comment: a key starting with _ holds anything, at any level of a conversion recipe or override file, and means nothing to the converter, which drops it unread. A type, a door or a light group whose id starts with _ therefore can't be named by a key there: such a key is a comment.",
+      "x-description-ru": "Комментарий: ключ, начинающийся с _, хранит что угодно на любом уровне рецепта конвертера или файла оверрайда и для конвертера ничего не значит: конвертер отбрасывает его, не читая. Поэтому тип, дверь или группу света с id на _ ключом там не задать: такой ключ — комментарий."
     },
     "lang_texts": {
       "type": "object",
