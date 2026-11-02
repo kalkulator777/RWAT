@@ -158,10 +158,12 @@ public final class GpuMesh implements AutoCloseable {
          * Queue a draw with an explicit {@code ChunkOffset} (terrain-shader
          * types only; entity shaders have no such uniform and ignore it). The
          * terrain shader adds the offset to every vertex position <i>and</i>
-         * computes fog from the sum — pass {@code −camera} with world-absolute
-         * geometry and the fog is honestly camera-relative, exactly like
-         * vanilla chunks. The modelview is captured now, so the draw lands
-         * where it would have if issued immediately.
+         * computes fog from the sum — keep the vertices relative to a nearby
+         * corner and pass {@code corner − camera} ({@link RailRegion#drawOffset})
+         * and both the positions and the fog are camera-relative and precise,
+         * exactly like vanilla chunk sections. The offset is the mesh's own:
+         * {@link #flush} uploads it before each draw. The modelview is captured
+         * now, so the draw lands where it would have if issued immediately.
          */
         public void add(GpuMesh mesh, Matrix4f pose, float offsetX, float offsetY, float offsetZ) {
             if (mesh.buffer == null) {
