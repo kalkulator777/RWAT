@@ -15,6 +15,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
@@ -42,7 +43,9 @@ import net.neoforged.neoforge.event.AddPackFindersEvent;
  *
  * <p>Extra folders can be listed in the {@code rwat.packDirs} system property
  * (path-separator separated); the dev runs whose game dir isn't {@code run/}
- * (client2, server) point it at the shared {@code run/rwat_packs}.
+ * (client2, server) point it at the shared {@code run/rwat_packs}. An entry
+ * that is no path on this system is skipped with a warning in the log and in
+ * the pack report ({@link PackDirs}), and the other folders are still searched.
  *
  * <p>Each pack's {@code "rwat"} block in {@code pack.mcmeta} is read first
  * ({@link RwatPackMeta}): a pack of a format newer than this RWAT reads, or
@@ -59,9 +62,6 @@ public final class RwatPacks {
 
     /** Folder name under the game directory. */
     public static final String FOLDER = "rwat_packs";
-
-    /** Extra pack folders, {@link File#pathSeparator}-separated. */
-    private static final String EXTRA_DIRS_PROPERTY = "rwat.packDirs";
 
     /** Shown next to the pack in the pack screens; adds itself to worlds automatically. */
     private static final PackSource SOURCE = PackSource.create(
@@ -81,6 +81,9 @@ public final class RwatPacks {
 
     /** The problems last logged per pack, so a rescan (F3+T, /reload, the other pack type) doesn't repeat them. */
     private static final Map<Path, List<PackProblem>> LOGGED = new ConcurrentHashMap<>();
+
+    /** The same for the entries of {@code rwat.packDirs} that were left out. */
+    private static final AtomicReference<List<PackProblem>> LOGGED_DIRS = new AtomicReference<>(List.of());
 
     /** Pack hashes, kept by size and time of change. */
     private static final PackHashCache HASHES = new PackHashCache();
@@ -163,17 +166,31 @@ public final class RwatPacks {
         return type == PackType.SERVER_DATA ? PackReport.SERVER : PackReport.CLIENT;
     }
 
+    /** The extra folders the property lists and the entries of it that are no path ({@link PackDirs}). */
+    private static PackDirs.Parsed extraDirs() {
+        return PackDirs.parse(System.getProperty(PackDirs.PROPERTY, ""), File.pathSeparator);
+    }
+
     /** Every folder packs are read from: the game dir's one first, then the extras. */
-    static Set<Path> folders() {
+    private static Set<Path> folders(PackDirs.Parsed extra) {
         Set<Path> folders = new LinkedHashSet<>();
         folders.add(FMLPaths.GAMEDIR.get().resolve(FOLDER).toAbsolutePath().normalize());
-        String extra = System.getProperty(EXTRA_DIRS_PROPERTY, "");
-        for (String entry : extra.split(File.pathSeparator)) {
-            if (!entry.isBlank()) {
-                folders.add(Path.of(entry.trim()).toAbsolutePath().normalize());
-            }
-        }
+        folders.addAll(extra.folders());
         return folders;
+    }
+
+    /**
+     * Logs the entries of {@code rwat.packDirs} that were left out, unless
+     * they are what was logged last time (a rescan, the other pack type's).
+     */
+    private static void logDirs(List<PackProblem> problems) {
+        if (problems.equals(LOGGED_DIRS.getAndSet(problems))) {
+            return;
+        }
+        for (PackProblem problem : problems) {
+            RailsWheelsAndTrains.LOGGER.warn("{} entry '{}': {}", PackDirs.PROPERTY, problem.file(),
+                    problem.message());
+        }
     }
 
     /**
@@ -202,7 +219,9 @@ public final class RwatPacks {
         public void loadPacks(Consumer<Pack> onLoad) {
             Map<String, Path> seen = new HashMap<>();
             List<PackInfo> infos = new ArrayList<>();
-            for (Path folder : folders()) {
+            PackDirs.Parsed extra = extraDirs();
+            logDirs(extra.problems());
+            for (Path folder : folders(extra)) {
                 try {
                     Files.createDirectories(folder);
                     FolderRepositorySource.discoverPacks(folder, NO_SYMLINKS, (path, resources) -> {
@@ -239,7 +258,9 @@ public final class RwatPacks {
                 }
             }
             SCANS.put(type, List.copyOf(infos));
-            report(type).replace(PackReport.Source.PACKS, Map.of(), PackInfo.problems(infos));
+            List<PackProblem> problems = new ArrayList<>(extra.problems());
+            problems.addAll(PackInfo.problems(infos));
+            report(type).replace(PackReport.Source.PACKS, Map.of(), problems);
         }
     }
 }
