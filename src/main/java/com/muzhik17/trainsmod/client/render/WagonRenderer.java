@@ -21,6 +21,7 @@ import com.muzhik17.trainsmod.client.ClientWagonRay;
 import com.muzhik17.trainsmod.client.render.model.StockModel;
 import com.muzhik17.trainsmod.client.render.model.StockModels;
 import com.muzhik17.trainsmod.client.render.model.WagonModel;
+import com.muzhik17.trainsmod.compat.IrisCompat;
 import com.muzhik17.trainsmod.consist.Handles;
 import com.muzhik17.trainsmod.consist.WagonEntity;
 import com.muzhik17.trainsmod.convention.ControlValue;
@@ -47,6 +48,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.RenderFrameEvent;
+import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 
 /**
  * Layer 3 renderer (SPEC §2.4): draws the wagon's {@link BakedStockModel} —
@@ -59,8 +61,9 @@ import net.neoforged.neoforge.client.event.RenderFrameEvent;
  * shows the same one-tick-behind window vanilla entity lerp shows, so the
  * model never leads or trails the driver in the seat (SPEC §2.1, 0.2).
  *
- * <p>A wagon's parts are queued into a {@link GpuMesh.Batch} and issued grouped
- * by texture; the interior is skipped beyond the client's
+ * <p>The parts of every wagon are queued into one {@link GpuMesh.Batch} and
+ * issued once a frame, after the entities, grouped by texture (under a shader
+ * pack, wagon by wagon); the interior is skipped beyond the client's
  * {@link ClientConfig#interiorDrawDistance}.
  * Doors swing with their IR animation, keyed by each door's open progress
  * ({@link WagonEntity#doorAnim}).
@@ -127,7 +130,11 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
             BAKES_PER_FRAME, (have, want) -> have.model == want.model && have.livery.equals(want.livery),
             BakedStockModel::close);
 
-    /** Reused draw queue for one wagon's parts (render thread only). */
+    /**
+     * The frame's draw queue: the parts of every wagon drawn, issued at once
+     * after the entities ({@link #onRenderStage}) — render thread only. The
+     * bakes it holds are drawn this frame, so the cache keeps them till then.
+     */
     private static final GpuMesh.Batch BATCH = new GpuMesh.Batch();
     /** Scratch for an interpolated door keyframe (render thread only). */
     private static final Matrix4f DOOR_FRAME = new Matrix4f();
@@ -249,7 +256,11 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
             drawBogie(baked.rear(), flipped ? pose.front() : pose.rear(),
                     flipped, lerped, poseStack);
         }
-        BATCH.flush();
+        if (IrisCompat.shaderPackInUse()) {
+            // a pack draws entities in passes of its own (the shadow pass: another view and
+            // projection, no stage events) — issued in the pass that drew it, as ever
+            BATCH.flush();
+        }
 
         // headlight flares, beams and track light (SPEC §8): queued, drawn after translucents
         if (litMask != 0L && !model.headlights().isEmpty()) {
@@ -332,10 +343,31 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
         poseStack.translate(0.0, -Sway.CENTRE_Y, 0.0);
     }
 
-    /** The frame before ended: the bakes it didn't draw may go, a new frame's budget opens. */
+    /**
+     * The frame before ended: the bakes it didn't draw may go, a new frame's
+     * budget opens. Draws a frame queued and never issued (no level drawn
+     * after them) are dropped first — their bakes may go now.
+     */
     @SubscribeEvent
     static void onFrameStart(RenderFrameEvent.Pre event) {
+        BATCH.clear();
         BAKED.nextFrame();
+    }
+
+    /**
+     * Every wagon drawn so far this frame, issued after the entities (M29:
+     * one setup of each texture's shader for all the cars, not per car) —
+     * the same view, projection, lights, fog and target the entities had;
+     * anything queued after that (another mod drawing a wagon later in the
+     * level) at the end of the level.
+     */
+    @SubscribeEvent
+    static void onRenderStage(RenderLevelStageEvent event) {
+        RenderLevelStageEvent.Stage stage = event.getStage();
+        if ((stage == RenderLevelStageEvent.Stage.AFTER_ENTITIES || stage == RenderLevelStageEvent.Stage.AFTER_LEVEL)
+                && !BATCH.isEmpty()) {
+            BATCH.flush();
+        }
     }
 
     /**
@@ -351,8 +383,9 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
                 key -> BakedStockModel.bake(key.model(), key.livery(), key.packedLight(), key.litMask()));
     }
 
-    /** Drop all baked buffers (logout, resource reload). */
+    /** Drop all baked buffers (logout, resource reload), and any draw of them still queued. */
     public static void clearBaked() {
+        BATCH.clear();
         BAKED.clear();
     }
 
@@ -684,7 +717,7 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
         poseStack.popPose();
     }
 
-    /** Queue meshes at the current pose; {@link #BATCH} issues them at the end of the wagon. */
+    /** Queue meshes at the current pose; {@link #BATCH} issues them after the entities. */
     private static void draw(List<GpuMesh> meshes, PoseStack poseStack) {
         for (GpuMesh mesh : meshes) {
             BATCH.add(mesh, poseStack.last().pose());
