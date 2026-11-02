@@ -11,6 +11,7 @@ import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.packs.PackType;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
@@ -18,8 +19,9 @@ import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 /**
  * How a {@link PackReport} is shown: in the log as the loaders find the
  * problems, in chat for {@code /rwat packs} (server) and {@code /rwatc packs}
- * (client), and as one line to an operator joining a server whose packs have
- * errors. The fixed text is translated ({@code rwat.packs.*}); the problems
+ * (client) together with the RWAT packs that side's scan found
+ * ({@link RwatPacks#infos(PackType)}), and as one line to an operator joining
+ * a server whose packs have errors. The fixed text is translated ({@code rwat.packs.*}); the problems
  * themselves are the loaders' English, as in the log.
  */
 @EventBusSubscriber(modid = RailsWheelsAndTrains.MODID)
@@ -48,8 +50,9 @@ public final class PackReportView {
     }
 
     /**
-     * The report in chat: the packs and what each loaded, then the counts
-     * and the problems, errors first.
+     * The report in chat: the packs and what each loaded, the RWAT packs that
+     * side's scan found ({@link #rwatPacks}), then the counts and the
+     * problems, errors first.
      *
      * @param server true for the server's report (the title says which side)
      */
@@ -71,6 +74,7 @@ public final class PackReportView {
             }
             source.sendSuccess(() -> line, false);
         }
+        rwatPacks(source, server ? PackType.SERVER_DATA : PackType.CLIENT_RESOURCES);
         int errors = report.errors();
         int warnings = report.warnings();
         if (errors == 0 && warnings == 0) {
@@ -80,6 +84,55 @@ public final class PackReportView {
         source.sendSuccess(() -> Component.translatable("rwat.packs.summary", errors, warnings)
                 .withStyle(errors > 0 ? ChatFormatting.RED : ChatFormatting.YELLOW), false);
         problems(source, report.problems());
+    }
+
+    /**
+     * The RWAT packs the last scan of that pack type found, one line each:
+     * the folder or zip, {@code rwat.name} and {@code version}, the format,
+     * loaded or not, the short content hash and how many problems the scan
+     * found (they are listed with the rest of the report). Nothing if the
+     * scan found none. A hash not worked out yet is not waited for: the
+     * hashing is started in the background and the next listing shows it.
+     */
+    private static void rwatPacks(CommandSourceStack source, PackType type) {
+        List<PackInfo> infos = RwatPacks.infos(type);
+        if (infos.isEmpty()) {
+            return;
+        }
+        source.sendSuccess(() -> Component.translatable("rwat.packs.rwat.title").withStyle(ChatFormatting.GOLD), false);
+        boolean hashing = false;
+        for (PackInfo info : infos) {
+            MutableComponent line = Component.literal("  " + info.fileName());
+            String label = info.label();
+            if (label != null) {
+                line.append(Component.literal(" — " + label));
+            }
+            if (info.meta() != null) {
+                line.append(", ").append(Component.translatable("rwat.packs.rwat.format", info.meta().format()));
+            }
+            line.append(", ").append(info.loaded()
+                    ? Component.translatable("rwat.packs.rwat.loaded").withStyle(ChatFormatting.GREEN)
+                    : Component.translatable("rwat.packs.rwat.not_loaded").withStyle(ChatFormatting.RED));
+            if (info.loaded()) {
+                String hash = RwatPacks.knownHash(info);
+                hashing |= hash == null;
+                MutableComponent shown = hash != null
+                        ? Component.translatable("rwat.packs.rwat.hash", PackManifest.shortHash(hash))
+                        : Component.translatable("rwat.packs.rwat.hash_pending");
+                line.append(", ").append(shown.withStyle(ChatFormatting.GRAY));
+            }
+            if (!info.problems().isEmpty()) {
+                line.append(", ").append(Component.translatable("rwat.packs.rwat.problems",
+                        info.errors(), info.warnings())
+                        .withStyle(info.hasErrors() ? ChatFormatting.RED : ChatFormatting.YELLOW));
+            }
+            source.sendSuccess(() -> line, false);
+        }
+        if (hashing) {
+            RwatPacks.manifest(type);
+            source.sendSuccess(() -> Component.translatable("rwat.packs.rwat.hashing")
+                    .withStyle(ChatFormatting.GRAY), false);
+        }
     }
 
     /** The problems in chat, errors first, at most {@link #MAX_LINES} of them. */

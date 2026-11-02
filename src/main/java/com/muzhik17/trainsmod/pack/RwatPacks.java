@@ -48,9 +48,12 @@ import net.neoforged.neoforge.event.AddPackFindersEvent;
  * ({@link RwatPackMeta}): a pack of a format newer than this RWAT reads, or
  * with a broken format, is not loaded. What each scan found — every pack, its
  * block, its problems, whether it loads — is kept for {@code /rwat packs}
- * ({@link #infos()}); the problems go to the log, once each time they change.
- * {@link #manifest} hashes the loaded packs for the check of a client's packs
- * against the server's ({@link PackManifest}).
+ * ({@link #infos()}); the problems go to the pack report with every loader's
+ * ({@link PackReport.Source#PACKS}: the data-pack scan to the server's, the
+ * resource-pack scan to the client's) and to the log, once each time they
+ * change. {@link #manifest} hashes the loaded packs for the check of a
+ * client's packs against the server's ({@link PackManifest}); the listing
+ * shows the hashes worked out so far ({@link #knownHash}).
  */
 public final class RwatPacks {
 
@@ -146,6 +149,20 @@ public final class RwatPacks {
         }, HASHING);
     }
 
+    /**
+     * The pack's hash as {@link #manifest} last worked it out, or {@code null}
+     * if it hasn't yet; never reads the pack nor waits for one being read, so
+     * a command may ask on a game thread.
+     */
+    public static String knownHash(PackInfo info) {
+        return HASHES.known(info.path());
+    }
+
+    /** The report a scan of that pack type goes to: data packs are the server's, resource packs the client's. */
+    public static PackReport report(PackType type) {
+        return type == PackType.SERVER_DATA ? PackReport.SERVER : PackReport.CLIENT;
+    }
+
     /** Every folder packs are read from: the game dir's one first, then the extras. */
     static Set<Path> folders() {
         Set<Path> folders = new LinkedHashSet<>();
@@ -164,7 +181,7 @@ public final class RwatPacks {
      * pack's path and that it isn't loaded — unless they are what was logged
      * for it last time.
      */
-    private static void report(String name, Path path, List<PackProblem> problems) {
+    private static void log(String name, Path path, List<PackProblem> problems) {
         if (problems.equals(LOGGED.put(path, problems))) {
             return;
         }
@@ -195,7 +212,7 @@ public final class RwatPacks {
                         if (first != null) {
                             List<PackProblem> problems = List.of(PackProblem.error(id, path.toString(),
                                     "a pack of the same name was found first, in " + first));
-                            report(name, path, problems);
+                            log(name, path, problems);
                             infos.add(new PackInfo(name, path, null, problems, false));
                             return;
                         }
@@ -211,7 +228,7 @@ public final class RwatPacks {
                                         "Minecraft can't read its \"pack\" section"));
                             }
                         }
-                        report(name, path, problems);
+                        log(name, path, problems);
                         infos.add(new PackInfo(name, path, meta.meta(), problems, pack != null));
                         if (pack != null) {
                             onLoad.accept(pack);
@@ -222,6 +239,7 @@ public final class RwatPacks {
                 }
             }
             SCANS.put(type, List.copyOf(infos));
+            report(type).replace(PackReport.Source.PACKS, Map.of(), PackInfo.problems(infos));
         }
     }
 }

@@ -135,4 +135,35 @@ class PackManifestTest {
         assertEquals(new PackManifest.Entry("bare.zip", "bare", "", B), bare.manifestEntry(B));
         assertEquals("rwat/example.zip", named.id());
     }
+
+    /** What /rwat packs lists of a pack: the block's name and version if it gives any, its problems counted. */
+    @Test
+    void packInfoForTheListing() {
+        PackProblem warning = PackProblem.warning("rwat/a", "pack.mcmeta", "w");
+        PackProblem error = PackProblem.error("rwat/b", "pack.mcmeta", "e");
+        PackInfo named = new PackInfo("a", Path.of("a"),
+                new RwatPackMeta(1, "Example", "2.0", List.of(), null, null), List.of(warning), true);
+        PackInfo versionOnly = new PackInfo("v.zip", Path.of("v.zip"),
+                new RwatPackMeta(1, null, "3", List.of(), null, null), List.of(), true);
+        PackInfo bare = new PackInfo("c", Path.of("c"),
+                new RwatPackMeta(1, null, null, List.of(), null, null), List.of(), true);
+        PackInfo refused = new PackInfo("b", Path.of("b"), null, List.of(warning, error), false);
+
+        assertEquals("Example 2.0", named.label());
+        assertEquals("v 3", versionOnly.label());
+        assertNull(bare.label());
+        assertNull(refused.label());
+        assertEquals(0, named.errors());
+        assertEquals(1, named.warnings());
+        assertEquals(1, refused.errors());
+        assertEquals(1, refused.warnings());
+        assertEquals(List.of(warning, warning, error), PackInfo.problems(List.of(named, bare, refused)));
+        assertEquals("rwat/b", PackInfo.idOf("b"));
+    }
+
+    @Test
+    void shortHashIsItsFirstEightChars() {
+        assertEquals("01234567", PackManifest.shortHash("0123456789abcdef".repeat(4)));
+        assertEquals("abc", PackManifest.shortHash("abc"));
+    }
 }

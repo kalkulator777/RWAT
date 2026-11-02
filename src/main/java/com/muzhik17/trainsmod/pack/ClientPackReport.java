@@ -25,10 +25,11 @@ import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
  * The client's side of the pack report ({@link PackReport#CLIENT}):
  *
  * <ul>
- * <li>{@code /rwatc packs} — what this client's loaders found (wagon models
- *     and their sounds, rail styles, models without a type, the model files'
- *     check); in a single-player world the server's part too, since the
- *     owner may have no cheats for {@code /rwat packs};</li>
+ * <li>{@code /rwatc packs} — the RWAT packs this client loaded as resource
+ *     packs and what its loaders found (wagon models and their sounds, rail
+ *     styles, models without a type, the model files' check); in a
+ *     single-player world the server's part too, since the owner may have no
+ *     cheats for {@code /rwat packs};</li>
  * <li>{@code /rwatc packs validate} — load and check every declared model
  *     now ({@link StockModels#checkFiles}), in the background, and report;</li>
  * <li>after each wagon type sync and each resource reload: the models

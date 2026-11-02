@@ -444,9 +444,11 @@ public final class RwatCommands {
 
     /**
      * {@code /rwat packs} — the server's content packs: what each loaded
-     * (wagon types, track beds) and every error and warning the loaders
-     * found, by pack and file ({@link PackReport#SERVER}). The client's
-     * half — models, sounds, rail styles — is {@code /rwatc packs}.
+     * (wagon types, track beds), the RWAT packs its scan found (name,
+     * version, format, loaded or not, short hash) and every error and
+     * warning the scan and the loaders found, by pack and file
+     * ({@link PackReport#SERVER}). The client's half — models, sounds, rail
+     * styles — is {@code /rwatc packs}.
      */
     private static int packs(CommandContext<CommandSourceStack> ctx) {
         PackReportView.show(ctx.getSource(), PackReport.SERVER, true);

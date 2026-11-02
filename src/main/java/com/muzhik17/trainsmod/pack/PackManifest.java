@@ -35,6 +35,8 @@ public final class PackManifest {
     public static final int MAX_VERSION_LENGTH = 64;
     /** A hash is lowercase hex SHA-256: always this many chars. */
     public static final int HASH_LENGTH = 64;
+    /** How much of a hash a listing shows ({@link #shortHash}): enough to tell two copies of a pack apart. */
+    public static final int SHORT_HASH_LENGTH = 8;
 
     private PackManifest() {
     }
@@ -113,6 +115,11 @@ public final class PackManifest {
     public static String baseName(String fileName) {
         return fileName.toLowerCase(Locale.ROOT).endsWith(".zip")
                 ? fileName.substring(0, fileName.length() - ".zip".length()) : fileName;
+    }
+
+    /** The first {@link #SHORT_HASH_LENGTH} chars of a hash, as {@code /rwat packs} lists it. */
+    public static String shortHash(String hash) {
+        return hash.length() <= SHORT_HASH_LENGTH ? hash : hash.substring(0, SHORT_HASH_LENGTH);
     }
 
     /** Lowercase hex of {@link #HASH_LENGTH} chars, as {@link PackHasher} writes. */

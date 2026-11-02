@@ -13,8 +13,9 @@ import java.util.TreeSet;
  * What the content packs got wrong, by pack and file, as every loader last
  * found it — the registry behind {@code /rwat packs} and {@code /rwatc packs}
  * and the operators' notice on joining. One instance per side:
- * {@link #SERVER} holds the server's loaders (wagon types, track beds),
- * {@link #CLIENT} the client's (wagon models with their sounds, rail styles,
+ * {@link #SERVER} holds the server's loaders (its scan of the pack folders
+ * as data packs, wagon types, track beds), {@link #CLIENT} the client's (its
+ * scan as resource packs, wagon models with their sounds, rail styles,
  * models without a type, the model files' check).
  *
  * <p>Each loader owns its {@link Source} and replaces it wholesale on every
@@ -27,13 +28,19 @@ import java.util.TreeSet;
  */
 public final class PackReport {
 
-    /** The server's loaders: wagon types and the track bed under the rail styles. */
+    /** The server's loaders: its pack scan, wagon types and the track bed under the rail styles. */
     public static final PackReport SERVER = new PackReport();
-    /** This client's loaders: wagon models (with their sounds), rail styles and the checks on them. */
+    /** This client's loaders: its pack scan, wagon models (with their sounds), rail styles and the checks on them. */
     public static final PackReport CLIENT = new PackReport();
 
     /** A loader; each replaces only its own part of the report. */
     public enum Source {
+        /**
+         * The scan of the pack folders ({@code RwatPacks}): each pack's
+         * {@code "rwat"} block, a pack left out (the data packs on the
+         * server, the resource packs on the client). Counts nothing.
+         */
+        PACKS("packs"),
         /** {@code data/<ns>/wagon_types/} (server). */
         WAGON_TYPES("wagon_types"),
         /** The rail styles' tiles as the track bed reads them (server). */

@@ -48,6 +48,29 @@ public record PackInfo(String fileName, Path path, RwatPackMeta meta, List<PackP
         return problems.stream().anyMatch(PackProblem::isError);
     }
 
+    /** How many of its problems are errors. */
+    public int errors() {
+        return (int) problems.stream().filter(PackProblem::isError).count();
+    }
+
+    /** How many of its problems are warnings. */
+    public int warnings() {
+        return problems.size() - errors();
+    }
+
+    /** {@code rwat.name} and {@code version} as a person reads them; {@code null} if the block gives neither. */
+    public String label() {
+        if (meta == null || meta.name() == null && meta.version() == null) {
+            return null;
+        }
+        return version().isEmpty() ? displayName() : displayName() + " " + version();
+    }
+
+    /** Every problem of a scan, pack by pack in the scan's order: what the scan puts in the pack report. */
+    public static List<PackProblem> problems(List<PackInfo> scan) {
+        return scan.stream().flatMap(info -> info.problems().stream()).toList();
+    }
+
     /** The pack in a manifest, with the given content hash. */
     public PackManifest.Entry manifestEntry(String hash) {
         return new PackManifest.Entry(fileName, displayName(), version(), hash).clipped();

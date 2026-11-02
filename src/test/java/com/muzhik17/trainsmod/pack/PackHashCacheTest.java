@@ -2,6 +2,7 @@ package com.muzhik17.trainsmod.pack;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -34,5 +35,24 @@ class PackHashCacheTest {
         assertNotEquals(first, changed);
         assertEquals(PackHasher.hash(pack), changed);
         assertEquals(2, cache.computed());
+    }
+
+    /** What a command shows without reading the pack: the hash last worked out, none before the first. */
+    @Test
+    void knownIsTheLastHashWorkedOut(@TempDir Path temp) throws IOException {
+        Path pack = Files.createDirectories(temp.resolve("p"));
+        Path mcmeta = Files.writeString(pack.resolve("pack.mcmeta"), "{}");
+        Files.setLastModifiedTime(mcmeta, FileTime.fromMillis(1_000_000L));
+        PackHashCache cache = new PackHashCache();
+        assertNull(cache.known(pack));
+
+        String first = cache.hash(pack);
+        assertEquals(first, cache.known(temp.resolve("p/../p")));
+
+        Files.writeString(mcmeta, "{ }");
+        Files.setLastModifiedTime(mcmeta, FileTime.fromMillis(2_000_000L));
+        assertEquals(first, cache.known(pack), "not read: the files aren't looked at");
+        assertEquals(cache.hash(pack), cache.known(pack));
+        assertNotEquals(first, cache.known(pack));
     }
 }
