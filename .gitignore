@@ -62,3 +62,6 @@ __pycache__/
 # Debug screenshots and profiler dumps
 /*.png
 *.sparkprofile
+
+### Claude Code agent worktrees ###
+.claude/worktrees/
