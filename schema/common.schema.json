@@ -57,6 +57,10 @@
       "description": "A Minecraft language code: en_us, ru_ru, …",
       "x-description-ru": "Код языка Minecraft: en_us, ru_ru, …"
     },
+    "comment": {
+      "description": "A comment: a key starting with _ holds anything, at any level of a conversion recipe or override file, and means nothing to the converter.",
+      "x-description-ru": "Комментарий: ключ, начинающийся с _, хранит что угодно на любом уровне рецепта конвертера или файла оверрайда и для конвертера ничего не значит."
+    },
     "lang_texts": {
       "type": "object",
       "propertyNames": {"$ref": "#/$defs/lang_code"},

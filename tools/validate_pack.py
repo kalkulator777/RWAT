@@ -243,6 +243,7 @@ class Validator:
     def object(self, value, schema, base, path):
         issues = []
         properties = schema.get("properties", {})
+        patterns = schema.get("patternProperties", {})
         for key in schema.get("required", []):
             if key not in value:
                 issues.append(Issue("error", path, f"missing required key {key!r}"))
@@ -257,8 +258,13 @@ class Validator:
                 for issue in self.check(key, schema["propertyNames"], base, where):
                     issue.message = "key " + issue.message
                     issues.append(issue)
+            matched = [sub for pattern, sub in patterns.items() if re.search(pattern, key)]
+            for sub in matched:
+                issues += self.check(item, sub, base, where)
             if key in properties:
                 issues += self.check(item, properties[key], base, where)
+            elif matched:
+                pass
             elif "additionalProperties" in schema:
                 extra = schema["additionalProperties"]
                 if extra is False:
@@ -300,6 +306,8 @@ class Validator:
         kind = schema.get("type")
         if isinstance(kind, list):
             return " or ".join(kind)
+        if kind is None and "pattern" in schema:
+            return f"a match of {schema['pattern']}"
         return kind or "a composite form"
 
 
@@ -314,6 +322,12 @@ def first_line(text):
 def describe_not(schema):
     if "required" in schema:
         return "all of " + ", ".join(repr(k) for k in schema["required"]) + " together"
+    if "enum" in schema:
+        return " or ".join(show(e) for e in schema["enum"])
+    if "pattern" in schema:
+        return f"a match of {schema['pattern']}"
+    if "anyOf" in schema:
+        return " or ".join(describe_not(s) for s in schema["anyOf"])
     return show(schema)
 
 
@@ -444,9 +458,7 @@ def walk_schema(node, pointer=""):
     if isinstance(node, dict):
         yield pointer, node
         for key, value in node.items():
-            if key in ("properties", "$defs", "dependentRequired"):
-                if key == "dependentRequired":
-                    continue
+            if key in ("properties", "$defs", "patternProperties"):
                 for name, sub in value.items():
                     yield from walk_schema(sub, f"{pointer}/{key}/{name}")
             elif key in ("items", "additionalProperties", "propertyNames", "not") and isinstance(value, dict):
@@ -484,8 +496,15 @@ PATCH_MIRRORS = [
     ("recipe_override", "#/$defs/model_patch", "wagon_model", "#"),
     ("recipe_override", "#/$defs/sounds_patch", "wagon_model", "#/$defs/sounds"),
     ("recipe_override", "#/$defs/control_sounds_patch", "wagon_model", "#/$defs/control_sounds"),
+    ("recipe_override", "#/$defs/zone", "wagon_type", "#/$defs/zone"),
+    ("recipe_override", "#/$defs/door", "wagon_type", "#/$defs/door"),
+    ("recipe_override", "#/$defs/seat", "wagon_type", "#/$defs/seat"),
     ("recipe", "#/$defs/rail_patch", "rail_model", "#"),
 ]
+
+# the files whose objects take comments at every level: a key starting with _
+COMMENTED = ("recipe", "recipe_override")
+COMMENT_KEY = "^_"
 
 # Java Pattern constants of convention/ObjectRole.java ↔ ids in schema/obj-conventions.json
 JAVA_PATTERNS = {
@@ -646,13 +665,25 @@ def self_check(store):
     for patch_file, patch_ptr, decl_file, decl_ptr in PATCH_MIRRORS:
         p_uri, _ = store.root(patch_file)
         d_uri, _ = store.root(decl_file)
-        _, patch = store.resolve(p_uri, patch_ptr)
-        _, decl = store.resolve(d_uri, decl_ptr)
+        try:
+            _, patch = store.resolve(p_uri, patch_ptr)
+            _, decl = store.resolve(d_uri, decl_ptr)
+        except KeyError as e:
+            problem(f"{patch_file}{patch_ptr}", str(e))
+            continue
         missing = set(decl.get("properties", {})) - set(patch.get("properties", {}))
         extra = set(patch.get("properties", {})) - set(decl.get("properties", {}))
         if missing or extra:
             problem(f"{patch_file}{patch_ptr}", f"doesn't mirror {decl_file}{decl_ptr}: "
                                                 f"missing {sorted(missing)}, extra {sorted(extra)}")
+
+    # 2b. a recipe and an override file take comments (keys starting with _) in every object
+    for kind in COMMENTED:
+        uri, document = store.root(kind)
+        for pointer, schema in walk_schema(document):
+            if schema.get("type") == "object" and COMMENT_KEY not in schema.get("patternProperties", {}):
+                problem(f"{kind}.schema.json#{pointer}", f"an object without patternProperties {COMMENT_KEY!r} "
+                                                         f"(comments are allowed at every level)")
 
     # 3. OBJ conventions: regexes compile, steps exist, kinds and patterns are the Java ones
     conventions = json.loads((store.folder / "obj-conventions.json").read_text(encoding="utf-8"))

@@ -53,6 +53,7 @@ NAMED = {
     "recipe.schema.json#/$defs/ir_sound": "звук IR",
     "recipe.schema.json#/$defs/rail_patch": "поля стиля рельсов",
     "recipe_override.schema.json#": "оверрайд типа",
+    "recipe_override.schema.json#/$defs/lang_texts": "тексты по языкам",
     "recipe_override.schema.json#/$defs/type_patch": "поля типа вагона",
     "recipe_override.schema.json#/$defs/model_patch": "поля модели вагона",
     "recipe_override.schema.json#/$defs/door_edits": "правки дверей по id",
@@ -473,7 +474,8 @@ def generate(store):
         "Пропущенное поле — значение движка, явный `0` — ноль. JSON `null` в паке не пишут; в оверрайдах "
         "конвертера `null` удаляет поле.")
     add("- **Незнакомый ключ** — ошибка схемы (`additionalProperties: false`): опечатку вроде `mass` вместо "
-        "`mass_t` ловит валидатор. Исключение — `pack.mcmeta`, где остальные ключи принадлежат Minecraft.")
+        "`mass_t` ловит валидатор. Исключения: `pack.mcmeta`, где остальные ключи принадлежат Minecraft, и "
+        "ключи на `_` в рецепте конвертера и его оверрайдах — это комментарии, на любом уровне.")
     add("")
     add("Пометки:")
     add("")
