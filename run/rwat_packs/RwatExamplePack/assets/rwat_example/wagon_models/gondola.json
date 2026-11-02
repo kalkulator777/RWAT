@@ -1,0 +1,10 @@
+{
+  "obj": "stock/gondola/gondola.obj",
+  "bogies": [2.75, -2.75],
+  "handbrake": ["WIDGET_1"],
+  "sounds": {
+    "wheels": "minecraft:entity.minecart.riding",
+    "clack": "minecraft:block.chain.step"
+  },
+  "sway": 1.3
+}

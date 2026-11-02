@@ -1,0 +1,12 @@
+{
+  "light.rwat_example.coach.IL": "Свет в вагоне",
+  "light.rwat_example.shunter.DeskL": "Подсветка пульта",
+  "light.rwat_example.shunter.FHL": "Прожектор передний",
+  "light.rwat_example.shunter.IL": "Свет в кабине",
+  "light.rwat_example.shunter.REL": "Хвостовые сигналы",
+  "light.rwat_example.shunter.RHL": "Прожектор задний",
+  "rail.rwat_example.wooden_track": "Путь на деревянных шпалах (пример)",
+  "wagon.rwat_example.coach": "Пассажирский вагон (пример)",
+  "wagon.rwat_example.gondola": "Двухосный полувагон (пример)",
+  "wagon.rwat_example.shunter": "Маневровый тепловоз (пример)"
+}
