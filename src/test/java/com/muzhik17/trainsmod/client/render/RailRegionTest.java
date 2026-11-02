@@ -6,19 +6,24 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import org.joml.Vector3d;
 import org.junit.jupiter.api.Test;
 
 import com.muzhik17.trainsmod.client.render.TileSweeper.Template;
 import com.muzhik17.trainsmod.client.render.TileSweeper.Tile;
+import com.muzhik17.trainsmod.path.HermiteSegment;
+import com.muzhik17.trainsmod.path.HermiteSegmentPath;
 import com.muzhik17.trainsmod.path.StraightLinePath;
 import com.muzhik17.trainsmod.path.TrackPath;
 
 /**
- * One region of drawn track: its static track and the switch blades lying
- * in it bake apart (audit M27), so a throw re-uploads the blades and leaves
- * the track's meshes alone.
+ * One region of drawn track: it is culled by the box of what it draws, so a
+ * crossing's or a bridge's deck reaching far off the centre line is never
+ * dropped at the screen's edge (audit M26); its static track and the switch
+ * blades lying in it bake apart (audit M27), so a throw re-uploads the
+ * blades and leaves the track's meshes alone.
  */
 class RailRegionTest {
 
@@ -69,6 +74,77 @@ class RailRegionTest {
 
     private static TrackPath straight(double x0, double z0, double x1, double z1) {
         return new StraightLinePath(new Vector3d(x0, 64.0, z0), new Vector3d(x1, 64.0, z1));
+    }
+
+    /** MVP's road crossing: a deck 0.44 high and ±4 across. */
+    static final Template CROSSING = boxes(new float[] {-0.5F, 0.0F, -4.0F, 0.5F, 0.4375F, 4.0F});
+    /** MVP's bridge: girders ±2.63 across reaching 1.5 down, rails on top. */
+    static final Template BRIDGE = boxes(new float[] {-0.5F, -1.5F, -2.63F, 0.5F, 0.0F, 2.63F},
+            new float[] {-0.5F, 0.0F, 0.72F, 0.5F, 0.40625F, 0.9F},
+            new float[] {-0.5F, 0.0F, -0.9F, 0.5F, 0.40625F, -0.72F});
+
+    /** A region holding the tiles of {@code template} along {@code path} that fall into the region of its start. */
+    private static RailRegion region(Template template, TrackPath path, List<Tile> mine) {
+        long key = RailRegion.key(path.samplePosition(0.0).x, path.samplePosition(0.0).z);
+        for (Tile tile : sweep(template, path)) {
+            if (tile.regionKey == key) {
+                mine.add(tile);
+            }
+        }
+        RailRegion region = new RailRegion(key);
+        region.put(1, mine);
+        return region;
+    }
+
+    private static void assertInside(RailRegion region, List<Tile> tiles) {
+        double[] box = region.cullBox();
+        assertFalse(tiles.isEmpty());
+        for (Tile tile : tiles) {
+            for (int i = 0; i < tile.template.vertexCount(); i++) {
+                double x = tile.x(i);
+                double y = tile.y(i);
+                double z = tile.z(i);
+                // the float a vertex is kept in may round it by a hair past the box
+                double eps = 1.0e-4;
+                assertTrue(x >= box[0] - eps && y >= box[1] - eps && z >= box[2] - eps
+                        && x <= box[3] + eps && y <= box[4] + eps && z <= box[5] + eps,
+                        String.format(Locale.ROOT, "vertex (%.3f, %.3f, %.3f) outside the cull box"
+                                + " [%.3f, %.3f, %.3f]..[%.3f, %.3f, %.3f]", x, y, z,
+                                box[0], box[1], box[2], box[3], box[4], box[5]));
+            }
+        }
+    }
+
+    /** Audit M26: a crossing's deck reaches 4 blocks off its centre line — 2 past the old margin. */
+    @Test
+    void aCrossingsDeckIsInsideItsRegionsCullBox() {
+        List<Tile> tiles = new ArrayList<>();
+        RailRegion region = region(CROSSING, straight(10.5, 3.5, 10.5, 60.5), tiles);
+        assertInside(region, tiles);
+    }
+
+    /** A bridge's girders on a curve: 2.63 across, 1.5 down, swung out by the bend. */
+    @Test
+    void aBridgeOnACurveIsInsideItsRegionsCullBox() {
+        List<Tile> tiles = new ArrayList<>();
+        TrackPath curve = new HermiteSegmentPath(new HermiteSegment(new Vector3d(2.5, 70.0, 2.5),
+                new Vector3d(31.0, 0, 0), new Vector3d(22.5, 72.0, 22.5), new Vector3d(0, 0, 31.0)));
+        RailRegion region = region(BRIDGE, curve, tiles);
+        assertInside(region, tiles);
+    }
+
+    /** The box is what the tiles draw, not a margin around their centres: no larger than the sleepers. */
+    @Test
+    void aPlainTracksCullBoxIsItsSleepers() {
+        List<Tile> tiles = new ArrayList<>();
+        RailRegion region = region(RAIL, straight(10.5, 3.5, 10.5, 60.5), tiles);
+        double[] box = region.cullBox();
+        assertEquals(10.5 - 1.25, box[0], 1.0e-6);
+        assertEquals(10.5 + 1.25, box[3], 1.0e-6);
+        assertEquals(64.0, box[1], 1.0e-6);
+        assertEquals(64.0 + 0.40625, box[4], 1.0e-6);
+        assertEquals(3.5, box[2], 1.0e-6);
+        assertEquals(60.5, box[5], 1.0e-6);
     }
 
     @Test

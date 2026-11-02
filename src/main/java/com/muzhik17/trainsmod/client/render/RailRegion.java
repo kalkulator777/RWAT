@@ -29,12 +29,6 @@ class RailRegion {
      */
     static final int SHIFT = 6;
 
-    /**
-     * Frustum-test margin around a region's tile centres: half the sleeper
-     * length (1.31) plus the rail height, rounded up.
-     */
-    static final double CULL_MARGIN = 2.0;
-
     /** {@link #key} of the region. */
     final long key;
     /** Static track, by segment. */
@@ -45,7 +39,7 @@ class RailRegion {
     boolean bladesDirty = true;
     /** Vertices of the static track (the bake budget's measure). */
     int vertexCount;
-    /** Bounds of the tile centres, blades included. */
+    /** Bounds of what the tiles draw ({@link Tile#bounds}), blades included. */
     double minX;
     double minY;
     double minZ;
@@ -112,10 +106,14 @@ class RailRegion {
         return all(bladesByNode);
     }
 
-    /** The box the region is culled by, {minX, minY, minZ, maxX, maxY, maxZ}. */
+    /**
+     * The box the region is culled by, {minX, minY, minZ, maxX, maxY, maxZ}:
+     * the box of what its tiles draw, no margin — a crossing's deck 4 blocks
+     * off its centre line is inside, and a plain track's box is no larger
+     * than its sleepers.
+     */
     double[] cullBox() {
-        return new double[] {minX - CULL_MARGIN, minY - CULL_MARGIN, minZ - CULL_MARGIN,
-                maxX + CULL_MARGIN, maxY + CULL_MARGIN, maxZ + CULL_MARGIN};
+        return new double[] {minX, minY, minZ, maxX, maxY, maxZ};
     }
 
     /** Called whenever the bounds may have changed (the renderer drops its cached cull box). */
@@ -151,12 +149,12 @@ class RailRegion {
     }
 
     private void include(Tile tile, boolean counted) {
-        minX = Math.min(minX, tile.cx);
-        minY = Math.min(minY, tile.cy);
-        minZ = Math.min(minZ, tile.cz);
-        maxX = Math.max(maxX, tile.cx);
-        maxY = Math.max(maxY, tile.cy);
-        maxZ = Math.max(maxZ, tile.cz);
+        minX = Math.min(minX, tile.bounds[0]);
+        minY = Math.min(minY, tile.bounds[1]);
+        minZ = Math.min(minZ, tile.bounds[2]);
+        maxX = Math.max(maxX, tile.bounds[3]);
+        maxY = Math.max(maxY, tile.bounds[4]);
+        maxZ = Math.max(maxZ, tile.bounds[5]);
         if (counted) {
             vertexCount += tile.template.vertexCount;
         }

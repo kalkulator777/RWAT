@@ -104,7 +104,10 @@ final class TileSweeper {
      * {@link Template} (~4 KB per tile, where a bent mesh of records was
      * ~22 KB, ~85 MB of heap for a 3800-block network). The geometry depends
      * only on the rail graph; {@code light} is the one field a relight may
-     * touch (sampled one block above the tile centre).
+     * touch (sampled one block above the tile centre). {@code bounds} is the
+     * box of the bent vertices, {minX, minY, minZ, maxX, maxY, maxZ} — what
+     * the tile really covers, however far its style reaches off the track
+     * (a crossing's deck, a bridge's girders) and however a bend stretches it.
      */
     public static final class Tile {
         final Template template;
@@ -114,18 +117,20 @@ final class TileSweeper {
         final double cx;
         final double cy;
         final double cz;
+        final double[] bounds;
         /** {@link RailRegion#key} of the region holding the tile: the one its centre lies in. */
         final long regionKey;
         /** Packed light, -1 until sampled. */
         int light = -1;
 
-        Tile(Template template, float[] xyz, int[] normalShade, Vector3d centre) {
+        Tile(Template template, float[] xyz, int[] normalShade, Vector3d centre, double[] bounds) {
             this.template = template;
             this.xyz = xyz;
             this.normalShade = normalShade;
             this.cx = centre.x;
             this.cy = centre.y;
             this.cz = centre.z;
+            this.bounds = bounds;
             this.regionKey = RailRegion.key(cx, cz);
         }
 
@@ -239,7 +244,8 @@ final class TileSweeper {
      * the normal is rotated into the same frame (local X→forward, Z→right,
      * Y→up). Diffuse shade is taken from each quad's first corner, as the
      * per-quad shading always was. A {@code bend} (a switch blade or frog rail)
-     * reshapes each vertex's across and height at its station first.
+     * reshapes each vertex's across and height at its station first. The
+     * tile's bounds are taken over the bent vertices.
      */
     private static Tile bendTile(Template t, int tileIndex, double tileLen, TrackPath path,
             Vector3d centre, RailBend bend) {
@@ -256,6 +262,8 @@ final class TileSweeper {
         int n = t.vertexCount;
         float[] xyz = new float[n * 3];
         float[] normals = new float[n * 3];
+        double[] bounds = {Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY,
+                Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY};
         for (int i = 0; i < n; i++) {
             int o = t.station[i] * TrackSweep.FRAME_STRIDE;
             double across = t.z[i]; // local Z is the cross-track (gauge) axis
@@ -265,9 +273,12 @@ final class TileSweeper {
                 across = SwitchThroat.bend(across, bend.side(), bend.gaugeFace(), bent[b], bent[b + 1], bent[b + 2]);
                 height -= bent[b + 3];
             }
-            xyz[i * 3] = (float) (frame[o] + frame[o + 6] * across + frame[o + 9] * height);
-            xyz[i * 3 + 1] = (float) (frame[o + 1] + frame[o + 7] * across + frame[o + 10] * height);
-            xyz[i * 3 + 2] = (float) (frame[o + 2] + frame[o + 8] * across + frame[o + 11] * height);
+            for (int axis = 0; axis < 3; axis++) {
+                double world = frame[o + axis] + frame[o + 6 + axis] * across + frame[o + 9 + axis] * height;
+                xyz[i * 3 + axis] = (float) world;
+                bounds[axis] = Math.min(bounds[axis], world);
+                bounds[axis + 3] = Math.max(bounds[axis + 3], world);
+            }
             normals[i * 3] = (float) (frame[o + 3] * t.nx[i] + frame[o + 6] * t.nz[i] + frame[o + 9] * t.ny[i]);
             normals[i * 3 + 1] = (float) (frame[o + 4] * t.nx[i] + frame[o + 7] * t.nz[i] + frame[o + 10] * t.ny[i]);
             normals[i * 3 + 2] = (float) (frame[o + 5] * t.nx[i] + frame[o + 8] * t.nz[i] + frame[o + 11] * t.ny[i]);
@@ -279,7 +290,10 @@ final class TileSweeper {
             normalShade[i] = packNormal(normals[i * 3]) | packNormal(normals[i * 3 + 1]) << 8
                     | packNormal(normals[i * 3 + 2]) << 16 | Math.round(shade * 255.0F) << 24;
         }
-        return new Tile(t, xyz, normalShade, centre);
+        if (n == 0) {
+            bounds = new double[] {centre.x, centre.y, centre.z, centre.x, centre.y, centre.z};
+        }
+        return new Tile(t, xyz, normalShade, centre, bounds);
     }
 
     /** One normal component as a signed byte, quantized like BufferBuilder's. */
