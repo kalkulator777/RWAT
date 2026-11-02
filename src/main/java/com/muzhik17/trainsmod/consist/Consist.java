@@ -57,6 +57,10 @@ import net.minecraft.nbt.Tag;
  * forward is where the <i>active cab</i> looks. {@link #cabFacing} records
  * which way along the path that cab faces (a cab in a flipped slot looks
  * towards −s), so the traction direction is {@code reverser × cabFacing}.
+ *
+ * <p><b>Types:</b> the composition holds its wagons' types as the registry
+ * had them when the consist was made or loaded; when the packs are reloaded
+ * the manager hands it the types as they are now ({@link #retype}, D1).
  */
 public final class Consist {
 
@@ -426,6 +430,27 @@ public final class Consist {
     /** New make-up on the same route and head (the front part of a split). */
     void setComposition(ConsistComposition composition) {
         this.composition = composition;
+    }
+
+    /**
+     * The packs were reloaded (D1, {@code /reload}): {@code next} is this
+     * make-up with every wagon's type as it is now ({@code WagonTypes.rebind}).
+     * The middle of the train stays where it stood ({@link
+     * ConsistComposition#headKeepingMiddle}) and the whole train is held on
+     * an open {@code path} as it is when running; {@code s} is renumbered
+     * with a frame shift, so the clients lay the new wagons out where the
+     * train stands instead of sliding it across the change. Speed and
+     * handles stay. {@code path} null — a consist not placed yet — is taken
+     * as it comes.
+     */
+    void retype(ConsistComposition next, TrackPath path) {
+        double head = next.headKeepingMiddle(composition, s);
+        if (path != null && !path.loop()) {
+            head = next.headOnPath(head, path.length());
+        }
+        composition = next;
+        shiftFrame(head - s);
+        s = head;
     }
 
     /**
@@ -878,9 +903,11 @@ public final class Consist {
     /**
      * Composition from NBT. An id no pack declares (a removed pack) becomes the
      * placeholder carrying that same id (SPEC §6.5), so the next save writes it
-     * back unchanged and the consist recovers when the pack returns. A save
-     * from before compositions gets one placeholder per saved wagon — the
-     * wagon count must keep matching the saved wagon entities.
+     * back unchanged and the consist recovers when the pack returns — or
+     * sooner: a {@code /reload} that brings the type back retypes the running
+     * consist ({@link #retype}). A save from before compositions gets one
+     * placeholder per saved wagon — the wagon count must keep matching the
+     * saved wagon entities.
      */
     private static ConsistComposition loadComposition(CompoundTag tag) {
         ListTag slots = tag.getList("Composition", Tag.TAG_COMPOUND);

@@ -2,6 +2,7 @@ package com.muzhik17.trainsmod.stock;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -19,7 +20,7 @@ import com.google.gson.JsonParser;
 /**
  * The pack-fed stock registry (SPEC §6.4/§6.5): aliases, placeholders, the
  * default consist; the server's load and its own client's sync sharing it in
- * single player (D2).
+ * single player (D2); what a reload hands the consists (D1).
  */
 class WagonTypesTest {
 
@@ -138,6 +139,7 @@ class WagonTypesTest {
     void ownClientsSyncKeepsTheServersAliasesAndInstances() {
         WagonType loco = parse("mvp:chme3", FULL);
         WagonTypes.load(Map.of(loco.id(), loco), Map.of("rwat:chme3", "mvp:chme3"));
+        int generation = WagonTypes.generation();
 
         WagonType synced = parse("mvp:chme3", FULL);
         assertNotSame(loco, synced);
@@ -145,6 +147,7 @@ class WagonTypesTest {
 
         assertSame(loco, WagonTypes.byId("rwat:chme3"), "the old id still finds the type");
         assertSame(loco, WagonTypes.byId("mvp:chme3"), "the server's instance, not the decoded copy");
+        assertEquals(generation, WagonTypes.generation(), "nothing changed: no consist is retyped");
     }
 
     /**
@@ -158,6 +161,7 @@ class WagonTypesTest {
         WagonType coach = type("mvp:coach", false, true);
         WagonTypes.load(Map.of(loco.id(), loco, coach.id(), coach),
                 Map.of("rwat:chme3", "mvp:chme3", "rwat:plazkart", "mvp:coach"));
+        int generation = WagonTypes.generation();
 
         WagonType otherLoco = new WagonType("mvp:chme3", 19.0, new double[]{5.0, -5.0}, 120.0, 95.0,
                 WagonType.Resistance.NONE, null, new WagonType.Cab(), WagonType.Brakes.NONE, null);
@@ -167,6 +171,7 @@ class WagonTypesTest {
         assertSame(otherLoco, WagonTypes.byId("rwat:chme3"), "an alias whose type is there stays");
         assertNull(WagonTypes.byId("mvp:coach"));
         assertNull(WagonTypes.byId("rwat:plazkart"), "an alias whose type is gone goes with it");
+        assertNotEquals(generation, WagonTypes.generation(), "other types: the consists take them");
     }
 
     /** A sync the server's next load overtook (two quick /reloads) is put right by the sync after it. */
@@ -202,5 +207,68 @@ class WagonTypesTest {
         WagonTypes.load(Map.of(car.id(), car), Map.of());
         WagonTypes.load(Map.of("b:other", type("b:other", false, false)));
         assertEquals(Map.of(car.id(), car), WagonTypes.loadedTypes());
+    }
+
+    // --- D1: /reload ---
+
+    @Test
+    void everyChangeOfTheLayerCountsAGeneration() {
+        int start = WagonTypes.generation();
+        WagonType car = type("a:car", false, true);
+        WagonTypes.load(Map.of(car.id(), car), Map.of());
+        int loaded = WagonTypes.generation();
+        assertNotEquals(start, loaded, "a server load");
+        WagonTypes.load(Map.of(car.id(), type("a:car", false, true)), Map.of());
+        assertNotEquals(loaded, WagonTypes.generation(), "a reload of the same packs too: new instances");
+    }
+
+    /**
+     * After a reload every wagon takes its type from the new load by the id
+     * it carries — all wagons of one type the same instance, a type gone the
+     * placeholder with its id, a renamed type through its alias — keeping
+     * orientation and livery.
+     */
+    @Test
+    void rebindTakesEveryWagonFromTheCurrentLoad() {
+        WagonType loco = type("a:loco", true, false);
+        WagonType coach = type("a:coach", false, true);
+        WagonType boxcar = type("a:boxcar", false, false);
+        WagonTypes.load(Map.of(loco.id(), loco, coach.id(), coach, boxcar.id(), boxcar), Map.of());
+        ConsistComposition before = new ConsistComposition(List.of(
+                new ConsistComposition.Slot(loco, false),
+                new ConsistComposition.Slot(coach, true, "red"),
+                new ConsistComposition.Slot(boxcar, false),
+                new ConsistComposition.Slot(coach, false)));
+        assertSame(before, WagonTypes.rebind(before), "nothing reloaded: the same make-up");
+
+        // the coach grew, the boxcar's pack is gone, the loco was renamed (its old id an alias)
+        WagonType coach2 = new WagonType("a:coach", 24.0, new double[]{9.0, -9.0}, 40.0, 100.0,
+                WagonType.Resistance.NONE, null, null, WagonType.Brakes.NONE,
+                new WagonType.Interior(-1, 1, -11, 1, 4, 11));
+        WagonType loco2 = type("b:loco", true, false);
+        WagonTypes.load(Map.of(coach2.id(), coach2, loco2.id(), loco2), Map.of("a:loco", "b:loco"));
+
+        ConsistComposition after = WagonTypes.rebind(before);
+        assertSame(loco2, after.slot(0).type());
+        assertSame(coach2, after.slot(1).type());
+        assertSame(coach2, after.slot(3).type(), "one load for the whole train");
+        assertEquals("a:boxcar", after.slot(2).type().id(), "a type gone keeps its id");
+        assertFalse(WagonTypes.isKnown("a:boxcar"));
+        assertTrue(after.slot(1).flipped());
+        assertEquals("red", after.slot(1).livery());
+        assertEquals(before.wagonCount(), after.wagonCount());
+    }
+
+    /** Door state lives by id (SPEC §9.8): a reload that reorders, adds or drops doors keeps it so. */
+    @Test
+    void openDoorsFollowTheirIds() {
+        WagonType before = withDoors("a:car", "door1", "door2", "door3", "kupe");
+        WagonType after = withDoors("a:car", "kupe", "door3", "toilet", "door1");
+        int open = 0b0101; // door1 and door3
+        assertEquals(0b1010, WagonTypes.openDoorsAfter(before, after, open));
+        assertEquals(0, WagonTypes.openDoorsAfter(before, withDoors("a:car"), open), "no doors now");
+        assertEquals(0, WagonTypes.openDoorsAfter(before, after, 0));
+        assertEquals(0, WagonTypes.openDoorsAfter(before, null, open));
+        assertEquals(open, WagonTypes.openDoorsAfter(before, before, open), "the same type: as it was");
     }
 }

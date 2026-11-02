@@ -3,8 +3,10 @@ package com.muzhik17.trainsmod.stock;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The rolling-stock registry (SPEC §5.1, §6). The mod ships no stock of its
@@ -26,6 +28,10 @@ import java.util.Map;
  * resolves the items and saves that carry an old id through them. When the
  * sync is the server's own layer coming back — decoded anew, but declaring
  * the same — the server's layer is kept as it is, instances and all.
+ *
+ * <p><b>Reloads.</b> Every change of the layer counts a {@link #generation}:
+ * the server's consists hold their types as instances, and take the new ones
+ * by id ({@link #rebind}) when they see it move (D1: {@code /reload}).
  */
 public final class WagonTypes {
 
@@ -75,6 +81,9 @@ public final class WagonTypes {
 
     /** The layer the server (in this JVM) loaded last, or null; guarded by the class lock. */
     private static Layer serverLayer;
+
+    /** How many times {@link #layer} changed; written under the class lock only. */
+    private static volatile int generation;
 
     private WagonTypes() {
     }
@@ -145,9 +154,22 @@ public final class WagonTypes {
         swap(serverLayer);
     }
 
-    /** Make {@code next} the layer. */
+    /** Make {@code next} the layer, counting a generation if it is another one. */
     private static void swap(Layer next) {
-        layer = next;
+        if (next != layer) {
+            layer = next;
+            generation++;
+        }
+    }
+
+    /**
+     * Counts every change of the loaded layer — a server (re)load, a client
+     * sync that brought other types. Whoever holds types as instances (the
+     * server's consists) {@linkplain #rebind takes the current ones} when it
+     * sees this move.
+     */
+    public static int generation() {
+        return generation;
     }
 
     /**
@@ -168,6 +190,52 @@ public final class WagonTypes {
         List<WagonType> all = new ArrayList<>(layer.types().values());
         all.sort((a, b) -> a.id().compareTo(b.id()));
         return all;
+    }
+
+    /**
+     * The make-up with each wagon's type looked up again by the id it carries
+     * (D1, after a reload): the type as it is now, a renamed one through its
+     * alias, a removed one as the {@link #missing} placeholder with that id —
+     * the same as a save loading. Every slot from one layer, so one train
+     * never holds two loads of a type; orientation and livery kept. The
+     * composition itself if no wagon's type changed.
+     */
+    public static ConsistComposition rebind(ConsistComposition composition) {
+        Layer now = layer;
+        List<ConsistComposition.Slot> slots = new ArrayList<>(composition.wagonCount());
+        boolean changed = false;
+        for (ConsistComposition.Slot slot : composition.slots()) {
+            WagonType type = now.resolve(slot.type().id());
+            changed |= type != slot.type();
+            slots.add(new ConsistComposition.Slot(type, slot.flipped(), slot.livery()));
+        }
+        return changed ? new ConsistComposition(slots) : composition;
+    }
+
+    /**
+     * The open doors of a wagon whose type went from {@code before} to
+     * {@code after} (D1): door state lives by id (SPEC §9.8), so each door of
+     * {@code after} is open if a door of that id was open in {@code before},
+     * wherever the reload put it in the list; a door gone is forgotten, a new
+     * one is shut. Bit {@code i} = door {@code i}, the first 32 as everywhere.
+     */
+    public static int openDoorsAfter(WagonType before, WagonType after, int openMask) {
+        if (before == null || after == null) {
+            return 0;
+        }
+        Set<String> open = new HashSet<>();
+        for (int i = 0; i < before.doors().size() && i < 32; i++) {
+            if ((openMask >> i & 1) != 0) {
+                open.add(before.doors().get(i).id());
+            }
+        }
+        int mask = 0;
+        for (int i = 0; i < after.doors().size() && i < 32; i++) {
+            if (open.contains(after.doors().get(i).id())) {
+                mask |= 1 << i;
+            }
+        }
+        return mask;
     }
 
     /** True if both declare the same ids, each the same way ({@link #sameDeclaration}). */

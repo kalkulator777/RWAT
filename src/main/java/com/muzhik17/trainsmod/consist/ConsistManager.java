@@ -66,7 +66,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *
  * <p>Each tick, for every ticking consist: advance {@code s += v}, push the
  * resulting pose into the consist's wagon entities (re-attached by UUID), and
- * broadcast a state snapshot to clients tracking the wagon.
+ * broadcast a state snapshot to clients tracking the wagon. A tick after the
+ * packs were reloaded first hands every consist its wagons' new types
+ * ({@link #retypeAll}, D1).
  *
  * <p><b>Coupling (SPEC §6.12):</b> before that, consists on one track whose
  * facing ends run into each other merge into one ({@link Coupling} decides,
@@ -87,6 +89,13 @@ public final class ConsistManager extends SavedData {
     private final Set<Integer> consistsWithRiders = new HashSet<>();
     /** Who holds which chunks loaded (SPEC §2.1, 2026-10-12); not saved — leases are re-earned after a restart. */
     private final ConsistChunks chunks = new ConsistChunks();
+    /**
+     * The {@link WagonTypes#generation} the consists' types are from: a
+     * consist made or loaded takes the types of the registry as it is, and
+     * a reload since is caught up with at the start of the next tick
+     * ({@link #retypeAll}, D1).
+     */
+    private int typesGeneration = WagonTypes.generation();
 
     public static ConsistManager get(ServerLevel level) {
         return level.getDataStorage().computeIfAbsent(
@@ -178,6 +187,9 @@ public final class ConsistManager extends SavedData {
         PhysicsTuning tuning = ServerConfig.tuning();
         ChunkLease.Policy chunkPolicy = ServerConfig.chunkLoading();
         long now = level.getGameTime();
+        if (typesGeneration != WagonTypes.generation()) {
+            retypeAll(level, network);
+        }
         boolean dirty = coupleTouching(level, network, tuning);
         // "last rider left" clears go out after every consist's rider list of
         // this tick: a rider whose wagon just changed consists (coupling,
@@ -346,6 +358,41 @@ public final class ConsistManager extends SavedData {
             }
         }
         return null;
+    }
+
+    /**
+     * The packs were reloaded (D1, {@code /reload}): every consist takes its
+     * wagons' types as the registry has them now, by the ids they carry
+     * ({@link WagonTypes#rebind}: all wagons of a train from the one load; a
+     * type gone becomes the placeholder with its id, as when a save loads).
+     * Where the geometry changed the train keeps its middle and stays on its
+     * track ({@link Consist#retype}), and each loaded wagon puts right what
+     * hung on the old type — its open doors by id, the chairs, the riders'
+     * feet ({@link WagonEntity#retyped}). Before the coupling pass, so no
+     * train touches another with the old lengths. A wagon not loaded keeps
+     * nothing that needs it: its doors are saved by id, nobody rides it.
+     */
+    private void retypeAll(ServerLevel level, RailNetwork network) {
+        // the generation first: a load landing while we rebind is caught next tick
+        typesGeneration = WagonTypes.generation();
+        for (Consist consist : consists.values()) {
+            ConsistComposition before = consist.composition();
+            ConsistComposition after = WagonTypes.rebind(before);
+            if (after == before) {
+                continue;
+            }
+            consist.retype(after, consist.resolvePath(network.graph(), network.revision()));
+            List<UUID> ids = consist.wagonIds();
+            for (int i = 0; i < ids.size() && i < after.wagonCount(); i++) {
+                if (level.getEntity(ids.get(i)) instanceof WagonEntity wagon) {
+                    // its place in the train, as the tick re-asserts it, so it reads its own new type
+                    wagon.setConsistId(consist.id());
+                    wagon.setWagonIndex(i);
+                    wagon.retyped(before.slot(i).type());
+                }
+            }
+        }
+        setDirty();
     }
 
     // --- coupling (SPEC §6.12) ---
