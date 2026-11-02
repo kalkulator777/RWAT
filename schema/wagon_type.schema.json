@@ -2,8 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kalkulator777.github.io/RWAT/schema/wagon_type.schema.json",
   "title": "Wagon type",
-  "description": "data/<namespace>/wagon_types/<id>.json: one rolling-stock type — geometry, physics, walkable floor, doors, cab. The file's location is the type id <namespace>:<id>; the body never states it. Loaded by the server and synced to the clients. An omitted field takes the engine's value, an explicit 0 stays zero.",
-  "x-description-ru": "data/<namespace>/wagon_types/<id>.json: один тип подвижного состава — геометрия, физика, пол, двери, кабина. Путь файла и есть id типа <namespace>:<id>, внутри файла id не пишется. Читает сервер и синхронизирует клиентам. Пропущенное поле — значение движка, явный 0 — ноль.",
+  "description": "data/<namespace>/wagon_types/<id>.json: one rolling-stock type — geometry, physics, walkable floor, doors, cab. The file's location is the type id <namespace>:<id>; the body never states it. Loaded by the server and synced to the clients. An omitted field takes the engine's value, an explicit 0 stays zero. A null, a value of the wrong type or a geometry that makes no wagon refuses the whole file (an error); an unknown key is a warning with the nearest known one as a hint.",
+  "x-description-ru": "data/<namespace>/wagon_types/<id>.json: один тип подвижного состава — геометрия, физика, пол, двери, кабина. Путь файла и есть id типа <namespace>:<id>, внутри файла id не пишется. Читает сервер и синхронизирует клиентам. Пропущенное поле — значение движка, явный 0 — ноль. null, значение не того типа или геометрия, из которой не выходит вагон, не дают загрузиться всему файлу (ошибка); незнакомый ключ — предупреждение с подсказкой ближайшего известного.",
   "x-file": "data/<namespace>/wagon_types/<id>.json",
   "x-code": ["stock/WagonTypeParser.java", "stock/StockDefaults.java", "data/WagonTypeReloadListener.java"],
   "x-keys": "stock/WagonTypeParser.java#KEYS",
@@ -13,22 +13,16 @@
       "type": "number",
       "exclusiveMinimum": 0,
       "x-unit": "block",
-      "description": "Length over the frame ends (coupler to coupler at zero coupler offsets): the car spans ±length/2 along the track from its centre. Sets the collision hull's length and, with couplers, where the couplers engage.",
-      "x-description-ru": "Длина по концам рамы (от сцепки до сцепки при нулевых смещениях сцепок): вагон занимает ±length/2 вдоль пути от центра. Задаёт длину корпуса коллизии и вместе с couplers — точки сцепления.",
-      "x-status": "pending-engine",
-      "x-status-note": "doesn't check length > 0 (phase 1, strict loading).",
-      "x-status-note-ru": "не проверяет length > 0 (будет в фазе 1, строгая загрузка)."
+      "description": "Length over the frame ends (coupler to coupler at zero coupler offsets): the car spans ±length/2 along the track from its centre. Sets the collision hull's length and, with couplers, where the couplers engage. Must be above 0; bogies and couplers are checked against it.",
+      "x-description-ru": "Длина по концам рамы (от сцепки до сцепки при нулевых смещениях сцепок): вагон занимает ±length/2 вдоль пути от центра. Задаёт длину корпуса коллизии и вместе с couplers — точки сцепления. Должна быть больше 0; по ней проверяются bogies и couplers."
     },
     "bogies": {
       "type": "array",
       "items": {"type": "number"},
       "minItems": 1,
       "x-unit": "block",
-      "description": "Bogie pivots along the car from its centre, + = forward, the front bogie first. Only the first and the last are used: the body rides on two pivots (kinematics and render). A two-axle car without bogies lists its axles.",
-      "x-description-ru": "Шкворни тележек вдоль вагона от центра, + — вперёд, передняя тележка первой. Работают только первая и последняя: кузов стоит на двух точках (кинематика и рендер). Двухосный вагон без тележек пишет сюда оси.",
-      "x-status": "pending-engine",
-      "x-status-note": "doesn't check the front-first order (phase 1, strict loading).",
-      "x-status-note-ru": "не проверяет порядок «передняя первой» (будет в фазе 1, строгая загрузка)."
+      "description": "Bogie pivots along the car from its centre, + = forward, the front bogie first. Only the first and the last are used: the body rides on two pivots (kinematics and render). A two-axle car without bogies lists its axles. The loader refuses the type unless the pivots run strictly front to back (each less than the one before) and each lies inside the body, |pivot| < length/2 — a schema can't say that, the loader does.",
+      "x-description-ru": "Шкворни тележек вдоль вагона от центра, + — вперёд, передняя тележка первой. Работают только первая и последняя: кузов стоит на двух точках (кинематика и рендер). Двухосный вагон без тележек пишет сюда оси. Загрузчик не принимает тип, если шкворни не идут строго спереди назад (каждый меньше предыдущего) или какой-то лежит вне кузова: нужно |шкворень| < length/2. Схема этого не выразит — проверяет загрузчик."
     },
     "mass_t": {
       "type": "number",
@@ -81,8 +75,8 @@
       "type": "array",
       "items": {"$ref": "common.schema.json#/$defs/type_id"},
       "default": [],
-      "description": "Old type ids this type takes over: saved wagons of an old id load as this type. Server only, one level (an alias of an alias isn't followed). An alias that is a real type id or another type's alias is dropped with an error in the log.",
-      "x-description-ru": "Старые id, которые этот тип забирает себе: сохранённые вагоны старого id загружаются этим типом. Только сервер, один уровень (алиас алиаса не раскрывается). Алиас, совпавший с id настоящего типа или с чужим алиасом, отбрасывается с ошибкой в логе."
+      "description": "Old type ids this type takes over: saved wagons of an old id load as this type. Server only, one level (an alias of an alias isn't followed). The type and its aliases load together: a broken list refuses the whole file. An alias that is a loaded type's id is ignored with an error; an alias two types claim goes to the lower type id, and both files get an error.",
+      "x-description-ru": "Старые id, которые этот тип забирает себе: сохранённые вагоны старого id загружаются этим типом. Только сервер, один уровень (алиас алиаса не раскрывается). Тип и его алиасы грузятся вместе: битый список не даёт загрузиться всему файлу. Алиас, совпавший с id загруженного типа, игнорируется с ошибкой; алиас, который заявили два типа, достаётся типу с меньшим id, а оба файла получают ошибку."
     }
   },
   "required": ["length", "bogies", "mass_t"],
@@ -232,8 +226,8 @@
           "default": 0,
           "x-unit": "kN",
           "x-status": "reserved",
-          "x-status-note": "parsed and synced, not modelled: no dynamic brake acts. The loader will warn when it is set (R7).",
-          "x-status-note-ru": "разбирается и синхронизируется, но не моделируется: электродинамический тормоз не действует. Загрузчик будет предупреждать, если поле задано (R7).",
+          "x-status-note": "parsed and synced, not modelled: no dynamic brake acts. The loader warns when it is set (R7).",
+          "x-status-note-ru": "разбирается и синхронизируется, но не моделируется: электродинамический тормоз не действует. Загрузчик предупреждает, если поле задано (R7).",
           "description": "Peak force of the dynamic (electric) brake.",
           "x-description-ru": "Наибольшая сила электродинамического тормоза."
         },
@@ -243,8 +237,8 @@
           "default": 0,
           "x-unit": "km/h",
           "x-status": "reserved",
-          "x-status-note": "parsed and synced, not modelled (R7).",
-          "x-status-note-ru": "разбирается и синхронизируется, но не моделируется (R7).",
+          "x-status-note": "parsed and synced, not modelled. The loader warns when it is set (R7).",
+          "x-status-note-ru": "разбирается и синхронизируется, но не моделируется. Загрузчик предупреждает, если поле задано (R7).",
           "description": "Speed below which the dynamic brake fades to zero.",
           "x-description-ru": "Скорость, ниже которой электродинамический тормоз сходит на нет."
         }
@@ -268,9 +262,6 @@
           "$ref": "common.schema.json#/$defs/vec3",
           "deprecated": true,
           "x-frame": "obj",
-          "x-status": "pending-engine",
-          "x-status-note": "reads the legacy RWAT frame; the OBJ frame comes with the R6 wave.",
-          "x-status-note-ru": "читает старый кадр RWAT; кадр OBJ — с волны R6.",
           "description": "Old form: one chair's point. Write seats: [{\"at\": …, \"yaw\": …}] instead. Not together with seats.",
           "x-description-ru": "Старая форма: точка одного кресла. Пишите seats: [{\"at\": …, \"yaw\": …}]. Вместе с seats нельзя."
         },
@@ -296,9 +287,6 @@
         "at": {
           "$ref": "common.schema.json#/$defs/vec3",
           "x-frame": "obj",
-          "x-status": "pending-engine",
-          "x-status-note": "reads the legacy RWAT frame; the OBJ frame comes with the R6 wave.",
-          "x-status-note-ru": "читает старый кадр RWAT; кадр OBJ — с волны R6.",
           "description": "The point on top of the cushion a seated driver sits on; the body sits 0.6 below it.",
           "x-description-ru": "Точка на верху подушки, на которую садится машинист; тело — на 0.6 ниже."
         },
@@ -317,9 +305,6 @@
       "type": "object",
       "x-keys": "stock/WagonTypeParser.java#ZONE_KEYS",
       "x-frame": "obj",
-      "x-status": "pending-engine",
-      "x-status-note": "reads the legacy RWAT frame; the OBJ frame comes with the R6 wave.",
-      "x-status-note-ru": "читает старый кадр RWAT; кадр OBJ — с волны R6.",
       "description": "One floor zone: its plan (x, z) is floor, min y is the floor height; max y is not used.",
       "x-description-ru": "Одна зона пола: её план (x, z) — пол, min y — высота пола; max y не используется.",
       "properties": {
@@ -341,9 +326,6 @@
       "type": "object",
       "x-keys": "stock/WagonTypeParser.java#DOOR_KEYS",
       "x-frame": "obj",
-      "x-status": "pending-engine",
-      "x-status-note": "reads the legacy RWAT frame; the OBJ frame comes with the R6 wave.",
-      "x-status-note-ru": "читает старый кадр RWAT; кадр OBJ — с волны R6.",
       "description": "A doorway: the door leaf's box. Its thinnest horizontal side is the wall normal — thin across the car: a side door, thin along it: an end door; it opens outward on the side of the centre it lies on. Without flags it is a hull door: shut it is the floor's edge, open it lets players step out on its own side. A leaf in the model moves with it: its .anim group (model animations, by id), or a DOOR_<n> leaf whose centre lies in this box (±0.1). The door animation always takes 40 ticks. No hull doors at all: riders get on and off by right-click.",
       "x-description-ru": "Дверной проём: коробка створки. Самая тонкая горизонтальная сторона — нормаль стены: тонкая поперёк вагона — боковая дверь, вдоль — торцевая; наружу — в сторону, где лежит её центр. Без флагов — наружная дверь: закрытая — край пола, открытая — выход шагом на её сторону. Створка модели ходит с ней: группа .anim (animations модели, по id) или створка DOOR_<n>, центр которой в этой коробке (±0.1). Анимация двери всегда 40 тиков. Без наружных дверей вход и выход — по ПКМ.",
       "properties": {
@@ -383,11 +365,8 @@
         },
         "group": {
           "type": "string",
-          "description": "Doors of one group open and close together. A cab switch whose control group equals a door's id or group opens it at value ≥ 0.5.",
-          "x-description-ru": "Двери одной группы открываются и закрываются вместе. Тумблер кабины, чья группа совпадает с id или group двери, открывает её при значении ≥ 0.5.",
-          "x-status": "pending-engine",
-          "x-status-note": "the client reads \"\" as no group, the server as a group named \"\". In v1 \"\" is no group and groups match case aside everywhere; null is read as no group but is not part of v1.",
-          "x-status-note-ru": "клиент читает \"\" как «нет группы», а сервер — как группу с именем \"\". В v1 \"\" — нет группы, группы везде без учёта регистра; null движок читает как «нет группы», но в v1 он не входит."
+          "description": "Doors of one group open and close together; group names match case aside. \"\" is no group, as the key left out is (the engine reads null so too, but null isn't part of format 1). A cab switch whose control group equals a door's id or group, case aside, opens it at value ≥ 0.5.",
+          "x-description-ru": "Двери одной группы открываются и закрываются вместе; имена групп сравниваются без учёта регистра. \"\" — нет группы, как и пропущенный ключ (null движок читает так же, но в формат 1 он не входит). Тумблер кабины, чья группа совпадает с id или group двери без учёта регистра, открывает её при значении ≥ 0.5."
         }
       },
       "required": ["id", "min", "max"],
@@ -396,8 +375,8 @@
     "couplers": {
       "type": "object",
       "x-keys": "stock/WagonTypeParser.java#COUPLERS_KEYS",
-      "description": "Where the couplers engage, from the frame ends (±length/2), + = outward. Coupled cars stand coupler point to coupler point; a negative offset lets the heads and the gangway bellows meet inside the frames.",
-      "x-description-ru": "Где сцепляются сцепки, от концов рамы (±length/2), + — наружу. Сцепленные вагоны стоят точка сцепления к точке; отрицательное смещение сводит головы сцепок и суфле внутрь рам.",
+      "description": "Where the couplers engage, from the frame ends (±length/2), + = outward. Coupled cars stand coupler point to coupler point; a negative offset lets the heads and the gangway bellows meet inside the frames. Each offset must be under length/2 in size, |front| < length/2 and |rear| < length/2: a coupler can't engage past the body's middle nor stick out further than half a body. A schema can't say that; the loader refuses the type otherwise.",
+      "x-description-ru": "Где сцепляются сцепки, от концов рамы (±length/2), + — наружу. Сцепленные вагоны стоят точка сцепления к точке; отрицательное смещение сводит головы сцепок и суфле внутрь рам. Каждое смещение по модулю меньше length/2: |front| < length/2 и |rear| < length/2 — сцепка не может сцепляться за серединой кузова и торчать дальше половины кузова. Схема этого не выразит; иначе загрузчик не принимает тип.",
       "properties": {
         "front": {
           "type": "number",

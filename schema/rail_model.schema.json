@@ -16,14 +16,11 @@
     },
     "tile_length": {
       "type": "number",
-      "exclusiveMinimum": 0,
+      "minimum": 0.25,
       "default": 1.0,
       "x-unit": "block",
-      "description": "How far apart the tile repeats. The rail objects are stretched along X to fill [−tile_length/2, tile_length/2] end to end; the base keeps its size, centred in the tile.",
-      "x-description-ru": "Шаг повторения тайла. Рельсы растягиваются по X на [−tile_length/2, tile_length/2] встык; основание сохраняет размер и стоит по центру тайла.",
-      "x-status": "pending-engine",
-      "x-status-note": "takes any tile_length > 0; a lower bound comes with the shared rail style parser (phase 1, D5).",
-      "x-status-note-ru": "принимает любое tile_length > 0; нижняя граница появится с общим разбором стиля рельсов (фаза 1, D5)."
+      "description": "How far apart the tile repeats. The rail objects are stretched along X to fill [−tile_length/2, tile_length/2] end to end; the base keeps its size, centred in the tile. At least a quarter block: both sides work per tile (the client draws each, the server rasterises each into the bed), so a shorter one is refused.",
+      "x-description-ru": "Шаг повторения тайла. Рельсы растягиваются по X на [−tile_length/2, tile_length/2] встык; основание сохраняет размер и стоит по центру тайла. Не меньше четверти блока: обе стороны работают по тайлам (клиент рисует каждый, сервер растрирует каждый в полотно), поэтому более короткий шаг не принимается."
     }
   },
   "required": ["obj"],

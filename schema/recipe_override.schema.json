@@ -287,9 +287,6 @@
           ],
           "x-unit": "block",
           "x-frame": "obj",
-          "x-status": "pending-engine",
-          "x-status-note": "floorgen reads heights in the legacy RWAT frame (OBJ y + 0.43625); the OBJ frame comes with the R6 wave.",
-          "x-status-note-ru": "floorgen читает высоты в старом кадре RWAT (y OBJ + 0.43625); кадр OBJ — с волны R6.",
           "x-engine-default": "the big up-facing surface nearest IR's passenger area, else the largest low one",
           "x-engine-default-ru": "большая горизонтальная поверхность, ближайшая к зоне passenger из IR, иначе самая большая нижняя",
           "description": "The floor height, or a list of heights for a floor in steps; each must lie within 0.05 of an up-facing surface of the model.",
@@ -348,9 +345,6 @@
     "floor_box": {
       "type": "object",
       "x-frame": "obj",
-      "x-status": "pending-engine",
-      "x-status-note": "floorgen reads the legacy RWAT frame; the OBJ frame comes with the R6 wave.",
-      "x-status-note-ru": "floorgen читает старый кадр RWAT; кадр OBJ — с волны R6.",
       "description": "A box of grid cells: x and z are the plan; with several levels, y picks the level (a box spanning several levels acts on each).",
       "x-description-ru": "Коробка клеток сетки: x и z — план; при нескольких уровнях y выбирает уровень (коробка через несколько уровней действует на каждый).",
       "properties": {

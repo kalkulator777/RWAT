@@ -304,9 +304,8 @@ class Tables:
         if schema.get("deprecated"):
             parts.insert(0, "**Устарело.**")
         if schema.get("x-frame") == "obj":
-            parts.append("**Кадр OBJ**; движок пока читает старый кадр (раздел «Системы координат»).")
-            self.statuses.append((file, key, "frame", ""))
-        elif schema.get("x-status") in self.store.status_label:
+            parts.append("**Кадр OBJ** (раздел «Системы координат»).")
+        if schema.get("x-status") in self.store.status_label:
             note = schema.get("x-status-note-ru", "")
             parts.append(f"**{self.store.status_label[schema['x-status']]}:** {md(note)}")
             self.statuses.append((file, key, schema["x-status"], note))
@@ -452,7 +451,7 @@ def generate(store):
             add("")
             add(f"**{label[frame['x-status']]}:** {md(frame['x-status-note-ru'])}")
         add("")
-    add("**Пересчёт** — для тех, кто читает старые файлы и сгенерированный пак MVP. "
+    add("**Пересчёт** — для тех, кто переводит файлы, написанные до формата 1. "
         f"Подъём {fmt(conversion['y_lift'])} = {md(conversion['x-y_lift_formula-ru'])}.")
     add("")
     out.extend(table(["Из кадра OBJ в старый", "Из старого в кадр OBJ"],
@@ -607,14 +606,9 @@ def generate(store):
 
     # statuses
     heading("Что движок пока делает иначе")
-    add("Собрано из пометок схем. Формат 1 описывает поведение после ближайших волн карты; до тех пор движок "
-        "ведёт себя так:")
+    add("Собрано из пометок схем: поля, которые движок разбирает, но не моделирует, и места, где формат 1 "
+        "описывает поведение после ближайших волн карты, а движок пока ведёт себя иначе.")
     add("")
-    frames = sorted({f"{code(key)} ({file.split('.')[0]})" for file, key, status, _ in tables.statuses
-                     if status == "frame"})
-    if frames:
-        add("- **Координаты разметки в кадре OBJ** (R6): движок, конвертер, `floorgen` и сгенерированный пак MVP "
-            "пока работают в старом кадре модели RWAT. Затронуты: " + ", ".join(frames) + ".")
     seen = set()
     for status in ("pending-engine", "reserved"):
         for file, key, s, note in tables.statuses:
