@@ -20,6 +20,7 @@ import com.muzhik17.trainsmod.client.render.model.StockModels;
 import com.muzhik17.trainsmod.consist.Consist;
 import com.muzhik17.trainsmod.consist.Handles;
 import com.muzhik17.trainsmod.consist.WagonEntity;
+import com.muzhik17.trainsmod.convention.ObjectRole;
 import com.muzhik17.trainsmod.kinematics.PoseMath;
 import com.muzhik17.trainsmod.kinematics.WagonPose;
 import com.muzhik17.trainsmod.stock.ConsistComposition;
@@ -145,7 +146,7 @@ public final class TrainSounds {
         LoopPlayer<TrainSound> horn;
         LoopPlayer<TrainSound> bell;
         String cabType;
-        final Map<String, TrainSound> engaged = new HashMap<>();
+        final Map<ObjectRole.Kind, TrainSound> engaged = new HashMap<>();
     }
 
     private static final Map<Integer, WagonAudio> WAGONS = new HashMap<>();
@@ -397,12 +398,14 @@ public final class TrainSounds {
         Handles before = audio.handles;
         audio.handles = handles;
         if (before != null && ear.distanceToSqr(desk.x, desk.y, desk.z) < CONTROL_DISTANCE * CONTROL_DISTANCE) {
-            control(audio, sounds, "THROTTLE_", null, before.throttle() != handles.throttle(), desk, volume);
-            control(audio, sounds, "TRAIN_BRAKE_", null, before.trainBrake() != handles.trainBrake(),
+            control(audio, sounds, ObjectRole.Kind.THROTTLE, before.throttle() != handles.throttle(), desk,
+                    volume);
+            control(audio, sounds, ObjectRole.Kind.TRAIN_BRAKE, before.trainBrake() != handles.trainBrake(),
                     desk, volume);
-            control(audio, sounds, "INDEPENDENT_BRAKE_", "IND_BRAKE_",
-                    before.indBrake() != handles.indBrake(), desk, volume);
-            control(audio, sounds, "REVERSER_", null, before.reverser() != handles.reverser(), desk, volume);
+            control(audio, sounds, ObjectRole.Kind.INDEPENDENT_BRAKE, before.indBrake() != handles.indBrake(),
+                    desk, volume);
+            control(audio, sounds, ObjectRole.Kind.REVERSER, before.reverser() != handles.reverser(), desk,
+                    volume);
         }
 
         int signals = ClientConsists.signals(consistId);
@@ -422,12 +425,12 @@ public final class TrainSounds {
      * {@code engage} unless that is still sounding from the last move (the
      * brake valve's long hiss doesn't restart on every notch).
      */
-    private static void control(ConsistAudio audio, SoundSet sounds, String kind, String alias,
-            boolean moved, Vector3d at, double volume) {
+    private static void control(ConsistAudio audio, SoundSet sounds, ObjectRole.Kind kind, boolean moved,
+            Vector3d at, double volume) {
         if (!moved) {
             return;
         }
-        SoundSet.Control control = sounds.control(kind, alias);
+        SoundSet.Control control = sounds.control(kind);
         if (control == null) {
             return;
         }

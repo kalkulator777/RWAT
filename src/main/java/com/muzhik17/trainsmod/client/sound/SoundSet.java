@@ -12,6 +12,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonSyntaxException;
+import com.muzhik17.trainsmod.convention.ObjectRole;
 import com.muzhik17.trainsmod.pack.PackJson;
 
 /**
@@ -43,7 +44,13 @@ import com.muzhik17.trainsmod.pack.PackJson;
  * {@code [from, to]}: for {@code idle} and {@code wheels} the range from rest
  * to full (throttle for {@code idle}, speed for {@code wheels}); a signal
  * ({@code horn}, {@code bell}) sounds at one level, the second number
- * ({@code to}), the first is read and unused.
+ * ({@code to}), the first is read and unused. A {@code controls} key is a
+ * control's name as an object's is ({@link ObjectRole}): its sound plays for
+ * the handle of exactly that kind ({@code THROTTLE_1} for the throttle;
+ * {@code THROTTLE_BRAKE_1}, a combined handle the mod only draws, is no
+ * throttle), and only the handles of the train sound: throttle, train brake,
+ * independent brake ({@code INDEPENDENT_BRAKE_<n>} or {@code IND_BRAKE_<n>}),
+ * reverser.
  *
  * <p>Plain GSON, no MC types: unit-testable like {@code WagonModelDecl}.
  */
@@ -85,17 +92,27 @@ public record SoundSet(Loop idle, Loop horn, Loop bell, Loop wheels, String clac
     }
 
     /**
-     * The cab control of a kind: the first declared whose key starts with
-     * {@code kind} or {@code alias} ({@code THROTTLE_1} before
-     * {@code THROTTLE_2}, as the pack lists them); null if none.
+     * The cab control of a kind: the first declared whose key names a control
+     * of exactly that kind, read the way an object's name is
+     * ({@link ObjectRole}): {@code THROTTLE_1} before {@code THROTTLE_2}, as
+     * the pack lists them; {@code IND_BRAKE_1} is an
+     * {@link ObjectRole.Kind#INDEPENDENT_BRAKE}, and {@code THROTTLE_BRAKE_1}
+     * is a {@link ObjectRole.Kind#THROTTLE_BRAKE}, not a throttle. A key that
+     * names no control of the convention matches no kind. Null if none.
      */
-    public Control control(String kind, String alias) {
+    public Control control(ObjectRole.Kind kind) {
         for (Map.Entry<String, Control> entry : controls.entrySet()) {
-            if (entry.getKey().startsWith(kind) || (alias != null && entry.getKey().startsWith(alias))) {
+            if (kindOf(entry.getKey()) == kind) {
                 return entry.getValue();
             }
         }
         return null;
+    }
+
+    /** The kind of control a {@code controls} key names, or null if it names none ({@code MY_LEVER}). */
+    static ObjectRole.Kind kindOf(String key) {
+        ObjectRole.Control control = ObjectRole.parse(key).control();
+        return control == null ? null : control.kind();
     }
 
     /** True if a sound reference names a file rather than a sound event. */
