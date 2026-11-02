@@ -36,6 +36,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * of the cab and from the walkway toward the cab, in spectator mode with the
  * HUD hidden — 4000 blocks east of the player, away from the save's own
  * rails. Quits the game at the end.
+ *
+ * <p>Some scenes keep a class of their own, on the same property: {@code
+ * access} — who may touch a wagon — is {@link AccessScene}.
  */
 @EventBusSubscriber(modid = RailsWheelsAndTrains.MODID, value = Dist.CLIENT)
 public final class ClientAutoScene {
