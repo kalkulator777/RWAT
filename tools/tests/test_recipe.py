@@ -78,6 +78,33 @@ class RecipeTest(unittest.TestCase):
         self.assertIn("sources[0]: unknown key \"lable\", ignored — did you mean \"label\"?", out)
         self.assertIn("\"copy_root_files\": Credits.txt is not in ir.zip", out)
 
+    def test_comment_keys_are_dropped_silently_at_any_depth(self):
+        self.per_type("test_coach", {
+            "_comment": "the coach of the test pack",
+            "name": {"_why": "a note", "ru_ru": "Вагон"},
+            "floor": {"_comment": "the defaults", "clearance": 0.1},
+            "type": {"_comment": "heavier", "mass_t": 31.0,
+                     "doors": {"_comment": "not a door", "door_3": {"_why": "a note", "inner": None}}},
+            "model": {"_comment": "a note", "sway": 1.5},
+        })
+        recipe = self.recipe(overrides_dir="tp", _comment="the recipe's own note",
+                             rail_overrides={"rail_a": {"_comment": "a note", "tile_length": 2.0}},
+                             sound_defaults={"_comment": "none", "clack": "sounds/coach/hum.ogg"})
+        data = json.loads(recipe.read_text("utf-8"))
+        data["sources"][0]["_comment"] = "the only source"
+        recipe.write_text(json.dumps(data), encoding="utf-8")
+        status, out, err = irpack.convert(recipe)
+        self.assertEqual(status, 0, out + err)
+        self.assertNotIn("unknown key", out)
+        self.assertNotIn("_comment", out + err)
+        wagon = self.wagon("test_coach")
+        self.assertEqual(wagon["mass_t"], 31.0)
+        self.assertEqual({d["id"]: d.get("inner") for d in wagon["doors"]}["door_3"], None)
+        written = [p.read_text("utf-8") for p in self.pack.rglob("*.json")] + [(self.pack / "pack.mcmeta").read_text()]
+        self.assertFalse(any("_comment" in text or "_why" in text for text in written))
+        rail = json.loads((self.pack / "assets/tp/rail_models/rail_a.json").read_text("utf-8"))
+        self.assertEqual(rail["tile_length"], 2.0)
+
     # ------------------------------------------------------------- null and layering
 
     def test_null_in_the_per_type_file_survives_the_inline_override(self):

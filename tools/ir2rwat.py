@@ -44,6 +44,10 @@ Sway: a per-type file's "sway" (a number from 0 to 3) goes to the model
 declaration — how hard that car's body rocks, on top of the player's own
 setting (SPEC §10.2).
 
+Comments: a key that starts with _ ("_comment", "_why") is a note to the
+reader at any depth of the recipe and the per-type files. It is dropped as
+the file is read: never warned about, never merged into a declaration.
+
 Sounds (SPEC §10): IR's "sounds" (idle, horn, bell, wheels, clack, controls)
 and the door animations' sounds go to the model declaration's "sounds", the
 files copied byte for byte under <root>/sounds/. A recipe's "sound_defaults"
@@ -886,8 +890,20 @@ def sanitize_id(name):
 
 # ------------------------------------------------------------------- recipe
 
+def without_comments(value):
+    """value with every key that starts with _ dropped, at any depth: in the
+    recipe and the per-type files such a key ("_comment", "_why") is a note
+    to the reader, never read and never written to the pack."""
+    if isinstance(value, dict):
+        return {key: without_comments(item) for key, item in value.items() if not key.startswith("_")}
+    if isinstance(value, list):
+        return [without_comments(item) for item in value]
+    return value
+
+
 def read_json_file(path, what):
-    """A JSON object from a file of the author's (recipe, per-type file); a refusal if it isn't one."""
+    """A JSON object from a file of the author's (recipe, per-type file), its
+    comment keys dropped (without_comments); a refusal if it isn't one."""
     try:
         text = path.read_text(encoding="utf-8-sig")
     except OSError as problem:
@@ -901,7 +917,7 @@ def read_json_file(path, what):
                               f"column {problem.colno}")
     if not isinstance(value, dict):
         raise ConversionError(f"{path}: {what} must be a JSON object")
-    return value
+    return without_comments(value)
 
 
 def check_recipe(recipe, name):
