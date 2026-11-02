@@ -13,10 +13,10 @@ import com.muzhik17.trainsmod.consist.TouchRules;
 import com.muzhik17.trainsmod.consist.WagonEntity;
 import com.muzhik17.trainsmod.consist.WagonTouch;
 import com.muzhik17.trainsmod.rail.BedMaterial;
+import com.muzhik17.trainsmod.rail.RailItem;
 import com.muzhik17.trainsmod.stock.WagonType;
 import com.muzhik17.trainsmod.stock.WagonTypes;
 
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
@@ -233,10 +233,11 @@ public final class RwatNetwork {
 
     /**
      * Store the picked rail style and bed material on the rails in the
-     * player's hand (SPEC §6.10, §2.2). Only a well-formed resource location
-     * (or {@code ""}, the mod's own rail) is accepted as the style — whether
-     * it exists is the client's business; the bed must be a material this
-     * server knows. The defaults are stored as no component at all.
+     * player's hand (SPEC §6.10, §2.2). The style is taken only if it is a
+     * valid id ({@link RailItem#validStyle}, the rule the item checks again
+     * as it is used) — whether it exists is the client's business; the bed
+     * must be a material this server knows. The defaults are stored as no
+     * component at all.
      */
     private static void handleSelectRailStyle(SelectRailStylePayload payload, IPayloadContext context) {
         if (!(context.player() instanceof ServerPlayer player)) {
@@ -248,7 +249,7 @@ public final class RwatNetwork {
         }
         if (payload.style().isEmpty()) {
             stack.remove(RailsWheelsAndTrains.RAIL_STYLE.get());
-        } else if (ResourceLocation.tryParse(payload.style()) != null) {
+        } else if (RailItem.validStyle(payload.style())) {
             stack.set(RailsWheelsAndTrains.RAIL_STYLE.get(), payload.style());
         }
         BedMaterial bed = BedMaterial.byId(payload.bed());
