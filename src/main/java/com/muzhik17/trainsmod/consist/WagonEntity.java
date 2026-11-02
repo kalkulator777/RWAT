@@ -889,12 +889,14 @@ public class WagonEntity extends Entity {
     /**
      * Set a control group (server): a cab switch, a light toggled from the
      * driver's menu. Names are the model's ({@code CG_<name>}/{@code LCG_<name>});
-     * the server only bounds their number and length. The doors the group
-     * works ({@link WagonType#doorsWorkedBy}) open at 0.5 and over, else close.
+     * the server only bounds their number and length, and takes only a value
+     * that is a number (NaN would pass the clamp, be kept, saved and synced).
+     * The doors the group works ({@link WagonType#doorsWorkedBy}) open at 0.5
+     * and over, else close.
      */
     public void setControl(String group, float value) {
         CompoundTag current = this.entityData.get(DATA_CONTROLS);
-        if (group.isEmpty() || group.length() > MAX_CONTROL_NAME
+        if (group.isEmpty() || group.length() > MAX_CONTROL_NAME || !Float.isFinite(value)
                 || (!current.contains(group) && current.size() >= MAX_CONTROL_GROUPS)) {
             return;
         }
@@ -1824,7 +1826,13 @@ public class WagonEntity extends Entity {
             savedOpenDoors.add(open.getString(i));
         }
         this.entityData.set(DATA_DOORS, 0);
-        this.entityData.set(DATA_CONTROLS, tag.getCompound("Controls").copy());
+        CompoundTag controls = tag.getCompound("Controls").copy();
+        for (String group : List.copyOf(controls.getAllKeys())) {
+            if (!Float.isFinite(controls.getFloat(group))) {
+                controls.remove(group); // a NaN a client once set (audit M4): the group starts off
+            }
+        }
+        this.entityData.set(DATA_CONTROLS, controls);
     }
 
     @Override

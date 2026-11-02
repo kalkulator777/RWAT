@@ -15,7 +15,8 @@ import net.minecraft.resources.ResourceLocation;
  * server checks the sender may operate it ({@code TouchRules}): aboard (or
  * within reach of) that wagon / driving that train; the driver's key, if the
  * server wants it, for a switch of a car with a cab and for a {@code GLOBAL}
- * one of a train with a cab anywhere in it.
+ * one of a train with a cab anywhere in it. A {@code value} that is NaN or
+ * infinite drops the packet ({@link PacketNumbers}); the rest is held to 0..1.
  */
 public record ControlGroupPayload(int targetId, Scope scope, String group, float value)
         implements CustomPacketPayload {

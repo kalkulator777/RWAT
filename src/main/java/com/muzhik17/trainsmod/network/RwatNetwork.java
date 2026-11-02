@@ -19,6 +19,7 @@ import com.muzhik17.trainsmod.stock.WagonTypes;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Mth;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
@@ -32,6 +33,8 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
  * ({@link WagonTouch}, {@link TouchRules}): in the game (not a spectator, not
  * dead), aboard or within reach of what is touched, the right to build for
  * what changes the world, the driver's key for a cab. A refusal is quiet.
+ * A packet with a number that is NaN or infinite is dropped whole, either
+ * way ({@link PacketNumbers}): a clamp would let NaN through.
  */
 public final class RwatNetwork {
 
@@ -41,16 +44,25 @@ public final class RwatNetwork {
     public static void register(RegisterPayloadHandlersEvent event) {
         PayloadRegistrar registrar = event.registrar("1");
         registrar.playToClient(ConsistSnapshotPayload.TYPE, ConsistSnapshotPayload.STREAM_CODEC,
-                (payload, context) -> ClientConsists.handleSnapshot(payload));
+                (payload, context) -> {
+                    if (payload.finite()) {
+                        ClientConsists.handleSnapshot(payload);
+                    }
+                });
         registrar.playToClient(RailGraphSyncPayload.TYPE, RailGraphSyncPayload.STREAM_CODEC,
                 (payload, context) -> ClientRailGraph.handleSync(payload));
         registrar.playToClient(WagonTypesPayload.TYPE, WagonTypesPayload.STREAM_CODEC,
                 (payload, context) -> WagonTypes.load(payload.types()));
         registrar.playToClient(RiderSyncPayload.TYPE, RiderSyncPayload.STREAM_CODEC,
-                (payload, context) -> ClientRiderSync.apply(payload.consistId(), payload.riders()));
+                (payload, context) -> ClientRiderSync.apply(payload.consistId(),
+                        payload.riders().stream().filter(RiderLocal::finite).toList()));
         registrar.playToClient(RiderPlacePayload.TYPE, RiderPlacePayload.STREAM_CODEC,
-                (payload, context) -> ClientWalk.place(payload.wagonId(),
-                        new org.joml.Vector3d(payload.x(), payload.y(), payload.z())));
+                (payload, context) -> {
+                    if (PacketNumbers.finite(payload.x(), payload.y(), payload.z())) {
+                        ClientWalk.place(payload.wagonId(),
+                                new org.joml.Vector3d(payload.x(), payload.y(), payload.z()));
+                    }
+                });
         registrar.playToClient(PackManifestPayload.TYPE, PackManifestPayload.STREAM_CODEC,
                 (payload, context) -> ClientPackCheck.handle(payload));
         registrar.playToServer(DriveInputPayload.TYPE, DriveInputPayload.STREAM_CODEC,
@@ -115,6 +127,11 @@ public final class RwatNetwork {
     private static void handleControlGroup(ControlGroupPayload payload, IPayloadContext context) {
         if (!(context.player() instanceof ServerPlayer player)
                 || !(player.level() instanceof ServerLevel level)) {
+            return;
+        }
+        if (!PacketNumbers.finite(payload.value())) {
+            RailsWheelsAndTrains.LOGGER.debug("{} sent control group {} = {}: dropped",
+                    player.getGameProfile().getName(), payload.group(), payload.value());
             return;
         }
         Consist consist;
@@ -339,14 +356,23 @@ public final class RwatNetwork {
      * local position (it clamps against the interior). The wagon is taken from
      * the player's vehicle, so a client can't move a rider it isn't; input
      * the client meant for another wagon (it hasn't seen a gangway carry it
-     * on yet, SPEC §9.5) is dropped.
+     * on yet, SPEC §9.5) is dropped, and so is input with a number that isn't
+     * one (an infinite step put the feet at NaN). The keys are held to their
+     * −1..1, the look to a turn either way.
      */
     private static void handleWalkInput(WalkInputPayload payload, IPayloadContext context) {
-        if (context.player() instanceof ServerPlayer player
-                && player.getVehicle() instanceof WagonEntity wagon
-                && wagon.getId() == payload.wagonId()) {
-            wagon.setWalkInput(player, payload.seq(), payload.forward(), payload.strafe(),
-                    payload.relativeYaw(), payload.sneak(), payload.exit());
+        if (!(context.player() instanceof ServerPlayer player)
+                || !(player.getVehicle() instanceof WagonEntity wagon)
+                || wagon.getId() != payload.wagonId()) {
+            return;
         }
+        if (!PacketNumbers.finite(payload.forward(), payload.strafe(), payload.relativeYaw())) {
+            RailsWheelsAndTrains.LOGGER.debug("{} sent walk input {} {} {}: dropped", player.getGameProfile().getName(),
+                    payload.forward(), payload.strafe(), payload.relativeYaw());
+            return;
+        }
+        wagon.setWalkInput(player, payload.seq(), Math.clamp(payload.forward(), -1.0F, 1.0F),
+                Math.clamp(payload.strafe(), -1.0F, 1.0F), Mth.wrapDegrees(payload.relativeYaw()),
+                payload.sneak(), payload.exit());
     }
 }
