@@ -489,6 +489,8 @@ public final class RailAutoScene {
     private static int phaseGeneration;
     private static RailGraph phaseGraph;
     private static volatile int phaseRevision;
+    /** The cell of A's bed taken out for the re-lay to close. */
+    private static volatile BlockPos hole;
     /** The lone marker far out of every click's range, and the switch stand. */
     private static BlockPos farMarker;
     private static BlockPos stand;
@@ -500,7 +502,9 @@ public final class RailAutoScene {
      * holds), and what a click costs. A track built, then a second build
      * clicked inside the cooldown and after it; Shift+use held on the
      * track's bed for 4 seconds, a use every 4 ticks as a held key repeats —
-     * one repaint, one graph sent, the rest nothing; a build refused by a
+     * one repaint, one graph sent, the rest re-lays under the cooldown; a
+     * hole punched in the bed and Shift+use in the look the track has — the
+     * hole closed, no revision, no graph sent; a build refused by a
      * protected block held as long — how often the world is asked; a build
      * with a style and a bed material no picker sends — the defaults laid; a
      * piston against the bed — it doesn't move; a lone marker far out of
@@ -538,8 +542,8 @@ public final class RailAutoScene {
             return;
         }
         // a build refused by a protected block, held as long
-        if (ticks >= 290 && ticks <= 370 && (ticks - 290) % 4 == 0) {
-            if (ticks == 290) {
+        if (ticks >= 320 && ticks <= 400 && (ticks - 320) % 4 == 0) {
+            if (ticks == 320) {
                 protectedAsked = 0;
                 startPhase(mc);
             }
@@ -578,62 +582,83 @@ public final class RailAutoScene {
                     RailSegment.Look.DEFAULT, false);
             case 165 -> logSegments(mc, "after the click past the cooldown (expect 2: A, B)");
             case 280 -> endPhase(mc, "Shift+use held 4 s on A's bed, 21 uses, in stone (before the fix: 21 repaints, 21 graphs)");
-            case 285 -> {
+            // a hole in A's bed, closed by Shift+use in the look A already has
+            case 284 -> onServer(mc, (level, player) -> {
+                hole = bedUnder(level, x + 10, y, z);
+                if (hole != null) {
+                    level.setBlock(hole, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+                }
+                RailsWheelsAndTrains.LOGGER.info("[railscene] railedit: hole punched in A's bed at {}", hole);
+            });
+            case 295 -> {
+                startPhase(mc);
+                onServer(mc, (level, player) -> useStack(level, player, "re-lay A in stone (its look)",
+                        bedUnder(level, x + 15, y, z), rails(STONE.style(), STONE.bed()), true));
+            }
+            case 305 -> {
+                endPhase(mc, "Shift+use in the look A has, with a hole in its bed");
+                onServer(mc, (level, player) -> {
+                    boolean closed = hole != null && level.getBlockState(hole).getBlock() instanceof TrackBedBlock;
+                    RailsWheelsAndTrains.LOGGER.info("[railscene] railedit: the hole at {} is {}", hole,
+                            closed ? "bed again: OK" : "STILL OPEN");
+                });
+            }
+            case 315 -> {
                 marker(mc, x, y, z + 16, false);
                 marker(mc, x + 20, y, z + 16, false);
                 command(mc, at("setblock %d %d %d stone", x + 10, y, z + 16));
                 protectedBlock = new BlockPos(x + 10, y, z + 16);
             }
-            case 380 -> {
+            case 410 -> {
                 endPhase(mc, "build C refused by a protected block, held 4 s, 21 uses");
                 onServer(mc, (level, player) -> RailsWheelsAndTrains.LOGGER.info(
                         "[railscene] railedit: the protected block was asked {} time(s), once per refused build"
                                 + " (before the fix: 21)", protectedAsked));
             }
-            case 382 -> {
+            case 412 -> {
                 protectedBlock = null;
                 command(mc, at("fill %d %d %d %d %d %d air", x, y, z + 16, x + 20, y, z + 16)); // C's markers
                 marker(mc, x, y, z + 24, false); // D: built with a look no picker sends
                 marker(mc, x + 20, y, z + 24, false);
             }
-            case 405 -> useForged(mc, x, y, z + 24);
-            case 410 -> logLook(mc, x + 10, y, z + 24);
-            case 415 -> piston(mc, x + 20, y, z);
-            case 425 -> pistonResult(mc, x + 20, y, z);
-            case 430 -> {
+            case 435 -> useForged(mc, x, y, z + 24);
+            case 440 -> logLook(mc, x + 10, y, z + 24);
+            case 445 -> piston(mc, x + 20, y, z);
+            case 455 -> pistonResult(mc, x + 20, y, z);
+            case 460 -> {
                 marker(mc, x, y, z + 40, true); // the Y-switch: toe and stand at x, legs to x + 17
                 marker(mc, x + 17, y, z + 40, false);
                 marker(mc, x + 17, y, z + 44, false);
                 stand = new BlockPos(x, y, z + 40);
             }
-            case 435 -> use(mc, "build the Y-switch", stand, RailSegment.Look.DEFAULT, false);
-            case 440 -> {
+            case 465 -> use(mc, "build the Y-switch", stand, RailSegment.Look.DEFAULT, false);
+            case 470 -> {
                 mc.options.hideGui = true;
                 flyTo(mc, x + 2.5, y + 5.0, z + 42.0, 0.0F, 90.0F);
             }
-            case 460 -> {
+            case 490 -> {
                 shot(mc, "rwat-rail-switch-0.png");
                 startPhase(mc);
             }
-            case 465 -> command(mc, at("setblock %d %d %d redstone_block", x, y - 2, z + 40));
-            case 490 -> {
+            case 495 -> command(mc, at("setblock %d %d %d redstone_block", x, y - 2, z + 40));
+            case 520 -> {
                 shot(mc, "rwat-rail-switch-1.png");
                 endPhase(mc, "switch thrown by redstone");
                 switchState(mc);
             }
-            case 500 -> {
+            case 530 -> {
                 mc.options.hideGui = false;
                 flyTo(mc, x + 3000.5, y + 30.0, z + 0.5, 0.0F, 30.0F);
             }
-            case 700, 900 -> {
-                int since = ticks - 500;
+            case 730, 930 -> {
+                int since = ticks - 530;
                 onServer(mc, (level, player) -> RailsWheelsAndTrains.LOGGER.info(
                         "[railscene] railedit: {} ticks after flying off, the switch stand's chunk is {}loaded"
                                 + " (track A's: {}loaded)", since,
                         level.hasChunk(stand.getX() >> 4, stand.getZ() >> 4) ? "" : "not ",
                         level.hasChunk(x >> 4, z >> 4) ? "" : "not "));
             }
-            case 910 -> mc.stop();
+            case 940 -> mc.stop();
             default -> {
             }
         }

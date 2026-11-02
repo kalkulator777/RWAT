@@ -27,6 +27,7 @@
   "message.railswheelsandtrains.board_hint_doors": "Ходьба — WASD · ПКМ по двери — открыть/закрыть · Выход — через открытую дверь · Shift — присесть, не выйдешь",
   "message.railswheelsandtrains.rail.click_marker": "Рельсы: кликните по маркеру, чтобы соединить его с другим.",
   "message.railswheelsandtrains.rail.restyled": "Сегментов перерисовано: %s, стиль — %s, подложка — %s.",
+  "message.railswheelsandtrains.rail.relaid": "Полотно доложено под сегментами (%s): дыры закрыты, путь расчищен.",
   "message.railswheelsandtrains.rail.blocked.unbreakable": "Рельсы: на пути %s (%s %s %s), его не сломать. Ничего не построено.",
   "message.railswheelsandtrains.rail.blocked.container": "Рельсы: на пути %s (%s %s %s), это блок с содержимым — уберите его сами. Ничего не построено.",
   "message.railswheelsandtrains.rail.blocked.protected": "Рельсы: на пути %s (%s %s %s), ломать его здесь вам нельзя. Ничего не построено.",

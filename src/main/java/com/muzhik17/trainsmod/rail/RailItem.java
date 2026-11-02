@@ -51,10 +51,11 @@ import net.minecraft.world.level.block.state.BlockState;
  * server checks both again as the item is used ({@link #look}).
  * Sneak-right-clicking existing track repaints its whole structure in the
  * held style and bed. Builds and repaints are refused whole when any cell of
- * bed they would change is one the player may not build in. Every edit that
- * lays out a structure's bed — built, repainted or refused — puts the rails
- * on a short cooldown ({@link RailEdit}); a repaint in the look the
- * structure already has does nothing at all.
+ * bed they would change is one the player may not build in. A repaint in the
+ * look the structure already has lays its bed out again — closing holes,
+ * clearing what got in the way — without touching the graph. Every edit that
+ * lays out a structure's bed — built, repainted, re-laid or refused — puts
+ * the rails on a short cooldown ({@link RailEdit}).
  */
 public class RailItem extends Item {
 
@@ -125,10 +126,13 @@ public class RailItem extends Item {
             if (context.getLevel() instanceof ServerLevel level && player instanceof ServerPlayer builder) {
                 RailNetwork.Repaint repaint = RailNetwork.get(level)
                         .restyleStructureAt(level, builder, context.getClickedPos(), look);
-                if (repaint.edit() == RailEdit.DONE || repaint.edit() == RailEdit.UNCHANGED) {
+                if (repaint.edit() == RailEdit.DONE) {
                     player.displayClientMessage(Component.translatable(
                             "message.railswheelsandtrains.rail.restyled", repaint.segments(),
                             styleName(look.style()), BedMaterial.of(look.bed()).displayName()), true);
+                } else if (repaint.edit() == RailEdit.RELAID) {
+                    player.displayClientMessage(Component.translatable(
+                            "message.railswheelsandtrains.rail.relaid", repaint.segments()), true);
                 }
                 rest(builder, repaint.edit());
             }
@@ -154,7 +158,9 @@ public class RailItem extends Item {
      * Put the rails in {@code player}'s hands on cooldown after an edit that
      * laid out a structure's bed, done or refused ({@link RailEdit#cooldownTicks}):
      * meanwhile the server doesn't call the item at all, and the client greys
-     * its slot.
+     * its slot. A click into the air doesn't open the style picker then
+     * either — vanilla asks the cooldown before {@link #use}; a second is
+     * short enough to leave it so.
      */
     private void rest(ServerPlayer player, RailEdit edit) {
         int ticks = edit.cooldownTicks();

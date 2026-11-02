@@ -14,8 +14,9 @@ import com.muzhik17.trainsmod.path.RailSegment;
 
 /**
  * The rails' answer to a held use key (SPEC §2.2): a repaint in the look the
- * structure already has is no edit, and every edit that lays out a bed —
- * done or refused — rests the rails, the cheap answers not.
+ * structure already has re-lays its bed but leaves the graph — no revision,
+ * nothing sent — and every edit that lays out a bed, done, re-laid or
+ * refused, rests the rails, the cheap answers not.
  */
 class RailEditTest {
 
@@ -37,7 +38,7 @@ class RailEditTest {
     }
 
     @Test
-    void aRepaintInTheLookTheStructureHasChangesNothing() {
+    void aRepaintInTheLookTheStructureHasIsARelay() {
         List<RailSegment> legs = structure(STONE);
         assertEquals(2, legs.size());
         assertTrue(STONE.ofAll(legs));
@@ -66,11 +67,20 @@ class RailEditTest {
     @Test
     void theHeavyEditsRestTheRailsAndTheCheapOnesDont() {
         assertEquals(RailEdit.COOLDOWN_TICKS, RailEdit.DONE.cooldownTicks());
+        assertEquals(RailEdit.COOLDOWN_TICKS, RailEdit.RELAID.cooldownTicks(),
+                "the bed was laid out all the same, and a held Shift+use would repeat it");
         assertEquals(RailEdit.COOLDOWN_TICKS, RailEdit.REFUSED.cooldownTicks(),
                 "a refused build laid its bed out too, and a held key would repeat it");
-        assertEquals(0, RailEdit.UNCHANGED.cooldownTicks(), "nothing was laid out");
-        assertEquals(0, RailEdit.NOTHING.cooldownTicks());
+        assertEquals(0, RailEdit.NOTHING.cooldownTicks(), "nothing was laid out");
         // a held use key repeats every 4 ticks (Minecraft.rightClickDelay): the rest must outlast it
         assertTrue(RailEdit.COOLDOWN_TICKS > 4);
+    }
+
+    @Test
+    void onlyADoneEditMovesTheRevisionOnAndSendsTheGraph() {
+        assertTrue(RailEdit.DONE.changesGraph(), "built, or another style or bed: the clients must draw it");
+        assertFalse(RailEdit.RELAID.changesGraph(), "the same track in the same look: bed blocks only");
+        assertFalse(RailEdit.REFUSED.changesGraph(), "nothing changed");
+        assertFalse(RailEdit.NOTHING.changesGraph());
     }
 }

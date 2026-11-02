@@ -220,7 +220,7 @@ public final class RailNetwork extends SavedData {
     /**
      * What a repaint came to ({@link #restyleStructureAt}): {@link RailEdit#NOTHING}
      * if the cell is no track (0 segments), else the structure's segment
-     * count with {@link RailEdit#UNCHANGED}, {@link RailEdit#DONE} or
+     * count with {@link RailEdit#DONE}, {@link RailEdit#RELAID} or
      * {@link RailEdit#REFUSED}.
      */
     public record Repaint(RailEdit edit, int segments) {
@@ -234,9 +234,10 @@ public final class RailNetwork extends SavedData {
      * The player must be allowed to break in every cell of the structure's
      * bed, all along it, and to place in the cells the new bed adds — one
      * protected cell, and nothing is repainted (refused: they are told where;
-     * nothing changed). A structure that already looks so is left as it is —
-     * no bed laid out, no revision, nothing sent: a held Shift+use repeats
-     * the click every 4 ticks.
+     * nothing changed). In the look the structure already has, the bed is
+     * laid out again all the same — that closes its holes and clears what got
+     * in its way (SPEC §2.2) — but the graph is as it was: no revision,
+     * nothing sent ({@link RailEdit#RELAID}).
      */
     public Repaint restyleStructureAt(ServerLevel level, ServerPlayer player, BlockPos cell,
             RailSegment.Look look) {
@@ -245,9 +246,7 @@ public final class RailNetwork extends SavedData {
             return new Repaint(RailEdit.NOTHING, 0);
         }
         List<RailSegment> structure = graph.structureOf(hit);
-        if (look.ofAll(structure)) {
-            return new Repaint(RailEdit.UNCHANGED, structure.size());
-        }
+        RailEdit done = look.ofAll(structure) ? RailEdit.RELAID : RailEdit.DONE;
         Set<BlockPos> own = bedOf(structure);
         Set<BlockPos> stale = new LinkedHashSet<>(own);
         stale.addAll(legacyStrips(structure));
@@ -268,8 +267,10 @@ public final class RailNetwork extends SavedData {
             clearWay(level, player, clearing.removed());
             layBed(level, layout);
         });
-        markChanged(level);
-        return new Repaint(RailEdit.DONE, structure.size());
+        if (done.changesGraph()) {
+            markChanged(level);
+        }
+        return new Repaint(done, structure.size());
     }
 
     /**

@@ -31,6 +31,7 @@
   "rail.railswheelsandtrains.standard": "Standard Rail",
   "message.railswheelsandtrains.rail.click_marker": "Rails: click a rail marker to connect it to another one.",
   "message.railswheelsandtrains.rail.restyled": "%s track segment(s) now drawn as %s on %s.",
+  "message.railswheelsandtrains.rail.relaid": "Track bed laid again under %s segment(s): holes closed, the way cleared.",
   "message.railswheelsandtrains.rail.blocked.unbreakable": "Rails: %s at %s %s %s is in the way and can't be broken. Nothing was built.",
   "message.railswheelsandtrains.rail.blocked.container": "Rails: %s at %s %s %s is in the way and holds contents. Clear it away yourself; nothing was built.",
   "message.railswheelsandtrains.rail.blocked.protected": "Rails: %s at %s %s %s is in the way, and you may not break it here. Nothing was built.",
