@@ -1,0 +1,12 @@
+{
+  "light.rwat_example.coach.IL": "Car lights",
+  "light.rwat_example.shunter.DeskL": "Desk backlight",
+  "light.rwat_example.shunter.FHL": "Front headlight",
+  "light.rwat_example.shunter.IL": "Cab light",
+  "light.rwat_example.shunter.REL": "Tail lamps",
+  "light.rwat_example.shunter.RHL": "Rear headlight",
+  "rail.rwat_example.wooden_track": "Example track (wooden sleepers)",
+  "wagon.rwat_example.coach": "Example coach",
+  "wagon.rwat_example.gondola": "Example two-axle gondola",
+  "wagon.rwat_example.shunter": "Example shunter"
+}
