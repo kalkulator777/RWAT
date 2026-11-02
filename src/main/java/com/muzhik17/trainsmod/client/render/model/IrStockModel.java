@@ -5,6 +5,7 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -13,6 +14,7 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
+import com.muzhik17.trainsmod.convention.GroupName;
 import com.muzhik17.trainsmod.convention.ObjectRole;
 import com.muzhik17.trainsmod.convention.PivotAxis;
 import com.muzhik17.trainsmod.stock.ObjFrame;
@@ -285,6 +287,8 @@ public final class IrStockModel {
     /**
      * Load and split one declared model; an empty model (logged) if its OBJ is
      * missing or unreadable — a broken asset must not take the renderer down.
+     * A control group named longer than the wire takes is dropped, with a
+     * warning ({@link GroupName#fit}): sending it cut the client off its server.
      *
      * @param name   the wagon type id, for logging
      * @param decl   the pack's declaration of the model
@@ -323,10 +327,13 @@ public final class IrStockModel {
         BogieBuilder front = new BogieBuilder(pivots[0]);
         BogieBuilder rear = new BogieBuilder(pivots[pivots.length - 1]);
         Map<ObjectRole.Coupled, CouplerBuilder> couplers = new LinkedHashMap<>();
+        Set<String> droppedGroups = new LinkedHashSet<>();
         int skipped = 0;
         for (ObjLoader.Part part : obj.parts()) {
             String object = part.object();
-            ObjectRole role = ObjectRole.parse(object);
+            ObjectRole parsed = ObjectRole.parse(object);
+            droppedGroups.addAll(GroupName.tooLong(parsed));
+            ObjectRole role = GroupName.fit(parsed);
             // a hidden switch-driven part (the ChME3 tail lamps) shows by its group, a coupler
             // head by its end's coupling (SPEC §6.12); other HIDE objects stay out
             boolean widget = role.control() != null && role.control().kind() == ObjectRole.Kind.WIDGET;
@@ -413,6 +420,11 @@ public final class IrStockModel {
                     lampCandidates.addAll(LampIslands.of(placed, group));
                 }
             }
+        }
+        if (!droppedGroups.isEmpty()) {
+            RailsWheelsAndTrains.LOGGER.warn("{}: control group(s) {} longer than {} characters dropped: their"
+                    + " switches can't be worked, their lights stay off (an LINVERT one on)", name, droppedGroups,
+                    GroupName.MAX_LENGTH);
         }
         List<StockModel.Door> builtDoors = new ArrayList<>();
         doors.forEach((id, door) -> builtDoors.add(door.build(id)));

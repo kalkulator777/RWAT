@@ -17,6 +17,7 @@ import com.muzhik17.trainsmod.consist.TouchRules;
 import com.muzhik17.trainsmod.consist.WagonEntity;
 import com.muzhik17.trainsmod.consist.WagonTouch;
 import com.muzhik17.trainsmod.convention.ControlValue;
+import com.muzhik17.trainsmod.convention.GroupName;
 import com.muzhik17.trainsmod.convention.ObjectRole;
 import com.muzhik17.trainsmod.kinematics.HullCollision;
 import com.muzhik17.trainsmod.network.CabLeverPayload;
@@ -409,7 +410,7 @@ public final class ClientCabInteract {
         if (handle != null) {
             PacketDistributor.sendToServer(new CabLeverPayload(wagon.getId(), handle.ordinal(),
                     Handles.fromTravel(handle, position)));
-        } else {
+        } else if (GroupName.fits(role.group())) { // the model loader made a longer one NO_TOUCH
             PacketDistributor.sendToServer(new ControlGroupPayload(wagon.getId(), role.global()
                     ? ControlGroupPayload.Scope.GLOBAL_SWITCH : ControlGroupPayload.Scope.SWITCH,
                     role.group(), position));

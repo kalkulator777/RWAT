@@ -14,6 +14,7 @@ import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.client.ClientConsists;
 import com.muzhik17.trainsmod.client.ClientRide;
 import com.muzhik17.trainsmod.client.ClientWalk;
+import com.muzhik17.trainsmod.convention.GroupName;
 import com.muzhik17.trainsmod.kinematics.CabArea;
 import com.muzhik17.trainsmod.kinematics.ClickReach;
 import com.muzhik17.trainsmod.kinematics.HullCollision;
@@ -163,9 +164,8 @@ public class WagonEntity extends Entity {
      * heavy, the minecart's degrees would swing its roof a block.
      */
     private static final double KNOCK_SHARE = 0.1;
-    /** Control groups a wagon keeps at most, and the longest group name (network sanity). */
+    /** Control groups a wagon keeps at most (network sanity); a name is at most {@link GroupName#MAX_LENGTH}. */
     private static final int MAX_CONTROL_GROUPS = 64;
-    private static final int MAX_CONTROL_NAME = 32;
 
     /** Server-authoritative local feet of each walking rider (SPEC v1.5-б). */
     private final Map<UUID, Vector3d> riderLocal = new HashMap<>();
@@ -896,7 +896,7 @@ public class WagonEntity extends Entity {
      */
     public void setControl(String group, float value) {
         CompoundTag current = this.entityData.get(DATA_CONTROLS);
-        if (group.isEmpty() || group.length() > MAX_CONTROL_NAME || !Float.isFinite(value)
+        if (!GroupName.fits(group) || !Float.isFinite(value)
                 || (!current.contains(group) && current.size() >= MAX_CONTROL_GROUPS)) {
             return;
         }

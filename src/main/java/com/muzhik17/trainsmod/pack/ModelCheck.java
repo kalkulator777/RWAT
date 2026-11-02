@@ -13,6 +13,7 @@ import com.muzhik17.trainsmod.client.render.model.IrAnim;
 import com.muzhik17.trainsmod.client.render.model.MtlParser;
 import com.muzhik17.trainsmod.client.render.model.ObjLoader;
 import com.muzhik17.trainsmod.client.render.model.WagonModelDecl;
+import com.muzhik17.trainsmod.convention.GroupName;
 import com.muzhik17.trainsmod.convention.ObjectRole;
 
 /**
@@ -26,8 +27,9 @@ import com.muzhik17.trainsmod.convention.ObjectRole;
  * file missing, a face index points at no vertex, the model has no faces or
  * none that draws (no textured material), a material library, texture or
  * animation is missing or unreadable. Warnings: drawn faces whose material
- * has no texture ({@code map_Kd}) — they aren't drawn — and a livery that
- * replaces no texture. A hinge marker ({@code <KEY>_ROT…} of a control or a
+ * has no texture ({@code map_Kd}) — they aren't drawn — a livery that
+ * replaces no texture, and a control group named longer than {@link
+ * GroupName#MAX_LENGTH} characters, which the model loader drops. A hinge marker ({@code <KEY>_ROT…} of a control or a
  * door leaf) is no such face: the model loader reads its axis with or
  * without a texture, and IR's packs leave it untextured, drawn by nothing.
  * A material is known by its whole name, spaces included, in the OBJ's
@@ -85,6 +87,7 @@ public final class ModelCheck {
         }
         Map<String, String> textures = textures(obj, model, files, origin, problems);
         checkDrawn(decl, obj, model, textures, origin, problems);
+        checkGroups(obj, model, origin, problems);
         checkAnimations(decl, files, origin, problems);
         checkLiveries(decl, obj, textures, files, origin, problems);
         return problems;
@@ -150,6 +153,25 @@ public final class ModelCheck {
         } else if (!untextured.isEmpty()) {
             problems.add(origin.warning("model " + obj + ": faces with no texture (map_Kd) aren't drawn,"
                     + " material(s) " + String.join(", ", untextured)));
+        }
+    }
+
+    /**
+     * A control group named longer than the wire takes ({@link GroupName}):
+     * the model loader drops it — its switches can't be worked, its lights
+     * stay as an unswitched group leaves them. Each name once, in the order
+     * the objects come.
+     */
+    private static void checkGroups(String obj, ObjLoader.Model model, PackOrigin origin,
+            List<PackProblem> problems) {
+        Set<String> names = new LinkedHashSet<>();
+        for (ObjLoader.Part part : model.parts()) {
+            names.addAll(GroupName.tooLong(ObjectRole.parse(part.object())));
+        }
+        for (String name : names) {
+            problems.add(origin.warning("model " + obj + ": control group '" + name + "' is longer than "
+                    + GroupName.MAX_LENGTH + " characters and is dropped: its switches can't be worked,"
+                    + " its lights stay off (an LINVERT one on)"));
         }
     }
 

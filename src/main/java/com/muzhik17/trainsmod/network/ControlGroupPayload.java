@@ -1,6 +1,7 @@
 package com.muzhik17.trainsmod.network;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
+import com.muzhik17.trainsmod.convention.GroupName;
 
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -31,8 +32,11 @@ public record ControlGroupPayload(int targetId, Scope scope, String group, float
         PANEL
     }
 
-    /** Longest group name accepted (the model's {@code CG_<name>} token). */
-    public static final int MAX_NAME = 32;
+    /**
+     * Longest group name accepted (the model's {@code CG_<name>} token): a
+     * longer one fails the codec — the model loader drops it ({@link GroupName}).
+     */
+    public static final int MAX_NAME = GroupName.MAX_LENGTH;
 
     public static final CustomPacketPayload.Type<ControlGroupPayload> TYPE =
             new CustomPacketPayload.Type<>(
