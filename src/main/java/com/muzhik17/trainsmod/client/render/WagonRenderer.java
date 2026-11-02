@@ -216,9 +216,9 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
     /**
      * The world box all the light of {@code wagon}'s lit headlights may reach
      * ({@link HeadlightBeam#reach}), or null if none is lit. Placed by the
-     * car's tick pose: the drawn one is up to two ticks behind it (SPEC §2.1),
-     * so the box reaches as far again as the car runs in two ticks, like the
-     * car's own culling box.
+     * car's tick pose: the drawn one trails it (SPEC §2.1), so the box
+     * reaches as far again as the car runs in two ticks, as the car's own
+     * culling box does.
      */
     private static AABB headlightBox(WagonEntity wagon) {
         ConsistComposition.Slot slot = ClientConsists.slot(wagon.getConsistId(), wagon.getWagonIndex());
