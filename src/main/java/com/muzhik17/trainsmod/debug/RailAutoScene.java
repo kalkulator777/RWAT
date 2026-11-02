@@ -11,11 +11,13 @@ import org.joml.Vector3d;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.ServerConfig;
+import com.muzhik17.trainsmod.client.ClientRailGraph;
 import com.muzhik17.trainsmod.consist.Consist;
 import com.muzhik17.trainsmod.consist.ConsistManager;
 import com.muzhik17.trainsmod.network.TrackPathSpec;
 import com.muzhik17.trainsmod.path.BedRaster;
 import com.muzhik17.trainsmod.path.RailGraph;
+import com.muzhik17.trainsmod.path.RailNode;
 import com.muzhik17.trainsmod.path.RailSegment;
 import com.muzhik17.trainsmod.path.RoutePath;
 import com.muzhik17.trainsmod.path.TrackPath;
@@ -34,6 +36,9 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.UseOnContext;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.piston.PistonBaseBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
@@ -45,7 +50,7 @@ import net.neoforged.neoforge.event.level.BlockEvent;
 
 /**
  * Dev tool: scripted rail scenes (SPEC §2.2), like {@link ClientAutoScene} —
- * {@code ./gradlew runClient -PquickPlay=<flat world copy> -Pautoscene=bedcut|trailing}.
+ * {@code ./gradlew runClient -PquickPlay=<flat world copy> -Pautoscene=bedcut|trailing|railedit}.
  * Off unless the system property {@code rwat.autoscene} names one of them;
  * use a throwaway copy of a save. Logs {@code [railscene]} lines, shots go to
  * {@code screenshots/rwat-rail-*.png}, quits at the end.
@@ -64,6 +69,11 @@ import net.neoforged.neoforge.event.level.BlockEvent;
  * for the siding and its exit switch for the main line; a train runs three
  * laps, coming off the siding against the exit switch each time. Logs every
  * segment the head enters and any stop; the switches must stay as set.
+ *
+ * <p>{@code railedit}: what clicks with the rails cost and what they may
+ * change — the cooldown, a held repaint, a held refused build, a forged
+ * look, a piston at the bed, a switch thrown by redstone, chunks of far
+ * markers and stands ({@link #railedit}).
  */
 @EventBusSubscriber(modid = RailsWheelsAndTrains.MODID, value = Dist.CLIENT)
 public final class RailAutoScene {
@@ -76,6 +86,8 @@ public final class RailAutoScene {
     private static Set<Integer> before = Set.of();
     /** While set, break events inside it are cancelled — a stand-in for region protection. */
     private static volatile BlockPos protectedBlock;
+    /** How often the world was asked about {@link #protectedBlock}: once per refused build. */
+    private static volatile int protectedAsked;
 
     private RailAutoScene() {
     }
@@ -84,6 +96,7 @@ public final class RailAutoScene {
     static void onBreak(BlockEvent.BreakEvent event) {
         if (event.getPos().equals(protectedBlock)) {
             event.setCanceled(true);
+            protectedAsked++;
         }
     }
 
@@ -100,6 +113,9 @@ public final class RailAutoScene {
         } else if (scene.equals("trailing")) {
             ticks++;
             trailing(mc);
+        } else if (scene.equals("railedit")) {
+            ticks++;
+            railedit(mc);
         }
     }
 
@@ -461,6 +477,327 @@ public final class RailAutoScene {
                     head, spec.legs().size(), route.loop() ? "loop" : "open");
         }
         consist.setSpeed(TRAILING_SPEED);
+    }
+
+    // --- railedit ---
+
+    /** The graph object the client held last tick, and how many new ones (full syncs) it has received. */
+    private static RailGraph seenGraph;
+    private static int graphsReceived;
+    /** Where a measured phase started: graphs received, the client's generation and graph, the server's revision. */
+    private static int phaseGraphs;
+    private static int phaseGeneration;
+    private static RailGraph phaseGraph;
+    private static volatile int phaseRevision;
+    /** The lone marker far out of every click's range, and the switch stand. */
+    private static BlockPos farMarker;
+    private static BlockPos stand;
+    private static final RailSegment.Look STONE = new RailSegment.Look(RailSegment.DEFAULT_STYLE, "stone");
+
+    /**
+     * {@code railedit}: the rails used through the server's own item-use path
+     * ({@code ServerPlayerGameMode.useItemOn}, where the item cooldown
+     * holds), and what a click costs. A track built, then a second build
+     * clicked inside the cooldown and after it; Shift+use held on the
+     * track's bed for 4 seconds, a use every 4 ticks as a held key repeats —
+     * one repaint, one graph sent, the rest nothing; a build refused by a
+     * protected block held as long — how often the world is asked; a build
+     * with a style and a bed material no picker sends — the defaults laid; a
+     * piston against the bed — it doesn't move; a lone marker far out of
+     * range in an unloaded chunk — clicks don't load it. Then a Y-switch is
+     * thrown by redstone: the revision moves on, the client keeps its graph
+     * (no full sync) and sets the switch as the server has it — shots of the
+     * blades before and after ({@code rwat-rail-switch-0/1.png}). Last the
+     * player flies 3000 blocks off: the switch stand's chunk must unload.
+     */
+    private static void railedit(Minecraft mc) {
+        RailGraph graph = ClientRailGraph.graph();
+        if (graph != seenGraph) {
+            seenGraph = graph;
+            graphsReceived++;
+        }
+        if (ticks < 100) {
+            return;
+        }
+        int x = origin == null ? 0 : origin.getX();
+        int y = origin == null ? 0 : origin.getY();
+        int z = origin == null ? 0 : origin.getZ();
+        // Shift+use held on track A's bed: a use every 4 ticks, 21 in all
+        if (ticks >= 190 && ticks <= 270 && (ticks - 190) % 4 == 0) {
+            if (ticks == 190) {
+                startPhase(mc);
+            }
+            onServer(mc, (level, player) -> {
+                BlockPos bed = bedUnder(level, x + 15, y, z);
+                if (bed == null) {
+                    RailsWheelsAndTrains.LOGGER.warn("[railscene] railedit: no bed under A at x {}", x + 15);
+                    return;
+                }
+                useStack(level, player, "repaint A in stone", bed, rails(STONE.style(), STONE.bed()), true);
+            });
+            return;
+        }
+        // a build refused by a protected block, held as long
+        if (ticks >= 290 && ticks <= 370 && (ticks - 290) % 4 == 0) {
+            if (ticks == 290) {
+                protectedAsked = 0;
+                startPhase(mc);
+            }
+            use(mc, "refused build C", new BlockPos(x, y, z + 16), RailSegment.Look.DEFAULT, false);
+            return;
+        }
+        switch (ticks) {
+            case 100 -> {
+                origin = BlockPos.containing(mc.player.position().add(4000.0, 0.0, 0.0));
+                command(mc, "gamemode creative");
+                command(mc, "gamerule doDaylightCycle false");
+                command(mc, "time set noon");
+                command(mc, "weather clear");
+                command(mc, "difficulty peaceful");
+                flyTo(mc, origin.getX() + 15.5, origin.getY() + 30.0, origin.getZ() + 20.0, 0.0F, 80.0F);
+            }
+            case 130 -> {
+                marker(mc, x, y, z, false); // A: built, then repainted under a held key
+                marker(mc, x + 30, y, z, false);
+                // far out of every click's range (max_marker_distance 512), its chunk let go
+                farMarker = new BlockPos(x + 700, y, z);
+                command(mc, at("forceload add %d %d", farMarker.getX(), farMarker.getZ()));
+                command(mc, at("setblock %d %d %d railswheelsandtrains:rail_marker[rotation=6]",
+                        farMarker.getX(), farMarker.getY(), farMarker.getZ()));
+                command(mc, at("forceload remove %d %d", farMarker.getX(), farMarker.getZ()));
+            }
+            case 135 -> use(mc, "build A", new BlockPos(x, y, z), RailSegment.Look.DEFAULT, false);
+            case 137 -> {
+                marker(mc, x, y, z + 8, false); // B: clicked inside the cooldown, then after it
+                marker(mc, x + 30, y, z + 8, false);
+            }
+            case 141 -> use(mc, "build B inside the cooldown", new BlockPos(x, y, z + 8),
+                    RailSegment.Look.DEFAULT, false);
+            case 145 -> logSegments(mc, "after the click inside the cooldown (expect 1: A)");
+            case 160 -> use(mc, "build B after the cooldown", new BlockPos(x, y, z + 8),
+                    RailSegment.Look.DEFAULT, false);
+            case 165 -> logSegments(mc, "after the click past the cooldown (expect 2: A, B)");
+            case 280 -> endPhase(mc, "Shift+use held 4 s on A's bed, 21 uses, in stone (before the fix: 21 repaints, 21 graphs)");
+            case 285 -> {
+                marker(mc, x, y, z + 16, false);
+                marker(mc, x + 20, y, z + 16, false);
+                command(mc, at("setblock %d %d %d stone", x + 10, y, z + 16));
+                protectedBlock = new BlockPos(x + 10, y, z + 16);
+            }
+            case 380 -> {
+                endPhase(mc, "build C refused by a protected block, held 4 s, 21 uses");
+                onServer(mc, (level, player) -> RailsWheelsAndTrains.LOGGER.info(
+                        "[railscene] railedit: the protected block was asked {} time(s), once per refused build"
+                                + " (before the fix: 21)", protectedAsked));
+            }
+            case 382 -> {
+                protectedBlock = null;
+                command(mc, at("fill %d %d %d %d %d %d air", x, y, z + 16, x + 20, y, z + 16)); // C's markers
+                marker(mc, x, y, z + 24, false); // D: built with a look no picker sends
+                marker(mc, x + 20, y, z + 24, false);
+            }
+            case 405 -> useForged(mc, x, y, z + 24);
+            case 410 -> logLook(mc, x + 10, y, z + 24);
+            case 415 -> piston(mc, x + 20, y, z);
+            case 425 -> pistonResult(mc, x + 20, y, z);
+            case 430 -> {
+                marker(mc, x, y, z + 40, true); // the Y-switch: toe and stand at x, legs to x + 17
+                marker(mc, x + 17, y, z + 40, false);
+                marker(mc, x + 17, y, z + 44, false);
+                stand = new BlockPos(x, y, z + 40);
+            }
+            case 435 -> use(mc, "build the Y-switch", stand, RailSegment.Look.DEFAULT, false);
+            case 440 -> {
+                mc.options.hideGui = true;
+                flyTo(mc, x + 2.5, y + 5.0, z + 42.0, 0.0F, 90.0F);
+            }
+            case 460 -> {
+                shot(mc, "rwat-rail-switch-0.png");
+                startPhase(mc);
+            }
+            case 465 -> command(mc, at("setblock %d %d %d redstone_block", x, y - 2, z + 40));
+            case 490 -> {
+                shot(mc, "rwat-rail-switch-1.png");
+                endPhase(mc, "switch thrown by redstone");
+                switchState(mc);
+            }
+            case 500 -> {
+                mc.options.hideGui = false;
+                flyTo(mc, x + 3000.5, y + 30.0, z + 0.5, 0.0F, 30.0F);
+            }
+            case 700, 900 -> {
+                int since = ticks - 500;
+                onServer(mc, (level, player) -> RailsWheelsAndTrains.LOGGER.info(
+                        "[railscene] railedit: {} ticks after flying off, the switch stand's chunk is {}loaded"
+                                + " (track A's: {}loaded)", since,
+                        level.hasChunk(stand.getX() >> 4, stand.getZ() >> 4) ? "" : "not ",
+                        level.hasChunk(x >> 4, z >> 4) ? "" : "not "));
+            }
+            case 910 -> mc.stop();
+            default -> {
+            }
+        }
+    }
+
+    /**
+     * Use the rails on {@code pos} as the server's item-use path does
+     * ({@code ServerPlayerGameMode.useItemOn}: the item cooldown is asked
+     * there, not in {@code useOn}), held in the main hand, sneaking or not.
+     */
+    private static void use(Minecraft mc, String what, BlockPos pos, RailSegment.Look look, boolean sneak) {
+        onServer(mc, (level, player) -> useStack(level, player, what, pos, rails(look.style(), look.bed()), sneak));
+    }
+
+    /** A rails stack whose components say {@code style} and {@code bed}, whatever they are. */
+    private static ItemStack rails(String style, String bed) {
+        ItemStack rails = new ItemStack(RailsWheelsAndTrains.RAIL_ITEM.get());
+        rails.set(RailsWheelsAndTrains.RAIL_STYLE.get(), style);
+        rails.set(RailsWheelsAndTrains.RAIL_BED.get(), bed);
+        return rails;
+    }
+
+    /** The bed block in column x, z near the rails' height {@code y} (the bed sits under the rail foot), or null. */
+    private static BlockPos bedUnder(ServerLevel level, int x, int y, int z) {
+        for (int dy = 1; dy >= -2; dy--) {
+            BlockPos pos = new BlockPos(x, y + dy, z);
+            if (level.getBlockState(pos).getBlock() instanceof TrackBedBlock) {
+                return pos;
+            }
+        }
+        return null;
+    }
+
+    private static void useStack(ServerLevel level, ServerPlayer player, String what, BlockPos pos, ItemStack rails,
+            boolean sneak) {
+        player.setItemInHand(InteractionHand.MAIN_HAND, rails);
+        player.setShiftKeyDown(sneak);
+        int before = RailNetwork.get(level).revision();
+        var result = player.gameMode.useItemOn(player, level, rails, InteractionHand.MAIN_HAND,
+                new BlockHitResult(Vec3.atCenterOf(pos), Direction.UP, pos, false));
+        player.setShiftKeyDown(false);
+        RailsWheelsAndTrains.LOGGER.info("[railscene] railedit: {} at {} {} {}: {}, revision {} → {}{}", what,
+                pos.getX(), pos.getY(), pos.getZ(), result, before, RailNetwork.get(level).revision(),
+                player.getCooldowns().isOnCooldown(rails.getItem()) ? ", rails cooling down" : "");
+    }
+
+    /**
+     * Build D with rails whose components say what no picker sends — a style
+     * that is no resource location, a bed material that doesn't exist — and
+     * look whether that clicks loaded the far marker's chunk.
+     */
+    private static void useForged(Minecraft mc, int x, int y, int z) {
+        onServer(mc, (level, player) -> {
+            ItemStack rails = rails("Not A Style!", "lava");
+            boolean before = level.hasChunk(farMarker.getX() >> 4, farMarker.getZ() >> 4);
+            useStack(level, player, "build D with a forged look", new BlockPos(x, y, z), rails, false);
+            boolean after = level.hasChunk(farMarker.getX() >> 4, farMarker.getZ() >> 4);
+            RailsWheelsAndTrains.LOGGER.info("[railscene] railedit: the far marker's chunk (700 blocks off) was {}loaded"
+                    + " before the click and is {}loaded after it: {}", before ? "" : "not ", after ? "" : "not ",
+                    !after ? "OK" : "LOADED BY THE CLICK");
+        });
+    }
+
+    /** The look the segment through {@code x, y, z} was built with: the defaults for D. */
+    private static void logLook(Minecraft mc, int x, int y, int z) {
+        onServer(mc, (level, player) -> {
+            RailSegment segment = RailNetwork.get(level).graph().segmentNear(new Vector3d(x + 0.5, y, z + 0.5), 2.0);
+            if (segment == null) {
+                RailsWheelsAndTrains.LOGGER.warn("[railscene] railedit: D was not built");
+                return;
+            }
+            boolean defaults = segment.style().equals(RailSegment.DEFAULT_STYLE)
+                    && segment.bed().equals(RailSegment.DEFAULT_BED);
+            RailsWheelsAndTrains.LOGGER.info("[railscene] railedit: D #{} built in style '{}' on bed '{}': {}",
+                    segment.id(), segment.style(), segment.bed(), defaults ? "the defaults, OK" : "NOT THE DEFAULTS");
+        });
+    }
+
+    /** The bed cells of track A's column {@code x}, by z. */
+    private static List<Integer> bedColumn(ServerLevel level, int x, int y, int z) {
+        List<Integer> cells = new ArrayList<>();
+        for (int dz = -4; dz <= 4; dz++) {
+            if (level.getBlockState(new BlockPos(x, y, z + dz)).getBlock() instanceof TrackBedBlock) {
+                cells.add(z + dz);
+            }
+        }
+        return cells;
+    }
+
+    private static List<Integer> pistonColumn = List.of();
+    /** The height of the bed the piston pushes at. */
+    private static int pistonY;
+
+    /** A piston beside track A's bed, pushing across it, and a redstone block to fire it. */
+    private static void piston(Minecraft mc, int x, int y, int z) {
+        onServer(mc, (level, player) -> {
+            BlockPos bed = bedUnder(level, x, y, z);
+            if (bed == null) {
+                RailsWheelsAndTrains.LOGGER.warn("[railscene] railedit: no bed at x {}", x);
+                return;
+            }
+            pistonY = bed.getY();
+            pistonColumn = bedColumn(level, x, pistonY, z);
+            int beside = pistonColumn.get(pistonColumn.size() - 1) + 1;
+            level.setBlock(new BlockPos(x, pistonY, beside),
+                    Blocks.PISTON.defaultBlockState().setValue(PistonBaseBlock.FACING, Direction.NORTH), Block.UPDATE_ALL);
+            level.setBlock(new BlockPos(x, pistonY, beside + 1), Blocks.REDSTONE_BLOCK.defaultBlockState(),
+                    Block.UPDATE_ALL);
+            RailsWheelsAndTrains.LOGGER.info("[railscene] railedit: piston at z {}, y {} fired against the bed at z {}",
+                    beside, pistonY, pistonColumn);
+        });
+    }
+
+    private static void pistonResult(Minecraft mc, int x, int y, int z) {
+        onServer(mc, (level, player) -> {
+            List<Integer> now = bedColumn(level, x, pistonY, z);
+            int beside = pistonColumn.isEmpty() ? z : pistonColumn.get(pistonColumn.size() - 1) + 1;
+            BlockState piston = level.getBlockState(new BlockPos(x, pistonY, beside));
+            boolean extended = piston.hasProperty(PistonBaseBlock.EXTENDED) && piston.getValue(PistonBaseBlock.EXTENDED);
+            RailsWheelsAndTrains.LOGGER.info("[railscene] railedit: piston extended: {}, bed at z {} (was {}): {}",
+                    extended, now, pistonColumn, !extended && now.equals(pistonColumn) ? "OK, not moved" : "MOVED");
+        });
+    }
+
+    /** Remember where a measured phase starts: on the client now, on the server at its next task. */
+    private static void startPhase(Minecraft mc) {
+        phaseGraphs = graphsReceived;
+        phaseGeneration = ClientRailGraph.generation();
+        phaseGraph = ClientRailGraph.graph();
+        onServer(mc, (level, player) -> phaseRevision = RailNetwork.get(level).revision());
+    }
+
+    /** What the phase cost: the server's revisions, the graphs the client received, its generation. */
+    private static void endPhase(Minecraft mc, String what) {
+        int graphs = graphsReceived - phaseGraphs;
+        int changes = ClientRailGraph.generation() - phaseGeneration;
+        boolean sameGraph = ClientRailGraph.graph() == phaseGraph;
+        onServer(mc, (level, player) -> RailsWheelsAndTrains.LOGGER.info(
+                "[railscene] railedit: {}: revision {} → {} (+{}), full graphs received by the client {}"
+                        + " (same graph object: {}), client graph changes {}", what, phaseRevision,
+                RailNetwork.get(level).revision(), RailNetwork.get(level).revision() - phaseRevision, graphs,
+                sameGraph, changes));
+    }
+
+    /** The switch's setting on the server and in the client's copy. */
+    private static void switchState(Minecraft mc) {
+        Vector3d toe = new Vector3d(stand.getX() + 0.5, stand.getY(), stand.getZ() + 0.5);
+        RailGraph client = ClientRailGraph.graph();
+        RailNode clientNode = client == null ? null : client.nodeNear(toe);
+        int clientSelection = clientNode == null ? -1 : client.switchSelection(clientNode.id());
+        onServer(mc, (level, player) -> {
+            RailGraph server = RailNetwork.get(level).graph();
+            RailNode node = server.nodeNear(toe);
+            int selection = node == null ? -1 : server.switchSelection(node.id());
+            RailsWheelsAndTrains.LOGGER.info("[railscene] railedit: switch at the toe node #{}: server selection {},"
+                    + " client selection {}: {}", node == null ? -1 : node.id(), selection, clientSelection,
+                    selection == 1 && clientSelection == selection ? "OK" : "WRONG");
+        });
+    }
+
+    /** The segments the server has, by id. */
+    private static void logSegments(Minecraft mc, String when) {
+        onServer(mc, (level, player) -> RailsWheelsAndTrains.LOGGER.info("[railscene] railedit: segments {}: {}",
+                when, segmentIds(level)));
     }
 
     // --- helpers ---
