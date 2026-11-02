@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kalkulator777.github.io/RWAT/schema/rail_model.schema.json",
+  "title": "Rail style",
+  "description": "assets/<namespace>/rail_models/<id>.json: rail style <namespace>:<id> — one track tile repeated along every segment laid in it. The client draws it, the server lays the track bed from the same OBJ (the projection of the whole model, rasterised into bed columns at the rail foot height). The built-in style is railswheelsandtrains:standard. After editing the OBJ: F3+T for the picture, /reload for new beds, /rwat rail rebed for beds already laid.",
+  "x-description-ru": "assets/<namespace>/rail_models/<id>.json: стиль рельсов <namespace>:<id> — один тайл пути, повторяемый вдоль каждого участка этого стиля. Клиент его рисует, сервер по тому же OBJ кладёт полотно (проекция всей модели растрируется в столбцы полотна на высоте подошвы рельса). Встроенный стиль — railswheelsandtrains:standard. После правки OBJ: F3+T — картинка, /reload — полотно новых построек, /rwat rail rebed — уже уложенное.",
+  "x-file": "assets/<namespace>/rail_models/<id>.json",
+  "x-code": ["client/render/model/RailModelReloadListener.java", "data/RailFootprintReloadListener.java", "path/TileFootprint.java"],
+  "type": "object",
+  "properties": {
+    "obj": {
+      "$ref": "common.schema.json#/$defs/resource_path",
+      "description": "The tile, an OBJ: rails along X, centred on x = 0, the gauge across Z (rails at z = ±0.8125, rail head at y = 0.40625 above the path). Objects named RAIL_… without BASE are rails (their side by the sign of each face's z), everything else is the base (sleepers, ballast, bridge deck); …HIDE… is not drawn. Switch blades and frogs appear only where the rail heads cover |z| = 0.8125.",
+      "x-description-ru": "Тайл — OBJ: рельсы вдоль X, тайл центрирован на x = 0, колея поперёк Z (рельсы на z = ±0.8125, головка на y = 0.40625 над путём). Объекты RAIL_… без BASE — рельсы (сторона — по знаку z каждой грани), всё остальное — основание (шпалы, балласт, настил моста); …HIDE… не рисуется. Остряки и крестовина появляются, только если головки рельсов накрывают |z| = 0.8125."
+    },
+    "tile_length": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "default": 1.0,
+      "x-unit": "block",
+      "description": "How far apart the tile repeats. The rail objects are stretched along X to fill [−tile_length/2, tile_length/2] end to end; the base keeps its size, centred in the tile.",
+      "x-description-ru": "Шаг повторения тайла. Рельсы растягиваются по X на [−tile_length/2, tile_length/2] встык; основание сохраняет размер и стоит по центру тайла.",
+      "x-status": "pending-engine",
+      "x-status-note": "takes any tile_length > 0; a lower bound comes with the shared rail style parser (phase 1, D5).",
+      "x-status-note-ru": "принимает любое tile_length > 0; нижняя граница появится с общим разбором стиля рельсов (фаза 1, D5)."
+    }
+  },
+  "required": ["obj"],
+  "additionalProperties": false,
+  "examples": [
+    {"obj": "tracks/my_rail.obj"},
+    {"obj": "tracks/my_embankment.obj", "tile_length": 1.625}
+  ]
+}
