@@ -26,7 +26,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * at world rendering from an automated run — {@code ./gradlew runClient
  * -PquickPlay=<world copy> -Pautoscene=cab|walk|beam|gangway|er2|panel}. Off unless the system property
  * {@code rwat.autoscene} is set; use a throwaway copy of a save (it spawns a
- * train, changes time and game mode).
+ * train, changes time and game mode). Some scenes are classes of their own,
+ * listening for the same property: {@code depot} ({@link DepotScene}, the
+ * wagon renderer under load), {@code ride} ({@link RideScene}) and others.
  *
  * <p>{@code cab} (SPEC §8–§9): a ChME3 on a straight debug path ahead (+Z) of
  * where the player stands, at midnight, every light group on, the throttle
