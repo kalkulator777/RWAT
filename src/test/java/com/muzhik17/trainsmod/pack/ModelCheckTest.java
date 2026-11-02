@@ -132,6 +132,29 @@ class ModelCheckTest {
                 check("{ \"obj\": \"car/car.obj\", \"skip\": [\"WIPER_\"] }", pack));
     }
 
+    /**
+     * A hinge marker ({@code <KEY>_ROT…} of a control or a door leaf) is read
+     * for its axis whether it has a texture or not, and IR leaves it
+     * untextured, drawn by nothing: that is no mistake to warn about. The
+     * same material on anything else still is.
+     */
+    @Test
+    void untexturedHingeMarkers_dontWarn() {
+        String markers = "mtllib car.mtl\n" + QUAD + "o BODY\nusemtl body\nf 1 2 3\n"
+                + "o THROTTLE_1_ROT_30\nusemtl marker\nf 1 2 3\no THROTTLE_1_LEVER\nusemtl body\nf 1 2 3\n"
+                + "o DOOR_2_ROT_-90\nusemtl marker\nf 1 2 3\no DOOR_2_LEAF\nusemtl body\nf 1 2 3\n"
+                + "o WIDGET_3_ROT.001\nusemtl marker\nf 1 2 3\n";
+        Pack pack = good().with("t:car/car.obj", markers);
+        assertEquals(List.of(), check("{ \"obj\": \"car/car.obj\" }", pack));
+        // ROT on no control's key, a control's other part: not markers
+        pack.with("t:car/car.obj", markers + "o BODY_ROT_90\nusemtl marker\nf 1 2 3\n");
+        assertEquals(List.of("W model t:car/car.obj: faces with no texture (map_Kd) aren't drawn, material(s) marker"),
+                check("{ \"obj\": \"car/car.obj\" }", pack));
+        pack.with("t:car/car.obj", markers + "o THROTTLE_1_KNOB\nusemtl knob\nf 1 2 3\n");
+        assertEquals(List.of("W model t:car/car.obj: faces with no texture (map_Kd) aren't drawn, material(s) knob"),
+                check("{ \"obj\": \"car/car.obj\" }", pack));
+    }
+
     @Test
     void animationsAndLiveries() {
         assertEquals(List.of("E animation 'door2': file t:car/door2.anim not found",

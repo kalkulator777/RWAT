@@ -215,8 +215,9 @@ def line(a, b):
     A control's …_ROT marker gives the hinge (docs/pack-format.md §9,
     PivotAxis): the centre of its bounding box and its long direction, from
     the end nearer the OBJ origin to the far one. Two points make that exact;
-    the face has no area, so nothing of it is drawn, but it has a textured
-    material all the same (an untextured one would be warned about)."""
+    the face has no area, so nothing of it is drawn; its material is textured
+    all the same, though an untextured marker, as IR's packs have them, is as
+    good (the engine reads its axis either way, the pack check doesn't warn)."""
     return [[a, b, b, a]]
 
 

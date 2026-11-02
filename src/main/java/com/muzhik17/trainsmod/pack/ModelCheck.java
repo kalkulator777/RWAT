@@ -13,6 +13,7 @@ import com.muzhik17.trainsmod.client.render.model.IrAnim;
 import com.muzhik17.trainsmod.client.render.model.MtlParser;
 import com.muzhik17.trainsmod.client.render.model.ObjLoader;
 import com.muzhik17.trainsmod.client.render.model.WagonModelDecl;
+import com.muzhik17.trainsmod.convention.ObjectRole;
 
 /**
  * The files a wagon model declaration names, checked all at once (the
@@ -26,7 +27,9 @@ import com.muzhik17.trainsmod.client.render.model.WagonModelDecl;
  * none that draws (no textured material), a material library, texture or
  * animation is missing or unreadable. Warnings: drawn faces whose material
  * has no texture ({@code map_Kd}) — they aren't drawn — and a livery that
- * replaces no texture.
+ * replaces no texture. A hinge marker ({@code <KEY>_ROT…} of a control or a
+ * door leaf) is no such face: the model loader reads its axis with or
+ * without a texture, and IR's packs leave it untextured, drawn by nothing.
  *
  * <p>Plain Java over {@link Files}, so tests run it over a pack on disk; the
  * client hands it the resource manager. Client-side only (the readers live
@@ -125,7 +128,7 @@ public final class ModelCheck {
         return textures;
     }
 
-    /** Something must draw; faces left untextured are named. */
+    /** Something must draw; faces left untextured are named, but for hinge markers. */
     private static void checkDrawn(WagonModelDecl decl, String obj, ObjLoader.Model model,
             Map<String, String> textures, PackOrigin origin, List<PackProblem> problems) {
         boolean anyDrawn = false;
@@ -136,7 +139,7 @@ public final class ModelCheck {
             }
             if (textures.containsKey(part.material())) {
                 anyDrawn = true;
-            } else {
+            } else if (!hingeMarker(part.object())) {
                 untextured.add(part.material().isEmpty() ? "(none)" : part.material());
             }
         }
@@ -185,6 +188,17 @@ public final class ModelCheck {
                         + liveryFolder + " next to the model)"));
             }
         });
+    }
+
+    /**
+     * True if the object is the hinge marker of a control or a door leaf
+     * ({@code <KEY>_ROT…}, as {@link ObjectRole} reads it): untextured, it
+     * still gives the hinge (the model loader counts a pivot marker without a
+     * texture), so drawing nothing is what it is for.
+     */
+    private static boolean hingeMarker(String object) {
+        ObjectRole leaf = ObjectRole.door(object);
+        return ObjectRole.parse(object).pivot() || leaf != null && leaf.pivot();
     }
 
     /** Never drawn: {@code HIDE} parts, {@code CARGO_FILL} and the declaration's {@code skip} prefixes. */
