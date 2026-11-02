@@ -270,7 +270,8 @@ class ExamplePackLoadTest {
      * and modifier, hinge markers and slides, door leaves of each kind, the
      * lights, the coupler heads in each state, bogies and wheelsets, interior,
      * dropped and skipped objects, the .anim's objects, the declared
-     * handbrake; and a rail tile of rails, base and a hidden object.
+     * handbrake, a livery, a Blender copy suffix read away; and a rail tile
+     * of rails, base and a hidden object.
      */
     @Test
     void objectNamesShowTheConvention() throws IOException {
@@ -301,6 +302,9 @@ class ExamplePackLoadTest {
                     mark(shown, control.slideX() != 0.0F || control.slideY() != 0.0F || control.slideZ() != 0.0F,
                             "TL_ on a control");
                 }
+                mark(shown, object.matches(".*\\.\\d{3}$") && !role.equals(ObjectRole.NONE)
+                        && role.equals(ObjectRole.parse(object.substring(0, object.length() - 4))),
+                        "copy suffix .001");
                 mark(shown, role.pivot(), "_ROT_ marker");
                 mark(shown, role.lightGroup() != null, "_LCG_");
                 mark(shown, role.lightInvert(), "LINVERT");
@@ -352,7 +356,7 @@ class ExamplePackLoadTest {
                 "_CG_", "_LABEL_", "_OFFSET_", "_RANGE_", "TL_ on a control", "_ROT_ marker", "_LCG_", "LINVERT",
                 "FULLBRIGHT", "HEADLIGHT_<n>", "_0X<RRGGBB>", "INTERIOR token", "INTERIOR*", "CARGO_FILL*",
                 "BOGEY_FRONT frame", "BOGEY_REAR frame", "wheelset", "HIDE dropped", "skip", "door leaf on a hinge",
-                "sliding door leaf", "declared handbrake", ".anim objects", "livery"));
+                "sliding door leaf", "declared handbrake", ".anim objects", "livery", "copy suffix .001"));
         for (String end : List.of("front ", "rear ")) {
             for (ObjectRole.Coupled.Shown when : ObjectRole.Coupled.Shown.values()) {
                 wanted.add("coupler " + end + when);

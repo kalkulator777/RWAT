@@ -42,7 +42,7 @@ OBJ. Объекты `GUIDE_*` в OBJ вагона и тепловоза рису
 | переходные двери | `gangway_front`, `gangway_rear` с `connecting`; створки `DOOR_5_LEAF`, `DOOR_6_LEAF` на шарнирах-маркерах `DOOR_5_ROT_90`, `DOOR_6_ROT_-90` (открываются внутрь тамбура) |
 | внутренняя дверь | `salon_door` с `inner` между передним тамбуром и салоном; створка и ручка ходят по `.anim` (`animations` модели, `stock/coach/salon_door.anim`) |
 | проём без створки | `salon_arch` с `inner` и `fixed` между задним тамбуром и салоном |
-| свет салона | лампы `LAMPS_FULLBRIGHT_LCG_IL` (острова больше 0.3 — лампы салона), детали салона `INTERIOR_*_LCG_IL` (префикс INTERIOR — прячутся вдали, токен INTERIOR — освещаются лампами); выключатель `WIDGET_1_TOGGLE_CG_IL` в переднем тамбуре |
+| свет салона | лампы `LAMPS_FULLBRIGHT_LCG_IL` (острова больше 0.3 — лампы салона), лампы тамбуров — копия `LAMPS_FULLBRIGHT_LCG_IL.001` (суффикс копии Blender отбрасывается до разбора имени); детали салона `INTERIOR_*_LCG_IL` (префикс INTERIOR — прячутся вдали, токен INTERIOR — освещаются лампами); выключатель `WIDGET_1_TOGGLE_CG_IL` в переднем тамбуре |
 | ручной тормоз | маховик `HANDBRAKE_1` в заднем тамбуре |
 | сцепки | `COUPLED_FRONT_1` / `COUPLED_REAR_1` — хвостовик, виден всегда; `…_2_HIDE` — голова расцепленная, `…_3_HIDE_INVERT` — сцепленная; `couplers` −0.05 сводят головы внутрь рам |
 | ливрея | `liveries`: `blue` → папка `l_blue/` с `coach_body.png` и `coach_door.png` того же имени |
