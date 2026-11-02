@@ -107,7 +107,8 @@ public final class PackReportView {
 
     /**
      * The RWAT packs the last scan of that pack type found, one line each:
-     * the folder or zip, {@code rwat.name} and {@code version}, the format,
+     * the folder or zip, {@code rwat.name} and {@code version} (also of a pack
+     * left out for its format), the format when it could be read,
      * loaded or not, the short content hash and how many problems the scan
      * found (they are listed with the rest of the report). Nothing if the
      * scan found none. A hash not worked out yet is not waited for: the
@@ -126,7 +127,7 @@ public final class PackReportView {
             if (label != null) {
                 line.append(Component.literal(" — " + label));
             }
-            if (info.meta() != null) {
+            if (info.meta() != null && info.meta().format() != RwatPackMeta.UNKNOWN_FORMAT) {
                 line.append(", ").append(Component.translatable("rwat.packs.rwat.format", info.meta().format()));
             }
             line.append(", ").append(info.loaded()
