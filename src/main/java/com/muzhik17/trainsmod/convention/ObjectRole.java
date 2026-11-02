@@ -101,7 +101,7 @@ public record ObjectRole(Control control, float pivotDegrees, String lightGroup,
      * One control, as its objects' names declare it.
      *
      * @param key    {@code <KIND>_<n>} as written, e.g. {@code THROTTLE_1} — the
-     *               identity shared by all of the control's objects
+     *               identity of the control's objects; {@code id} is its number, held at int range
      * @param group  the control group it sets/reads: {@code _CG_<name>}, else {@code key}
      * @param global {@code GLOBAL}: setting it sets the group on the whole train
      * @param slideX source-space slide at full travel ({@code TL_<f>_X}), blocks; same for Y/Z
@@ -241,7 +241,7 @@ public record ObjectRole(Control control, float pivotDegrees, String lightGroup,
             while (tl.find()) {
                 slide[tl.group(2).charAt(0) - 'X'] = parseFloat(tl.group(1), 0.0F);
             }
-            return new Control(kind, Integer.parseInt(m.group(2)), key,
+            return new Control(kind, number(m.group(2)), key,
                     cg.find() ? cg.group(1) : key,
                     label.find() ? label.group(1).replace('^', ' ') : null,
                     hasToken(name, "TOGGLE"), hasToken(name, "PRESS"), hasToken(name, "INVERT"),
@@ -275,6 +275,23 @@ public record ObjectRole(Control control, float pivotDegrees, String lightGroup,
             return Float.parseFloat(text);
         } catch (NumberFormatException e) {
             return fallback;
+        }
+    }
+
+    /**
+     * The number of a control from the digits of its name. Digits too many for
+     * an int ({@code THROTTLE_12345678901}) are still a control — the name says
+     * so, and so does the converter's port of the rule, whose numbers don't
+     * overflow — and the number is held at {@link Integer#MAX_VALUE}. It only
+     * numbers the control: what tells one control from another is its
+     * {@code key}, which keeps the digits as written. Throwing here took the
+     * whole model down at load, for one object's name.
+     */
+    private static int number(String digits) {
+        try {
+            return Integer.parseInt(digits);
+        } catch (NumberFormatException e) {
+            return Integer.MAX_VALUE; // the pattern allows only digits: the value is too big
         }
     }
 }
