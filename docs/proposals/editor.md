@@ -674,27 +674,33 @@ export interface ViewApi {
 
 - Golden в Java проверяет задача `mod`, в Python — `pack-format`; их шаги добавляет агент golden. Задача `editor` от них не зависит и идёт параллельно.
 - `build.gradle` объявляет `fixtures/golden/` входом тестов, как `schema/` (иначе кэш ответит старым результатом). Это зона агента golden.
+- **Как сделано (A1.1).** Задача добавлена в конец `ci.yml` по эскизу. Ещё два шага:
+  - собранный `editor/dist/` каждой ветки сохраняется артефактом `editor-site` на 14 дней (*решение дирижёра*: сборки рабочих веток — артефакт CI, сайт — только из `main`);
+  - отчёт упавшего e2e включает и `editor/test-results/` (трассы и снимки).
 
 ### 5.4. Выкладка на GitHub Pages
 
 **Workflow** `.github/workflows/pages.yml` — отдельный файл. Почему: правами `pages: write` и `id-token: write` не должна обладать проверка каждого пуша.
 
-- **Запуск:** пуш в `main` с изменениями в `editor/**`, `schema/**`, `tools/ir2rwat.py`, `tools/floorgen.py`, плюс `workflow_dispatch`.
+- **Запуск:** пуш в `main` с изменениями в `editor/**`, `schema/**`, `tools/ir2rwat.py`, `tools/floorgen.py` (и самого `pages.yml`), плюс `workflow_dispatch`. **Только из `main`** (*решение дирижёра*, вопрос 9.5 закрыт). Ручной запуск с другой ветки ничего не делает: у задачи `build` условие `github.ref == 'refs/heads/main'`. Сборки рабочих веток — артефакт CI `editor-site` (5.3).
 - **Задача `build`:**
-  - `npm ci` и `npm run build` с `base: '/RWAT/'`;
-  - в `dist/schema/` копируется `schema/` (адреса `$id` схем начинаются с `https://kalkulator777.github.io/RWAT/schema/`);
+  - `npm ci` и `npm run build`;
+  - `dist/schema/` — копия `schema/` байт в байт (адреса `$id` схем начинаются с `https://kalkulator777.github.io/RWAT/schema/`). Шаг сверяет копию `cmp`;
   - `actions/configure-pages@v5`, `actions/upload-pages-artifact@v3` (`path: editor/dist`).
 - **Задача `deploy`:** `actions/deploy-pages@v4`, окружение `github-pages`.
 - `concurrency: pages`, без отмены идущей выкладки.
+- *Решение агента:* `base: './'` вместо `'/RWAT/'`. Все адреса сборки относительные, и один и тот же `dist/` работает на Pages под `/RWAT/`, в `vite preview` от корня (e2e) и из любой папки. Сборке не нужна переменная окружения, и e2e проверяет те же байты, что уходят на сайт.
+- *Решение агента:* `schema/` копирует сама сборка (плагин в `vite.config.ts`), а не шаг workflow. Так схемы попадают в предкэш service worker (он строится по `dist/` в конце сборки), есть в артефакте CI, а e2e проверяет их по `$id`.
 
 **Что включить пользователю** (репозиторий публичный, Pages бесплатны; сейчас `has_pages: false`):
 
 1. GitHub → репозиторий `kalkulator777/RWAT` → **Settings → Pages**.
 2. В блоке **Build and deployment** поле **Source** → **GitHub Actions**. Ветку и папку выбирать не нужно.
-3. **Settings → Environments → `github-pages`** (окружение создаётся при первой выкладке или вручную кнопкой **New environment** с этим именем) → **Deployment branches and tags**: оставить `main`. Чтобы увидеть редактор до пулл-реквеста в `main`, добавить рабочую ветку `ccr-4b67d258-0673ah` и запускать выкладку с неё вручную (шаг 5, ветка выбирается в окне запуска; вопрос 9.5).
+3. **Settings → Environments → `github-pages`** (окружение создаётся само при включении Pages с источником Actions или при первой выкладке) → **Deployment branches and tags**: оставить `main`. Других веток не добавлять: сайт выкладывается только из `main`.
 4. **Settings → Actions → General:** «Allow all actions and reusable workflows» (так по умолчанию) — нужны `actions/*`. «Workflow permissions» не трогать: workflow сам просит нужные права.
-5. Запустить workflow: **Actions → Pages → Run workflow** (или он запустится после слияния в `main`).
+5. Сделать шаги 1–2 **до** слияния редактора в `main`. Иначе первый прогон `pages.yml` после слияния упадёт на `configure-pages` (Pages выключены). Если так вышло, включить Pages и перезапустить прогон. Первый раз workflow запускается сам: пуш в `main` меняет `editor/**`. Кнопка **Actions → Pages → Run workflow** (ветка `main`) появляется, когда `pages.yml` уже лежит в `main`.
 6. Адрес появится в **Settings → Pages** и в итоге прогона: `https://kalkulator777.github.io/RWAT/`. HTTPS для `github.io` включён всегда.
+7. До слияния редактор можно посмотреть из артефакта: **Actions → CI** → прогон ветки → **Artifacts → `editor-site`**, распаковать в `editor/dist/` и запустить `npm run preview` в `editor/` (`http://localhost:4173/`), или отдать папку любым статическим сервером. Service worker работает только на `localhost` и по HTTPS.
 
 ### 5.5. Офлайн
 
@@ -943,6 +949,7 @@ A6.1 и A6.2 могут начаться сразу после M2, паралл�
    **Рекомендую один в v1.** Внешние ссылки помечаются «не проверена», второй пак можно открыть позже как библиотеку только для чтения.
 5. **Откуда выкладывать сайт:** только из `main` или ещё из рабочей ветки `ccr-4b67d258-0673ah`? Сейчас партия A и фаза 1 в `main` не влиты.
    **Рекомендую:** до первого пулл-реквеста в `main` разрешить рабочую ветку в правилах окружения `github-pages` и выкладывать с неё ручным запуском (5.4, шаги 3 и 5); после слияния — только `main`, автоматически.
+   **Решено дирижёром (A1.1):** только из `main`; сборки рабочих веток — артефакт CI `editor-site` (5.3, 5.4).
 6. **Начинать фазу 2 с правок Java (M0) — согласен?** Это вынос `ModelParts` из рендера, структурные находки `FloorCheck`, ничья `PivotAxis`.
    **Рекомендую да.** Без этого порт разбора модели нечем сверить с движком, а находки пола не связать с зонами. M0 идёт параллельно с каркасом и фазу не задерживает.
 7. **Нужен ли адрес на своём домене** вместо `kalkulator777.github.io/RWAT`?
