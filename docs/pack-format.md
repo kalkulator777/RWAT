@@ -353,7 +353,7 @@ pack.mcmeta в корне пака: секция pack самого Minecraft п�
 | `LINVERT` | `(?:^\|_)LINVERT(?:_\|$)` | Горит при выключенной группе. | [ObjectRole.java#parse](../src/main/java/com/muzhik17/trainsmod/convention/ObjectRole.java) |
 | `FULLBRIGHT` | `(?:^\|_)FULLBRIGHT(?:_\|$)` | Светится в полную яркость, пока горит; без LCG — всегда. Остров FULLBRIGHT (диагональ ≥ 0.3) в группе, где есть объект с токеном INTERIOR, — лампа салона, освещает внутри (без цвета). | [ObjectRole.java#parse](../src/main/java/com/muzhik17/trainsmod/convention/ObjectRole.java), [IrStockModel.java#load](../src/main/java/com/muzhik17/trainsmod/client/render/model/IrStockModel.java), [LampIslands.java#MIN_LAMP_SIZE](../src/main/java/com/muzhik17/trainsmod/client/render/model/LampIslands.java) |
 | INTERIOR (токен) | `(?:^\|_)INTERIOR(?:_\|$)` | Грани объекта освещаются лампами салона; его группа света становится группой света салона. | [IrStockModel.java#load](../src/main/java/com/muzhik17/trainsmod/client/render/model/IrStockModel.java) |
-| `HEADLIGHT_<n>` | `(?:^\|_)HEADLIGHT_\d+(?=_\|$)` | Фара: ореол, луч на 16 блоков и пятно на пути. Фара в передней половине модели светит вперёд, в задней — назад (не задаётся). Эффекты видны, только пока горит какая-нибудь группа света вагона. | [ObjectRole.java#HEADLIGHT](../src/main/java/com/muzhik17/trainsmod/convention/ObjectRole.java), [IrStockModel.java#headlight](../src/main/java/com/muzhik17/trainsmod/client/render/model/IrStockModel.java), [LampEffects.java#BEAM_LENGTH](../src/main/java/com/muzhik17/trainsmod/client/render/LampEffects.java), [WagonRenderer.java#render](../src/main/java/com/muzhik17/trainsmod/client/render/WagonRenderer.java) |
+| `HEADLIGHT_<n>` | `(?:^\|_)HEADLIGHT_\d+(?=_\|$)` | Фара: ореол, луч на 16 блоков и пятно на пути. Фара в передней половине модели светит вперёд, в задней — назад (не задаётся). Светит, пока горит её группа света (LCG); фара без группы светит всегда. | [ObjectRole.java#HEADLIGHT](../src/main/java/com/muzhik17/trainsmod/convention/ObjectRole.java), [IrStockModel.java#headlight](../src/main/java/com/muzhik17/trainsmod/client/render/model/IrStockModel.java), [HeadlightBeam.java#LENGTH](../src/main/java/com/muzhik17/trainsmod/client/render/HeadlightBeam.java), [LampEffects.java#collect](../src/main/java/com/muzhik17/trainsmod/client/render/LampEffects.java), [WagonRenderer.java#render](../src/main/java/com/muzhik17/trainsmod/client/render/WagonRenderer.java) |
 | `_0X<RRGGBB>` | `_0[xX]([0-9A-Fa-f]{6})(?=_\|$)` | Цвет фары. | [ObjectRole.java#RGB](../src/main/java/com/muzhik17/trainsmod/convention/ObjectRole.java) |
 
 **Тайл рельсов** (OBJ стиля рельсов):
@@ -393,7 +393,7 @@ pack.mcmeta в корне пака: секция pack самого Minecraft п�
 | ход двери, тики | 40 | [WagonEntity.java#DOOR_ANIM_TICKS](../src/main/java/com/muzhik17/trainsmod/consist/WagonEntity.java) |
 | поворот головы сцепки, градусы | 22 | [CouplerAim.java#LIMIT_DEGREES](../src/main/java/com/muzhik17/trainsmod/kinematics/CouplerAim.java) |
 | диагональ острова лампы салона, блоки | 0.3 | [LampIslands.java#MIN_LAMP_SIZE](../src/main/java/com/muzhik17/trainsmod/client/render/model/LampIslands.java) |
-| луч фары, блоки | 16 | [LampEffects.java#BEAM_LENGTH](../src/main/java/com/muzhik17/trainsmod/client/render/LampEffects.java) |
+| луч фары, блоки | 16 | [HeadlightBeam.java#LENGTH](../src/main/java/com/muzhik17/trainsmod/client/render/HeadlightBeam.java) |
 
 ## 10. Lang-ключи
 
