@@ -35,8 +35,9 @@ public final class FloorCheck {
     /** Thicker than this, a door box is more than its leaf (handles, frame — fine) or wrong. */
     private static final double MAX_DOOR_THICKNESS = 0.6;
     /** The cushion top above the floor by it a sitting player fits: the seated feet hang SIT_DROP below it. */
-    private static final double MIN_SEAT_HEIGHT = 0.2;
-    private static final double MAX_SEAT_HEIGHT = 1.5;
+    public static final double MIN_SEAT_HEIGHT = 0.2;
+    /** The highest a chair's cushion may be above the floor by it (see {@link #MIN_SEAT_HEIGHT}). */
+    public static final double MAX_SEAT_HEIGHT = 1.5;
     /** Step along a door's span when looking for a place to walk out through it. */
     private static final double SPAN_STEP = 0.05;
 

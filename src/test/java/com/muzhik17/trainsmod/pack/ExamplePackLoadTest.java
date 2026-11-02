@@ -19,35 +19,53 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 
+import org.joml.Vector3d;
 import org.junit.jupiter.api.Test;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.JsonPrimitive;
 import com.muzhik17.trainsmod.client.render.model.IrAnim;
+import com.muzhik17.trainsmod.client.render.model.Mesh;
+import com.muzhik17.trainsmod.client.render.model.MtlParser;
 import com.muzhik17.trainsmod.client.render.model.ObjLoader;
 import com.muzhik17.trainsmod.client.render.model.WagonModelDecl;
 import com.muzhik17.trainsmod.client.sound.SoundSet;
 import com.muzhik17.trainsmod.convention.ObjectRole;
+import com.muzhik17.trainsmod.kinematics.CabArea;
+import com.muzhik17.trainsmod.kinematics.FloorCheck;
+import com.muzhik17.trainsmod.kinematics.RiderWalk;
 import com.muzhik17.trainsmod.path.TileFootprint;
+import com.muzhik17.trainsmod.stock.FloorRegion;
+import com.muzhik17.trainsmod.stock.ObjFrame;
+import com.muzhik17.trainsmod.stock.WagonType;
 import com.muzhik17.trainsmod.stock.WagonTypeParser;
 
 /**
  * The example pack ({@code run/rwat_packs/RwatExamplePack}, written by
  * {@code tools/gen_example_pack.py}, roadmap R11) loads as the game loads it
- * with nothing to report: no error and no warning from the type, model and
- * rail style readers, from {@code /rwatc packs validate}'s file check or from
- * the rwat block; every model has its type and every type its model; every
- * name has its lang key in both languages; and the pack still shows the
- * functions of the format it is there to show (the OBJ naming convention,
- * here; the JSON keys are held to the schema by
- * {@code tools/tests/test_example_pack.py}). The pack is in the repository:
- * this is never skipped.
+ * with nothing to report: no error and no warning from the type loader (the
+ * reader's own and {@link FloorCheck}'s), the model and rail style readers,
+ * {@code /rwatc packs validate}'s file check or the rwat block; every model
+ * has its type and every type its model; every name has its lang key in both
+ * languages; and the pack still shows the functions of the format it is
+ * there to show (the OBJ naming convention, here; the JSON keys are held to
+ * the schema by {@code tools/tests/test_example_pack.py}). The pack is in the
+ * repository: this is never skipped.
  *
- * <p>Not here: {@code FloorCheck} over the types' floors. The pack's markup
- * is in the OBJ frame of format 1, which the engine reads once the frame
- * change (R6) is in; until then its floor is read in the old frame.
+ * <p>The markup (format 1, the OBJ frame, read by the parser the loader
+ * uses) is held to what the pack's README says it shows, walked as the engine
+ * walks it ({@link RiderWalk}, {@link CabArea}): the coach's four zones are
+ * reached through their doors, every way out and every gangway is where the
+ * floor ends, the inner door is a wall shut and a passage open; the
+ * shunter's steps lead out and both chairs are sat in, the second driving
+ * back; every door leaf of a model lies in its door's box. Each of these
+ * checks is shown to fail on a broken copy of the markup.
  */
 class ExamplePackLoadTest {
 
@@ -129,23 +147,18 @@ class ExamplePackLoadTest {
     }
 
     @Test
-    void wagonTypesLoadWithoutAnErrorOrAWarningOfTheReader() throws IOException {
+    void wagonTypesLoadWithNothingToReport() throws IOException {
         Map<String, Path> files = declarations("data", "wagon_types");
         assertEquals(TYPES, files.keySet());
-        List<String> warnings = new ArrayList<>();
         List<WagonTypeLoader.Declaration> declarations = new ArrayList<>();
         for (Map.Entry<String, Path> file : files.entrySet()) {
-            JsonObject json = json(file.getValue());
-            // the reader's own warnings (unknown keys, reserved fields): none
-            WagonTypeParser.parse(file.getKey(), json, w -> warnings.add(file.getKey() + ": " + w));
-            declarations.add(new WagonTypeLoader.Declaration(file.getKey(), origin(file.getValue()), json));
+            declarations.add(new WagonTypeLoader.Declaration(file.getKey(), origin(file.getValue()),
+                    json(file.getValue())));
         }
-        assertTrue(warnings.isEmpty(), lines(warnings));
-        // whole files with their aliases, as the registry takes them; the loader's FloorCheck
-        // warnings wait for the frame change (see the class comment)
+        // whole files with their aliases, as the registry takes them: no error, and no warning
+        // either — the reader's (unknown keys, reserved fields) or FloorCheck's
         WagonTypeLoader.Result result = WagonTypeLoader.load(declarations);
-        List<PackProblem> errors = result.problems().stream().filter(PackProblem::isError).toList();
-        assertTrue(errors.isEmpty(), lines(errors));
+        assertTrue(result.problems().isEmpty(), lines(result.problems()));
         assertEquals(TYPES, result.types().keySet());
         assertEquals(Map.of(NS + ":open_wagon", NS + ":gondola"), result.aliases());
     }
@@ -371,6 +384,474 @@ class ExamplePackLoadTest {
         assertTrue(tile.stream().anyMatch(o -> !TileFootprint.isRailObject(o) && o.startsWith("RAIL_")),
                 "a RAIL_…BASE… object (base)");
         assertTrue(tile.stream().anyMatch(TileFootprint::isHiddenObject), "a hidden object");
+    }
+
+    // ---- the markup, as the engine walks it ----
+
+    private static final double M = RiderWalk.PLAYER_HALF_WIDTH;
+    private static final String COACH = NS + ":coach";
+    private static final String SHUNTER = NS + ":shunter";
+
+    /** The pack's type file {@code id}, read afresh (a copy to break). */
+    private static JsonObject typeJson(String id) throws IOException {
+        return json(declarations("data", "wagon_types").get(id));
+    }
+
+    /** A type of the pack as the loader's parser reads it: the markup turned from the OBJ frame into the model's. */
+    private static WagonType type(String id) throws IOException {
+        return WagonTypeParser.parse(id, typeJson(id));
+    }
+
+    /** The type {@code id} with its markup broken by {@code change}. */
+    private static WagonType broken(String id, Consumer<JsonObject> change) throws IOException {
+        JsonObject json = typeJson(id);
+        change.accept(json);
+        return WagonTypeParser.parse(id, json);
+    }
+
+    /** The JSON of door {@code id} in a type file. */
+    private static JsonObject doorJson(JsonObject type, String id) {
+        for (JsonElement door : type.getAsJsonArray("doors")) {
+            if (door.getAsJsonObject().get("id").getAsString().equals(id)) {
+                return door.getAsJsonObject();
+            }
+        }
+        throw new IllegalArgumentException("no door " + id);
+    }
+
+    /** A box ({@code min}, {@code max}) or a chair ({@code at}) of a type file moved along OBJ axis {@code axis}. */
+    private static void move(JsonObject box, int axis, double by) {
+        for (String key : List.of("min", "max", "at")) {
+            if (box.has(key)) {
+                JsonArray xyz = box.getAsJsonArray(key);
+                xyz.set(axis, new JsonPrimitive(xyz.get(axis).getAsDouble() + by));
+            }
+        }
+    }
+
+    /** The index of door {@code id} of a type; −1 if it has none. */
+    private static int door(WagonType type, String id) {
+        for (int i = 0; i < type.doors().size(); i++) {
+            if (type.doors().get(i).id().equals(id)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** The doors of {@code ids} the type lacks, as problems. */
+    private static List<String> missing(WagonType type, List<String> ids) {
+        return ids.stream().filter(id -> door(type, id) < 0).map(id -> "no door " + id).toList();
+    }
+
+    /** Feet at (x, z) on the floor there. */
+    private static Vector3d feet(WagonType type, double x, double z) {
+        return new Vector3d(x, type.interior().floorAt(x, z, M), z);
+    }
+
+    /**
+     * Walks a rider at {@code from} straight at (x, z), as far as the floor
+     * lets them ({@link RiderWalk#toward}, sliding along walls), with the doors
+     * of {@code openMask} open; true if they get there.
+     */
+    private static boolean walks(WagonType type, Vector3d from, double x, double z, int openMask) {
+        Vector3d at = from;
+        for (int leg = 0; leg < 8; leg++) {
+            Vector3d next = RiderWalk.toward(at, x, z, type.interior(), type.doors(), openMask);
+            if (next.distanceSquared(at) < 1.0e-8) {
+                break;
+            }
+            at = next;
+        }
+        return Math.hypot(at.x - x, at.z - z) < 2.0e-3;
+    }
+
+    /**
+     * A point of zone {@code i} a rider fits at and no other zone holds: its
+     * middle, else the middle of one of its edges, a body's half-width in.
+     */
+    private static double[] ownPoint(List<WagonType.Interior.Zone> zones, int i) {
+        WagonType.Interior.Zone zone = zones.get(i);
+        double cx = (zone.minX() + zone.maxX()) / 2;
+        double cz = (zone.minZ() + zone.maxZ()) / 2;
+        for (double[] p : new double[][]{{cx, cz}, {zone.minX() + M, cz}, {zone.maxX() - M, cz},
+                {cx, zone.minZ() + M}, {cx, zone.maxZ() - M}}) {
+            boolean others = false;
+            for (int j = 0; j < zones.size(); j++) {
+                others |= j != i && zones.get(j).holds(p[0], p[1], M);
+            }
+            if (!others && zone.holds(p[0], p[1], M)) {
+                return p;
+            }
+        }
+        return new double[]{cx, cz};
+    }
+
+    /** The look yaw of a rider walking along (dx, dz) of the model frame, the wagon at yaw 0. */
+    private static float yaw(double dx, double dz) {
+        return (float) Math.toDegrees(Math.atan2(-dx, dz));
+    }
+
+    /**
+     * Where a rider walks out through hull or gangway door {@code d}: up to
+     * it, on the floor nearest its middle, then one step on through it
+     * ({@link RiderWalk#exitDoor}, which takes a door only where the floor
+     * ends within its slack of the inner face). The zone they stand in, or
+     * −1 if the step doesn't take this door.
+     */
+    private static int exitsFrom(WagonType type, int d, int openMask) {
+        WagonType.Door door = type.doors().get(d);
+        FloorRegion floor = type.interior().region(M, type.doors(), openMask);
+        double[] at = floor.nearest((door.minX() + door.maxX()) / 2, (door.minZ() + door.maxZ()) / 2);
+        float yaw = door.axis() == 0 ? yaw(door.outward(), 0) : yaw(0, door.outward());
+        int out = RiderWalk.exitDoor(feet(type, at[0], at[1]), 1.0, 0.0, yaw, 0.0F, type.interior(),
+                type.doors(), openMask);
+        if (out != d) {
+            return -1;
+        }
+        List<WagonType.Interior.Zone> zones = type.interior().zones();
+        for (int i = 0; i < zones.size(); i++) {
+            if (zones.get(i).holds(at[0], at[1], M)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** The parts of a floor joined by the floor alone, no door bridging: piece → its part's least piece. */
+    private static int[] partsByFloor(FloorRegion floor) {
+        int[] part = new int[floor.pieces().size()];
+        for (int i = 0; i < part.length; i++) {
+            part[i] = i;
+        }
+        boolean merged = true;
+        while (merged) {
+            merged = false;
+            for (int[] link : floor.links()) {
+                int least = Math.min(part[link[0]], part[link[1]]);
+                if (part[link[0]] != least || part[link[1]] != least) {
+                    part[link[0]] = least;
+                    part[link[1]] = least;
+                    merged = true;
+                }
+            }
+        }
+        return part;
+    }
+
+    /** The parts of the floor (see {@link #partsByFloor}) that {@code zone} has pieces in. */
+    private static Set<Integer> partsOf(FloorRegion floor, int[] part, WagonType.Interior.Zone zone) {
+        Set<Integer> found = new TreeSet<>();
+        for (int p = 0; p < part.length; p++) {
+            if (floor.pieces().get(p).touches(zone.minX(), zone.minZ(), zone.maxX(), zone.maxZ())) {
+                found.add(part[p]);
+            }
+        }
+        return found;
+    }
+
+    /**
+     * What the coach's markup gets wrong of what the pack's README says it
+     * shows; empty if nothing. Its zones, in the generator's order: the front
+     * vestibule, the salon aisle, the middle platform, the rear vestibule.
+     */
+    private static List<String> coachProblems(WagonType coach) {
+        List<String> out = new ArrayList<>();
+        List<WagonType.Interior.Zone> zones = coach.interior().zones();
+        List<WagonType.Door> doors = coach.doors();
+        out.addAll(missing(coach, List.of("door_fl", "door_fr", "door_rl", "door_rr", "gangway_front",
+                "gangway_rear", "salon_door", "salon_arch")));
+        if (zones.size() != 4) {
+            out.add("four zones, not " + zones.size());
+        }
+        if (!out.isEmpty()) {
+            return out;
+        }
+        int all = coach.leafDoors();
+        int salonDoor = door(coach, "salon_door");
+        int salonArch = door(coach, "salon_arch");
+        // every zone is walked to from the salon with every door open; with salon_door shut,
+        // all but the front vestibule (the rear one is past the arch, never shut)
+        double[] salon = ownPoint(zones, 1);
+        for (int z = 0; z < zones.size(); z++) {
+            double[] to = ownPoint(zones, z);
+            if (!walks(coach, feet(coach, salon[0], salon[1]), to[0], to[1], all)) {
+                out.add("zone " + z + " isn't walked to from the salon with every door open");
+            }
+            if (walks(coach, feet(coach, salon[0], salon[1]), to[0], to[1], all & ~(1 << salonDoor)) != (z != 0)) {
+                out.add("zone " + z + (z == 0 ? " is" : " isn't") + " walked to from the salon with salon_door shut");
+            }
+        }
+        // the inner doorways walked through both ways, a block either side of the wall: the
+        // bridge reaches both sides; salon_door shut is a wall
+        for (int d : new int[]{salonDoor, salonArch}) {
+            WagonType.Door door = doors.get(d);
+            boolean side = door.axis() == 0;
+            double along = (door.spanMin() + door.spanMax()) / 2;
+            double wall = side ? (door.minX() + door.maxX()) / 2 : (door.minZ() + door.maxZ()) / 2;
+            double[] in = side ? new double[]{wall - door.outward(), along}
+                    : new double[]{along, wall - door.outward()};
+            double[] beyond = side ? new double[]{wall + door.outward(), along}
+                    : new double[]{along, wall + door.outward()};
+            for (int mask : door.fixed() ? new int[]{0} : new int[]{all, 0}) {
+                boolean open = door.open(mask, d);
+                if (walks(coach, feet(coach, in[0], in[1]), beyond[0], beyond[1], mask) != open
+                        || walks(coach, feet(coach, beyond[0], beyond[1]), in[0], in[1], mask) != open) {
+                    out.add(door.id() + (open ? " open isn't walked through both ways" : " shut is walked through"));
+                }
+            }
+        }
+        // salon_door: the zones on its two sides don't meet in its doorway, and the floor
+        // alone doesn't join them round it
+        FloorRegion.Cut cut = FloorRegion.Cut.shut(doors.get(salonDoor), M);
+        for (FloorRegion.Piece piece : coach.interior().region(M).pieces()) {
+            if (cut.bites(piece)) {
+                out.add("salon_door: the floor runs through its doorway, " + piece);
+            }
+        }
+        FloorRegion shut = coach.interior().region(M, doors, 0);
+        int[] part = partsByFloor(shut);
+        Set<Integer> joined = partsOf(shut, part, zones.get(0));
+        joined.retainAll(partsOf(shut, part, zones.get(1)));
+        if (!joined.isEmpty()) {
+            out.add("salon_door: the front vestibule and the salon are one floor without it");
+        }
+        // the ways out of each vestibule, its outer doors and its gangway: the floor ends at each
+        Map<String, Integer> waysOut = new TreeMap<>(Map.of("door_fl", 0, "door_fr", 0, "gangway_front", 0,
+                "door_rl", 3, "door_rr", 3, "gangway_rear", 3));
+        waysOut.forEach((id, zone) -> {
+            int d = door(coach, id);
+            int from = exitsFrom(coach, d, all);
+            if (from != zone) {
+                out.add(id + " open isn't walked out through from zone " + zone
+                        + (from < 0 ? ": the floor doesn't end at it" : " but from zone " + from));
+            }
+            if (exitsFrom(coach, d, 0) >= 0) {
+                out.add(id + " shut is walked out through");
+            }
+        });
+        // the gangways in the end walls: a rider coming along the train lands through them, on the floor
+        for (int travel : new int[]{1, -1}) {
+            String id = travel > 0 ? "gangway_rear" : "gangway_front";
+            RiderWalk.Arrival in = RiderWalk.gangwayArrival(doors, coach.interior(), travel, 0.0, all);
+            if (doors.get(door(coach, id)).axis() != 2) {
+                out.add(id + " isn't in an end wall");
+            } else if (in == null || in.door() != door(coach, id)
+                    || !coach.interior().region(M, doors, all).fits(in.feet().x, in.feet().z)) {
+                out.add("a rider coming " + (travel > 0 ? "forward" : "back") + " along the train doesn't land"
+                        + " through " + id + " on the floor");
+            }
+        }
+        return out;
+    }
+
+    /**
+     * What the shunter's markup gets wrong of what the README says: the
+     * steps lead out of the cab, a rider climbing in walks to within reach of
+     * either chair, each chair has floor within reach and its cushion at a
+     * sitting height above it, both are the one cab's, and the second faces
+     * back, so it drives the other way.
+     */
+    private static List<String> shunterProblems(WagonType shunter) {
+        List<String> out = new ArrayList<>(missing(shunter, List.of("steps_left", "steps_right")));
+        if (!out.isEmpty()) {
+            return out;
+        }
+        WagonType.Interior interior = shunter.interior();
+        for (String id : List.of("steps_left", "steps_right")) {
+            int d = door(shunter, id);
+            if (!shunter.doors().get(d).fixed() || exitsFrom(shunter, d, 0) < 0) {
+                out.add(id + " isn't a doorway without a leaf a rider walks out through");
+            }
+        }
+        WagonType.Door steps = shunter.doors().get(door(shunter, "steps_left"));
+        double[] climbedIn = interior.region(M).nearest((steps.minX() + steps.maxX()) / 2,
+                (steps.minZ() + steps.maxZ()) / 2);
+        List<WagonType.Seat> seats = shunter.cab().seats();
+        CabArea cabs = CabArea.of(shunter);
+        for (int i = 0; i < seats.size(); i++) {
+            WagonType.Seat seat = seats.get(i);
+            double[] floor = interior.region(M).nearest(seat.x(), seat.z());
+            double reach = Math.hypot(floor[0] - seat.x(), floor[1] - seat.z());
+            double cushion = seat.y() - interior.floorAt(floor[0], floor[1], M);
+            if (!(reach <= RiderWalk.SEAT_REACH)) {
+                out.add("cab.seats[" + i + "]: the floor is " + reach + " off, out of reach");
+            }
+            if (!(cushion >= FloorCheck.MIN_SEAT_HEIGHT && cushion <= FloorCheck.MAX_SEAT_HEIGHT)) {
+                out.add("cab.seats[" + i + "]: the cushion is " + cushion + " above the floor");
+            }
+            Vector3d walked = RiderWalk.toward(feet(shunter, climbedIn[0], climbedIn[1]), seat.x(), seat.z(),
+                    interior, shunter.doors(), 0);
+            if (Math.hypot(walked.x - seat.x(), walked.z - seat.z()) > RiderWalk.SEAT_REACH) {
+                out.add("cab.seats[" + i + "] isn't walked to within reach from the steps");
+            }
+            if (cabs.cabOfChair(i) != 0) {
+                out.add("cab.seats[" + i + "] is in cab " + cabs.cabOfChair(i) + ", not the one cab");
+            }
+        }
+        if (seats.size() != 2 || CabArea.facing(false, seats.get(0)) != 1
+                || CabArea.facing(false, seats.get(1)) != -1) {
+            out.add("two chairs, the first driving forward and the second back: " + seats);
+        }
+        return out;
+    }
+
+    /**
+     * The door leaves of a model ({@code DOOR_<n>} with a hinge marker or a
+     * slide), each as the box of its textured parts in the OBJ frame — the
+     * parts the model loader builds the leaf of ({@code IrStockModel}: not
+     * hidden, skipped, of a bogie or moved by an .anim). Key → {min, max}.
+     */
+    private static Map<String, double[][]> leaves(WagonModelDecl decl) throws IOException {
+        ObjLoader.Model model;
+        try (InputStream in = Files.newInputStream(file(decl.obj()))) {
+            model = ObjLoader.loadModel(in);
+        }
+        String namespace = decl.obj().substring(0, decl.obj().indexOf(':'));
+        String folder = MtlParser.folderOf(decl.obj().substring(namespace.length() + 1));
+        Set<String> textured = new TreeSet<>();
+        for (String library : model.materialLibraries()) {
+            try (InputStream in = Files.newInputStream(file(namespace + ":" + MtlParser.resolve(folder, library)))) {
+                textured.addAll(MtlParser.parse(in).keySet());
+            }
+        }
+        Set<String> animated = new TreeSet<>();
+        for (String anim : decl.animations().values()) {
+            try (InputStream in = Files.newInputStream(file(anim))) {
+                animated.addAll(IrAnim.parse(in).keySet());
+            }
+        }
+        Set<String> moving = new TreeSet<>();
+        Map<String, double[][]> boxes = new TreeMap<>();
+        for (ObjLoader.Part part : model.parts()) {
+            String object = part.object();
+            ObjectRole leaf = ObjectRole.door(object);
+            if (leaf == null || object.contains("HIDE") || object.startsWith("BOGEY_") || animated.contains(object)
+                    || decl.skip().stream().anyMatch(object::startsWith)) {
+                continue;
+            }
+            ObjectRole.Control control = leaf.control();
+            if (leaf.pivot() || control.slideX() != 0.0F || control.slideY() != 0.0F || control.slideZ() != 0.0F) {
+                moving.add(control.key());
+            }
+            if (!textured.contains(part.material())) {
+                continue;
+            }
+            double[][] box = boxes.computeIfAbsent(control.key(), k -> new double[][]{
+                    {Double.MAX_VALUE, Double.MAX_VALUE, Double.MAX_VALUE},
+                    {-Double.MAX_VALUE, -Double.MAX_VALUE, -Double.MAX_VALUE}});
+            for (Mesh.Quad q : part.mesh().quads()) {
+                for (Mesh.Vertex v : new Mesh.Vertex[]{q.v0(), q.v1(), q.v2(), q.v3()}) {
+                    double[] xyz = {v.x(), v.y(), v.z()};
+                    for (int a = 0; a < 3; a++) {
+                        box[0][a] = Math.min(box[0][a], xyz[a]);
+                        box[1][a] = Math.max(box[1][a], xyz[a]);
+                    }
+                }
+            }
+        }
+        boxes.keySet().retainAll(moving);
+        return boxes;
+    }
+
+    /**
+     * Every door leaf of the model lies in its own door's box: the centre of
+     * its box, turned into the model frame, finds a door by {@link
+     * WagonType#doorHolding} as the renderer looks it up, no two leaves the
+     * same door; and every door with a leaf is moved by one, or by the .anim
+     * named after it.
+     */
+    private static List<String> leafProblems(WagonType type, WagonModelDecl decl) throws IOException {
+        List<String> out = new ArrayList<>();
+        Map<Integer, String> held = new TreeMap<>();
+        for (Map.Entry<String, double[][]> leaf : leaves(decl).entrySet()) {
+            double[][] box = leaf.getValue();
+            double[] centre = ObjFrame.point((box[0][0] + box[1][0]) / 2, (box[0][1] + box[1][1]) / 2,
+                    (box[0][2] + box[1][2]) / 2);
+            int d = type.doorHolding(centre[0], centre[1], centre[2]);
+            if (d < 0) {
+                out.add(leaf.getKey() + ": its centre is in no door's box");
+            } else if (held.containsKey(d)) {
+                out.add(leaf.getKey() + " and " + held.get(d) + " are both door " + type.doors().get(d).id() + "'s");
+            } else {
+                held.put(d, leaf.getKey());
+            }
+        }
+        for (int d = 0; d < type.doors().size(); d++) {
+            WagonType.Door door = type.doors().get(d);
+            if (!door.fixed() && !held.containsKey(d) && !decl.animations().containsKey(door.id())) {
+                out.add("door " + door.id() + " has no leaf in the model and no .anim");
+            }
+        }
+        return out;
+    }
+
+    /** FloorCheck finds nothing in any type of the pack (the loader would warn of it). */
+    @Test
+    void floorCheckFindsNothingInAnyType() throws IOException {
+        for (String id : TYPES) {
+            assertEquals(List.of(), FloorCheck.problems(type(id)), id);
+        }
+    }
+
+    @Test
+    void theCoachIsWalkedAsItsReadmeSays() throws IOException {
+        assertEquals(List.of(), coachProblems(type(COACH)));
+    }
+
+    @Test
+    void theShunterIsWalkedAsItsReadmeSays() throws IOException {
+        assertEquals(List.of(), shunterProblems(type(SHUNTER)));
+    }
+
+    @Test
+    void everyDoorLeafLiesInItsDoorsBox() throws IOException {
+        Map<String, WagonModelDecl> models = models();
+        int leaves = 0;
+        for (String id : TYPES) {
+            assertEquals(List.of(), leafProblems(type(id), models.get(id)), id);
+            leaves += leaves(models.get(id)).size();
+        }
+        assertEquals(6, leaves, "the coach's four outer and two gangway leaves");
+    }
+
+    /** The checks above see a broken markup: each of these copies of the pack's types fails one. */
+    @Test
+    void theMarkupChecksSeeABrokenMarkup() throws IOException {
+        Map<String, WagonType> coaches = new LinkedHashMap<>();
+        // the salon aisle run up to the front vestibule, through salon_door's doorway
+        coaches.put("aisle into the vestibule", broken(COACH, t -> t.getAsJsonArray("interior").get(1)
+                .getAsJsonObject().getAsJsonArray("min").set(0, new JsonPrimitive(-7.9))));
+        // salon_door a block into the salon: its bridge doesn't reach the vestibule
+        coaches.put("salon_door in the salon", broken(COACH, t -> move(doorJson(t, "salon_door"), 0, 1.0)));
+        // an outer door half a block off the side wall: the floor doesn't end at it
+        coaches.put("door_fl off the wall", broken(COACH, t -> move(doorJson(t, "door_fl"), 2, 0.5)));
+        // the arch a block aside, off the aisle: the rear vestibule is cut off the salon, though
+        // FloorCheck finds nothing (the vestibule has its own doors, so it is reached anyway)
+        coaches.put("salon_arch off the aisle", broken(COACH, t -> move(doorJson(t, "salon_arch"), 2, 1.0)));
+        // a gangway in the side wall
+        coaches.put("gangway_front in the side", broken(COACH, t -> {
+            JsonObject gangway = doorJson(t, "gangway_front");
+            gangway.add("min", JsonParser.parseString("[-9.5, 1.15, 1.45]"));
+            gangway.add("max", JsonParser.parseString("[-8.6, 3.25, 1.51]"));
+        }));
+        coaches.forEach((what, coach) -> assertTrue(!coachProblems(coach).isEmpty(), what + " passes"));
+
+        Map<String, WagonType> shunters = new LinkedHashMap<>();
+        // FloorCheck finds nothing here either: a chair may face either way
+        shunters.put("the second chair facing forward", broken(SHUNTER, t -> t.getAsJsonObject("cab")
+                .getAsJsonArray("seats").get(1).getAsJsonObject().addProperty("yaw", 0)));
+        // the cushion 0.5 above the cab floor raised to 1.7
+        shunters.put("the first chair too high", broken(SHUNTER, t -> move(t.getAsJsonObject("cab")
+                .getAsJsonArray("seats").get(0).getAsJsonObject(), 1, 1.2)));
+        shunters.put("steps off the wall", broken(SHUNTER, t -> move(doorJson(t, "steps_left"), 2, 0.6)));
+        shunters.forEach((what, shunter) -> assertTrue(!shunterProblems(shunter).isEmpty(), what + " passes"));
+
+        WagonModelDecl coachModel = models().get(COACH);
+        assertTrue(!leafProblems(broken(COACH, t -> move(doorJson(t, "door_rl"), 0, -2.0)), coachModel).isEmpty(),
+                "a door box away from its leaf passes");
+        assertTrue(!leafProblems(broken(COACH, t -> doorJson(t, "salon_door").addProperty("id", "inner")),
+                coachModel).isEmpty(), "a door moved by nothing passes");
     }
 
     private static void mark(Set<String> shown, boolean condition, String what) {
