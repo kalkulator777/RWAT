@@ -20,7 +20,8 @@ import net.neoforged.neoforge.event.entity.player.PlayerEvent;
  * How a {@link PackReport} is shown: in the log as the loaders find the
  * problems, in chat for {@code /rwat packs} (server) and {@code /rwatc packs}
  * (client) together with the RWAT packs that side's scan found
- * ({@link RwatPacks#infos(PackType)}), and as one line to an operator joining
+ * ({@link RwatPacks#infos(PackType)}; in a game that is its own server one
+ * list for both sides, {@link #showShared}), and as one line to an operator joining
  * a server whose packs have errors. The fixed text is translated ({@code rwat.packs.*}); the problems
  * themselves are the loaders' English, as in the log.
  */
@@ -57,8 +58,26 @@ public final class PackReportView {
      * @param server true for the server's report (the title says which side)
      */
     public static void show(CommandSourceStack source, PackReport report, boolean server) {
-        source.sendSuccess(() -> Component.translatable(server ? "rwat.packs.title.server" : "rwat.packs.title.client")
-                .withStyle(ChatFormatting.GOLD), false);
+        showReport(source, report, server ? "rwat.packs.title.server" : "rwat.packs.title.client",
+                server ? PackType.SERVER_DATA : PackType.CLIENT_RESOURCES);
+    }
+
+    /**
+     * The report of a game that is its own server (single player, the host
+     * of a LAN game) in one list: both sides read the same pack files, so
+     * the RWAT packs are listed once (the data-pack scan, what the server
+     * loads) and a problem both sides found is told once
+     * ({@link PackReport#merged}).
+     */
+    public static void showShared(CommandSourceStack source) {
+        PackType scan = RwatPacks.infos(PackType.SERVER_DATA).isEmpty() ? PackType.CLIENT_RESOURCES
+                : PackType.SERVER_DATA;
+        showReport(source, PackReport.merged(PackReport.SERVER, PackReport.CLIENT), "rwat.packs.title.shared",
+                scan);
+    }
+
+    private static void showReport(CommandSourceStack source, PackReport report, String title, PackType scan) {
+        source.sendSuccess(() -> Component.translatable(title).withStyle(ChatFormatting.GOLD), false);
         Map<String, Map<PackReport.Source, Integer>> loaded = report.loaded();
         if (report.packs().isEmpty()) {
             source.sendSuccess(() -> Component.translatable("rwat.packs.none").withStyle(ChatFormatting.GRAY), false);
@@ -74,7 +93,7 @@ public final class PackReportView {
             }
             source.sendSuccess(() -> line, false);
         }
-        rwatPacks(source, server ? PackType.SERVER_DATA : PackType.CLIENT_RESOURCES);
+        rwatPacks(source, scan);
         int errors = report.errors();
         int warnings = report.warnings();
         if (errors == 0 && warnings == 0) {

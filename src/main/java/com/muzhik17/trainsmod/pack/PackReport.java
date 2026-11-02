@@ -3,6 +3,7 @@ package com.muzhik17.trainsmod.pack;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -78,6 +79,40 @@ public final class PackReport {
             .thenComparing(PackProblem::file);
 
     private final Map<Source, Part> parts = new EnumMap<>(Source.class);
+
+    /**
+     * The two sides' reports as one, for a game that is its own server
+     * (single player, or the host of a LAN game): both sides read the same
+     * pack files, so the pack scans each found the same problems with a
+     * pack's {@code "rwat"} block, and listing both would say everything
+     * twice. Each source keeps what its side reported; a problem both
+     * reported is kept once, and a count both gave for a pack (the same files
+     * read twice) is not added up. A snapshot: later changes to the sides
+     * don't reach it.
+     */
+    public static PackReport merged(PackReport first, PackReport second) {
+        PackReport merged = new PackReport();
+        for (PackReport side : List.of(first, second)) {
+            side.snapshot().forEach((source, part) -> merged.parts.merge(source, part, PackReport::join));
+        }
+        return merged;
+    }
+
+    private synchronized Map<Source, Part> snapshot() {
+        return new EnumMap<>(parts);
+    }
+
+    private static Part join(Part a, Part b) {
+        Map<String, Integer> loaded = new HashMap<>(a.loaded());
+        b.loaded().forEach((pack, count) -> loaded.merge(pack, count, Math::max));
+        List<PackProblem> problems = new ArrayList<>(a.problems());
+        for (PackProblem problem : b.problems()) {
+            if (!problems.contains(problem)) {
+                problems.add(problem);
+            }
+        }
+        return new Part(Map.copyOf(loaded), List.copyOf(problems));
+    }
 
     /**
      * Replace what {@code source} reported last.

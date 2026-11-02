@@ -218,6 +218,7 @@
   "control.railswheelsandtrains.handbrake_released": "отпущен",
   "rwat.packs.title.server": "Паки контента на сервере:",
   "rwat.packs.title.client": "Паки контента на этом клиенте:",
+  "rwat.packs.title.shared": "Паки контента в этой игре (она сама себе сервер):",
   "rwat.packs.none": "  ничего не загружено: положите пак контента в папку rwat_packs в папке игры",
   "rwat.packs.count.wagon_types": "типов вагонов: %s",
   "rwat.packs.count.track_beds": "стилей рельсов (полотно): %s",

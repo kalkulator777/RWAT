@@ -79,6 +79,55 @@ class PackReportTest {
                 "the scan counts nothing");
     }
 
+    /**
+     * A game that is its own server lists its two reports as one: both pack
+     * scans read the same pack.mcmeta and report the same rwat-block problem,
+     * which is told once; what only one side found, and what each side
+     * loaded, stays.
+     */
+    @Test
+    void mergedSides_tellAProblemBothFoundOnce() {
+        PackOrigin mcmeta = new PackOrigin("rwat/Old", "pack.mcmeta");
+        PackProblem noFormat = mcmeta.warning("the rwat block has no format number");
+        PackReport server = new PackReport();
+        PackReport client = new PackReport();
+        server.replace(PackReport.Source.PACKS, Map.of(), List.of(noFormat));
+        client.replace(PackReport.Source.PACKS, Map.of(), List.of(noFormat));
+        server.replace(PackReport.Source.WAGON_TYPES, Map.of("rwat/Old", 2), List.of(TYPE_A.error("bad type")));
+        client.replace(PackReport.Source.WAGON_MODELS, Map.of("rwat/Old", 3), List.of(MODEL.warning("bad model")));
+
+        PackReport merged = PackReport.merged(server, client);
+        assertEquals(1, merged.errors());
+        assertEquals(2, merged.warnings(), "the rwat block's warning once, not once per side");
+        assertEquals(List.of("bad type", "bad model", "the rwat block has no format number"),
+                merged.problems().stream().map(PackProblem::message).toList());
+        assertEquals(Map.of("rwat/Old", Map.of(PackReport.Source.WAGON_TYPES, 2, PackReport.Source.WAGON_MODELS, 3)),
+                merged.loaded());
+        assertEquals(Set.of("rwat/A", "rwat/B", "rwat/Old"), merged.packs());
+
+        // the sides themselves are untouched: each still has its own copy of the problem
+        assertEquals(1, server.problems(PackReport.Source.PACKS).size());
+        assertEquals(1, client.problems(PackReport.Source.PACKS).size());
+        assertEquals(2, server.errors() + server.warnings());
+
+        // a snapshot: a side reloading later doesn't reach it
+        client.replace(PackReport.Source.WAGON_MODELS, Map.of(), List.of());
+        assertEquals(2, merged.warnings());
+    }
+
+    /** The same files read twice give one count, not their sum; a different problem with the same text is another. */
+    @Test
+    void mergedSides_dontAddUpACountBothGave() {
+        PackReport server = new PackReport();
+        PackReport client = new PackReport();
+        server.replace(PackReport.Source.PACKS, Map.of("rwat/Old", 1), List.of(MODEL.warning("same text")));
+        client.replace(PackReport.Source.PACKS, Map.of("rwat/Old", 1), List.of(TYPE_A.warning("same text")));
+        PackReport merged = PackReport.merged(server, client);
+        assertEquals(Map.of("rwat/Old", Map.of(PackReport.Source.PACKS, 1)), merged.loaded());
+        assertEquals(2, merged.warnings(), "another file is another problem");
+        assertEquals(0, PackReport.merged(new PackReport(), new PackReport()).packs().size());
+    }
+
     /** D4: a model is tied to its type only by the id; one without a type is never drawn. */
     @Test
     void modelsWithoutType_areWarnedAboutBySortedId() {

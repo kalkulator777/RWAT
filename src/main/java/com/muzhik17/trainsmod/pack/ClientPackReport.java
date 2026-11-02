@@ -28,9 +28,10 @@ import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
  * <li>{@code /rwatc packs} — the RWAT packs this client loaded as resource
  *     packs and what its loaders found (wagon models and their sounds, rail
  *     styles, models without a type and types without a model, the model
- *     files' check); in a
- *     single-player world the server's part too, since the owner may have no
- *     cheats for {@code /rwat packs};</li>
+ *     files' check); in a game that is its own server (single player, the
+ *     host of a LAN game) the server's part too, since the owner may have no
+ *     cheats for {@code /rwat packs} — one list for both sides, as they read
+ *     the same pack files ({@link PackReportView#showShared});</li>
  * <li>{@code /rwatc packs validate} — load and check every declared model
  *     now ({@link StockModels#checkFiles}), in the background, and report;</li>
  * <li>after each wagon type sync and each resource reload: the models
@@ -66,9 +67,10 @@ public final class ClientPackReport {
     private static int show(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
         if (Minecraft.getInstance().hasSingleplayerServer()) {
-            PackReportView.show(source, PackReport.SERVER, true);
+            PackReportView.showShared(source);
+        } else {
+            PackReportView.show(source, PackReport.CLIENT, false);
         }
-        PackReportView.show(source, PackReport.CLIENT, false);
         if (!PackReport.CLIENT.has(PackReport.Source.MODEL_FILES)) {
             source.sendSuccess(() -> Component.translatable("rwat.packs.validate.hint")
                     .withStyle(ChatFormatting.GRAY), false);

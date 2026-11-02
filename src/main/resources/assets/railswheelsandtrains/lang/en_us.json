@@ -218,6 +218,7 @@
   "control.railswheelsandtrains.handbrake_released": "released",
   "rwat.packs.title.server": "Content packs on the server:",
   "rwat.packs.title.client": "Content packs on this client:",
+  "rwat.packs.title.shared": "Content packs in this game (it is its own server):",
   "rwat.packs.none": "  nothing loaded: put a content pack into the rwat_packs folder of the game directory",
   "rwat.packs.count.wagon_types": "wagon types: %s",
   "rwat.packs.count.track_beds": "rail styles (track bed): %s",
