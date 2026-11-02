@@ -20,10 +20,12 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
 import net.minecraft.world.entity.Entity;
 import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RenderFrameEvent;
+import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 
 /**
  * Dev tool (SPEC §2.4a): {@code -Pautoscene=depot} on a throwaway save copy —
@@ -34,7 +36,8 @@ import net.neoforged.neoforge.client.event.RenderFrameEvent;
  * so the cars stand in different light — more bake combinations than the
  * cache's capacity, all in one view from above. Once every car's model has
  * loaded and a warm-up has passed, a {@link #WINDOW_TICKS}-tick window is
- * measured: frames and their times, and what the bake cache did
+ * measured: frames and their times, the entity pass of each frame (the
+ * wagons' draws issued in it), and what the bake cache did
  * ({@code [depot]} lines in the log); then {@code rwat-depot.png}, and
  * {@code rwat-depot-beam.png} from ahead of the first train's leading
  * headlight looking away from it — its light on the track with the car
@@ -81,6 +84,10 @@ public final class DepotScene {
     private static boolean measuring;
     private static long lastFrame;
     private static final List<Long> FRAMES = new ArrayList<>();
+    /** When this frame's entity pass began (0 = not in it). */
+    private static long entitiesFrom;
+    /** Each frame's entity pass: from the cutout blocks to after the entities, the wagons' draws issued. */
+    private static final List<Long> ENTITY_PASSES = new ArrayList<>();
     private static BakeCache.Stats windowStart;
     private static BakeCache.Stats secondStart;
     private static int secondFrames;
@@ -103,6 +110,20 @@ public final class DepotScene {
         }
         lastFrame = now;
         secondFrames++;
+    }
+
+    /** Last of the listeners: the wagon renderer issues its frame's draws after the entities first. */
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    static void onRenderStage(RenderLevelStageEvent event) {
+        if (!measuring) {
+            return;
+        }
+        if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_CUTOUT_BLOCKS) {
+            entitiesFrom = System.nanoTime();
+        } else if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_ENTITIES && entitiesFrom != 0L) {
+            ENTITY_PASSES.add(System.nanoTime() - entitiesFrom);
+            entitiesFrom = 0L;
+        }
     }
 
     @SubscribeEvent
@@ -167,6 +188,8 @@ public final class DepotScene {
         if (t == WARMUP_TICKS) {
             measuring = true;
             FRAMES.clear();
+            ENTITY_PASSES.clear();
+            entitiesFrom = 0L;
             lastFrame = 0L;
             secondFrames = 0;
             windowStart = WagonRenderer.bakeStats();
@@ -283,12 +306,22 @@ public final class DepotScene {
         }
         double total = Arrays.stream(times).sum() / 1.0e6;
         RailsWheelsAndTrains.LOGGER.info(String.format(Locale.ROOT,
-                "[depot] RESULT %d frames in %.1f s: %.1f fps, frame ms mean %.1f, p50 %.1f, p95 %.1f, max %.1f;"
+                "[depot] RESULT %d frames in %.1f s: %.1f fps, frame ms %s; entity pass ms %s;"
                         + " bakes %d (%.2f a frame), hits %d, stand-ins %d, deferred %d, evicted %d, cached %d",
-                times.length, total / 1000.0, times.length / (total / 1000.0), total / times.length,
-                times[times.length / 2] / 1.0e6, times[(int) (times.length * 0.95)] / 1.0e6,
-                times[times.length - 1] / 1.0e6, bakes.bakes(), bakes.bakes() / (double) times.length,
+                times.length, total / 1000.0, times.length / (total / 1000.0), spread(times),
+                spread(ENTITY_PASSES.stream().mapToLong(Long::longValue).sorted().toArray()),
+                bakes.bakes(), bakes.bakes() / (double) times.length,
                 bakes.hits(), bakes.standIns(), bakes.deferred(), bakes.evictions(), bakes.size()));
+    }
+
+    /** Mean, median, 95th percentile and worst of sorted nanosecond times, in milliseconds. */
+    private static String spread(long[] sorted) {
+        if (sorted.length == 0) {
+            return "-";
+        }
+        return String.format(Locale.ROOT, "mean %.1f, p50 %.1f, p95 %.1f, max %.1f",
+                Arrays.stream(sorted).sum() / 1.0e6 / sorted.length, sorted[sorted.length / 2] / 1.0e6,
+                sorted[(int) (sorted.length * 0.95)] / 1.0e6, sorted[sorted.length - 1] / 1.0e6);
     }
 
     private static void tp(Minecraft mc, double x, double y, double z, float yaw, float pitch) {
