@@ -485,14 +485,29 @@ def floor_levels(raw, x_range=(-math.inf, math.inf), z_range=(-math.inf, math.in
             for y, (a, box, objects) in sorted(levels.items()) if a >= min_area]
 
 
+def material_name(line, keyword):
+    """The material a "newmtl" or "usemtl" line names: everything after the keyword
+    and the whitespace behind it, stripped, the spaces inside kept ("usemtl Dark
+    Wood" is "Dark Wood"); None if the line isn't a `keyword` line or names
+    nothing. Blender reads and writes both keywords so, and the mod does the
+    same (MtlParser.materialName, which also reads the OBJ's usemtl): the OBJ and
+    the MTL must call a material by one name, or it finds no texture. The converter
+    reads only the MTL's names (the OBJ's are for the engine), but the rule is one."""
+    parts = line.strip().split(None, 1)
+    if len(parts) < 2 or parts[0] != keyword:
+        return None
+    return parts[1].strip() or None
+
+
 def parse_mtl(raw):
     """Material → its map_Kd path as the file writes it (relative to the OBJ's folder, SPEC §6.3)."""
     maps = {}
     material = None
     for line in raw.decode("utf-8", errors="replace").splitlines():
         line = line.strip()
-        if line.startswith("newmtl "):
-            material = line[len("newmtl "):].strip()
+        named = material_name(line, "newmtl")
+        if named is not None:
+            material = named
         elif line.startswith("map_Kd ") and material is not None:
             maps[material] = line[len("map_Kd "):].strip()
     return maps

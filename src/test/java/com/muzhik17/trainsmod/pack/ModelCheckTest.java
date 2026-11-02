@@ -79,6 +79,23 @@ class ModelCheckTest {
                   "liveries": { "red": "red" } }""", good()));
     }
 
+    /**
+     * Blender writes a material named "Dark Wood" as it is in both files. The
+     * OBJ loader cut it to "Dark", the MTL entry stayed whole: the check said
+     * "draws nothing" of a model the game would have drawn.
+     */
+    @Test
+    void aMaterialNamedWithSpacesFindsItsTexture() {
+        Pack pack = good()
+                .with("t:car/car.obj", "mtllib car.mtl\n" + QUAD + "o BODY\nusemtl Dark Wood\nf 1/1 2/1 3/1 4/1\n")
+                .with("t:car/car.mtl", "newmtl Dark Wood\nmap_Kd ../tex/body.png\n");
+        assertEquals(List.of(), check("{ \"obj\": \"car/car.obj\" }", pack));
+        // a different name is another material, as ever: no texture
+        pack.with("t:car/car.obj", "mtllib car.mtl\n" + QUAD + "o BODY\nusemtl Dark Oak\nf 1/1 2/1 3/1 4/1\n");
+        assertEquals(List.of("E model t:car/car.obj draws nothing: no face has a textured material"),
+                check("{ \"obj\": \"car/car.obj\" }", pack));
+    }
+
     @Test
     void missingOrInvalidObj() {
         assertEquals(List.of("E model file t:car/gone.obj not found"),

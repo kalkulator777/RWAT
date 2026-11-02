@@ -16,7 +16,7 @@ import java.util.function.Function;
  * source is swappable behind {@link Mesh}). Reads {@code v}/{@code vt}/{@code vn}
  * and triangular/quad {@code f} faces, splitting by {@code o} object and
  * {@code usemtl} material into {@link Part}s, and records {@code mtllib}
- * references. The {@code .mtl} file itself is read by {@link MtlParser}.
+ * references. The {@code .mtl} file, and what a material's name is, by {@link MtlParser}.
  *
  * <p>Quad faces are kept as quads; triangles are stored as degenerate quads
  * (4th vertex = 3rd) since the render type draws quads; larger n-gons are
@@ -108,7 +108,9 @@ public final class ObjLoader {
                             parts.add(new Part(object, material, current));
                             current = new Mesh();
                         }
-                        material = t.length > 1 ? t[1] : "";
+                        // the whole rest of the line, as the MTL's newmtl: "Dark Wood" is one material
+                        String named = MtlParser.materialName(line, "usemtl");
+                        material = named != null ? named : "";
                     }
                     case "f" -> face(t, positions, uvs, normals, current, color);
                     // the file name may contain spaces: take the rest of the line

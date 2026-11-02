@@ -30,6 +30,8 @@ import com.muzhik17.trainsmod.convention.ObjectRole;
  * replaces no texture. A hinge marker ({@code <KEY>_ROT…} of a control or a
  * door leaf) is no such face: the model loader reads its axis with or
  * without a texture, and IR's packs leave it untextured, drawn by nothing.
+ * A material is known by its whole name, spaces included, in the OBJ's
+ * {@code usemtl} and the MTL's {@code newmtl} alike ({@link MtlParser#materialName}).
  *
  * <p>Plain Java over {@link Files}, so tests run it over a pack on disk; the
  * client hands it the resource manager. Client-side only (the readers live
