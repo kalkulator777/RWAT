@@ -13,6 +13,7 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
+import com.muzhik17.trainsmod.convention.DoorLeaves;
 import com.muzhik17.trainsmod.convention.ObjectRole;
 import com.muzhik17.trainsmod.convention.PivotAxis;
 import com.muzhik17.trainsmod.stock.ObjFrame;
@@ -67,8 +68,8 @@ import net.minecraft.resources.ResourceLocation;
  * materials without a diffuse map. Groups listed under the declaration's
  * {@code animations} are animated from their IR {@code .anim} ({@link IrAnim});
  * cab controls ({@code THROTTLE_*}, {@code WIDGET_*}, {@code GAUGE_*}…) and
- * door leaves moved by name ({@code DOOR_<n>} with {@code ROT_}/{@code TL_})
- * are split out to move by their values (SPEC §9.3, §9.5).
+ * door leaves moved by name ({@code DOOR_<n>} with {@code ROT_}/{@code TL_},
+ * {@link DoorLeaves}) are split out to move by their values (SPEC §9.3, §9.5).
  */
 public final class IrStockModel {
 
@@ -312,7 +313,8 @@ public final class IrStockModel {
         Map<String, DoorBuilder> doors = new LinkedHashMap<>();
         Map<String, ControlBuilder> controls = new LinkedHashMap<>();
         Map<String, ControlBuilder> leaves = new LinkedHashMap<>();
-        Set<String> movingDoors = movingDoors(obj.parts(), skipPrefixes, animated);
+        DoorLeaves doorLeaves = DoorLeaves.of(obj.parts().stream().map(ObjLoader.Part::object).toList(),
+                skipPrefixes, animated.keySet());
         List<String> lightGroups = new ArrayList<>();
         Set<Integer> interiorGroups = new HashSet<>();
         List<StockModel.Lamp> lampCandidates = new ArrayList<>();
@@ -342,11 +344,9 @@ public final class IrStockModel {
                 continue;
             }
             AnimTrack track = bogie == null && coupler == null ? animated.get(object) : null;
-            // a door leaf moved by name is built like a control (SPEC §9.5)
-            ObjectRole leafRole = bogie == null && track == null && coupler == null ? ObjectRole.door(object) : null;
-            if (leafRole != null && !movingDoors.contains(leafRole.control().key())) {
-                leafRole = null; // a door the asset doesn't move: part of the body
-            }
+            // a door leaf moved by name is built like a control (SPEC §9.5); a DOOR_<n>
+            // object the asset doesn't move is part of the body
+            ObjectRole leafRole = doorLeaves.leaf(object);
             ControlBuilder control = leafRole != null
                     ? leaves.computeIfAbsent(leafRole.control().key(), k -> new ControlBuilder())
                     : bogie == null && track == null && role.control() != null
@@ -652,30 +652,6 @@ public final class IrStockModel {
             }
         }
         return tracks;
-    }
-
-    /**
-     * The {@code DOOR_<n>} keys the asset moves by name: any object of the
-     * door, drawn and not animated by an {@code .anim}, is its hinge
-     * ({@code DOOR_<n>_ROT…}) or slides ({@code TL_<f>_<axis>}). IR reads a
-     * door's flags from any of its objects, so the whole door moves.
-     */
-    private static Set<String> movingDoors(List<ObjLoader.Part> parts, List<String> skipPrefixes,
-            Map<String, AnimTrack> animated) {
-        Set<String> moving = new HashSet<>();
-        for (ObjLoader.Part part : parts) {
-            String object = part.object();
-            if (object.contains("HIDE") || startsWithAny(object, skipPrefixes)
-                    || object.startsWith("BOGEY_") || animated.containsKey(object)) {
-                continue;
-            }
-            ObjectRole leaf = ObjectRole.door(object);
-            if (leaf != null && (leaf.pivot() || leaf.control().slideX() != 0.0F
-                    || leaf.control().slideY() != 0.0F || leaf.control().slideZ() != 0.0F)) {
-                moving.add(leaf.control().key());
-            }
-        }
-        return moving;
     }
 
     private static boolean startsWithAny(String name, List<String> prefixes) {

@@ -118,10 +118,10 @@
       "x-name-ru": "DOOR_<n> с DOOR_<n>_ROT[_<град>] или TL_<f>_<ось>",
       "category": "door",
       "match": {"type": "regex", "regex": "(?:^|_)(DOOR)_(\\d+)(?=_|$)", "input": "normalized", "captures": ["kind", "n"]},
-      "effect": "A rigid door leaf, if any object of DOOR_<n> has the hinge marker DOOR_<n>_ROT[_<degrees>] or a slide TL_<f>_<axis>; otherwise DOOR_<n> is body. The type's door whose box (grown by 0.1) holds the leaf's centre drives it. INVERT and OFFSET don't work on leaves. EXTERNAL / CONNECTING / INTERNAL are not read by the engine (the converter derives the type's doors from them).",
-      "x-description-ru": "Жёсткая створка, если у какого-то объекта DOOR_<n> есть маркер шарнира DOOR_<n>_ROT[_<град>] или сдвиг TL_<f>_<ось>; иначе DOOR_<n> — кузов. Её ведёт дверь типа, в коробке которой (с запасом 0.1) лежит центр створки. INVERT и OFFSET у створок не работают. EXTERNAL / CONNECTING / INTERNAL движок не читает (по ним конвертер выводит двери типа).",
+      "effect": "A rigid door leaf, if any object of DOOR_<n> has the hinge marker DOOR_<n>_ROT[_<degrees>] or a slide TL_<f>_<axis>; otherwise DOOR_<n> is body. Only objects drawn as parts of their own count, for the leaf and for its hinge or slide: not hidden (HIDE), skipped, of a bogie (BOGEY_FRONT*, BOGEY_REAR*), a coupler head or named in an .anim. The type's door whose box (grown by 0.1) holds the centre of the leaf's textured faces drives it. INVERT and OFFSET don't work on leaves. EXTERNAL / CONNECTING / INTERNAL are not read by the engine (the converter derives the type's doors from them).",
+      "x-description-ru": "Жёсткая створка, если у какого-то объекта DOOR_<n> есть маркер шарнира DOOR_<n>_ROT[_<град>] или сдвиг TL_<f>_<ось>; иначе DOOR_<n> — кузов. Считаются только объекты, которые рисуются отдельной деталью, — и для створки, и для её шарнира или сдвига: не скрытые (HIDE), не из skip, не часть тележки (BOGEY_FRONT*, BOGEY_REAR*), не голова сцепки и не названные в .anim. Её ведёт дверь типа, в коробке которой (с запасом 0.1) лежит центр текстурированных граней створки. INVERT и OFFSET у створок не работают. EXTERNAL / CONNECTING / INTERNAL движок не читает (по ним конвертер выводит двери типа).",
       "engine": "active",
-      "code": ["convention/ObjectRole.java#door", "client/render/model/IrStockModel.java#load", "client/render/model/IrStockModel.java#movingDoors", "stock/WagonType.java#doorHolding"],
+      "code": ["convention/DoorLeaves.java#leaf", "convention/ObjectRole.java#door", "client/render/model/IrStockModel.java#load", "convention/DoorLeaves.java#door", "stock/WagonType.java#doorHolding"],
       "examples": ["DOOR_3_ROT_90", "DOOR_3_EXTERNAL", "DOOR_5_TL_0.6_Z"]
     },
     {
