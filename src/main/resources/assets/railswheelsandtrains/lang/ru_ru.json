@@ -215,5 +215,9 @@
   "hud.railswheelsandtrains.handbrakes": "Ручники %s/%s",
   "control.railswheelsandtrains.handbrake": "Ручной тормоз",
   "control.railswheelsandtrains.handbrake_set": "затянут",
-  "control.railswheelsandtrains.handbrake_released": "отпущен"
+  "control.railswheelsandtrains.handbrake_released": "отпущен",
+  "rwat.packsync.mismatch": "RWAT-паки отличаются от серверных: %s. Поезда могут выглядеть и звучать не так; подробности в логе.",
+  "rwat.packsync.missing": "%s (не установлен)",
+  "rwat.packsync.different": "%s (другие файлы)",
+  "rwat.packsync.more": "и ещё %s"
 }

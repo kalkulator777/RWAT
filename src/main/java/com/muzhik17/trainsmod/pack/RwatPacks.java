@@ -11,7 +11,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
@@ -46,6 +49,8 @@ import net.neoforged.neoforge.event.AddPackFindersEvent;
  * with a broken format, is not loaded. What each scan found — every pack, its
  * block, its problems, whether it loads — is kept for {@code /rwat packs}
  * ({@link #infos()}); the problems go to the log, once each time they change.
+ * {@link #manifest} hashes the loaded packs for the check of a client's packs
+ * against the server's ({@link PackManifest}).
  */
 public final class RwatPacks {
 
@@ -74,6 +79,16 @@ public final class RwatPacks {
     /** The problems last logged per pack, so a rescan (F3+T, /reload, the other pack type) doesn't repeat them. */
     private static final Map<Path, List<PackProblem>> LOGGED = new ConcurrentHashMap<>();
 
+    /** Pack hashes, kept by size and time of change. */
+    private static final PackHashCache HASHES = new PackHashCache();
+
+    /** Hashing reads whole packs (MVP: ~170 MB): one background thread, never a game thread. */
+    private static final ExecutorService HASHING = Executors.newSingleThreadExecutor(task -> {
+        Thread thread = new Thread(task, "RWAT pack hashing");
+        thread.setDaemon(true);
+        return thread;
+    });
+
     private RwatPacks() {
     }
 
@@ -96,6 +111,39 @@ public final class RwatPacks {
     /** The RWAT packs the last scan of that pack type found, loaded or not. */
     public static List<PackInfo> infos(PackType type) {
         return SCANS.getOrDefault(type, List.of());
+    }
+
+    /**
+     * The loaded packs of the last scan of that pack type with their content
+     * hashes, worked out on a background thread (a pack unchanged since its
+     * last hash isn't read again). A pack that can't be read is left out,
+     * with an error in the log; at most {@link PackManifest#MAX_PACKS}.
+     */
+    public static CompletableFuture<List<PackManifest.Entry>> manifest(PackType type) {
+        List<PackInfo> loaded = infos(type).stream().filter(PackInfo::loaded).toList();
+        return CompletableFuture.supplyAsync(() -> {
+            List<PackManifest.Entry> entries = new ArrayList<>();
+            for (PackInfo info : loaded) {
+                if (entries.size() == PackManifest.MAX_PACKS) {
+                    RailsWheelsAndTrains.LOGGER.warn("More than {} RWAT packs: only the first {} are checked "
+                            + "against the other side's", PackManifest.MAX_PACKS, PackManifest.MAX_PACKS);
+                    break;
+                }
+                try {
+                    long start = System.nanoTime();
+                    int read = HASHES.computed();
+                    String hash = HASHES.hash(info.path());
+                    RailsWheelsAndTrains.LOGGER.debug("RWAT pack {}: hash {} ({} in {} ms)", info.fileName(), hash,
+                            HASHES.computed() != read ? "read" : "unchanged, from the cache",
+                            (System.nanoTime() - start) / 1_000_000L);
+                    entries.add(info.manifestEntry(hash));
+                } catch (IOException | RuntimeException e) {
+                    RailsWheelsAndTrains.LOGGER.error("RWAT pack {} ({}): can't hash it for the pack check: {}",
+                            info.fileName(), info.path(), e.toString());
+                }
+            }
+            return List.copyOf(entries);
+        }, HASHING);
     }
 
     /** Every folder packs are read from: the game dir's one first, then the extras. */

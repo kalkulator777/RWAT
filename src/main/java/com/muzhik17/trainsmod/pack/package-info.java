@@ -5,8 +5,10 @@
  * consumers ({@code data.WagonTypeReloadListener}, {@code client.render.model}).
  *
  * <p>Here too: the pack's {@code "rwat"} block and format version
- * ({@code RwatPackMeta}) and what a scan found about each pack
- * ({@code RwatPacks.infos()}). The classes without Minecraft imports are
+ * ({@code RwatPackMeta}), what a scan found about each pack
+ * ({@code RwatPacks.infos()}), and the check of a client's packs against the
+ * server's by content hash ({@code PackHasher}, {@code PackManifest},
+ * {@code PackSyncEvents}). The classes without Minecraft imports are
  * unit-tested.
  */
 package com.muzhik17.trainsmod.pack;

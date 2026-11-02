@@ -215,5 +215,9 @@
   "hud.railswheelsandtrains.handbrakes": "Handbrakes %s/%s",
   "control.railswheelsandtrains.handbrake": "Handbrake",
   "control.railswheelsandtrains.handbrake_set": "set",
-  "control.railswheelsandtrains.handbrake_released": "released"
+  "control.railswheelsandtrains.handbrake_released": "released",
+  "rwat.packsync.mismatch": "RWAT packs differ from the server's: %s. Trains may look or sound wrong; details in the log.",
+  "rwat.packsync.missing": "%s (not installed)",
+  "rwat.packsync.different": "%s (different files)",
+  "rwat.packsync.more": "and %s more"
 }

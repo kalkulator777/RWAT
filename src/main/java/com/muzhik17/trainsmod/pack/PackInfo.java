@@ -6,7 +6,7 @@ import java.util.Objects;
 
 /**
  * What a scan of the pack folders found about one RWAT pack
- * ({@code RwatPacks.infos()}): for {@code /rwat packs}.
+ * ({@code RwatPacks.infos()}): for {@code /rwat packs} and the client check.
  *
  * @param fileName its folder or zip name in the pack folder
  * @param path     where it lies
@@ -31,11 +31,7 @@ public record PackInfo(String fileName, Path path, RwatPackMeta meta, List<PackP
 
     /** {@code rwat.name}, else the file name without {@code .zip}. */
     public String displayName() {
-        if (meta != null && meta.name() != null) {
-            return meta.name();
-        }
-        return fileName.toLowerCase(java.util.Locale.ROOT).endsWith(".zip")
-                ? fileName.substring(0, fileName.length() - ".zip".length()) : fileName;
+        return meta != null && meta.name() != null ? meta.name() : PackManifest.baseName(fileName);
     }
 
     /** {@code rwat.version}, {@code ""} if not given. */
@@ -45,5 +41,10 @@ public record PackInfo(String fileName, Path path, RwatPackMeta meta, List<PackP
 
     public boolean hasErrors() {
         return problems.stream().anyMatch(PackProblem::isError);
+    }
+
+    /** The pack in a manifest, with the given content hash. */
+    public PackManifest.Entry manifestEntry(String hash) {
+        return new PackManifest.Entry(fileName, displayName(), version(), hash).clipped();
     }
 }
