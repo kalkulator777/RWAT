@@ -2,7 +2,8 @@
 # the mod builds and its tests pass; the pack tools' tests pass; the schema in
 # schema/ agrees with itself, with the parsers' and the converter's key lists
 # and with the generated author reference; the MVP recipe and the generated
-# MVP pack follow the schema.
+# MVP pack follow the schema; the example pack follows it with nothing to warn
+# about either.
 name: CI
 
 on:
@@ -73,6 +74,17 @@ jobs:
 
       - name: MVP recipe and its overrides follow the schema
         run: python -I tools/validate_pack.py packs/mvp.json
+
+      # Our own pack, the format's reference (roadmap R11): validate_pack fails the step
+      # on an error itself; a warning fails it here, as the pack has to load without one.
+      - name: Example pack follows the schema without an error or a warning
+        run: |
+          out=$(python -I tools/validate_pack.py run/rwat_packs/RwatExamplePack)
+          echo "$out"
+          if [[ "$out" != *" 0 error(s), 0 warning(s)" ]]; then
+            echo "::error title=Example pack::validate_pack reports a warning in run/rwat_packs/RwatExamplePack"
+            exit 1
+          fi
 
       # The generated pack leaves the repository after phase 2 (R12): then this
       # step says it was skipped instead of passing silently (E9).
