@@ -8,12 +8,14 @@ import org.joml.Vector3d;
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.ServerConfig;
 import com.muzhik17.trainsmod.client.ClientItemScreens;
+import com.muzhik17.trainsmod.network.SelectRailStylePayload;
 import com.muzhik17.trainsmod.path.RailGraph;
 import com.muzhik17.trainsmod.path.RailSegment;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
@@ -45,7 +47,8 @@ import net.minecraft.world.level.block.state.BlockState;
  *
  * <p>Right-clicking into the air opens the rail style picker (SPEC §6.10):
  * the chosen style and bed material (SPEC §2.2) are stored on the stack, and
- * every segment this item builds is drawn in that style on that bed.
+ * every segment this item builds is drawn in that style on that bed — the
+ * server checks both again as the item is used ({@link #look}).
  * Sneak-right-clicking existing track repaints its whole structure in the
  * held style and bed. Builds and repaints are refused whole when any cell of
  * bed they would change is one the player may not build in.
@@ -79,9 +82,32 @@ public class RailItem extends Item {
         return stack.getOrDefault(RailsWheelsAndTrains.RAIL_BED.get(), RailSegment.DEFAULT_BED);
     }
 
-    /** The rail style and bed a rails stack builds with. */
+    /**
+     * The rail style and bed a rails stack builds and repaints with, checked
+     * as the picker's choice is ({@code RwatNetwork}): a style that is no
+     * {@linkplain #validStyle valid id} builds the mod's own rail, a bed
+     * material this server doesn't know the default gravel. The picker
+     * stores nothing else, but a creative player can write any string into
+     * the stack — and the look goes into the segments, the save and every
+     * client's copy of the graph.
+     */
     public static RailSegment.Look look(ItemStack stack) {
-        return new RailSegment.Look(style(stack), bed(stack));
+        String style = style(stack);
+        BedMaterial bed = BedMaterial.byId(bed(stack));
+        return new RailSegment.Look(validStyle(style) ? style : RailSegment.DEFAULT_STYLE,
+                bed == null ? RailSegment.DEFAULT_BED : bed.key());
+    }
+
+    /**
+     * Whether a rail style id may go into a segment: {@code ""} (the mod's own
+     * rail) or a well-formed resource location no longer than the picker may
+     * send ({@link SelectRailStylePayload#MAX_LENGTH}). Whether the style
+     * exists is not asked: styles are client resources (SPEC §6.10), and a
+     * client without it draws the standard rail.
+     */
+    public static boolean validStyle(String style) {
+        return style.isEmpty()
+                || style.length() <= SelectRailStylePayload.MAX_LENGTH && ResourceLocation.tryParse(style) != null;
     }
 
     @Override
