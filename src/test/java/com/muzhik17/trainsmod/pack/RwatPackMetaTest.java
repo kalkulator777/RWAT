@@ -12,11 +12,15 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 /** The {@code "rwat"} block of {@code pack.mcmeta}, format v1 (roadmap R5, phase 1 item 4). */
 class RwatPackMetaTest {
@@ -278,5 +282,17 @@ class RwatPackMetaTest {
         assertTrue(result.accepted(), result.problems().toString());
         assertEquals(1, result.meta().format());
         assertEquals("Matoi Vanilla Pack", result.meta().name());
+    }
+
+    /** The schema of the block (R4) names the keys the reader knows, no more, no fewer, and requires the format. */
+    @Test
+    void schemaHasTheKeysTheReaderKnows() throws IOException {
+        JsonObject schema = JsonParser.parseString(Files.readString(Path.of("schema/pack_mcmeta_rwat.schema.json")))
+                .getAsJsonObject();
+        JsonObject block = schema.getAsJsonObject("$defs").getAsJsonObject("rwat");
+
+        assertTrue(schema.getAsJsonObject("properties").has(RwatPackMeta.BLOCK));
+        assertEquals(Set.copyOf(RwatPackMeta.KEYS), block.getAsJsonObject("properties").keySet());
+        assertEquals("[\"format\"]", block.get("required").toString());
     }
 }

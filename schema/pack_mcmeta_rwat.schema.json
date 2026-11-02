@@ -5,7 +5,7 @@
   "description": "pack.mcmeta at the pack's root: Minecraft's own pack section plus the rwat block. A folder or zip without a readable pack.mcmeta is skipped. Keys other than pack and rwat belong to Minecraft or other mods and are left alone.",
   "x-description-ru": "pack.mcmeta в корне пака: секция pack самого Minecraft плюс блок rwat. Папка или zip без читаемого pack.mcmeta пропускается. Остальные ключи принадлежат Minecraft или другим модам, их не трогают.",
   "x-file": "pack.mcmeta",
-  "x-code": ["pack/RwatPacks.java"],
+  "x-code": ["pack/RwatPacks.java", "pack/RwatPackMeta.java"],
   "$comment": "Open: keys other than pack and rwat (filter, overlays, features, language, other mods' sections) belong to Minecraft and other mods.",
   "type": "object",
   "properties": {
@@ -37,17 +37,14 @@
   "$defs": {
     "rwat": {
       "type": "object",
-      "description": "RWAT's block: the pack format version the pack is written in and who made it.",
-      "x-description-ru": "Блок RWAT: версия формата, в которой написан пак, и кто его сделал.",
-      "x-status": "pending-engine",
-      "x-status-note": "ignores the block; the loader reads it from phase 1 (R5).",
-      "x-status-note-ru": "не читает блок; загрузчик начнёт его читать в фазе 1 (R5).",
+      "description": "RWAT's block: the pack format version the pack is written in and who made it. A pack without the block, or without format, loads as format 1 with a warning; a block that is not an object keeps the pack out. A descriptive field of the wrong type or an unknown key is a warning and ignored. /rwat packs lists the block and its problems.",
+      "x-description-ru": "Блок RWAT: версия формата, в которой написан пак, и кто его сделал. Пак без блока или без format грузится как формат 1 с предупреждением; блок не-объект не даёт паку подключиться. Описательное поле не того типа или незнакомый ключ — предупреждение, значение не берётся. /rwat packs показывает блок и его проблемы.",
       "properties": {
         "format": {
           "type": "integer",
           "minimum": 1,
-          "description": "The RWAT pack format version the pack is written in; this document describes format 1. A later format either reads older packs as they are or migrates them by this number.",
-          "x-description-ru": "Версия формата паков RWAT, в которой написан пак; этот справочник описывает формат 1. Следующие форматы либо читают старые паки как есть, либо переводят их по этому номеру."
+          "description": "The RWAT pack format version the pack is written in; this document describes format 1. A later format either reads older packs as they are or migrates them by this number. A pack of a format newer than the mod reads, or a format that is not a whole number of 1 or more, is not loaded (an error).",
+          "x-description-ru": "Версия формата паков RWAT, в которой написан пак; этот справочник описывает формат 1. Следующие форматы либо читают старые паки как есть, либо переводят их по этому номеру. Пак формата новее, чем читает мод, или с format не целым числом от 1 не подключается (ошибка)."
         },
         "name": {
           "type": "string",
