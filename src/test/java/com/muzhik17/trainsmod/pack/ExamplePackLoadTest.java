@@ -389,8 +389,8 @@ class ExamplePackLoadTest {
     // ---- the markup, as the engine walks it ----
 
     private static final double M = RiderWalk.PLAYER_HALF_WIDTH;
-    private static final String COACH = NS + ":coach";
-    private static final String SHUNTER = NS + ":shunter";
+    static final String COACH = NS + ":coach";
+    static final String SHUNTER = NS + ":shunter";
 
     /** The pack's type file {@code id}, read afresh (a copy to break). */
     private static JsonObject typeJson(String id) throws IOException {
@@ -420,7 +420,7 @@ class ExamplePackLoadTest {
     }
 
     /** A box ({@code min}, {@code max}) or a chair ({@code at}) of a type file moved along OBJ axis {@code axis}. */
-    private static void move(JsonObject box, int axis, double by) {
+    static void move(JsonObject box, int axis, double by) {
         for (String key : List.of("min", "max", "at")) {
             if (box.has(key)) {
                 JsonArray xyz = box.getAsJsonArray(key);
@@ -803,43 +803,66 @@ class ExamplePackLoadTest {
         assertEquals(6, leaves, "the coach's four outer and two gangway leaves");
     }
 
-    /** The checks above see a broken markup: each of these copies of the pack's types fails one. */
-    @Test
-    void theMarkupChecksSeeABrokenMarkup() throws IOException {
-        Map<String, WagonType> coaches = new LinkedHashMap<>();
+    /**
+     * The ways to break the coach's type file that {@link #coachProblems}
+     * must see: what → the change. {@link FloorCheckTextsTest} pins what the
+     * floor check says of the same copies.
+     */
+    static Map<String, Consumer<JsonObject>> coachBreaks() {
+        Map<String, Consumer<JsonObject>> breaks = new LinkedHashMap<>();
         // the salon aisle run up to the front vestibule, through salon_door's doorway
-        coaches.put("aisle into the vestibule", broken(COACH, t -> t.getAsJsonArray("interior").get(1)
-                .getAsJsonObject().getAsJsonArray("min").set(0, new JsonPrimitive(-7.9))));
+        breaks.put("aisle into the vestibule", t -> t.getAsJsonArray("interior").get(1)
+                .getAsJsonObject().getAsJsonArray("min").set(0, new JsonPrimitive(-7.9)));
         // salon_door a block into the salon: its bridge doesn't reach the vestibule
-        coaches.put("salon_door in the salon", broken(COACH, t -> move(doorJson(t, "salon_door"), 0, 1.0)));
+        breaks.put("salon_door in the salon", t -> move(doorJson(t, "salon_door"), 0, 1.0));
         // an outer door half a block off the side wall: the floor doesn't end at it
-        coaches.put("door_fl off the wall", broken(COACH, t -> move(doorJson(t, "door_fl"), 2, 0.5)));
+        breaks.put("door_fl off the wall", t -> move(doorJson(t, "door_fl"), 2, 0.5));
         // the arch a block aside, off the aisle: the rear vestibule is cut off the salon, though
         // FloorCheck finds nothing (the vestibule has its own doors, so it is reached anyway)
-        coaches.put("salon_arch off the aisle", broken(COACH, t -> move(doorJson(t, "salon_arch"), 2, 1.0)));
+        breaks.put("salon_arch off the aisle", t -> move(doorJson(t, "salon_arch"), 2, 1.0));
         // a gangway in the side wall
-        coaches.put("gangway_front in the side", broken(COACH, t -> {
+        breaks.put("gangway_front in the side", t -> {
             JsonObject gangway = doorJson(t, "gangway_front");
             gangway.add("min", JsonParser.parseString("[-9.5, 1.15, 1.45]"));
             gangway.add("max", JsonParser.parseString("[-8.6, 3.25, 1.51]"));
-        }));
-        coaches.forEach((what, coach) -> assertTrue(!coachProblems(coach).isEmpty(), what + " passes"));
+        });
+        return breaks;
+    }
 
-        Map<String, WagonType> shunters = new LinkedHashMap<>();
+    /** The ways to break the shunter's type file that {@link #shunterProblems} must see (as {@link #coachBreaks}). */
+    static Map<String, Consumer<JsonObject>> shunterBreaks() {
+        Map<String, Consumer<JsonObject>> breaks = new LinkedHashMap<>();
         // FloorCheck finds nothing here either: a chair may face either way
-        shunters.put("the second chair facing forward", broken(SHUNTER, t -> t.getAsJsonObject("cab")
-                .getAsJsonArray("seats").get(1).getAsJsonObject().addProperty("yaw", 0)));
+        breaks.put("the second chair facing forward", t -> t.getAsJsonObject("cab")
+                .getAsJsonArray("seats").get(1).getAsJsonObject().addProperty("yaw", 0));
         // the cushion 0.5 above the cab floor raised to 1.7
-        shunters.put("the first chair too high", broken(SHUNTER, t -> move(t.getAsJsonObject("cab")
-                .getAsJsonArray("seats").get(0).getAsJsonObject(), 1, 1.2)));
-        shunters.put("steps off the wall", broken(SHUNTER, t -> move(doorJson(t, "steps_left"), 2, 0.6)));
-        shunters.forEach((what, shunter) -> assertTrue(!shunterProblems(shunter).isEmpty(), what + " passes"));
+        breaks.put("the first chair too high", t -> move(t.getAsJsonObject("cab")
+                .getAsJsonArray("seats").get(0).getAsJsonObject(), 1, 1.2));
+        breaks.put("steps off the wall", t -> move(doorJson(t, "steps_left"), 2, 0.6));
+        return breaks;
+    }
 
+    /** The ways to break the coach's type file that {@link #leafProblems} must see (as {@link #coachBreaks}). */
+    static Map<String, Consumer<JsonObject>> coachLeafBreaks() {
+        Map<String, Consumer<JsonObject>> breaks = new LinkedHashMap<>();
+        breaks.put("a door box away from its leaf", t -> move(doorJson(t, "door_rl"), 0, -2.0));
+        breaks.put("a door moved by nothing", t -> doorJson(t, "salon_door").addProperty("id", "inner"));
+        return breaks;
+    }
+
+    /** The checks above see a broken markup: each of these copies of the pack's types fails one. */
+    @Test
+    void theMarkupChecksSeeABrokenMarkup() throws IOException {
+        for (Map.Entry<String, Consumer<JsonObject>> coach : coachBreaks().entrySet()) {
+            assertTrue(!coachProblems(broken(COACH, coach.getValue())).isEmpty(), coach.getKey() + " passes");
+        }
+        for (Map.Entry<String, Consumer<JsonObject>> shunter : shunterBreaks().entrySet()) {
+            assertTrue(!shunterProblems(broken(SHUNTER, shunter.getValue())).isEmpty(), shunter.getKey() + " passes");
+        }
         WagonModelDecl coachModel = models().get(COACH);
-        assertTrue(!leafProblems(broken(COACH, t -> move(doorJson(t, "door_rl"), 0, -2.0)), coachModel).isEmpty(),
-                "a door box away from its leaf passes");
-        assertTrue(!leafProblems(broken(COACH, t -> doorJson(t, "salon_door").addProperty("id", "inner")),
-                coachModel).isEmpty(), "a door moved by nothing passes");
+        for (Map.Entry<String, Consumer<JsonObject>> leaf : coachLeafBreaks().entrySet()) {
+            assertTrue(!leafProblems(broken(COACH, leaf.getValue()), coachModel).isEmpty(), leaf.getKey() + " passes");
+        }
     }
 
     private static void mark(Set<String> shown, boolean condition, String what) {

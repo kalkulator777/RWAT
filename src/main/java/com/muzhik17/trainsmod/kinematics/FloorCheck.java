@@ -2,8 +2,8 @@ package com.muzhik17.trainsmod.kinematics;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
+import com.muzhik17.trainsmod.kinematics.FloorFinding.Code;
 import com.muzhik17.trainsmod.stock.FloorRegion;
 import com.muzhik17.trainsmod.stock.ObjFrame;
 import com.muzhik17.trainsmod.stock.WagonType;
@@ -23,11 +23,17 @@ import com.muzhik17.trainsmod.stock.WagonType;
  * (or at the wrong height for the floor there). The parts of the floor are
  * those with every door between zones shut ({@link
  * WagonType.Interior#region(double, List, int)}), joined where one opens.
- * A line that names a place or a size gives it in the OBJ frame, where the
- * author measured it ({@link ObjFrame}): a chair at its {@code at}, a zone
- * as its x (along the car) by z (across) extent. Pure; the type
- * registry logs what it finds on load, and a unit test runs it over every
- * type of the generated packs.
+ *
+ * <p>Each thing found is a {@link FloorFinding}: a stable code, the zone,
+ * door or chair it is about, and the numbers and names its line is made of,
+ * for the pack editor to word in its language and point at; {@link
+ * #problems} gives the lines, in English. A line (and a finding's params)
+ * that names a place or a size gives it in the OBJ frame, where the author
+ * measured it ({@link ObjFrame}): a chair at its {@code at}, a zone as its x
+ * (along the car) by z (across) extent. Pure; the type registry logs the
+ * lines on load, a unit test runs it over every type of the generated
+ * packs, and another holds the lines to what they were before the findings
+ * had codes ({@code FloorCheckTextsTest}).
  */
 public final class FloorCheck {
 
@@ -44,14 +50,31 @@ public final class FloorCheck {
     private FloorCheck() {
     }
 
-    /** What's wrong with this type's floor, one line each; empty if nothing. */
+    /**
+     * What's wrong with this type's floor, one line each, as the type
+     * registry logs it and {@code /rwat packs} shows it: the {@link
+     * FloorFinding#text} of each of {@link #findings}; empty if nothing.
+     */
     public static List<String> problems(WagonType type) {
         List<String> out = new ArrayList<>();
+        for (FloorFinding finding : findings(type)) {
+            out.add(finding.text());
+        }
+        return out;
+    }
+
+    /**
+     * What's wrong with this type's floor, one finding each, in the order of
+     * {@link #problems}' lines: its code, the zone, door or chair it is
+     * about, and the numbers and names its line is made of; empty if nothing.
+     */
+    public static List<FloorFinding> findings(WagonType type) {
+        List<FloorFinding> out = new ArrayList<>();
         WagonType.Interior interior = type.interior();
         List<WagonType.Seat> seats = type.cab() != null ? type.cab().seats() : List.of();
         if (interior == null) {
             if (!seats.isEmpty()) {
-                out.add("cab.seats without an interior: a chair needs a floor to walk to it");
+                out.add(FloorFinding.of(Code.SEATS_WITHOUT_INTERIOR, -1));
             }
             return out;
         }
@@ -60,8 +83,7 @@ public final class FloorCheck {
         FloorRegion region = interior.region(M);
         List<FloorRegion.Piece> pieces = region.pieces();
         if (pieces.isEmpty()) {
-            out.add(String.format(Locale.ROOT,
-                    "a player fits nowhere on the floor: every part of it is narrower than %.1f", 2 * M));
+            out.add(FloorFinding.of(Code.FLOOR_TOO_NARROW, -1, "player_width", 2 * M));
         }
         // the floor with every door between zones shut: its pieces are the parts walked
         FloorRegion shut = interior.region(M, doors, 0);
@@ -83,9 +105,8 @@ public final class FloorCheck {
             }
             if (!fits && !pieces.isEmpty()) {
                 // x along the car by z across, as the OBJ frame has them
-                out.add(String.format(Locale.ROOT, "zone %d holds no place a player fits (%.2f x %.2f):"
-                        + " widen it to %.1f or join it to a wider zone",
-                        i, z.maxZ() - z.minZ(), z.maxX() - z.minX(), 2 * M));
+                out.add(FloorFinding.of(Code.ZONE_TOO_NARROW, i, "size_x", z.maxZ() - z.minZ(),
+                        "size_z", z.maxX() - z.minX(), "player_width", 2 * M));
             }
         }
         // joined: by the floor alone (every door between zones shut), then by open doors too
@@ -100,16 +121,16 @@ public final class FloorCheck {
         List<Integer> waysIn = new ArrayList<>(); // the floor pieces outside and gangway doors open onto
         for (int d = 0; d < doors.size(); d++) {
             WagonType.Door door = doors.get(d);
-            String name = "door " + d + " '" + door.id() + "'";
+            String id = door.id();
             double thick = door.axis() == 0 ? door.maxX() - door.minX() : door.maxZ() - door.minZ();
             if (thick > MAX_DOOR_THICKNESS) {
-                out.add(String.format(Locale.ROOT, "%s is %.2f thick: is the box the door leaf?", name, thick));
+                out.add(FloorFinding.of(Code.DOOR_TOO_THICK, d, "id", id, "thickness", thick));
             }
             if (door.spanMax() - door.spanMin() - 2 * RiderWalk.DOOR_SPAN_INSET <= 0.0) {
-                out.add(name + " is too narrow to walk through");
+                out.add(FloorFinding.of(Code.DOOR_TOO_NARROW, d, "id", id));
             }
             if (door.connecting() && door.axis() != 2) {
-                out.add(name + " is a gangway (connecting) door but not in an end wall");
+                out.add(FloorFinding.of(Code.GANGWAY_NOT_IN_END_WALL, d, "id", id));
             }
             if (door.inner()) {
                 double[] b = bridge(door);
@@ -135,7 +156,7 @@ public final class FloorCheck {
                     }
                 }
                 if (first < 0) {
-                    out.add(name + " (inner) touches no floor");
+                    out.add(FloorFinding.of(Code.INNER_DOOR_NO_FLOOR, d, "id", id));
                 }
                 if (door.fixed()) {
                     continue; // never shut
@@ -145,9 +166,7 @@ public final class FloorCheck {
                     through |= cut.bites(piece);
                 }
                 if (through) {
-                    out.add(name + " (inner): the floor runs through its doorway — the zones on its two sides"
-                            + " touch or overlap in it, and a player stands half in the shut leaf: part them"
-                            + " (any gap is wall; open, the door bridges it)");
+                    out.add(FloorFinding.of(Code.INNER_DOOR_FLOOR_THROUGH, d, "id", id));
                 }
                 boolean round = false;
                 for (int p : before) {
@@ -156,15 +175,13 @@ public final class FloorCheck {
                     }
                 }
                 if (round) {
-                    out.add(name + " (inner): its two sides are one floor without it — the floor runs round"
-                            + " it or through the wall beside it, so shut it is no wall");
+                    out.add(FloorFinding.of(Code.INNER_DOOR_FLOOR_ROUND, d, "id", id));
                 }
             } else {
                 List<Integer> from = walkablePieces(door, shut);
                 if (from.isEmpty()) {
-                    out.add(name + " isn't where the floor ends: nobody can walk through it"
-                            + " (a player must fit in front of it, inside its span, with the floor ending"
-                            + " within " + RiderWalk.DOOR_WALL_SLACK + " of its inner face)");
+                    out.add(FloorFinding.of(Code.DOOR_NOT_AT_FLOOR_END, d, "id", id,
+                            "slack", RiderWalk.DOOR_WALL_SLACK));
                 }
                 waysIn.addAll(from);
             }
@@ -187,13 +204,11 @@ public final class FloorCheck {
                 }
             }
             if (!cut.isEmpty()) {
-                out.add("floor zones " + cut + " can't be walked to from zone 0 or a way in: join them"
-                        + " (zones that touch join), put an inner door between them, or a door out of them");
+                out.add(FloorFinding.of(Code.ZONES_UNREACHABLE, -1, "zones", List.copyOf(cut)));
             }
         }
         if (type.cab() != null && seats.isEmpty()) {
-            out.add("a walkable cab needs a driver's chair (cab.seats): in a cab with a floor the keys"
-                    + " drive only from a chair");
+            out.add(FloorFinding.of(Code.CAB_WITHOUT_SEAT, -1));
         }
         // a chair needs floor to sit down from: a place to stand within reach,
         // the cushion above the floor there (the chair itself may stand off
@@ -214,10 +229,9 @@ public final class FloorCheck {
             double height = seat.y() - floor;
             if (!(reach <= RiderWalk.SEAT_REACH) || !(height >= MIN_SEAT_HEIGHT && height <= MAX_SEAT_HEIGHT)) {
                 double[] at = ObjFrame.toObj(seat.x(), seat.y(), seat.z());
-                out.add(String.format(Locale.ROOT, "cab.seats[%d] (%.2f, %.2f, %.2f): the nearest place to stand"
-                        + " is %.2f off (sitting reaches %.1f), its floor %.2f below the cushion (%.1f..%.1f;"
-                        + " the seat is the top of the cushion)", i, at[0], at[1], at[2], reach,
-                        RiderWalk.SEAT_REACH, height, MIN_SEAT_HEIGHT, MAX_SEAT_HEIGHT));
+                out.add(FloorFinding.of(Code.SEAT_NOT_SITTABLE, i, "x", at[0], "y", at[1], "z", at[2],
+                        "reach", reach, "sit_reach", RiderWalk.SEAT_REACH, "height", height,
+                        "min_height", MIN_SEAT_HEIGHT, "max_height", MAX_SEAT_HEIGHT));
             }
         }
         return out;
