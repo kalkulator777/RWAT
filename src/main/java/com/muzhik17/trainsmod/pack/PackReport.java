@@ -17,7 +17,8 @@ import java.util.TreeSet;
  * {@link #SERVER} holds the server's loaders (its scan of the pack folders
  * as data packs, wagon types, track beds), {@link #CLIENT} the client's (its
  * scan as resource packs, wagon models with their sounds, rail styles,
- * models without a type and types without a model, the model files' check).
+ * models without a type and types without a model, the model files' check,
+ * its packs against the server's by hash).
  *
  * <p>Each loader owns its {@link Source} and replaces it wholesale on every
  * reload ({@link #replace}), so a fixed file's problems go with the reload
@@ -59,7 +60,13 @@ public final class PackReport {
          */
         MODEL_TYPES("model_types"),
         /** The models' OBJ, MTL, texture and animation files, checked on demand (client). */
-        MODEL_FILES("model_files");
+        MODEL_FILES("model_files"),
+        /**
+         * The server's packs against this client's by content hash, as the
+         * server sent them on joining (client; not in a game that is its own
+         * server).
+         */
+        PACK_SYNC("pack_sync");
 
         /** Lower-case name, for lang keys. */
         public final String key;
@@ -221,6 +228,25 @@ public final class PackReport {
                                 + " assets/" + namespace + "/wagon_models/" + path + ".json of a pack this client has)"));
             }
         });
+        return problems;
+    }
+
+    /**
+     * The server's packs this client does not have as the server does
+     * ({@link PackManifest#compare}) as warnings, one per pack, in the
+     * server's order: the pack is not installed here, or is here with other
+     * files, so wagons may lack models, rails their style, trains their
+     * sounds. A problem with a pack as a whole is told where the pack lies:
+     * {@code rwat_packs/<file or folder name>}, under the client's own pack
+     * if it has one that stands for it, else under the server's.
+     */
+    public static List<PackProblem> packMismatches(List<PackManifest.Mismatch> mismatches) {
+        List<PackProblem> problems = new ArrayList<>();
+        for (PackManifest.Mismatch mismatch : mismatches) {
+            PackManifest.Entry pack = mismatch.local() != null ? mismatch.local() : mismatch.server();
+            problems.add(PackProblem.warning(PackInfo.idOf(pack.id()), "rwat_packs/" + pack.id(),
+                    mismatch.describe()));
+        }
         return problems;
     }
 

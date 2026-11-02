@@ -128,6 +128,53 @@ class PackReportTest {
         assertEquals(0, PackReport.merged(new PackReport(), new PackReport()).packs().size());
     }
 
+    private static String hash(char c) {
+        return String.valueOf(c).repeat(PackManifest.HASH_LENGTH);
+    }
+
+    /**
+     * The client's packs against the server's (R15): each pack the client
+     * lacks or holds other files of is one warning in the client's report, as
+     * well as the line in chat, and the report holds it as its own source so
+     * a reconnect or a new check replaces it.
+     */
+    @Test
+    void packMismatches_areWarningsInTheClientsReport() {
+        List<PackManifest.Entry> server = List.of(
+                new PackManifest.Entry("MVP.zip", "Matoi Vanilla Pack", "1.0", hash('a')),
+                new PackManifest.Entry("Extra.zip", "Extra", "", hash('b')),
+                new PackManifest.Entry("Same.zip", "Same", "", hash('c')));
+        List<PackManifest.Entry> client = List.of(
+                new PackManifest.Entry("MVP.zip", "Matoi Vanilla Pack", "0.9", hash('d')),
+                new PackManifest.Entry("Same.zip", "Same", "", hash('c')));
+
+        List<PackProblem> problems = PackReport.packMismatches(PackManifest.compare(server, client));
+        assertEquals(2, problems.size());
+        PackProblem different = problems.get(0);
+        assertFalse(different.isError());
+        assertEquals(List.of("rwat/MVP.zip", "rwat_packs/MVP.zip"), List.of(different.pack(), different.file()));
+        assertTrue(different.message().contains("differs from the one here"), different.message());
+        assertTrue(different.message().contains("Matoi Vanilla Pack 1.0"), different.message());
+        PackProblem missing = problems.get(1);
+        assertEquals(List.of("rwat/Extra.zip", "rwat_packs/Extra.zip"), List.of(missing.pack(), missing.file()));
+        assertTrue(missing.message().contains("is not installed here"), missing.message());
+
+        PackReport report = new PackReport();
+        report.replace(PackReport.Source.PACK_SYNC, Map.of(), problems);
+        assertEquals(2, report.warnings());
+        assertEquals(0, report.errors());
+        assertEquals(Set.of("rwat/MVP.zip", "rwat/Extra.zip"), report.packs());
+
+        // the next check says all is well: the warnings go with it; leaving the server forgets the check
+        report.replace(PackReport.Source.PACK_SYNC, Map.of(),
+                PackReport.packMismatches(PackManifest.compare(server, server)));
+        assertEquals(0, report.warnings());
+        assertTrue(report.has(PackReport.Source.PACK_SYNC));
+        report.clear(PackReport.Source.PACK_SYNC);
+        assertFalse(report.has(PackReport.Source.PACK_SYNC));
+        assertTrue(PackReport.packMismatches(List.of()).isEmpty());
+    }
+
     /** D4: a model is tied to its type only by the id; one without a type is never drawn. */
     @Test
     void modelsWithoutType_areWarnedAboutBySortedId() {

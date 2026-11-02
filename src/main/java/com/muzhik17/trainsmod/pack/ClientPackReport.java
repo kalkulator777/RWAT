@@ -31,7 +31,10 @@ import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
  *     files' check); in a game that is its own server (single player, the
  *     host of a LAN game) the server's part too, since the owner may have no
  *     cheats for {@code /rwat packs} — one list for both sides, as they read
- *     the same pack files ({@link PackReportView#showShared});</li>
+ *     the same pack files ({@link PackReportView#showShared}). On another
+ *     player's server it also holds the check of this client's packs
+ *     against the server's by hash ({@link PackReport.Source#PACK_SYNC},
+ *     made on joining by {@code client.ClientPackCheck});</li>
  * <li>{@code /rwatc packs validate} — load and check every declared model
  *     now ({@link StockModels#checkFiles}), in the background, and report;</li>
  * <li>after each wagon type sync and each resource reload: the models
@@ -146,5 +149,6 @@ public final class ClientPackReport {
         checkedModels = null;
         logged = List.of();
         PackReport.CLIENT.clear(PackReport.Source.MODEL_TYPES);
+        PackReport.CLIENT.clear(PackReport.Source.PACK_SYNC); // the server's packs were that connection's
     }
 }
