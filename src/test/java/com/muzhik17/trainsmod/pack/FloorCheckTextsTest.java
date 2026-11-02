@@ -29,6 +29,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonPrimitive;
 import com.muzhik17.trainsmod.kinematics.FloorCheck;
+import com.muzhik17.trainsmod.kinematics.FloorFinding;
 import com.muzhik17.trainsmod.stock.WagonType;
 
 /**
@@ -44,7 +45,10 @@ import com.muzhik17.trainsmod.stock.WagonType;
  * ({@code src/test/resources/fixtures/floor_check_texts.json}: the type ids,
  * the breaks and the lines, nothing of the MVP's models but what the lines
  * say). The packs are read as the game reads them: each file through the
- * type loader, its markup in the OBJ frame.
+ * type loader, its markup in the OBJ frame. The check's findings ({@link
+ * FloorCheck#findings}) are held to the same lines, and each to point at
+ * what the file has: a door of its own index and id, a zone or a chair of
+ * its index with its size or place as the file writes it.
  *
  * <p>The example pack is in the repository for good; the MVP pack until it
  * leaves it (roadmap R12): without it, its part is skipped, not passed. A
@@ -187,6 +191,10 @@ class FloorCheckTextsTest {
             assertNotNull(type, entry.getKey() + " isn't loaded: " + loaded.problems());
             List<String> lines = FloorCheck.problems(type);
             actual.put(entry.getKey(), lines);
+            // the findings are the lines, each pointing at what the type file has
+            List<FloorFinding> findings = FloorCheck.findings(type);
+            assertEquals(lines, findings.stream().map(FloorFinding::text).toList(), entry.getKey());
+            findings.forEach(finding -> assertPointsIntoTheFile(c.json(), type, finding, entry.getKey()));
             // the loader warns of each line as it is, after what the parser tolerated
             List<PackProblem> problems = loaded.problems();
             List<PackProblem> floor = problems.subList(problems.size() - lines.size(), problems.size());
@@ -217,6 +225,50 @@ class FloorCheckTextsTest {
                     + "' (what they say now: " + out + "):\n  "
                     + String.join("\n  ", wrong.subList(0, Math.min(wrong.size(), 20))));
         }
+    }
+
+    /**
+     * A finding is about a zone, door or chair the type has, by its index:
+     * a door with its own id, a zone or a chair with its size or place as
+     * the file gives it (the OBJ frame); the floor, the cab and zones in the
+     * plural have none (−1), the zones named each one of the type's.
+     */
+    private static void assertPointsIntoTheFile(JsonObject json, WagonType type, FloorFinding finding, String name) {
+        String what = name + ": " + finding.text();
+        int i = finding.index();
+        switch (finding.subject()) {
+            case FLOOR, CAB -> assertEquals(-1, i, what);
+            case ZONE -> {
+                int zones = type.interior().zones().size();
+                if (finding.code() == FloorFinding.Code.ZONES_UNREACHABLE) {
+                    assertEquals(-1, i, what);
+                    List<?> listed = (List<?>) finding.params().get("zones");
+                    assertTrue(!listed.isEmpty() && listed.stream().allMatch(z -> (Integer) z > 0
+                            && (Integer) z < zones), what);
+                } else {
+                    assertTrue(i >= 0 && i < zones, what);
+                    JsonObject zone = element(json, "interior", i);
+                    assertNear(coordinate(zone, "max", 0) - coordinate(zone, "min", 0), finding, "size_x", what);
+                    assertNear(coordinate(zone, "max", 2) - coordinate(zone, "min", 2), finding, "size_z", what);
+                }
+            }
+            case DOOR -> {
+                assertTrue(i >= 0 && i < type.doors().size(), what);
+                assertEquals(type.doors().get(i).id(), finding.params().get("id"), what);
+            }
+            case SEAT -> {
+                assertTrue(i >= 0 && i < type.cab().seats().size(), what);
+                for (int axis = 0; axis < 3; axis++) {
+                    assertNear(seat(json, i).getAsJsonArray("at").get(axis).getAsDouble(), finding,
+                            List.of("x", "y", "z").get(axis), what);
+                }
+            }
+        }
+    }
+
+    private static void assertNear(double expected, FloorFinding finding, String param, String what) {
+        double actual = ((Number) finding.params().get(param)).doubleValue();
+        assertTrue(Math.abs(expected - actual) <= 1.0e-9, what + ": " + param + " " + actual + ", not " + expected);
     }
 
     /** The summary's part {@code part}: case → the lines, in order. */
