@@ -1,0 +1,320 @@
+{
+  "$comment": "A wagon type as a pack writes it (format 1, OBJ frame; only length, bogies, mass_t, interior, doors and cab.seats matter here) -> what the floor check says of it, one line each (kinematics.FloorCheck.problems after stock.WagonTypeParser.parse). input.type; expected: the lines, [] if nothing.",
+  "cases": [
+    {
+      "name": "no floor, no cab",
+      "input": {"type": {"length": 25.0, "bogies": [8.5, -8.5], "mass_t": 50.0}},
+      "expected": []
+    },
+    {
+      "name": "chairs without a floor",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "cab": {"seats": [{"at": [-9.0, 1.86375, 0.0], "yaw": 0}]}
+        }
+      },
+      "expected": ["cab.seats without an interior: a chair needs a floor to walk to it"]
+    },
+    {
+      "name": "one zone",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "interior": [{"min": [-5.0, 1.37375, -1.0], "max": [5.0, 3.87375, 1.0]}]
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "zones that touch",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "interior": [
+            {"min": [-5.0, 1.37375, -1.0], "max": [0.0, 3.87375, 1.0]},
+            {"min": [-10.0, 1.37375, -1.0], "max": [-5.0, 3.87375, 1.0]}
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "a gap between zones",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "interior": [
+            {"min": [-5.0, 1.37375, -1.0], "max": [0.0, 3.87375, 1.0]},
+            {"min": [-10.0, 1.37375, -1.0], "max": [-5.05, 3.87375, 1.0]}
+          ]
+        }
+      },
+      "expected": [
+        "floor zones [1] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+      ]
+    },
+    {
+      "name": "a narrow zone alone",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "interior": [
+            {"min": [-5.0, 1.37375, -1.0], "max": [0.0, 3.87375, 1.0]},
+            {"min": [-5.0, 1.37375, 1.2], "max": [0.0, 3.87375, 1.6]}
+          ]
+        }
+      },
+      "expected": ["zone 1 holds no place a player fits (5.00 x 0.40): widen it to 0.6 or join it to a wider zone"]
+    },
+    {
+      "name": "nobody fits anywhere",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "interior": [{"min": [-5.0, 1.37375, -0.2], "max": [0.0, 3.87375, 0.2]}]
+        }
+      },
+      "expected": ["a player fits nowhere on the floor: every part of it is narrower than 0.6"]
+    },
+    {
+      "name": "a gangway where the floor ends",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "interior": [
+            {"min": [-11.4, 1.37375, -0.65], "max": [-9.5, 3.87375, 0.125]},
+            {"min": [-11.75, 1.37375, -1.45], "max": [-10.87, 3.87375, 1.45]}
+          ],
+          "doors": [
+            {
+              "id": "Trap1",
+              "min": [-12.044, 1.49975, -0.438],
+              "max": [-11.75, 3.43775, 0.438],
+              "connecting": true
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "a gangway the floor stops short of",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "interior": [{"min": [-10.75, 1.37375, -1.45], "max": [11.75, 3.87375, 1.45]}],
+          "doors": [
+            {
+              "id": "Trap1",
+              "min": [-12.044, 1.49975, -0.438],
+              "max": [-11.75, 3.43775, 0.438],
+              "connecting": true
+            }
+          ]
+        }
+      },
+      "expected": [
+        "door 0 'Trap1' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+      ]
+    },
+    {
+      "name": "a gangway in a side wall",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "interior": [{"min": [-5.0, 1.37375, -1.45], "max": [5.0, 3.87375, 1.45]}],
+          "doors": [
+            {
+              "id": "side_gangway",
+              "min": [-0.9, 1.46375, 1.45],
+              "max": [0.0, 3.36375, 1.5],
+              "connecting": true
+            }
+          ]
+        }
+      },
+      "expected": ["door 0 'side_gangway' is a gangway (connecting) door but not in an end wall"]
+    },
+    {
+      "name": "a thick door, a narrow door",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "interior": [{"min": [-5.0, 1.37375, -1.45], "max": [5.0, 3.87375, 1.45]}],
+          "doors": [
+            {"id": "thick", "min": [-1.0, 1.46375, 1.45], "max": [0.0, 3.36375, 2.25]},
+            {"id": "narrow", "min": [-2.15, 1.46375, 1.45], "max": [-2.0, 3.36375, 1.5]}
+          ]
+        }
+      },
+      "expected": [
+        "door 0 'thick' is 0.80 thick: is the box the door leaf?",
+        "door 1 'narrow' is too narrow to walk through",
+        "door 1 'narrow' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+      ]
+    },
+    {
+      "name": "a side door where the floor ends",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "interior": [{"min": [-5.0, 1.37375, -1.45], "max": [5.0, 3.87375, 1.45]}],
+          "doors": [{"id": "door_1", "min": [-0.9, 1.46375, 1.45], "max": [0.0, 3.36375, 1.5]}]
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "the floor runs through a shut door",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "interior": [
+            {"min": [-9.25, 1.37375, 0.35], "max": [10.78, 3.87375, 1.0]},
+            {"min": [-7.55, 1.37375, -0.65], "max": [-6.78, 3.87375, 0.375]}
+          ],
+          "doors": [{"id": "DoorKupe", "min": [-7.5, 1.37375, 0.375], "max": [-6.875, 3.46375, 0.5], "inner": true}]
+        }
+      },
+      "expected": [
+        "door 0 'DoorKupe' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+      ]
+    },
+    {
+      "name": "the zones parted at the shut door",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "interior": [
+            {"min": [-9.25, 1.37375, 0.5], "max": [10.78, 3.87375, 1.15]},
+            {"min": [-7.55, 1.37375, -0.65], "max": [-6.78, 3.87375, 0.375]}
+          ],
+          "doors": [{"id": "DoorKupe", "min": [-7.5, 1.37375, 0.375], "max": [-6.875, 3.46375, 0.5], "inner": true}]
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "the floor runs round a door",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "interior": [{"min": [-10.0, 1.37375, -1.0], "max": [0.0, 3.87375, 1.0]}],
+          "doors": [{"id": "door", "min": [-5.05, 1.37375, -0.4], "max": [-4.95, 3.46375, 0.4], "inner": true}]
+        }
+      },
+      "expected": [
+        "door 0 'door' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)",
+        "door 0 'door' (inner): its two sides are one floor without it — the floor runs round it or through the wall beside it, so shut it is no wall"
+      ]
+    },
+    {
+      "name": "an inner door on no floor",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "interior": [{"min": [-5.0, 1.37375, -1.0], "max": [0.0, 3.87375, 1.0]}],
+          "doors": [{"id": "far", "min": [-8.1, 1.37375, -0.4], "max": [-8.0, 3.46375, 0.4], "inner": true}]
+        }
+      },
+      "expected": ["door 0 'far' (inner) touches no floor"]
+    },
+    {
+      "name": "a cab without a chair",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "interior": [{"min": [-10.0, 1.37375, -1.0], "max": [-7.0, 3.87375, 1.0]}],
+          "cab": {"seats": []}
+        }
+      },
+      "expected": [
+        "a walkable cab needs a driver's chair (cab.seats): in a cab with a floor the keys drive only from a chair"
+      ]
+    },
+    {
+      "name": "a cab with its chair",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "interior": [{"min": [-10.0, 1.37375, -1.0], "max": [-7.0, 3.87375, 1.0]}],
+          "cab": {"seats": [{"at": [-9.0, 1.86375, 0.5], "yaw": 0}]}
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "a chair out of reach and one too high",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "interior": [{"min": [-10.0, 1.37375, -1.0], "max": [-7.0, 3.87375, 1.0]}],
+          "cab": {
+            "seats": [
+              {"at": [-9.0, 1.86375, 0.5], "yaw": 0},
+              {"at": [-9.0, 1.86375, 4.0], "yaw": 0},
+              {"at": [-8.0, 3.56375, 0.0], "yaw": 180}
+            ]
+          }
+        }
+      },
+      "expected": [
+        "cab.seats[1] (-9.00, 1.86, 4.00): the nearest place to stand is 3.30 off (sitting reaches 2.5), its floor 0.49 below the cushion (0.2..1.5; the seat is the top of the cushion)",
+        "cab.seats[2] (-8.00, 3.56, 0.00): the nearest place to stand is 0.00 off (sitting reaches 2.5), its floor 2.19 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+      ]
+    },
+    {
+      "name": "a part of the floor walked to by its own door",
+      "input": {
+        "type": {
+          "length": 25.0,
+          "bogies": [8.5, -8.5],
+          "mass_t": 50.0,
+          "interior": [
+            {"min": [-5.0, 1.37375, -1.0], "max": [0.0, 3.87375, 1.0]},
+            {"min": [-9.0, 1.37375, -1.45], "max": [-6.0, 3.87375, 1.45]}
+          ],
+          "doors": [{"id": "steps", "min": [-7.9, 1.16375, 1.45], "max": [-7.0, 3.16375, 1.5], "fixed": true}]
+        }
+      },
+      "expected": []
+    }
+  ]
+}

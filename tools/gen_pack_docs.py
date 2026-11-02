@@ -181,11 +181,14 @@ def compact_json(value, indent=0, width=88):
 
 
 def code_link(ref):
-    """'client/X.java:12' → a markdown link into the source tree (tools/… and src/… too)."""
-    path, _, line = ref.partition(":")
+    """A code reference → a markdown link into the source tree (tools/… and src/… too):
+    'client/X.java#name' (a symbol of the file, as obj-conventions.json points) links the
+    file under the label X.java#name; 'client/X.java:12', a line, links that line."""
+    path, _, symbol = ref.partition("#")
+    path, _, line = path.partition(":")
     target = "../" + path if path.startswith(("tools/", "src/")) else CODE_LINK_BASE + path
     anchor = "#L" + line.split("-")[0] if line else ""
-    label = path.rsplit("/", 1)[-1] + (":" + line if line else "")
+    label = path.rsplit("/", 1)[-1] + ("#" + symbol if symbol else "") + (":" + line if line else "")
     return f"[{label}]({target}{anchor})"
 
 

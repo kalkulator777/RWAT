@@ -96,6 +96,26 @@ class ModelCheckTest {
                 check("{ \"obj\": \"car/car.obj\" }", pack));
     }
 
+    /**
+     * A switch or light group named longer than 32 characters cut the client
+     * off its server when it was sent (M9); the loader drops it, the check
+     * says so — once a name, however many objects carry it.
+     */
+    @Test
+    void aControlGroupTooLongToSend_isNamed() {
+        String name = "ThisSwitchNameIsFarTooLongToEverBeSentXY";
+        String face = "\nusemtl body\nf 1/1 2/1 3/1 4/1\n";
+        Pack pack = good().with("t:car/car.obj", "mtllib car.mtl\n" + QUAD + "o BODY" + face
+                + "o WIDGET_1_CG_" + name + "_TOGGLE" + face
+                + "o WIDGET_1_CG_" + name + "_ROT_90" + face
+                + "o LAMP_LCG_" + name + "_FULLBRIGHT" + face
+                + "o THROTTLE_1_CG_" + name + face // a lever's group never travels
+                + "o LAMP_LCG_IL_FULLBRIGHT" + face);
+        assertEquals(List.of("W model t:car/car.obj: control group '" + name + "' is longer than 32 characters"
+                + " and is dropped: its switches can't be worked, its lights stay off (an LINVERT one on)"),
+                check("{ \"obj\": \"car/car.obj\" }", pack));
+    }
+
     @Test
     void missingOrInvalidObj() {
         assertEquals(List.of("E model file t:car/gone.obj not found"),

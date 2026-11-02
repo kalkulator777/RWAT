@@ -1,5 +1,5 @@
 {
-  "$comment": "Machine-readable OBJ object-name conventions of RWAT (the Immersive Railroading convention as the mod reads it). Read by the pack editor (role highlighting) and tools/gen_pack_docs.py. Every regex is written to behave the same in Java, JavaScript and Python and is SEARCHED in the name (find anywhere), not fully matched, unless it is anchored. 'input' says which name a rule sees: 'raw' = the object name as written, 'normalized' = with a trailing Blender copy suffix (.001) removed. Code references are relative to src/main/java/com/muzhik17/trainsmod/ unless they start with tools/.",
+  "$comment": "Machine-readable OBJ object-name conventions of RWAT (the Immersive Railroading convention as the mod reads it). Read by the pack editor (role highlighting) and tools/gen_pack_docs.py. Every regex is written to behave the same in Java, JavaScript and Python and is SEARCHED in the name (find anywhere), not fully matched, unless it is anchored. 'input' says which name a rule sees: 'raw' = the object name as written, 'normalized' = with a trailing Blender copy suffix (.001) removed. Code references are relative to src/main/java/com/muzhik17/trainsmod/ unless they start with tools/, and point at a symbol, not a line: <file>#<name> names a class, method, field or enum constant declared in the file (Outer.Inner for a nested one); validate_pack.py --self-check finds each one there.",
   "format": 1,
   "title": "OBJ object-name conventions",
   "description": "What the names of the objects in a wagon or rail tile OBJ make the engine do. Case matters everywhere. Anything the rules don't recognise is rigid body, so static parts may be named freely; functions need the IR names. RWAT's only own name is HANDBRAKE_<n>.",
@@ -7,9 +7,9 @@
   "code_root": "src/main/java/com/muzhik17/trainsmod/",
   "naming": {
     "object_name": {
-      "description": "An object's name is the first whitespace-separated token after 'o ' or 'g ' in the OBJ (a space cuts the name). Every later face belongs to it until the next o/g.",
-      "x-description-ru": "Имя объекта — первый токен после «o » или «g » в OBJ (пробел обрезает имя). Все следующие грани принадлежат ему до следующего o/g.",
-      "code": ["client/render/model/ObjLoader.java:98"]
+      "description": "An object's name is the whole rest of its 'o' or 'g' line in the OBJ, the blanks at its ends dropped and those inside kept ('o Door Leaf' is Door Leaf; blanks are the characters up to U+0020, a tab too), as Blender's importer and Immersive Railroading read it; Blender's exporter writes a blank in a name as _. Every later face belongs to it until the next o/g line. Faces before any o/g line, or after one that names nothing, belong to the object 'default'.",
+      "x-description-ru": "Имя объекта — весь остаток его строки «o» или «g» в OBJ без пробелов по краям, пробелы внутри сохраняются («o Door Leaf» — это Door Leaf; пробелом считаются символы до U+0020, табуляция тоже), так имя читают импорт Blender и Immersive Railroading; экспорт Blender пишет пробел в имени как _. Все следующие грани принадлежат объекту до следующей строки o/g. Грани до первой строки o/g или после строки без имени принадлежат объекту «default».",
+      "code": ["convention/ObjectRole.java#objectName", "client/render/model/ObjLoader.java#loadParts", "tools/floorgen.py#object_name_of"]
     },
     "case_sensitive": true,
     "copy_suffix": {
@@ -17,19 +17,19 @@
       "replace": "",
       "description": "A Blender copy suffix (.001) at the end is dropped before the control, light, door-leaf and coupler rules read the name (input 'normalized'). The prefix and substring rules (bogies, INTERIOR, HIDE, skip) and the .anim lookup see the raw name.",
       "x-description-ru": "Суффикс копии Blender (.001) в конце отбрасывается, прежде чем имя читают правила органов, света, створок и сцепок (вход «normalized»). Правила префикса и подстроки (тележки, INTERIOR, HIDE, skip) и поиск по .anim видят сырое имя.",
-      "code": ["convention/ObjectRole.java:131", "convention/ObjectRole.java:188", "convention/ObjectRole.java:200"]
+      "code": ["convention/ObjectRole.java#COPY_SUFFIX", "convention/ObjectRole.java#coupled", "convention/ObjectRole.java#parse"]
     },
     "token": {
       "regex_template": "(?:^|_)TOKEN(?:_|$)",
       "description": "A flag TOKEN counts when the name contains _TOKEN_, starts with TOKEN_, ends with _TOKEN or is TOKEN.",
       "x-description-ru": "Флаг TOKEN засчитывается, если в имени есть _TOKEN_, имя начинается с TOKEN_, кончается на _TOKEN или равно TOKEN.",
-      "code": ["convention/ObjectRole.java:268"]
+      "code": ["convention/ObjectRole.java#hasToken"]
     }
   },
   "parse_order": {
     "description": "Each object of a wagon OBJ goes through these steps in order; the first that takes it decides. The light rules then apply to any textured object, whatever took it.",
     "x-description-ru": "Каждый объект OBJ вагона проходит эти шаги по порядку; решает первый, который его взял. Правила света затем применяются к любому текстурированному объекту, кто бы его ни взял.",
-    "code": ["client/render/model/IrStockModel.java:329-417"],
+    "code": ["client/render/model/IrStockModel.java#load"],
     "steps": ["hidden", "skip", "coupler_head", "bogie_front", "bogie_rear", "wheelset", "anim_object", "door_leaf", "control", "untextured", "interior", "body"]
   },
   "roles": [
@@ -42,7 +42,7 @@
       "effect": "Dropped at load (IR shows these only in states the mod doesn't model). A substring, not a token. Exceptions: WIDGET controls (shown by their value) and coupler heads (shown by coupling).",
       "x-description-ru": "Выбрасывается при загрузке (IR показывает такие объекты в состояниях, которых мод не моделирует). Подстрока, не токен. Исключения: органы WIDGET (видны по значению) и головы сцепок (видны по сцеплению).",
       "engine": "dropped",
-      "code": ["client/render/model/IrStockModel.java:335"],
+      "code": ["client/render/model/IrStockModel.java#load"],
       "examples": ["WINDOW_HIDE_GLASS", "BOGEY_FRONT_HIDE"]
     },
     {
@@ -54,7 +54,7 @@
       "effect": "Dropped at load: CARGO_FILL* always (cargo isn't modelled, the wagon renders empty), plus the prefixes the model declaration lists in skip.",
       "x-description-ru": "Выбрасывается при загрузке: CARGO_FILL* всегда (груза нет, вагон рисуется пустым), плюс префиксы из skip декларации модели.",
       "engine": "dropped",
-      "code": ["client/render/model/IrStockModel.java:96", "client/render/model/IrStockModel.java:335"],
+      "code": ["client/render/model/IrStockModel.java#DEFAULT_SKIP_PREFIXES", "client/render/model/IrStockModel.java#load"],
       "examples": ["CARGO_FILL_20", "CARGO_FILL_100"]
     },
     {
@@ -65,7 +65,7 @@
       "effect": "A coupler head at the front or rear end. With the HIDE token it is shown while that end is uncoupled, with HIDE and INVERT while it is coupled, without HIDE always. All heads of an end turn towards the neighbour (at most 22°) about one pivot on the centre line, at the inner end of the heads.",
       "x-description-ru": "Голова сцепки переднего или заднего конца. С токеном HIDE видна, пока этот конец расцеплен, с HIDE и INVERT — пока сцеплен, без HIDE — всегда. Все головы конца поворачиваются к соседу (не больше 22°) вокруг одного шарнира на оси вагона, у внутреннего конца голов.",
       "engine": "active",
-      "code": ["convention/ObjectRole.java:129", "convention/ObjectRole.java:187", "client/render/model/IrStockModel.java:470", "kinematics/CouplerAim.java:14"],
+      "code": ["convention/ObjectRole.java#COUPLED", "convention/ObjectRole.java#coupled", "client/render/model/IrStockModel.java#buildCouplers", "kinematics/CouplerAim.java#LIMIT_DEGREES"],
       "examples": ["COUPLED_FRONT_1_HIDE", "COUPLED_FRONT_2_HIDE_INVERT", "COUPLED_REAR_1"]
     },
     {
@@ -76,7 +76,7 @@
       "effect": "Front bogie frame: turns with the track's tangent at the type's first bogie pivot. Its mesh centre is the model's default bogie pivot.",
       "x-description-ru": "Рама передней тележки: поворачивается по касательной пути в первом шкворне типа. Центр её меша — пивот тележки модели по умолчанию.",
       "engine": "active",
-      "code": ["client/render/model/IrStockModel.java:339", "client/render/model/IrStockModel.java:606"],
+      "code": ["client/render/model/IrStockModel.java#load", "client/render/model/IrStockModel.java#measurePivots"],
       "examples": ["BOGEY_FRONT", "BOGEY_FRONT_FRAME_1"]
     },
     {
@@ -87,7 +87,7 @@
       "effect": "Rear bogie frame, at the type's last bogie pivot.",
       "x-description-ru": "Рама задней тележки, в последнем шкворне типа.",
       "engine": "active",
-      "code": ["client/render/model/IrStockModel.java:339"],
+      "code": ["client/render/model/IrStockModel.java#load"],
       "examples": ["BOGEY_REAR"]
     },
     {
@@ -98,7 +98,7 @@
       "effect": "A wheelset of that bogie: each object is one wheelset spinning about its own axle (the centre of its mesh) by the distance rolled. Tread radius 0.53 for every wheel.",
       "x-description-ru": "Колёсная пара этой тележки: каждый объект — одна пара, крутится вокруг своей оси (центр меша) на пройденный путь. Радиус круга катания у всех 0.53.",
       "engine": "active",
-      "code": ["client/render/model/IrStockModel.java:343", "client/render/model/IrStockModel.java:85"],
+      "code": ["client/render/model/IrStockModel.java#WheelBuilder", "client/render/model/IrStockModel.java#WHEEL_RADIUS"],
       "examples": ["BOGEY_FRONT_WHEEL_1", "BOGEY_REAR_WHEEL_2"]
     },
     {
@@ -110,7 +110,7 @@
       "effect": "Moves by the .anim's frames as its door opens (the door whose id is the animation's key). Exact name, copy suffix included.",
       "x-description-ru": "Двигается по кадрам .anim по мере открытия своей двери (двери, чей id — ключ анимации). Точное имя, вместе с суффиксом копии.",
       "engine": "active",
-      "code": ["client/render/model/IrStockModel.java:347", "client/render/model/IrAnim.java"]
+      "code": ["client/render/model/IrStockModel.java#loadAnimations", "client/render/model/IrAnim.java"]
     },
     {
       "id": "door_leaf",
@@ -118,10 +118,10 @@
       "x-name-ru": "DOOR_<n> с DOOR_<n>_ROT[_<град>] или TL_<f>_<ось>",
       "category": "door",
       "match": {"type": "regex", "regex": "(?:^|_)(DOOR)_(\\d+)(?=_|$)", "input": "normalized", "captures": ["kind", "n"]},
-      "effect": "A rigid door leaf, if any object of DOOR_<n> has the hinge marker DOOR_<n>_ROT[_<degrees>] or a slide TL_<f>_<axis>; otherwise DOOR_<n> is body. The type's door whose box (grown by 0.1) holds the leaf's centre drives it. INVERT and OFFSET don't work on leaves. EXTERNAL / CONNECTING / INTERNAL are not read by the engine (the converter derives the type's doors from them).",
-      "x-description-ru": "Жёсткая створка, если у какого-то объекта DOOR_<n> есть маркер шарнира DOOR_<n>_ROT[_<град>] или сдвиг TL_<f>_<ось>; иначе DOOR_<n> — кузов. Её ведёт дверь типа, в коробке которой (с запасом 0.1) лежит центр створки. INVERT и OFFSET у створок не работают. EXTERNAL / CONNECTING / INTERNAL движок не читает (по ним конвертер выводит двери типа).",
+      "effect": "A rigid door leaf, if any object of DOOR_<n> has the hinge marker DOOR_<n>_ROT[_<degrees>] or a slide TL_<f>_<axis>; otherwise DOOR_<n> is body. Only objects drawn as parts of their own count, for the leaf and for its hinge or slide: not hidden (HIDE), skipped, of a bogie (BOGEY_FRONT*, BOGEY_REAR*), a coupler head or named in an .anim. The type's door whose box (grown by 0.1) holds the centre of the leaf's textured faces drives it. INVERT and OFFSET don't work on leaves. EXTERNAL / CONNECTING / INTERNAL are not read by the engine (the converter derives the type's doors from them).",
+      "x-description-ru": "Жёсткая створка, если у какого-то объекта DOOR_<n> есть маркер шарнира DOOR_<n>_ROT[_<град>] или сдвиг TL_<f>_<ось>; иначе DOOR_<n> — кузов. Считаются только объекты, которые рисуются отдельной деталью, — и для створки, и для её шарнира или сдвига: не скрытые (HIDE), не из skip, не часть тележки (BOGEY_FRONT*, BOGEY_REAR*), не голова сцепки и не названные в .anim. Её ведёт дверь типа, в коробке которой (с запасом 0.1) лежит центр текстурированных граней створки. INVERT и OFFSET у створок не работают. EXTERNAL / CONNECTING / INTERNAL движок не читает (по ним конвертер выводит двери типа).",
       "engine": "active",
-      "code": ["convention/ObjectRole.java:82", "client/render/model/IrStockModel.java:349", "client/render/model/IrStockModel.java:666", "stock/WagonType.java:610"],
+      "code": ["convention/DoorLeaves.java#leaf", "convention/ObjectRole.java#door", "client/render/model/IrStockModel.java#load", "convention/DoorLeaves.java#door", "stock/WagonType.java#doorHolding"],
       "examples": ["DOOR_3_ROT_90", "DOOR_3_EXTERNAL", "DOOR_5_TL_0.6_Z"]
     },
     {
@@ -132,7 +132,7 @@
       "effect": "A cab control or gauge. Every object with the same key <KIND>_<n> is one control; flags and modifiers on any of them count for all.",
       "x-description-ru": "Орган управления или прибор. Все объекты с одним ключом <KIND>_<n> — один орган; флаги и модификаторы на любом из них действуют на весь орган.",
       "engine": "active",
-      "code": ["client/render/model/IrStockModel.java:356", "convention/ObjectRole.java:219"],
+      "code": ["client/render/model/IrStockModel.java#ControlBuilder", "convention/ObjectRole.java#control"],
       "examples": ["THROTTLE_1", "WIDGET_7_TOGGLE_CG_IL", "GAUGE_SPEED_1_RANGE_0_120"]
     },
     {
@@ -144,7 +144,7 @@
       "effect": "Not drawn and takes no clicks; a control's pivot marker still counts.",
       "x-description-ru": "Не рисуется и не перехватывает клики; маркер шарнира органа при этом учитывается.",
       "engine": "dropped",
-      "code": ["client/render/model/IrStockModel.java:363", "client/render/model/MtlParser.java"]
+      "code": ["client/render/model/IrStockModel.java#materialTextures", "client/render/model/MtlParser.java"]
     },
     {
       "id": "interior",
@@ -154,7 +154,7 @@
       "effect": "Interior shell (seats, partitions, cab fittings): rigid with the body, hidden beyond the client's interiorDrawDistance. Only the prefix counts: _INTERIOR_ elsewhere in a name is the light token.",
       "x-description-ru": "Интерьер (сиденья, перегородки, оборудование кабины): жёстко с кузовом, прячется дальше клиентской настройки interiorDrawDistance. Считается только префикс: _INTERIOR_ в середине имени — токен света.",
       "engine": "active",
-      "code": ["client/render/model/IrStockModel.java:391", "client/ClientConfig.java:40"],
+      "code": ["client/render/model/IrStockModel.java#load", "client/ClientConfig.java#INTERIOR_DISTANCE"],
       "examples": ["INTERIOR_1", "INTERIOR_SEATS_LCG_IL"]
     },
     {
@@ -166,95 +166,95 @@
       "effect": "Rigid body.",
       "x-description-ru": "Жёсткий кузов.",
       "engine": "active",
-      "code": ["client/render/model/IrStockModel.java:391"]
+      "code": ["client/render/model/IrStockModel.java#load"]
     }
   ],
   "control_kinds": [
     {"kind": "GAUGE_SPEED", "name": "GAUGE_SPEED_<n>", "regex": "(?:^|_)(GAUGE_SPEED)_(\\d+)(?=_|$)", "class": "gauge", "gauge": true,
      "effect": "Speed: |speed| / max_speed_kmh of the type (200 km/h if none), mapped by RANGE.",
      "x-description-ru": "Скорость: |скорость| / max_speed_kmh типа (200 км/ч, если нет), через RANGE.",
-     "code": ["convention/ObjectRole.java:55", "convention/ControlValue.java:95"]},
+     "code": ["convention/ObjectRole.java#Kind.GAUGE_SPEED", "convention/ControlValue.java#reading"]},
     {"kind": "GAUGE_THROTTLE", "name": "GAUGE_THROTTLE_<n>", "regex": "(?:^|_)(GAUGE_THROTTLE)_(\\d+)(?=_|$)", "class": "gauge", "gauge": true,
      "effect": "Throttle notch / 8.",
      "x-description-ru": "Позиция контроллера / 8.",
-     "code": ["convention/ObjectRole.java:56", "convention/ControlValue.java:97"]},
+     "code": ["convention/ObjectRole.java#Kind.GAUGE_THROTTLE", "convention/ControlValue.java#reading"]},
     {"kind": "GAUGE_REVERSER", "name": "GAUGE_REVERSER_<n>", "regex": "(?:^|_)(GAUGE_REVERSER)_(\\d+)(?=_|$)", "class": "gauge", "gauge": true,
      "effect": "Reverser: 0 backward, 0.5 neutral, 1 forward.",
      "x-description-ru": "Реверсор: 0 назад, 0.5 нейтраль, 1 вперёд.",
-     "code": ["convention/ObjectRole.java:57", "convention/ControlValue.java:98"]},
+     "code": ["convention/ObjectRole.java#Kind.GAUGE_REVERSER", "convention/ControlValue.java#reading"]},
     {"kind": "GAUGE_TRAIN_BRAKE", "name": "GAUGE_TRAIN_BRAKE_<n>", "regex": "(?:^|_)(GAUGE_TRAIN_BRAKE)_(\\d+)(?=_|$)", "class": "gauge", "gauge": true,
      "effect": "Train brake cylinder pressure: the fraction of full braking in effect (it builds up after the handle).",
      "x-description-ru": "Давление в цилиндрах автотормоза: доля полного торможения в действии (нарастает после рукоятки).",
-     "code": ["convention/ObjectRole.java:58", "convention/ControlValue.java:100"]},
+     "code": ["convention/ObjectRole.java#Kind.GAUGE_TRAIN_BRAKE", "convention/ControlValue.java#reading"]},
     {"kind": "GAUGE_INDEPENDENT_BRAKE", "name": "GAUGE_INDEPENDENT_BRAKE_<n> / GAUGE_IND_BRAKE_<n>", "regex": "(?:^|_)(GAUGE_(?:INDEPENDENT|IND)_BRAKE)_(\\d+)(?=_|$)", "class": "gauge", "gauge": true,
      "effect": "Independent brake cylinder pressure.",
      "x-description-ru": "Давление в цилиндрах вспомогательного тормоза.",
-     "code": ["convention/ObjectRole.java:59", "convention/ControlValue.java:101"]},
+     "code": ["convention/ObjectRole.java#Kind.GAUGE_INDEPENDENT_BRAKE", "convention/ControlValue.java#reading"]},
     {"kind": "BRAKE_PRESSURE", "name": "BRAKE_PRESSURE_<n>", "regex": "(?:^|_)(BRAKE_PRESSURE)_(\\d+)(?=_|$)", "class": "gauge", "gauge": true,
      "effect": "The higher of the two brake pressures.",
      "x-description-ru": "Большее из двух давлений тормозов.",
-     "code": ["convention/ObjectRole.java:60", "convention/ControlValue.java:102"]},
+     "code": ["convention/ObjectRole.java#Kind.BRAKE_PRESSURE", "convention/ControlValue.java#reading"]},
     {"kind": "GAUGE_OTHER", "name": "GAUGE_LIQUID_<n>, GAUGE_TEMPERATURE_<n>, GAUGE_BOILER_PRESSURE_<n>, COUPLED_<n>", "regex": "(?:^|_)((?:GAUGE_(?:LIQUID|TEMPERATURE|BOILER_PRESSURE)|COUPLED))_(\\d+)(?=_|$)", "class": "gauge_rest", "gauge": true,
      "effect": "Readouts the mod has no value for: always drawn at rest.",
      "x-description-ru": "Приборы, для которых у мода нет значения: всегда в покое.",
-     "code": ["convention/ObjectRole.java:62"]},
+     "code": ["convention/ObjectRole.java#Kind.GAUGE_OTHER"]},
     {"kind": "THROTTLE_BRAKE", "name": "THROTTLE_BRAKE_<n>", "regex": "(?:^|_)(THROTTLE_BRAKE)_(\\d+)(?=_|$)", "class": "fixed", "gauge": false,
      "effect": "Combined handle: not worked, drawn in neutral (0.5).",
      "x-description-ru": "Совмещённая рукоятка: не работает, нарисована в нейтрали (0.5).",
-     "code": ["convention/ObjectRole.java:63", "convention/ControlValue.java:69"]},
+     "code": ["convention/ObjectRole.java#Kind.THROTTLE_BRAKE", "convention/ControlValue.java#position"]},
     {"kind": "THROTTLE", "name": "THROTTLE_<n>", "regex": "(?:^|_)(THROTTLE)_(\\d+)(?=_|$)", "class": "handle", "gauge": false, "sound_prefix": "THROTTLE_",
      "effect": "Throttle: dragged, snaps to its 8 notches; one for the whole train.",
      "x-description-ru": "Контроллер: перетаскивается со снапом к 8 позициям; один на весь поезд.",
-     "code": ["convention/ObjectRole.java:64", "convention/ControlValue.java:41"]},
+     "code": ["convention/ObjectRole.java#Kind.THROTTLE", "convention/ControlValue.java#handle"]},
     {"kind": "REVERSER", "name": "REVERSER_<n>", "regex": "(?:^|_)(REVERSER)_(\\d+)(?=_|$)", "class": "handle", "gauge": false, "sound_prefix": "REVERSER_",
      "effect": "Reverser: three positions; its value is centred (−0.5 … 0.5), the model is drawn in neutral.",
      "x-description-ru": "Реверсор: три положения; значение центрировано (−0.5 … 0.5), модель нарисована в нейтрали.",
-     "code": ["convention/ObjectRole.java:65", "convention/ControlValue.java:80"]},
+     "code": ["convention/ObjectRole.java#Kind.REVERSER", "convention/ControlValue.java#value"]},
     {"kind": "TRAIN_BRAKE", "name": "TRAIN_BRAKE_<n>", "regex": "(?:^|_)(TRAIN_BRAKE)_(\\d+)(?=_|$)", "class": "handle", "gauge": false, "sound_prefix": "TRAIN_BRAKE_",
      "effect": "Driver's brake valve (train brake).",
      "x-description-ru": "Кран машиниста (автотормоз).",
-     "code": ["convention/ObjectRole.java:66"]},
+     "code": ["convention/ObjectRole.java#Kind.TRAIN_BRAKE"]},
     {"kind": "INDEPENDENT_BRAKE", "name": "INDEPENDENT_BRAKE_<n> / IND_BRAKE_<n>", "regex": "(?:^|_)((?:INDEPENDENT|IND)_BRAKE)_(\\d+)(?=_|$)", "class": "handle", "gauge": false, "sound_prefix": "INDEPENDENT_BRAKE_ or IND_BRAKE_",
      "effect": "Independent brake valve.",
      "x-description-ru": "Кран вспомогательного тормоза.",
-     "code": ["convention/ObjectRole.java:67"]},
+     "code": ["convention/ObjectRole.java#Kind.INDEPENDENT_BRAKE"]},
     {"kind": "HANDBRAKE", "name": "HANDBRAKE_<n> / HAND_BRAKE_<n>", "regex": "(?:^|_)(HAND_?BRAKE)_(\\d+)(?=_|$)", "class": "handbrake", "gauge": false,
      "effect": "The car's handbrake wheel (RWAT's own name): a click sets or releases the handbrake, the wheel shows it. Any control listed in the model's handbrake becomes one too.",
      "x-description-ru": "Маховик ручного тормоза вагона (своё имя RWAT): клик затягивает или отпускает ручник, маховик его показывает. Таким же становится любой орган из handbrake модели.",
-     "code": ["convention/ObjectRole.java:74", "convention/ControlValue.java:72", "client/render/model/IrStockModel.java:423"]},
+     "code": ["convention/ObjectRole.java#Kind.HANDBRAKE", "convention/ControlValue.java#position", "client/render/model/IrStockModel.java#load"]},
     {"kind": "BELL", "name": "BELL_CONTROL_<n>", "regex": "(?:^|_)(BELL_CONTROL)_(\\d+)(?=_|$)", "class": "group", "gauge": false,
      "effect": "Sets its control group's value; doesn't ring (the bell sounds only from the J key).",
      "x-description-ru": "Ставит значение своей группы; не звонит (сигнал звучит только с клавиши J).",
-     "code": ["convention/ObjectRole.java:75"]},
+     "code": ["convention/ObjectRole.java#Kind.BELL"]},
     {"kind": "WHISTLE", "name": "WHISTLE_CONTROL_<n>", "regex": "(?:^|_)(WHISTLE_CONTROL)_(\\d+)(?=_|$)", "class": "group", "gauge": false,
      "effect": "Sets its control group's value; doesn't whistle.",
      "x-description-ru": "Ставит значение своей группы; не свистит.",
-     "code": ["convention/ObjectRole.java:76"]},
+     "code": ["convention/ObjectRole.java#Kind.WHISTLE"]},
     {"kind": "HORN", "name": "HORN_CONTROL_<n>", "regex": "(?:^|_)(HORN_CONTROL)_(\\d+)(?=_|$)", "class": "group", "gauge": false,
      "effect": "Sets its control group's value; doesn't sound the horn (H key only).",
      "x-description-ru": "Ставит значение своей группы; тифон не включает (только клавиша H).",
-     "code": ["convention/ObjectRole.java:77"]},
+     "code": ["convention/ObjectRole.java#Kind.HORN"]},
     {"kind": "ENGINE_START", "name": "ENGINE_START_<n>", "regex": "(?:^|_)(ENGINE_START)_(\\d+)(?=_|$)", "class": "group", "gauge": false,
      "effect": "Sets its control group's value; doesn't start the engine.",
      "x-description-ru": "Ставит значение своей группы; двигатель не запускает.",
-     "code": ["convention/ObjectRole.java:78"]},
+     "code": ["convention/ObjectRole.java#Kind.ENGINE_START"]},
     {"kind": "WIDGET", "name": "WIDGET_<n>", "regex": "(?:^|_)(WIDGET)_(\\d+)(?=_|$)", "class": "group", "gauge": false,
      "effect": "A switch or lever: sets its control group's value 0…1, which lights the group's lights, opens doors whose id or group is the group (at ≥ 0.5), shows or hides HIDE widgets and moves the group's other controls. The only kind kept with HIDE.",
      "x-description-ru": "Тумблер или рычаг: ставит значение своей группы 0…1 — от него горит свет группы, открываются двери, чей id или group равен группе (при ≥ 0.5), показываются и прячутся HIDE-виджеты, двигаются другие органы группы. Единственный вид, который остаётся с HIDE.",
-     "code": ["convention/ObjectRole.java:79", "client/render/model/IrStockModel.java:332", "stock/WagonType.java:631"]},
+     "code": ["convention/ObjectRole.java#Kind.WIDGET", "client/render/model/IrStockModel.java#load", "stock/WagonType.java#doorsWorkedBy"]},
     {"kind": "WINDOW", "name": "WINDOW_<n>", "regex": "(?:^|_)(WINDOW)_(\\d+)(?=_|$)", "class": "group", "gauge": false,
      "effect": "A window: a rigid control moved by its group's value (one axis, ROT or TL).",
      "x-description-ru": "Окно: жёсткий орган, который двигает значение группы (одна ось, ROT или TL).",
-     "code": ["convention/ObjectRole.java:80"]},
+     "code": ["convention/ObjectRole.java#Kind.WINDOW"]},
     {"kind": "DOOR", "name": "DOOR_<n>", "regex": "(?:^|_)(DOOR)_(\\d+)(?=_|$)", "class": "door_leaf", "gauge": false,
      "effect": "Not a control: read only as a door leaf (see the door_leaf role).",
      "x-description-ru": "Не орган: читается только как створка двери (см. роль door_leaf).",
-     "code": ["convention/ObjectRole.java:82"]}
+     "code": ["convention/ObjectRole.java#door"]}
   ],
   "control_kind_order": {
     "description": "Kinds are tried in the order listed; the first whose regex is found wins (GAUGE_THROTTLE_1 is a gauge, not a THROTTLE).",
     "x-description-ru": "Виды проверяются в указанном порядке; побеждает первый найденный (GAUGE_THROTTLE_1 — прибор, а не THROTTLE).",
-    "code": ["convention/ObjectRole.java:52", "convention/ObjectRole.java:221"]
+    "code": ["convention/ObjectRole.java#Kind", "convention/ObjectRole.java#control"]
   },
   "control_classes": [
     {"class": "handle", "effect": "A train handle: dragged, snaps to its notch, one value for the whole train; only the driving cab's handles move, the others rest.", "x-description-ru": "Рукоятка поезда: перетаскивается со снапом к позиции, одно значение на весь поезд; двигаются рукоятки только ведущей кабины, остальные в покое."},
@@ -269,71 +269,71 @@
     {"id": "CG", "name": "_CG_<group>", "regex": "_CG_([^_]+)", "captures": ["group"], "default": "the control's key <KIND>_<n>", "x-default-ru": "собственный ключ <KIND>_<n>",
      "effect": "The control group the control sets or reads; without it the group is the control's own key.",
      "x-description-ru": "Группа управления, которую орган ставит или читает; без неё группа — собственный ключ органа.",
-     "code": ["convention/ObjectRole.java:121"]},
+     "code": ["convention/ObjectRole.java#CG"]},
     {"id": "LABEL", "name": "_LABEL_<text>", "regex": "_LABEL_([^_]+)", "captures": ["text"],
      "effect": "The control's caption under the crosshair; ^ stands for a space. A lang name of its group (light.<ns>.<type>.<group>) comes first.",
      "x-description-ru": "Подпись органа под прицелом; ^ означает пробел. Название группы из lang (light.<ns>.<type>.<группа>) важнее.",
-     "code": ["convention/ObjectRole.java:122", "client/ClientCabInteract.java:406"]},
+     "code": ["convention/ObjectRole.java#LABEL", "client/ClientCabInteract.java#controlName"]},
     {"id": "OFFSET", "name": "_OFFSET_<f>", "regex": "_OFFSET_([^_]+)", "captures": ["offset"], "default": "0",
      "effect": "Added to the control's position before INVERT: value = position + offset.",
      "x-description-ru": "Прибавляется к положению органа до INVERT: значение = положение + смещение.",
-     "code": ["convention/ObjectRole.java:123", "convention/ControlValue.java:78"]},
+     "code": ["convention/ObjectRole.java#OFFSET", "convention/ControlValue.java#value"]},
     {"id": "RANGE", "name": "_RANGE_<min>_<max>", "regex": "_RANGE_([^_]*)_([^_]*)", "captures": ["min", "max"], "default": "0 … 1",
      "effect": "A gauge's range: the reading is mapped from [min, max] to 0…1 (the last RANGE in the name wins).",
      "x-description-ru": "Диапазон прибора: показание переводится из [min, max] в 0…1 (действует последний RANGE в имени).",
-     "code": ["convention/ObjectRole.java:124", "convention/ControlValue.java:64"]},
+     "code": ["convention/ObjectRole.java#RANGE", "convention/ControlValue.java#position"]},
     {"id": "TL", "name": "TL_<f>_<X|Y|Z>", "regex": "TL_([^_]*)_([XYZ])", "captures": ["distance", "axis"],
      "effect": "Slide at full travel along an OBJ axis, blocks (value × distance). On a DOOR_<n> it makes the leaf move.",
      "x-description-ru": "Сдвиг на полном ходу вдоль оси OBJ, блоки (значение × расстояние). У DOOR_<n> делает створку подвижной.",
-     "code": ["convention/ObjectRole.java:125"]},
+     "code": ["convention/ObjectRole.java#SLIDE"]},
     {"id": "ROT", "name": "<KEY>_ROT[_<deg>]", "regex": "(?:^|_)([A-Z][A-Z_]*?_\\d+)_ROT(?:_([^_]+))?", "captures": ["key", "degrees"], "default": "0°",
-     "effect": "The control's hinge marker (the first such object of the control, textured or not): the hinge is the centre of its bounding box, the axis its long direction, from the end nearer the OBJ origin to the farther one (that sign decides which way it turns); the swing at full travel is <deg> degrees.",
-     "x-description-ru": "Маркер шарнира органа (первый такой объект органа, с текстурой или без): шарнир — центр его габарита, ось — его длинное направление, от конца ближе к началу координат OBJ к дальнему (этот знак решает, куда он поворачивается); поворот на полном ходу — <град> градусов.",
-     "code": ["convention/ObjectRole.java:203", "convention/ObjectRole.java:257", "convention/PivotAxis.java:24", "client/render/model/IrStockModel.java:146"]}
+     "effect": "The control's hinge marker (the first such object of the control, textured or not, all its faces): the hinge is the centre of its bounding box, the axis its long direction by IR's rule, whose sign decides which way the part turns; the swing at full travel is <deg> degrees. On a line of two points or a rod the axis runs from the end nearer the OBJ origin to the farther one. A marker symmetric about its centre (a box: all eight corners equally far from it) takes the sign from the order of its vertices in the file, as in IR: where the sign matters, draw the marker as a line of two points.",
+     "x-description-ru": "Маркер шарнира органа (первый такой объект органа, с текстурой или без, все его грани): шарнир — центр его габарита, ось — его длинное направление по правилу IR; её знак решает, куда деталь поворачивается; поворот на полном ходу — <град> градусов. У линии из двух точек и у стержня ось идёт от конца ближе к началу координат OBJ к дальнему. У маркера, симметричного относительно центра (коробка: все восемь углов от него на равном расстоянии), знак берётся из порядка вершин в файле, как в IR: где знак важен, рисуйте маркер линией из двух точек.",
+     "code": ["convention/ObjectRole.java#parse", "convention/ObjectRole.java#degreesAfterRot", "convention/PivotAxis.java#of", "client/render/model/IrStockModel.java#ControlBuilder"]}
   ],
   "control_flags": [
-    {"flag": "TOGGLE", "regex": "(?:^|_)TOGGLE(?:_|$)", "effect": "A click flips the value between 0 and 1.", "x-description-ru": "Клик переключает значение между 0 и 1.", "code": ["client/ClientCabInteract.java:277"]},
-    {"flag": "PRESS", "regex": "(?:^|_)PRESS(?:_|$)", "effect": "Value 1 while held, 0 when released.", "x-description-ru": "Значение 1, пока держат, 0 — когда отпустили.", "code": ["client/ClientCabInteract.java:281"]},
-    {"flag": "INVERT", "regex": "(?:^|_)INVERT(?:_|$)", "effect": "Mirrors the value: 1 − value. On a coupler head with HIDE: shown while coupled.", "x-description-ru": "Зеркалит значение: 1 − значение. У головы сцепки с HIDE — видна, пока сцеплено.", "code": ["convention/ControlValue.java:79", "convention/ObjectRole.java:194"]},
-    {"flag": "HIDE", "regex": "(?:^|_)HIDE(?:_|$)", "effect": "Hidden while the value is 1. Works on WIDGET only: other HIDE objects are dropped at load.", "x-description-ru": "Прячется, пока значение равно 1. Работает только у WIDGET: остальные объекты с HIDE выбрасываются при загрузке.", "code": ["convention/ControlValue.java:88"]},
-    {"flag": "NOTOUCH", "regex": "(?:^|_)(?:NOTOUCH|NOINTERACT)(?:_|$)", "aliases": ["NOINTERACT"], "effect": "Can't be clicked.", "x-description-ru": "Не кликается.", "code": ["client/ClientCabInteract.java:504"]},
-    {"flag": "GLOBAL", "regex": "(?:^|_)GLOBAL(?:_|$)", "effect": "Setting it sets its group on every car of the train (ER2's door switches).", "x-description-ru": "Ставит свою группу на всех вагонах поезда (дверные тумблеры ЭР2).", "code": ["client/ClientCabInteract.java:385"]}
+    {"flag": "TOGGLE", "regex": "(?:^|_)TOGGLE(?:_|$)", "effect": "A click flips the value between 0 and 1.", "x-description-ru": "Клик переключает значение между 0 и 1.", "code": ["client/ClientCabInteract.java#onUse"]},
+    {"flag": "PRESS", "regex": "(?:^|_)PRESS(?:_|$)", "effect": "Value 1 while held, 0 when released.", "x-description-ru": "Значение 1, пока держат, 0 — когда отпустили.", "code": ["client/ClientCabInteract.java#onUse"]},
+    {"flag": "INVERT", "regex": "(?:^|_)INVERT(?:_|$)", "effect": "Mirrors the value: 1 − value. On a coupler head with HIDE: shown while coupled.", "x-description-ru": "Зеркалит значение: 1 − значение. У головы сцепки с HIDE — видна, пока сцеплено.", "code": ["convention/ControlValue.java#value", "convention/ObjectRole.java#coupled"]},
+    {"flag": "HIDE", "regex": "(?:^|_)HIDE(?:_|$)", "effect": "Hidden while the value is 1. Works on WIDGET only: other HIDE objects are dropped at load.", "x-description-ru": "Прячется, пока значение равно 1. Работает только у WIDGET: остальные объекты с HIDE выбрасываются при загрузке.", "code": ["convention/ControlValue.java#visible"]},
+    {"flag": "NOTOUCH", "regex": "(?:^|_)(?:NOTOUCH|NOINTERACT)(?:_|$)", "aliases": ["NOINTERACT"], "effect": "Can't be clicked.", "x-description-ru": "Не кликается.", "code": ["client/ClientCabInteract.java#pick"]},
+    {"flag": "GLOBAL", "regex": "(?:^|_)GLOBAL(?:_|$)", "effect": "Setting it sets its group on every car of the train (ER2's door switches).", "x-description-ru": "Ставит свою группу на всех вагонах поезда (дверные тумблеры ЭР2).", "code": ["client/ClientCabInteract.java#send"]}
   ],
   "lights": [
     {"id": "LCG", "name": "_LCG_<group>", "regex": "_LCG_([^_]+)", "captures": ["group"], "input": "normalized",
      "effect": "The object lights with control group <group>: drawn lit while the group's value is on. A car has at most 64 light groups.",
      "x-description-ru": "Объект светится с группой управления <группа>: рисуется освещённым, пока группа включена. У вагона не больше 64 групп света.",
-     "code": ["convention/ObjectRole.java:126", "client/render/model/StockModel.java:86"]},
+     "code": ["convention/ObjectRole.java#LCG", "client/render/model/StockModel.java#tagLit"]},
     {"id": "LINVERT", "name": "LINVERT", "regex": "(?:^|_)LINVERT(?:_|$)", "input": "normalized",
      "effect": "Lit while the group is off.",
      "x-description-ru": "Горит при выключенной группе.",
-     "code": ["convention/ObjectRole.java:215"]},
+     "code": ["convention/ObjectRole.java#parse"]},
     {"id": "FULLBRIGHT", "name": "FULLBRIGHT", "regex": "(?:^|_)FULLBRIGHT(?:_|$)", "input": "normalized",
      "effect": "Glows at full brightness while lit; without LCG always. A FULLBRIGHT island (diagonal ≥ 0.3) of a group that also has an INTERIOR-token object is a cabin lamp that lights the inside (no colour).",
      "x-description-ru": "Светится в полную яркость, пока горит; без LCG — всегда. Остров FULLBRIGHT (диагональ ≥ 0.3) в группе, где есть объект с токеном INTERIOR, — лампа салона, освещает внутри (без цвета).",
-     "code": ["convention/ObjectRole.java:211", "client/render/model/IrStockModel.java:414", "client/render/model/LampIslands.java:19"]},
+     "code": ["convention/ObjectRole.java#parse", "client/render/model/IrStockModel.java#load", "client/render/model/LampIslands.java#MIN_LAMP_SIZE"]},
     {"id": "INTERIOR_TOKEN", "name": "INTERIOR (token)", "x-name-ru": "INTERIOR (токен)", "regex": "(?:^|_)INTERIOR(?:_|$)", "input": "raw",
      "effect": "The object's faces are lit by the cabin lamps; its light group becomes a cabin light group.",
      "x-description-ru": "Грани объекта освещаются лампами салона; его группа света становится группой света салона.",
-     "code": ["client/render/model/IrStockModel.java:375", "client/render/model/IrStockModel.java:442"]},
+     "code": ["client/render/model/IrStockModel.java#load"]},
     {"id": "HEADLIGHT", "name": "HEADLIGHT_<n>", "regex": "(?:^|_)HEADLIGHT_\\d+(?=_|$)", "input": "normalized",
      "effect": "A headlight: flare, 16-block beam and a pool of light on the track. A lamp in the front half of the model shines forward, in the rear half backward (not settable). Its effects show only while some light group of the car is lit.",
      "x-description-ru": "Фара: ореол, луч на 16 блоков и пятно на пути. Фара в передней половине модели светит вперёд, в задней — назад (не задаётся). Эффекты видны, только пока горит какая-нибудь группа света вагона.",
-     "code": ["convention/ObjectRole.java:128", "client/render/model/IrStockModel.java:500", "client/render/LampEffects.java:67", "client/render/WagonRenderer.java:289"]},
+     "code": ["convention/ObjectRole.java#HEADLIGHT", "client/render/model/IrStockModel.java#headlight", "client/render/LampEffects.java#BEAM_LENGTH", "client/render/WagonRenderer.java#render"]},
     {"id": "RGB", "name": "_0X<RRGGBB>", "regex": "_0[xX]([0-9A-Fa-f]{6})(?=_|$)", "captures": ["rgb"], "input": "normalized", "default": "FFFFFF",
      "effect": "The headlight's colour.",
      "x-description-ru": "Цвет фары.",
-     "code": ["convention/ObjectRole.java:127"]}
+     "code": ["convention/ObjectRole.java#RGB"]}
   ],
   "rail_tile": [
     {"id": "rail", "name": "RAIL_* without BASE", "x-name-ru": "RAIL_* без BASE", "match": {"type": "regex", "regex": "^RAIL_(?!.*BASE)", "case_insensitive": true, "input": "raw"},
      "effect": "A rail: stretched along X to fill the tile; each face's side by the sign of its z (LEFT/RIGHT in the name don't matter). The rail faces make the switch blades and frogs. Case doesn't matter here.",
      "x-description-ru": "Рельс: растягивается по X на весь тайл; сторона каждой грани — по знаку её z (LEFT/RIGHT в имени не важны). Из граней рельсов делаются остряки и крестовины. Регистр здесь не важен.",
-     "code": ["path/TileFootprint.java:217", "client/render/model/RailModelReloadListener.java"]},
+     "code": ["path/TileFootprint.java#isRailObject", "client/render/model/RailModelReloadListener.java"]},
     {"id": "rail_hidden", "name": "*HIDE*", "match": {"type": "substring", "value": "HIDE", "regex": "HIDE", "input": "raw"},
      "effect": "Not drawn and not part of the bed.",
      "x-description-ru": "Не рисуется и не входит в полотно.",
-     "code": ["path/TileFootprint.java:223"]},
+     "code": ["path/TileFootprint.java#isHiddenObject"]},
     {"id": "rail_base", "name": "anything else", "x-name-ru": "всё остальное", "match": {"type": "fallback", "input": "raw"},
      "effect": "Base (sleepers, ballast, bridge deck): keeps its size, centred in the tile. Its projection with the rails' makes the track bed.",
      "x-description-ru": "Основание (шпалы, балласт, настил моста): сохраняет размер, стоит по центру тайла. Его проекция вместе с рельсами даёт полотно.",
@@ -343,19 +343,19 @@
     {"id": "door_kind", "name": "DOOR_<n> with EXTERNAL / CONNECTING / anything else", "x-name-ru": "DOOR_<n> с EXTERNAL, CONNECTING или без них", "regex": "(?:^|_)DOOR_(\\d+)(?=_|$)", "input": "raw",
      "effect": "Each DOOR_<n> group becomes a type door: CONNECTING token → connecting, EXTERNAL → hull door, else (IR's INTERNAL) inner. Only doorways ≥ 1.2 tall and ≥ 0.3 wide; the leaves of one doorway join; id = its CG_<name>, else door_<n>; several doorways on one CG get it as their group.",
      "x-description-ru": "Каждая группа DOOR_<n> становится дверью типа: токен CONNECTING → переходная, EXTERNAL → наружная, иначе (INTERNAL у IR) — внутренняя. Только проёмы высотой ≥ 1.2 и шириной ≥ 0.3; створки одного проёма сливаются; id — её CG_<имя>, иначе door_<n>; несколько проёмов на одной CG получают её как group.",
-     "code": ["tools/ir2rwat.py:424"]},
+     "code": ["tools/ir2rwat.py#derive_doors"]},
     {"id": "widget_door", "name": "WIDGET_<n>_TOGGLE_CG_<group> of door size", "x-name-ru": "WIDGET_<n>_TOGGLE_CG_<группа> размером с дверь", "regex": "(?:^|_)WIDGET_(\\d+)(?=_|$)", "input": "raw",
      "effect": "An inner door: a TOGGLE widget without HIDE whose CG has an IR animation, ≥ 1.2 tall, ≤ 0.35 thick, ≥ 0.3 wide; id = the group.",
      "x-description-ru": "Внутренняя дверь: виджет с TOGGLE без HIDE, у CG которого есть анимация IR, высотой ≥ 1.2, толщиной ≤ 0.35, шириной ≥ 0.3; id — группа.",
-     "code": ["tools/ir2rwat.py:480"]},
+     "code": ["tools/ir2rwat.py#widget_doors"]},
     {"id": "handbrake_label", "name": "WIDGET_<n>_…_LABEL_Hand^Brake", "regex": "_LABEL_hand\\^?brake(?:_|$)", "case_insensitive": true, "input": "raw",
      "effect": "The widget's key goes to the model's handbrake (MVP's convention for its handbrake wheels).",
      "x-description-ru": "Ключ виджета попадает в handbrake модели (так MVP помечает маховики ручника).",
-     "code": ["tools/ir2rwat.py:337"]},
+     "code": ["tools/ir2rwat.py#HANDBRAKE_LABEL"]},
     {"id": "flag_word_not_group", "name": "_CG_<flag>", "regex": "_CG_(NOINTERACT|NOTOUCH|TOGGLE|PRESS|INVERT|HIDE|GLOBAL|EXTERNAL|INTERIOR|CONNECTING|INTERNAL|FULLBRIGHT)(?:_|$)", "input": "normalized",
      "effect": "A flag word after _CG_ (a careless name) is no control group for door ids. The engine still reads it as the group.",
      "x-description-ru": "Слово-флаг после _CG_ (небрежное имя) не считается группой для id дверей. Движок при этом читает его как группу.",
-     "code": ["tools/ir2rwat.py:110", "tools/ir2rwat.py:378"]}
+     "code": ["tools/ir2rwat.py#FLAG_WORDS", "tools/ir2rwat.py#control_group"]}
   ],
   "ir_static": {
     "description": "Names IR animates that RWAT draws as rigid body (no special handling in the engine).",
@@ -370,13 +370,13 @@
     ]
   },
   "limits": [
-    {"what": "control groups per car", "value": 64, "x-description-ru": "групп управления на вагон", "code": ["consist/WagonEntity.java:165"]},
-    {"what": "control group name length", "value": 32, "x-description-ru": "длина имени группы управления", "code": ["consist/WagonEntity.java:166"]},
-    {"what": "light groups per car", "value": 64, "x-description-ru": "групп света на вагон", "code": ["client/render/model/StockModel.java:91"]},
-    {"what": "wheel tread radius, blocks", "value": 0.53, "x-description-ru": "радиус круга катания колеса, блоки", "code": ["client/render/model/IrStockModel.java:85"]},
-    {"what": "door animation, ticks", "value": 40, "x-description-ru": "ход двери, тики", "code": ["consist/WagonEntity.java:136"]},
-    {"what": "coupler head turn, degrees", "value": 22, "x-description-ru": "поворот головы сцепки, градусы", "code": ["kinematics/CouplerAim.java:14"]},
-    {"what": "cabin lamp island diagonal, blocks", "value": 0.3, "x-description-ru": "диагональ острова лампы салона, блоки", "code": ["client/render/model/LampIslands.java:19"]},
-    {"what": "headlight beam, blocks", "value": 16, "x-description-ru": "луч фары, блоки", "code": ["client/render/LampEffects.java:67"]}
+    {"what": "control groups per car", "value": 64, "x-description-ru": "групп управления на вагон", "code": ["consist/WagonEntity.java#MAX_CONTROL_GROUPS"]},
+    {"what": "control group name length", "value": 32, "x-description-ru": "длина имени группы управления", "code": ["consist/WagonEntity.java#MAX_CONTROL_NAME"]},
+    {"what": "light groups per car", "value": 64, "x-description-ru": "групп света на вагон", "code": ["client/render/model/StockModel.java#tagLit"]},
+    {"what": "wheel tread radius, blocks", "value": 0.53, "x-description-ru": "радиус круга катания колеса, блоки", "code": ["client/render/model/IrStockModel.java#WHEEL_RADIUS"]},
+    {"what": "door animation, ticks", "value": 40, "x-description-ru": "ход двери, тики", "code": ["consist/WagonEntity.java#DOOR_ANIM_TICKS"]},
+    {"what": "coupler head turn, degrees", "value": 22, "x-description-ru": "поворот головы сцепки, градусы", "code": ["kinematics/CouplerAim.java#LIMIT_DEGREES"]},
+    {"what": "cabin lamp island diagonal, blocks", "value": 0.3, "x-description-ru": "диагональ острова лампы салона, блоки", "code": ["client/render/model/LampIslands.java#MIN_LAMP_SIZE"]},
+    {"what": "headlight beam, blocks", "value": 16, "x-description-ru": "луч фары, блоки", "code": ["client/render/LampEffects.java#BEAM_LENGTH"]}
   ]
 }

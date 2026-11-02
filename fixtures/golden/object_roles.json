@@ -1,0 +1,1129 @@
+{
+  "$comment": "Object name -> what the convention reads in it (convention.ObjectRole: parse, door, coupled, hasToken INTERIOR). input.name; expected: control (null or kind, gauge, id, key, group, label, flags, offset, range, slide in the OBJ frame), pivot_degrees (null if no hinge marker), light_group, light_invert, fullbright, headlight, rgb, interior_token, door (the name read as a door leaf: control fields and pivot_degrees, or null), coupled (front, shown: COUPLED/UNCOUPLED/ALWAYS, or null).",
+  "cases": [
+    {
+      "name": "a lever",
+      "input": {"name": "THROTTLE_1_INTERIOR_LCG_IL_mvp_chme3"},
+      "expected": {
+        "control": {
+          "kind": "THROTTLE",
+          "gauge": false,
+          "id": 1,
+          "key": "THROTTLE_1",
+          "group": "THROTTLE_1",
+          "label": null,
+          "toggle": false,
+          "press": false,
+          "invert": false,
+          "hide": false,
+          "no_touch": false,
+          "global": false,
+          "offset": 0.0,
+          "range": [0.0, 1.0],
+          "slide": [0.0, 0.0, 0.0]
+        },
+        "pivot_degrees": null,
+        "light_group": "IL",
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": true,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "a lever's hinge marker",
+      "input": {"name": "THROTTLE_1_ROT_-120_INTERIOR_LCG_IL_mvp_chme3"},
+      "expected": {
+        "control": {
+          "kind": "THROTTLE",
+          "gauge": false,
+          "id": 1,
+          "key": "THROTTLE_1",
+          "group": "THROTTLE_1",
+          "label": null,
+          "toggle": false,
+          "press": false,
+          "invert": false,
+          "hide": false,
+          "no_touch": false,
+          "global": false,
+          "offset": 0.0,
+          "range": [0.0, 1.0],
+          "slide": [0.0, 0.0, 0.0]
+        },
+        "pivot_degrees": -120.0,
+        "light_group": "IL",
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": true,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "a gauge is no lever",
+      "input": {"name": "GAUGE_THROTTLE_1_FULLBRIGHT_LCG_IL_mvp_chme3"},
+      "expected": {
+        "control": {
+          "kind": "GAUGE_THROTTLE",
+          "gauge": true,
+          "id": 1,
+          "key": "GAUGE_THROTTLE_1",
+          "group": "GAUGE_THROTTLE_1",
+          "label": null,
+          "toggle": false,
+          "press": false,
+          "invert": false,
+          "hide": false,
+          "no_touch": false,
+          "global": false,
+          "offset": 0.0,
+          "range": [0.0, 1.0],
+          "slide": [0.0, 0.0, 0.0]
+        },
+        "pivot_degrees": null,
+        "light_group": "IL",
+        "light_invert": false,
+        "fullbright": true,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "a needle's hinge",
+      "input": {"name": "GAUGE_SPEED_1_ROT_-270_mvp_chme3"},
+      "expected": {
+        "control": {
+          "kind": "GAUGE_SPEED",
+          "gauge": true,
+          "id": 1,
+          "key": "GAUGE_SPEED_1",
+          "group": "GAUGE_SPEED_1",
+          "label": null,
+          "toggle": false,
+          "press": false,
+          "invert": false,
+          "hide": false,
+          "no_touch": false,
+          "global": false,
+          "offset": 0.0,
+          "range": [0.0, 1.0],
+          "slide": [0.0, 0.0, 0.0]
+        },
+        "pivot_degrees": -270.0,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "a range",
+      "input": {"name": "GAUGE_SPEED_1_NEEDLE_RANGE_0_1.5"},
+      "expected": {
+        "control": {
+          "kind": "GAUGE_SPEED",
+          "gauge": true,
+          "id": 1,
+          "key": "GAUGE_SPEED_1",
+          "group": "GAUGE_SPEED_1",
+          "label": null,
+          "toggle": false,
+          "press": false,
+          "invert": false,
+          "hide": false,
+          "no_touch": false,
+          "global": false,
+          "offset": 0.0,
+          "range": [0.0, 1.5],
+          "slide": [0.0, 0.0, 0.0]
+        },
+        "pivot_degrees": null,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "the last range wins",
+      "input": {"name": "GAUGE_SPEED_2_RANGE_0_120_RANGE_0_2"},
+      "expected": {
+        "control": {
+          "kind": "GAUGE_SPEED",
+          "gauge": true,
+          "id": 2,
+          "key": "GAUGE_SPEED_2",
+          "group": "GAUGE_SPEED_2",
+          "label": null,
+          "toggle": false,
+          "press": false,
+          "invert": false,
+          "hide": false,
+          "no_touch": false,
+          "global": false,
+          "offset": 0.0,
+          "range": [0.0, 2.0],
+          "slide": [0.0, 0.0, 0.0]
+        },
+        "pivot_degrees": null,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "IND_ brake gauge",
+      "input": {"name": "GAUGE_IND_BRAKE_1"},
+      "expected": {
+        "control": {
+          "kind": "GAUGE_INDEPENDENT_BRAKE",
+          "gauge": true,
+          "id": 1,
+          "key": "GAUGE_IND_BRAKE_1",
+          "group": "GAUGE_IND_BRAKE_1",
+          "label": null,
+          "toggle": false,
+          "press": false,
+          "invert": false,
+          "hide": false,
+          "no_touch": false,
+          "global": false,
+          "offset": 0.0,
+          "range": [0.0, 1.0],
+          "slide": [0.0, 0.0, 0.0]
+        },
+        "pivot_degrees": null,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "IND_ brake valve hinge",
+      "input": {"name": "IND_BRAKE_2_ROT_-90_mvp_chme3"},
+      "expected": {
+        "control": {
+          "kind": "INDEPENDENT_BRAKE",
+          "gauge": false,
+          "id": 2,
+          "key": "IND_BRAKE_2",
+          "group": "IND_BRAKE_2",
+          "label": null,
+          "toggle": false,
+          "press": false,
+          "invert": false,
+          "hide": false,
+          "no_touch": false,
+          "global": false,
+          "offset": 0.0,
+          "range": [0.0, 1.0],
+          "slide": [0.0, 0.0, 0.0]
+        },
+        "pivot_degrees": -90.0,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "reverser with a group",
+      "input": {"name": "REVERSER_1_ROT_-60_CG_RVR_mvp_chme3"},
+      "expected": {
+        "control": {
+          "kind": "REVERSER",
+          "gauge": false,
+          "id": 1,
+          "key": "REVERSER_1",
+          "group": "RVR",
+          "label": null,
+          "toggle": false,
+          "press": false,
+          "invert": false,
+          "hide": false,
+          "no_touch": false,
+          "global": false,
+          "offset": 0.0,
+          "range": [0.0, 1.0],
+          "slide": [0.0, 0.0, 0.0]
+        },
+        "pivot_degrees": -60.0,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "combined handle",
+      "input": {"name": "THROTTLE_BRAKE_1"},
+      "expected": {
+        "control": {
+          "kind": "THROTTLE_BRAKE",
+          "gauge": false,
+          "id": 1,
+          "key": "THROTTLE_BRAKE_1",
+          "group": "THROTTLE_BRAKE_1",
+          "label": null,
+          "toggle": false,
+          "press": false,
+          "invert": false,
+          "hide": false,
+          "no_touch": false,
+          "global": false,
+          "offset": 0.0,
+          "range": [0.0, 1.0],
+          "slide": [0.0, 0.0, 0.0]
+        },
+        "pivot_degrees": null,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "handbrake",
+      "input": {"name": "HANDBRAKE_1_ROT_270"},
+      "expected": {
+        "control": {
+          "kind": "HANDBRAKE",
+          "gauge": false,
+          "id": 1,
+          "key": "HANDBRAKE_1",
+          "group": "HANDBRAKE_1",
+          "label": null,
+          "toggle": false,
+          "press": false,
+          "invert": false,
+          "hide": false,
+          "no_touch": false,
+          "global": false,
+          "offset": 0.0,
+          "range": [0.0, 1.0],
+          "slide": [0.0, 0.0, 0.0]
+        },
+        "pivot_degrees": 270.0,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "hand brake",
+      "input": {"name": "HAND_BRAKE_2"},
+      "expected": {
+        "control": {
+          "kind": "HANDBRAKE",
+          "gauge": false,
+          "id": 2,
+          "key": "HAND_BRAKE_2",
+          "group": "HAND_BRAKE_2",
+          "label": null,
+          "toggle": false,
+          "press": false,
+          "invert": false,
+          "hide": false,
+          "no_touch": false,
+          "global": false,
+          "offset": 0.0,
+          "range": [0.0, 1.0],
+          "slide": [0.0, 0.0, 0.0]
+        },
+        "pivot_degrees": null,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "a toggle with a label",
+      "input": {"name": "WIDGET_7_TOGGLE_CG_IL_LABEL_Cab^Light"},
+      "expected": {
+        "control": {
+          "kind": "WIDGET",
+          "gauge": false,
+          "id": 7,
+          "key": "WIDGET_7",
+          "group": "IL",
+          "label": "Cab Light",
+          "toggle": true,
+          "press": false,
+          "invert": false,
+          "hide": false,
+          "no_touch": false,
+          "global": false,
+          "offset": 0.0,
+          "range": [0.0, 1.0],
+          "slide": [0.0, 0.0, 0.0]
+        },
+        "pivot_degrees": null,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "press, no touch",
+      "input": {"name": "WIDGET_3_PRESS_NOTOUCH"},
+      "expected": {
+        "control": {
+          "kind": "WIDGET",
+          "gauge": false,
+          "id": 3,
+          "key": "WIDGET_3",
+          "group": "WIDGET_3",
+          "label": null,
+          "toggle": false,
+          "press": true,
+          "invert": false,
+          "hide": false,
+          "no_touch": true,
+          "global": false,
+          "offset": 0.0,
+          "range": [0.0, 1.0],
+          "slide": [0.0, 0.0, 0.0]
+        },
+        "pivot_degrees": null,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "no interact",
+      "input": {"name": "WIDGET_4_NOINTERACT"},
+      "expected": {
+        "control": {
+          "kind": "WIDGET",
+          "gauge": false,
+          "id": 4,
+          "key": "WIDGET_4",
+          "group": "WIDGET_4",
+          "label": null,
+          "toggle": false,
+          "press": false,
+          "invert": false,
+          "hide": false,
+          "no_touch": true,
+          "global": false,
+          "offset": 0.0,
+          "range": [0.0, 1.0],
+          "slide": [0.0, 0.0, 0.0]
+        },
+        "pivot_degrees": null,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "global",
+      "input": {"name": "WIDGET_5_GLOBAL_CG_DrL"},
+      "expected": {
+        "control": {
+          "kind": "WIDGET",
+          "gauge": false,
+          "id": 5,
+          "key": "WIDGET_5",
+          "group": "DrL",
+          "label": null,
+          "toggle": false,
+          "press": false,
+          "invert": false,
+          "hide": false,
+          "no_touch": false,
+          "global": true,
+          "offset": 0.0,
+          "range": [0.0, 1.0],
+          "slide": [0.0, 0.0, 0.0]
+        },
+        "pivot_degrees": null,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "a hidden tail lamp",
+      "input": {"name": "WIDGET_17_HIDE_INVERT_FULLBRIGHT_CG_FEL"},
+      "expected": {
+        "control": {
+          "kind": "WIDGET",
+          "gauge": false,
+          "id": 17,
+          "key": "WIDGET_17",
+          "group": "FEL",
+          "label": null,
+          "toggle": false,
+          "press": false,
+          "invert": true,
+          "hide": true,
+          "no_touch": false,
+          "global": false,
+          "offset": 0.0,
+          "range": [0.0, 1.0],
+          "slide": [0.0, 0.0, 0.0]
+        },
+        "pivot_degrees": null,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": true,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "offset and invert",
+      "input": {"name": "WIDGET_2_OFFSET_0.25_INVERT"},
+      "expected": {
+        "control": {
+          "kind": "WIDGET",
+          "gauge": false,
+          "id": 2,
+          "key": "WIDGET_2",
+          "group": "WIDGET_2",
+          "label": null,
+          "toggle": false,
+          "press": false,
+          "invert": true,
+          "hide": false,
+          "no_touch": false,
+          "global": false,
+          "offset": 0.25,
+          "range": [0.0, 1.0],
+          "slide": [0.0, 0.0, 0.0]
+        },
+        "pivot_degrees": null,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "a flag word as the group",
+      "input": {"name": "WIDGET_8_CG_TOGGLE"},
+      "expected": {
+        "control": {
+          "kind": "WIDGET",
+          "gauge": false,
+          "id": 8,
+          "key": "WIDGET_8",
+          "group": "TOGGLE",
+          "label": null,
+          "toggle": true,
+          "press": false,
+          "invert": false,
+          "hide": false,
+          "no_touch": false,
+          "global": false,
+          "offset": 0.0,
+          "range": [0.0, 1.0],
+          "slide": [0.0, 0.0, 0.0]
+        },
+        "pivot_degrees": null,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "a hinge without degrees",
+      "input": {"name": "WIDGET_9_ROT"},
+      "expected": {
+        "control": {
+          "kind": "WIDGET",
+          "gauge": false,
+          "id": 9,
+          "key": "WIDGET_9",
+          "group": "WIDGET_9",
+          "label": null,
+          "toggle": false,
+          "press": false,
+          "invert": false,
+          "hide": false,
+          "no_touch": false,
+          "global": false,
+          "offset": 0.0,
+          "range": [0.0, 1.0],
+          "slide": [0.0, 0.0, 0.0]
+        },
+        "pivot_degrees": 0.0,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "degrees that aren't a number",
+      "input": {"name": "THROTTLE_1_ROT_abc"},
+      "expected": {
+        "control": {
+          "kind": "THROTTLE",
+          "gauge": false,
+          "id": 1,
+          "key": "THROTTLE_1",
+          "group": "THROTTLE_1",
+          "label": null,
+          "toggle": false,
+          "press": false,
+          "invert": false,
+          "hide": false,
+          "no_touch": false,
+          "global": false,
+          "offset": 0.0,
+          "range": [0.0, 1.0],
+          "slide": [0.0, 0.0, 0.0]
+        },
+        "pivot_degrees": 0.0,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "a window slides",
+      "input": {"name": "WINDOW_1_TL_0.6_Y_CG_Win"},
+      "expected": {
+        "control": {
+          "kind": "WINDOW",
+          "gauge": false,
+          "id": 1,
+          "key": "WINDOW_1",
+          "group": "Win",
+          "label": null,
+          "toggle": false,
+          "press": false,
+          "invert": false,
+          "hide": false,
+          "no_touch": false,
+          "global": false,
+          "offset": 0.0,
+          "range": [0.0, 1.0],
+          "slide": [0.0, 0.6, 0.0]
+        },
+        "pivot_degrees": null,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "a slider gauge",
+      "input": {"name": "GAUGE_REVERSER_1_TL_0.08_Y"},
+      "expected": {
+        "control": {
+          "kind": "GAUGE_REVERSER",
+          "gauge": true,
+          "id": 1,
+          "key": "GAUGE_REVERSER_1",
+          "group": "GAUGE_REVERSER_1",
+          "label": null,
+          "toggle": false,
+          "press": false,
+          "invert": false,
+          "hide": false,
+          "no_touch": false,
+          "global": false,
+          "offset": 0.0,
+          "range": [0.0, 1.0],
+          "slide": [0.0, 0.08, 0.0]
+        },
+        "pivot_degrees": null,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "horn with a group",
+      "input": {"name": "HORN_CONTROL_1_CG_Horn"},
+      "expected": {
+        "control": {
+          "kind": "HORN",
+          "gauge": false,
+          "id": 1,
+          "key": "HORN_CONTROL_1",
+          "group": "Horn",
+          "label": null,
+          "toggle": false,
+          "press": false,
+          "invert": false,
+          "hide": false,
+          "no_touch": false,
+          "global": false,
+          "offset": 0.0,
+          "range": [0.0, 1.0],
+          "slide": [0.0, 0.0, 0.0]
+        },
+        "pivot_degrees": null,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "engine start hinge",
+      "input": {"name": "ENGINE_START_1_ROT_-80"},
+      "expected": {
+        "control": {
+          "kind": "ENGINE_START",
+          "gauge": false,
+          "id": 1,
+          "key": "ENGINE_START_1",
+          "group": "ENGINE_START_1",
+          "label": null,
+          "toggle": false,
+          "press": false,
+          "invert": false,
+          "hide": false,
+          "no_touch": false,
+          "global": false,
+          "offset": 0.0,
+          "range": [0.0, 1.0],
+          "slide": [0.0, 0.0, 0.0]
+        },
+        "pivot_degrees": -80.0,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "a door's hinge marker",
+      "input": {"name": "DOOR_3_ROT_90"},
+      "expected": {
+        "control": null,
+        "pivot_degrees": null,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": {
+          "kind": "DOOR",
+          "gauge": false,
+          "id": 3,
+          "key": "DOOR_3",
+          "group": "DOOR_3",
+          "label": null,
+          "toggle": false,
+          "press": false,
+          "invert": false,
+          "hide": false,
+          "no_touch": false,
+          "global": false,
+          "offset": 0.0,
+          "range": [0.0, 1.0],
+          "slide": [0.0, 0.0, 0.0],
+          "pivot_degrees": 90.0
+        },
+        "coupled": null
+      }
+    },
+    {
+      "name": "a door object",
+      "input": {"name": "DOOR_3_EXTERNAL"},
+      "expected": {
+        "control": null,
+        "pivot_degrees": null,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": {
+          "kind": "DOOR",
+          "gauge": false,
+          "id": 3,
+          "key": "DOOR_3",
+          "group": "DOOR_3",
+          "label": null,
+          "toggle": false,
+          "press": false,
+          "invert": false,
+          "hide": false,
+          "no_touch": false,
+          "global": false,
+          "offset": 0.0,
+          "range": [0.0, 1.0],
+          "slide": [0.0, 0.0, 0.0],
+          "pivot_degrees": null
+        },
+        "coupled": null
+      }
+    },
+    {
+      "name": "a sliding leaf",
+      "input": {"name": "DOOR_5_TL_0.6_Z_LEAF"},
+      "expected": {
+        "control": null,
+        "pivot_degrees": null,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": {
+          "kind": "DOOR",
+          "gauge": false,
+          "id": 5,
+          "key": "DOOR_5",
+          "group": "DOOR_5",
+          "label": null,
+          "toggle": false,
+          "press": false,
+          "invert": false,
+          "hide": false,
+          "no_touch": false,
+          "global": false,
+          "offset": 0.0,
+          "range": [0.0, 1.0],
+          "slide": [0.0, 0.0, 0.6],
+          "pivot_degrees": null
+        },
+        "coupled": null
+      }
+    },
+    {
+      "name": "a lit door part with a copy suffix",
+      "input": {"name": "DOOR_3_INTERIOR_LCG_IL.001"},
+      "expected": {
+        "control": null,
+        "pivot_degrees": null,
+        "light_group": "IL",
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": true,
+        "door": {
+          "kind": "DOOR",
+          "gauge": false,
+          "id": 3,
+          "key": "DOOR_3",
+          "group": "DOOR_3",
+          "label": null,
+          "toggle": false,
+          "press": false,
+          "invert": false,
+          "hide": false,
+          "no_touch": false,
+          "global": false,
+          "offset": 0.0,
+          "range": [0.0, 1.0],
+          "slide": [0.0, 0.0, 0.0],
+          "pivot_degrees": null
+        },
+        "coupled": null
+      }
+    },
+    {
+      "name": "a coupler head free",
+      "input": {"name": "COUPLED_FRONT_1_HIDE"},
+      "expected": {
+        "control": null,
+        "pivot_degrees": null,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": null,
+        "coupled": {"front": true, "shown": "UNCOUPLED"}
+      }
+    },
+    {
+      "name": "a coupler head coupled",
+      "input": {"name": "COUPLED_FRONT_2_HIDE_INVERT"},
+      "expected": {
+        "control": null,
+        "pivot_degrees": null,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": null,
+        "coupled": {"front": true, "shown": "COUPLED"}
+      }
+    },
+    {
+      "name": "a coupler head always",
+      "input": {"name": "COUPLED_REAR_1"},
+      "expected": {
+        "control": null,
+        "pivot_degrees": null,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": null,
+        "coupled": {"front": false, "shown": "ALWAYS"}
+      }
+    },
+    {
+      "name": "a headlight with a colour",
+      "input": {"name": "HEADLIGHT_1_LCG_FL_0XFFAA00"},
+      "expected": {
+        "control": null,
+        "pivot_degrees": null,
+        "light_group": "FL",
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": true,
+        "rgb": "FFAA00",
+        "interior_token": false,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "a headlight lit while off",
+      "input": {"name": "HEADLIGHT_2_0x12ab34_LINVERT"},
+      "expected": {
+        "control": null,
+        "pivot_degrees": null,
+        "light_group": null,
+        "light_invert": true,
+        "fullbright": false,
+        "headlight": true,
+        "rgb": "12AB34",
+        "interior_token": false,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "always lit",
+      "input": {"name": "LAMP_FULLBRIGHT"},
+      "expected": {
+        "control": null,
+        "pivot_degrees": null,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": true,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "the interior shell",
+      "input": {"name": "INTERIOR_SEATS_LCG_IL"},
+      "expected": {
+        "control": null,
+        "pivot_degrees": null,
+        "light_group": "IL",
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": true,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "nothing",
+      "input": {"name": "BODY"},
+      "expected": {
+        "control": null,
+        "pivot_degrees": null,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "case matters",
+      "input": {"name": "throttle_1"},
+      "expected": {
+        "control": null,
+        "pivot_degrees": null,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "a letter before the kind",
+      "input": {"name": "XTHROTTLE_1"},
+      "expected": {
+        "control": null,
+        "pivot_degrees": null,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": null,
+        "coupled": null
+      }
+    },
+    {
+      "name": "digits past an int",
+      "input": {"name": "THROTTLE_12345678901"},
+      "expected": {
+        "control": {
+          "kind": "THROTTLE",
+          "gauge": false,
+          "id": 2147483647,
+          "key": "THROTTLE_12345678901",
+          "group": "THROTTLE_12345678901",
+          "label": null,
+          "toggle": false,
+          "press": false,
+          "invert": false,
+          "hide": false,
+          "no_touch": false,
+          "global": false,
+          "offset": 0.0,
+          "range": [0.0, 1.0],
+          "slide": [0.0, 0.0, 0.0]
+        },
+        "pivot_degrees": null,
+        "light_group": null,
+        "light_invert": false,
+        "fullbright": false,
+        "headlight": false,
+        "rgb": "FFFFFF",
+        "interior_token": false,
+        "door": null,
+        "coupled": null
+      }
+    }
+  ]
+}

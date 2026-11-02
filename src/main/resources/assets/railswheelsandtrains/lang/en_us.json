@@ -208,6 +208,7 @@
   "hud.railswheelsandtrains.reverser_locked": "Only at a standstill with the throttle shut",
   "control.railswheelsandtrains.from_cab": "Only from the cab",
   "control.railswheelsandtrains.driver_seated": "The driver at the controls has the levers",
+  "control.railswheelsandtrains.from_inside": "Only from inside the car",
   "message.railswheelsandtrains.bump": "Bump! Too fast to couple · gently, up to %s km/h",
   "message.railswheelsandtrains.handbrake_set": "Handbrake set · %s of %s wagons braked",
   "message.railswheelsandtrains.handbrake_released": "Handbrake released · %s of %s wagons braked",

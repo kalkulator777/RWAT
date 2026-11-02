@@ -21,10 +21,18 @@ import net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent;
  * silently, so this logs every wagon and player join/leave on the client with
  * id and position: flapping shows up as JOIN/LEAVE pairs, and a wagon spawned
  * at a stale spot shows as a JOIN far from the consist's actual position.
- * Debug-only; remove (or gate) once the tracking work settles.
+ *
+ * <p>Off unless the JVM is started with {@code -Drwat.entityDebug=true}: it
+ * wrote a line for every player and wagon coming into or out of view, on
+ * every client, always (audit M6).
  */
 @EventBusSubscriber(modid = RailsWheelsAndTrains.MODID, value = Dist.CLIENT)
 public final class ClientEntityDebug {
+
+    /** The system property that turns the trace on. */
+    private static final String PROPERTY = "rwat.entityDebug";
+    /** On only with {@link #PROPERTY} set to {@code true} when the game starts. */
+    private static final boolean ON = Boolean.getBoolean(PROPERTY);
 
     /**
      * The entity the local player rode at the end of the last tick, −1 if
@@ -44,6 +52,9 @@ public final class ClientEntityDebug {
      */
     @SubscribeEvent
     static void onClientTick(ClientTickEvent.Post event) {
+        if (!ON) {
+            return;
+        }
         Minecraft mc = Minecraft.getInstance();
         Entity vehicle = mc.player == null ? null : mc.player.getVehicle();
         int now = vehicle == null ? -1 : vehicle.getId();
@@ -59,14 +70,14 @@ public final class ClientEntityDebug {
 
     @SubscribeEvent
     static void onJoin(EntityJoinLevelEvent event) {
-        if (event.getLevel().isClientSide()) {
+        if (ON && event.getLevel().isClientSide()) {
             log("JOIN", event.getEntity());
         }
     }
 
     @SubscribeEvent
     static void onLeave(EntityLeaveLevelEvent event) {
-        if (event.getLevel().isClientSide()) {
+        if (ON && event.getLevel().isClientSide()) {
             log(event.getEntity().getId() == ridden ? "LEAVE (the local player aboard!)" : "LEAVE",
                     event.getEntity());
         }

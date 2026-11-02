@@ -25,7 +25,8 @@ import java.util.regex.Pattern;
  *       {@code _OFFSET_<f>} shifts its value; {@code _RANGE_<min>_<max>} maps a
  *       gauge's reading; {@code TL_<amount>_<axis>} slides it;</li>
  *   <li>{@code <KIND>_<n>_ROT[_<degrees>]} is the control's <b>pivot</b>: a
- *       flat marker whose centre is the hinge and whose normal the axis;</li>
+ *       marker whose bounding-box centre is the hinge and whose long direction
+ *       the axis ({@link PivotAxis});</li>
  *   <li>lights: {@code _LCG_<name>} lights with control group {@code name}
  *       ({@code LINVERT} inverts), {@code FULLBRIGHT} glows when lit,
  *       {@code HEADLIGHT_<n>} is a lamp with a flare, {@code _0X<RRGGBB>} its
@@ -142,6 +143,34 @@ public record ObjectRole(Control control, float pivotDegrees, String lightGroup,
     /** True if this object lights up with a control group (or always, if it has none). */
     public boolean lit() {
         return fullbright || headlight;
+    }
+
+    /** The object faces belong to before any {@code o}/{@code g} line, or after one that names nothing. */
+    public static final String DEFAULT_OBJECT = "default";
+
+    /**
+     * The name an OBJ {@code o} or {@code g} line gives the object the faces
+     * after it belong to: the whole rest of the line after the keyword,
+     * trimmed, the blanks inside kept ({@code o Door Leaf} is {@code Door Leaf});
+     * {@link #DEFAULT_OBJECT} if it names nothing; null if the line is no
+     * {@code o}/{@code g} line. Blanks are the characters up to U+0020, as
+     * {@link String#trim} and Blender's reader take them, so a tab parts the
+     * keyword from the name as well. That is how Blender's importer reads an
+     * object's name, and Immersive Railroading's (UniversalModCore) OBJ
+     * parser: the rest of the line. Blender's exporter writes a blank in an
+     * object's name as {@code _}, so its files have none; the first-word
+     * reading the loader once had cut a hand-written {@code o Door Leaf} to
+     * {@code Door}, while the converter's port of the rule
+     * ({@code tools/floorgen.py}, {@code object_name_of}) took the whole line.
+     */
+    public static String objectName(String line) {
+        String text = line.trim();
+        if (text.isEmpty() || (text.charAt(0) != 'o' && text.charAt(0) != 'g')
+                || (text.length() > 1 && text.charAt(1) > ' ')) {
+            return null;
+        }
+        String name = text.substring(1).trim();
+        return name.isEmpty() ? DEFAULT_OBJECT : name;
     }
 
     /** Read one object name. */

@@ -208,6 +208,7 @@
   "hud.railswheelsandtrains.reverser_locked": "Только на стоянке при нулевой тяге",
   "control.railswheelsandtrains.from_cab": "Только из кабины",
   "control.railswheelsandtrains.driver_seated": "Рычаги у машиниста за пультом",
+  "control.railswheelsandtrains.from_inside": "Только изнутри вагона",
   "message.railswheelsandtrains.bump": "Удар! Слишком быстро для сцепки · сцепляйте плавно, до %s км/ч",
   "message.railswheelsandtrains.handbrake_set": "Ручник затянут · на ручнике %s из %s ваг.",
   "message.railswheelsandtrains.handbrake_released": "Ручник отпущен · на ручнике %s из %s ваг.",

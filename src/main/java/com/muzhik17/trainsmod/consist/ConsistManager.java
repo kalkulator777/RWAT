@@ -711,8 +711,9 @@ public final class ConsistManager extends SavedData {
 
     /**
      * A player used the crowbar on the coupler at the front ({@code front}) or
-     * rear end of {@code wagon} (SPEC §6.12): uncouple there if the coupler
-     * is within reach, with actionbar feedback.
+     * rear end of {@code wagon} (SPEC §6.12): uncouple there if they may —
+     * the crowbar in hand, the coupler within reach, the right to build where
+     * it is ({@link TouchRules.Action#UNCOUPLE}) — with actionbar feedback.
      *
      * @return true if the consist was split
      */
@@ -739,8 +740,10 @@ public final class ConsistManager extends SavedData {
                 wagon.getYRot(), wagon.getXRot(), new Vector3d(at.x, at.y + 1.0, at.z));
         Vector3d eye = wagon.localEye(player);
         double reach = player.blockInteractionRange() + COUPLER_REACH_SLACK;
-        if (ClickReach.distanceSq(eye.x, eye.y, eye.z, wagon.clickSweep(player), c.x, c.y, c.z, c.x, c.y, c.z)
-                > reach * reach) {
+        boolean inReach = ClickReach.distanceSq(eye.x, eye.y, eye.z, wagon.clickSweep(player),
+                c.x, c.y, c.z, c.x, c.y, c.z) <= reach * reach;
+        if (!WagonTouch.allows(player, wagon, TouchRules.Action.UNCOUPLE, WagonTouch.facts(player, wagon)
+                .inReach(inReach).mayBuildHere(level.mayInteract(player, BlockPos.containing(at.x, at.y, at.z))))) {
             return false;
         }
         Consist rear = split(level, consist, cut);
@@ -753,10 +756,13 @@ public final class ConsistManager extends SavedData {
     }
 
     /**
-     * A player turned a wagon's handbrake wheel with the crowbar (SPEC §5.3):
-     * set it if released, release it if set — if the wagon is within reach.
-     * Under a profile whose handbrakes set themselves the wheel isn't the
-     * player's: they are told so, nothing turns.
+     * A player turned a wagon's handbrake (SPEC §5.3): set it if released,
+     * release it if set. By its wheel (or the key for it) only from aboard
+     * the car — with the driver's key, a car with a cab — and by the crowbar
+     * within reach of the car's body ({@link WagonEntity#withinReach}, as the
+     * client drew it) — never from across the yard ({@link
+     * TouchRules.Action#HANDBRAKE}). Under a profile whose handbrakes set
+     * themselves the wheel isn't the player's: they are told so, nothing turns.
      *
      * @return true if the handbrake moved
      */
@@ -766,11 +772,9 @@ public final class ConsistManager extends SavedData {
         if (index < 0 || index >= consist.composition().wagonCount()) {
             return false;
         }
-        double reach = player.blockInteractionRange()
-                + consist.composition().slot(index).type().length() * 0.5 + 1.0;
-        Vector3d eye = wagon.localEye(player); // the car as the player's client drew it (SPEC §9.3)
-        if (ClickReach.distanceSq(eye.x, eye.y, eye.z, wagon.clickSweep(player), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
-                > reach * reach) {
+        TouchRules.Facts facts = WagonTouch.facts(player, wagon);
+        if (!WagonTouch.allows(player, wagon, TouchRules.Action.HANDBRAKE,
+                facts.inReach(facts.crowbar() && wagon.withinReach(player)))) {
             return false;
         }
         if (ServerConfig.tuning().autoHandbrake()) {
@@ -806,14 +810,14 @@ public final class ConsistManager extends SavedData {
      * protection), the wagon takes it as the player's attack: a few blows
      * wear it down in survival, one breaks it in creative
      * ({@link WagonEntity#hurt}). A rider can't strike: aboard, the world is
-     * out of reach (SPEC v1.5-б).
+     * out of reach (SPEC v1.5-б; {@link TouchRules.Action#STRIKE}).
      *
      * @return true if the blow landed
      */
     public boolean strikeBogie(ServerLevel level, ServerPlayer player, WagonEntity wagon, boolean front) {
-        if (player.isSpectator() || !player.isAlive() || player.getVehicle() instanceof WagonEntity
-                || !player.mayBuild()) {
-            return false;
+        TouchRules.Facts facts = WagonTouch.facts(player, wagon);
+        if (!TouchRules.allows(TouchRules.Action.STRIKE, facts.inReach(true))) {
+            return false; // no pose to work out for a spectator or a rider
         }
         Consist consist = byId(wagon.getConsistId());
         int index = consist == null ? -1 : consist.wagonIds().indexOf(wagon.getUUID());
@@ -827,15 +831,14 @@ public final class ConsistManager extends SavedData {
         }
         WagonPose pose = ConsistKinematics.wagonPose(path, consist.s(), index, consist.composition());
         Vector3d bogie = (front ? pose.front() : pose.rear()).position();
-        if (!level.mayInteract(player, BlockPos.containing(bogie.x, bogie.y, bogie.z))) {
-            return false; // spawn protection
-        }
         Vec3 eye = player.getEyePosition();
         Vec3 look = player.getLookAngle();
         double slack = BOGIE_REACH_SLACK + Math.abs(consist.speed()) * VIEW_LAG_TICKS;
-        if (!BogieReach.reaches(new Vector3d(eye.x, eye.y, eye.z), new Vector3d(look.x, look.y, look.z),
-                bogie, player.entityInteractionRange(), slack)) {
-            return false;
+        boolean inReach = BogieReach.reaches(new Vector3d(eye.x, eye.y, eye.z), new Vector3d(look.x, look.y, look.z),
+                bogie, player.entityInteractionRange(), slack);
+        if (!WagonTouch.allows(player, wagon, TouchRules.Action.STRIKE, facts.inReach(inReach)
+                .mayBuildHere(level.mayInteract(player, BlockPos.containing(bogie.x, bogie.y, bogie.z))))) {
+            return false; // spawn protection too
         }
         wagon.strikeBy(player);
         return true;

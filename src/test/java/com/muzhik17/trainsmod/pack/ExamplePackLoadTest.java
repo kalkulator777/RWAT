@@ -36,13 +36,13 @@ import com.muzhik17.trainsmod.client.render.model.MtlParser;
 import com.muzhik17.trainsmod.client.render.model.ObjLoader;
 import com.muzhik17.trainsmod.client.render.model.WagonModelDecl;
 import com.muzhik17.trainsmod.client.sound.SoundSet;
+import com.muzhik17.trainsmod.convention.DoorLeaves;
 import com.muzhik17.trainsmod.convention.ObjectRole;
 import com.muzhik17.trainsmod.kinematics.CabArea;
 import com.muzhik17.trainsmod.kinematics.FloorCheck;
 import com.muzhik17.trainsmod.kinematics.RiderWalk;
 import com.muzhik17.trainsmod.path.TileFootprint;
 import com.muzhik17.trainsmod.stock.FloorRegion;
-import com.muzhik17.trainsmod.stock.ObjFrame;
 import com.muzhik17.trainsmod.stock.WagonType;
 import com.muzhik17.trainsmod.stock.WagonTypeParser;
 
@@ -697,10 +697,9 @@ class ExamplePackLoadTest {
     }
 
     /**
-     * The door leaves of a model ({@code DOOR_<n>} with a hinge marker or a
-     * slide), each as the box of its textured parts in the OBJ frame — the
-     * parts the model loader builds the leaf of ({@code IrStockModel}: not
-     * hidden, skipped, of a bogie or moved by an .anim). Key → {min, max}.
+     * The door leaves of a model ({@link DoorLeaves}: {@code DOOR_<n>} with a
+     * hinge marker or a slide, drawn, not a bogie's, not moved by an .anim),
+     * each as the box of its textured parts in the OBJ frame. Key → {min, max}.
      */
     private static Map<String, double[][]> leaves(WagonModelDecl decl) throws IOException {
         ObjLoader.Model model;
@@ -721,23 +720,16 @@ class ExamplePackLoadTest {
                 animated.addAll(IrAnim.parse(in).keySet());
             }
         }
-        Set<String> moving = new TreeSet<>();
+        // the pack has no CARGO_FILL object: the declaration's skip is all the model drops
+        DoorLeaves doorLeaves = DoorLeaves.of(model.parts().stream().map(ObjLoader.Part::object).toList(),
+                decl.skip(), animated);
         Map<String, double[][]> boxes = new TreeMap<>();
         for (ObjLoader.Part part : model.parts()) {
-            String object = part.object();
-            ObjectRole leaf = ObjectRole.door(object);
-            if (leaf == null || object.contains("HIDE") || object.startsWith("BOGEY_") || animated.contains(object)
-                    || decl.skip().stream().anyMatch(object::startsWith)) {
+            ObjectRole leaf = doorLeaves.leaf(part.object());
+            if (leaf == null || !textured.contains(part.material())) {
                 continue;
             }
-            ObjectRole.Control control = leaf.control();
-            if (leaf.pivot() || control.slideX() != 0.0F || control.slideY() != 0.0F || control.slideZ() != 0.0F) {
-                moving.add(control.key());
-            }
-            if (!textured.contains(part.material())) {
-                continue;
-            }
-            double[][] box = boxes.computeIfAbsent(control.key(), k -> new double[][]{
+            double[][] box = boxes.computeIfAbsent(leaf.control().key(), k -> new double[][]{
                     {Double.MAX_VALUE, Double.MAX_VALUE, Double.MAX_VALUE},
                     {-Double.MAX_VALUE, -Double.MAX_VALUE, -Double.MAX_VALUE}});
             for (Mesh.Quad q : part.mesh().quads()) {
@@ -750,14 +742,13 @@ class ExamplePackLoadTest {
                 }
             }
         }
-        boxes.keySet().retainAll(moving);
         return boxes;
     }
 
     /**
      * Every door leaf of the model lies in its own door's box: the centre of
-     * its box, turned into the model frame, finds a door by {@link
-     * WagonType#doorHolding} as the renderer looks it up, no two leaves the
+     * its box finds a door ({@link DoorLeaves#door}, by {@link
+     * WagonType#doorHolding} as the renderer looks it up), no two leaves the
      * same door; and every door with a leaf is moved by one, or by the .anim
      * named after it.
      */
@@ -765,10 +756,7 @@ class ExamplePackLoadTest {
         List<String> out = new ArrayList<>();
         Map<Integer, String> held = new TreeMap<>();
         for (Map.Entry<String, double[][]> leaf : leaves(decl).entrySet()) {
-            double[][] box = leaf.getValue();
-            double[] centre = ObjFrame.point((box[0][0] + box[1][0]) / 2, (box[0][1] + box[1][1]) / 2,
-                    (box[0][2] + box[1][2]) / 2);
-            int d = type.doorHolding(centre[0], centre[1], centre[2]);
+            int d = DoorLeaves.door(type, leaf.getValue()[0], leaf.getValue()[1]);
             if (d < 0) {
                 out.add(leaf.getKey() + ": its centre is in no door's box");
             } else if (held.containsKey(d)) {

@@ -10,7 +10,9 @@ import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.client.render.model.Mesh;
 import com.muzhik17.trainsmod.client.render.model.StockModel;
 import com.muzhik17.trainsmod.client.render.model.StockModels;
+import com.muzhik17.trainsmod.consist.TouchRules;
 import com.muzhik17.trainsmod.consist.WagonEntity;
+import com.muzhik17.trainsmod.consist.WagonTouch;
 import com.muzhik17.trainsmod.kinematics.BogieReach;
 import com.muzhik17.trainsmod.kinematics.HullCollision;
 import com.muzhik17.trainsmod.kinematics.PoseMath;
@@ -45,7 +47,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * box) keeps the blow: a blow at the body breaks nothing, so a stray click at
  * the car you walk about in never knocks it down. A nearer block or entity
  * under the crosshair keeps the click too; a rider never strikes (aboard, the
- * world is out of reach — {@code AboardGuard}). The bogie is picked once per
+ * world is out of reach — {@code AboardGuard}), nor a spectator, nor a player
+ * who may not build here ({@link TouchRules}, as the server decides: the
+ * click goes on to vanilla). The bogie is picked once per
  * frame from the frame's eye ({@link ClientWagonRay}, SPEC §9.3); a click
  * takes what the last frame picked — at click time the playback clock is
  * already a tick on, so a pose computed then is not the one on screen.
@@ -74,10 +78,15 @@ public final class ClientBogieHit {
     private ClientBogieHit() {
     }
 
-    /** Pick the bogie under the crosshair for this frame (SPEC §9.3: as drawn, from the frame's eye). */
+    /**
+     * Pick the bogie under the crosshair for this frame (SPEC §9.3: as drawn,
+     * from the frame's eye) — none the player may not strike ({@link TouchRules}).
+     */
     static void frame(Minecraft mc, LocalPlayer player, ClientWagonRay.Look look) {
-        framePick = player.isSpectator() || player.getVehicle() instanceof WagonEntity ? null
-                : pick(mc, player, look);
+        Pick pick = WagonTouch.present(player) && !(player.getVehicle() instanceof WagonEntity)
+                ? pick(mc, player, look) : null;
+        framePick = pick != null && TouchRules.allows(TouchRules.Action.STRIKE,
+                WagonTouch.facts(player, pick.wagon()).inReach(true)) ? pick : null;
     }
 
     @SubscribeEvent(priority = EventPriority.HIGH)
@@ -87,11 +96,10 @@ public final class ClientBogieHit {
         }
         Minecraft mc = Minecraft.getInstance();
         LocalPlayer player = mc.player;
-        if (player == null || mc.level == null || player.isSpectator()
-                || player.getVehicle() instanceof WagonEntity) {
+        if (player == null || mc.level == null) {
             return;
         }
-        Pick pick = framePick;
+        Pick pick = framePick; // none the player may not strike
         if (pick == null || pick.wagon().isRemoved()) {
             return;
         }

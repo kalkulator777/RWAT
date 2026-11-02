@@ -1,0 +1,80 @@
+{
+  "$comment": "The OBJ frame (the pack's: front -X, Y up, +Z the left side) and the engine's model frame (+Z forward, X across, the railhead at y 0.40625): stock.ObjFrame; tools/floorgen.py point_from_obj, point_to_obj, box_from_obj, box_to_obj. input: one of point_obj / point_model [x, y, z], box_obj / box_model {min, max}; expected: model or obj, the same shape.",
+  "cases": [
+    {
+      "name": "point: the origin",
+      "input": {"point_obj": [0.0, 0.0, 0.0]},
+      "expected": {"model": [0.0, 0.43625, 0.0]}
+    },
+    {
+      "name": "point: the tread's bottom is at the railhead",
+      "input": {"point_obj": [0.0, -0.03, 0.0]},
+      "expected": {"model": [0.0, 0.40625, 0.0]}
+    },
+    {
+      "name": "point: a chair",
+      "input": {"point_obj": [-8.75, 1.9, 0.6]},
+      "expected": {"model": [0.6, 2.3362499999999997, 8.75]}
+    },
+    {
+      "name": "point: the front, left",
+      "input": {"point_obj": [-12.5, 2.311, 1.4375]},
+      "expected": {"model": [1.4375, 2.74725, 12.5]}
+    },
+    {
+      "name": "point: the rear, right",
+      "input": {"point_obj": [9.0, 0.0, -1.7]},
+      "expected": {"model": [-1.7, 0.43625, -9.0]}
+    },
+    {
+      "name": "point back: the body centre",
+      "input": {"point_model": [0.0, 0.0, 0.0]},
+      "expected": {"obj": [0.0, -0.43625, 0.0]}
+    },
+    {
+      "name": "point back: a chair",
+      "input": {"point_model": [0.6, 2.33625, 8.75]},
+      "expected": {"obj": [-8.75, 1.9000000000000001, 0.6]}
+    },
+    {
+      "name": "point back: the railhead",
+      "input": {"point_model": [1.0, 0.40625, -3.0]},
+      "expected": {"obj": [3.0, -0.030000000000000027, 1.0]}
+    },
+    {
+      "name": "box: the platzkart's vestibule door",
+      "input": {"box_obj": {"min": [10.781, 1.37475, 0.344], "max": [10.844, 3.62475, 1.031]}},
+      "expected": {"model": {"min": [0.344, 1.811, -10.844], "max": [1.031, 4.061, -10.781]}}
+    },
+    {
+      "name": "box: a floor zone",
+      "input": {"box_obj": {"min": [-4.0, 0.56375, -1.0], "max": [4.0, 2.56375, 1.0]}},
+      "expected": {"model": {"min": [-1.0, 1.0, -4.0], "max": [1.0, 3.0, 4.0]}}
+    },
+    {
+      "name": "box: across the origin",
+      "input": {"box_obj": {"min": [-1.0, -0.5, -0.25], "max": [2.0, 0.5, 0.75]}},
+      "expected": {"model": {"min": [-0.25, -0.06374999999999997, -2.0], "max": [0.75, 0.93625, 1.0]}}
+    },
+    {
+      "name": "box: flat",
+      "input": {"box_obj": {"min": [-5.0, 0.9, -1.4], "max": [5.0, 0.9, 1.4]}},
+      "expected": {"model": {"min": [-1.4, 1.3362500000000002, -5.0], "max": [1.4, 1.3362500000000002, 5.0]}}
+    },
+    {
+      "name": "box back: the platzkart's vestibule door",
+      "input": {"box_model": {"min": [0.344, 1.811, -10.844], "max": [1.031, 4.061, -10.781]}},
+      "expected": {"obj": {"min": [10.781, 1.37475, 0.344], "max": [10.844, 3.6247499999999997, 1.031]}}
+    },
+    {
+      "name": "box back: a floor zone",
+      "input": {"box_model": {"min": [-1.0, 1.0, -4.0], "max": [1.0, 3.0, 4.0]}},
+      "expected": {"obj": {"min": [-4.0, 0.56375, -1.0], "max": [4.0, 2.5637499999999998, 1.0]}}
+    },
+    {
+      "name": "box back: flat",
+      "input": {"box_model": {"min": [-1.4, 1.33625, -5.0], "max": [1.4, 1.33625, 5.0]}},
+      "expected": {"obj": {"min": [-5.0, 0.8999999999999999, -1.4], "max": [5.0, 0.8999999999999999, 1.4]}}
+    }
+  ]
+}

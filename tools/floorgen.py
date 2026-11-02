@@ -196,6 +196,24 @@ def flat_box_to_obj(box):
 
 # ----------------------------------------------------------------- the model
 
+# the object faces belong to before any o/g line, or after one that names nothing
+DEFAULT_OBJECT = "default"
+# blanks of an OBJ line: the characters up to U+0020 (Java's String.trim, Blender's reader)
+BLANKS = "".join(chr(c) for c in range(0x21))
+
+
+def object_name_of(line):
+    """The name an OBJ "o" or "g" line gives the object the faces after it belong to:
+    the whole rest of the line after the keyword, stripped of blanks, the blanks
+    inside kept ("o Door Leaf" is "Door Leaf"); DEFAULT_OBJECT if it names nothing;
+    None if the line is no o/g line. The port of convention.ObjectRole.objectName —
+    how Blender's importer and Immersive Railroading read the name."""
+    text = line.strip(BLANKS)
+    if not text or text[0] not in "og" or (len(text) > 1 and text[1] > " "):
+        return None
+    return text[1:].strip(BLANKS) or DEFAULT_OBJECT
+
+
 def read_triangles(raw):
     """([names], [(name index, 9 floats)]) of an OBJ in the engine's model frame
     (rx, ry, rz = z, y + Y_LIFT, -x); polygons are fanned into triangles."""
@@ -204,17 +222,20 @@ def read_triangles(raw):
     current = -1
     triangles = []
     for line in io.TextIOWrapper(io.BytesIO(raw), encoding="utf-8", errors="replace"):
+        name = object_name_of(line)
         if line.startswith("v "):
             p = line.split()
             positions.append((float(p[3]), float(p[2]) + Y_LIFT, -float(p[1])))
-        elif line.startswith(("o ", "g ")):
-            name = line[2:].strip()
+        elif name is not None:
             if name in names:
                 current = names.index(name)
             else:
                 names.append(name)
                 current = len(names) - 1
         elif line.startswith("f "):
+            if current < 0:  # faces before any o/g line
+                names.append(DEFAULT_OBJECT)
+                current = len(names) - 1
             corners = []
             for token in line.split()[1:]:
                 index = int(token.split("/")[0])
