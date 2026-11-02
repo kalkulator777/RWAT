@@ -5,7 +5,6 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -32,6 +31,7 @@ import com.muzhik17.trainsmod.path.TrackSweep;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.SectionPos;
 import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -81,8 +81,8 @@ public final class RailNetwork extends SavedData {
      * bed) toggles the node's switch selection.
      */
     private final Map<BlockPos, Integer> switchStands = new LinkedHashMap<>();
-    /** Last polled power per stand, for rising-edge detection. Transient. */
-    private final Map<BlockPos, Boolean> standPowered = new LinkedHashMap<>();
+    /** The stands' redstone, for the rising edge. Transient. */
+    private final SwitchStandPoll<BlockPos> standPoll = new SwitchStandPoll<>();
     private int revision = 1;
 
     public static RailNetwork get(ServerLevel level) {
@@ -427,33 +427,56 @@ public final class RailNetwork extends SavedData {
      * edge of a signal into the stand cell — or into the cell below it, so a
      * lever on the track bed works — advances the node's switch selection by
      * one (SPEC §2.2 v1: cycle through the diverging legs). Stands whose node
-     * is gone (the junction was demolished) are pruned on the way.
+     * is gone (the junction was demolished) are pruned on the way. A stand
+     * whose chunk isn't loaded is passed over without loading it
+     * ({@link SwitchStandPoll}, {@link #standLoaded}).
      */
     public void tickSwitches(ServerLevel level) {
-        boolean changed = false;
-        for (Iterator<Map.Entry<BlockPos, Integer>> it = switchStands.entrySet().iterator();
-                it.hasNext(); ) {
-            Map.Entry<BlockPos, Integer> stand = it.next();
-            BlockPos pos = stand.getKey();
-            if (graph.node(stand.getValue()) == null) {
-                it.remove();
-                standPowered.remove(pos);
-                setDirty();
-                continue;
-            }
-            boolean powered = level.hasNeighborSignal(pos) || level.hasNeighborSignal(pos.below());
-            Boolean was = standPowered.put(pos, powered);
-            if (was != null && !was && powered) {
-                graph.setSwitchSelection(stand.getValue(),
-                        graph.switchSelection(stand.getValue()) + 1);
-                level.playSound(null, pos, SoundEvents.PISTON_CONTRACT,
-                        SoundSource.BLOCKS, 0.4F, 0.6F);
-                changed = true;
+        int stands = switchStands.size();
+        List<BlockPos> risen = standPoll.poll(switchStands, node -> graph.node(node) != null,
+                new SwitchStandPoll.Signals<>() {
+                    @Override
+                    public boolean loaded(BlockPos stand) {
+                        return standLoaded(level, stand);
+                    }
+
+                    @Override
+                    public boolean powered(BlockPos stand) {
+                        return level.hasNeighborSignal(stand) || level.hasNeighborSignal(stand.below());
+                    }
+                });
+        if (switchStands.size() != stands) {
+            setDirty();
+        }
+        if (risen.isEmpty()) {
+            return;
+        }
+        for (BlockPos stand : risen) {
+            int node = switchStands.get(stand);
+            graph.setSwitchSelection(node, graph.switchSelection(node) + 1);
+            level.playSound(null, stand, SoundEvents.PISTON_CONTRACT, SoundSource.BLOCKS, 0.4F, 0.6F);
+        }
+        markChanged(level);
+    }
+
+    /**
+     * Whether every block a stand's signal is read from is loaded: its six
+     * neighbours and those of the cell below ({@link #tickSwitches}) — one
+     * block around it in x and z, so up to four chunks.
+     */
+    private static boolean standLoaded(ServerLevel level, BlockPos stand) {
+        int minX = SectionPos.blockToSectionCoord(stand.getX() - 1);
+        int maxX = SectionPos.blockToSectionCoord(stand.getX() + 1);
+        int minZ = SectionPos.blockToSectionCoord(stand.getZ() - 1);
+        int maxZ = SectionPos.blockToSectionCoord(stand.getZ() + 1);
+        for (int x = minX; x <= maxX; x++) {
+            for (int z = minZ; z <= maxZ; z++) {
+                if (!level.hasChunk(x, z)) {
+                    return false;
+                }
             }
         }
-        if (changed) {
-            markChanged(level);
-        }
+        return true;
     }
 
     // --- rail markers (SPEC §2.2 UX): the server-side registry of placed marker blocks ---
@@ -479,42 +502,37 @@ public final class RailNetwork extends SavedData {
      * passed over, as if it weren't there. {@code switchMarkers} selects
      * {@link RailSwitchMarkerBlock} vs plain {@link RailMarkerBlock}.
      * Entries whose block is gone (e.g. removed without the hook firing) are
-     * pruned on the way — the world is re-checked, the registry is just an
-     * index so connecting doesn't scan blocks.
+     * pruned as they come up — the world is re-checked, the registry is just
+     * an index so connecting doesn't scan blocks. The registry holds the
+     * markers of the whole dimension, and reading a block loads its chunk:
+     * so the distance comes first, and of the markers in range only the
+     * nearest are read, until enough are found.
      */
     public List<BlockPos> nearestMarkers(ServerLevel level, ServerPlayer player, BlockPos from, double maxDist,
             boolean switchMarkers, int count) {
         record Found(BlockPos pos, double distSq) {
         }
-        List<Found> found = new ArrayList<>();
+        List<Found> inRange = new ArrayList<>();
         double maxDistSq = maxDist * maxDist;
-        for (Iterator<BlockPos> it = markers.keySet().iterator(); it.hasNext(); ) {
-            BlockPos pos = it.next();
-            if (pos.equals(from)) {
-                continue;
-            }
-            Block block = level.getBlockState(pos).getBlock();
-            if (!(block instanceof RailMarkerBlock)) {
-                it.remove(); // stale entry
-                setDirty();
-                continue;
-            }
-            if (block instanceof RailSwitchMarkerBlock != switchMarkers) {
-                continue;
-            }
+        for (BlockPos pos : markers.keySet()) {
             double distSq = pos.distSqr(from);
-            if (distSq <= maxDistSq) {
-                found.add(new Found(pos, distSq));
+            if (distSq <= maxDistSq && !pos.equals(from)) {
+                inRange.add(new Found(pos, distSq));
             }
         }
-        found.sort(Comparator.comparingDouble(Found::distSq));
-        // asked nearest first, only until enough are found
+        inRange.sort(Comparator.comparingDouble(Found::distSq));
         List<BlockPos> usable = new ArrayList<>();
-        for (Found marker : found) {
+        for (Found marker : inRange) {
             if (usable.size() == count) {
                 break;
             }
-            if (mayBreak(level, player, marker.pos())) {
+            Block block = level.getBlockState(marker.pos()).getBlock();
+            if (!(block instanceof RailMarkerBlock)) {
+                markers.remove(marker.pos()); // stale entry
+                setDirty();
+                continue;
+            }
+            if (block instanceof RailSwitchMarkerBlock == switchMarkers && mayBreak(level, player, marker.pos())) {
                 usable.add(marker.pos());
             }
         }
