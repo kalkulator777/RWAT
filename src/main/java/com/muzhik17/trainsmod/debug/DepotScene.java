@@ -39,8 +39,8 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
  * measured: frames and their times, the entity pass of each frame (the
  * wagons' draws issued in it), and what the bake cache did
  * ({@code [depot]} lines in the log); then {@code rwat-depot.png}, and
- * {@code rwat-depot-beam.png} from ahead of the first train's leading
- * headlight looking away from it — its light on the track with the car
+ * {@code rwat-depot-beam.png} ahead of a lone lit shunter 60 blocks west
+ * of the depot, looking away from it — its light on the track with the car
  * behind the camera (M28). Quits the game at the end.
  */
 @EventBusSubscriber(modid = RailsWheelsAndTrains.MODID, value = Dist.CLIENT)
@@ -66,7 +66,15 @@ public final class DepotScene {
     /** Along each gap between tracks, glowstone this far from the tracks' start, blocks. */
     private static final int[][] GLOW = {{8, 50}, {20}, {35, 70}, {5, 60}, {28}, {45, 12}, {66}};
     /**
-     * The beam shot's camera this far ahead of the leading car's front, blocks:
+     * The beam shot's train, its lights and its track, blocks across from
+     * the depot's first: alone, so no other car's light or culling box is
+     * near.
+     */
+    private static final String LONE = "shunter";
+    private static final String[] LONE_LIGHTS = {"FHL"};
+    private static final double LONE_X = -60.0;
+    /**
+     * The beam shot's camera this far ahead of the lone car's front, blocks:
      * past the car's former culling box (half the longest car + 3.4 from its
      * centre), short of the end of its light on the track (22 past the lamp).
      */
@@ -144,21 +152,23 @@ public final class DepotScene {
             command(mc, "weather clear");
             tp(mc, x0 + 0.5, y0, z0 + 0.5, 0.0F, 0.0F);
         }
+        // the depot's trains, then the lone one
         int track = (ticks - 140) / 10;
-        if (ticks >= 140 && track < TRACKS.length && (ticks - 140) % 10 == 0) {
+        boolean lone = track == TRACKS.length;
+        if (ticks >= 140 && track <= TRACKS.length && (ticks - 140) % 10 == 0) {
             // on its own straight debug path (no rails near), front first along +Z
-            tp(mc, trackX(track), y0, z0 + 0.5, 0.0F, 0.0F);
-            command(mc, "rwat spawn 120 with " + TRACKS[track]);
+            tp(mc, trainX(track), y0, z0 + 0.5, 0.0F, 0.0F);
+            command(mc, "rwat spawn 120 with " + (lone ? LONE : TRACKS[track]));
         }
-        if (ticks >= 140 && track < TRACKS.length && (ticks - 140) % 10 == 5) {
+        if (ticks >= 140 && track <= TRACKS.length && (ticks - 140) % 10 == 5) {
             // beside the train just spawned: it is the nearest one
-            tp(mc, trackX(track) + 2.0, y0, z0 + 10.5, 0.0F, 0.0F);
-            for (String group : LIGHTS[track]) {
+            tp(mc, trainX(track) + 2.0, y0, z0 + 10.5, 0.0F, 0.0F);
+            for (String group : lone ? LONE_LIGHTS : LIGHTS[track]) {
                 command(mc, "rwat control " + group + " 1");
             }
             command(mc, "rwat handle train_brake 8");
         }
-        int setUp = 140 + TRACKS.length * 10;
+        int setUp = 140 + (TRACKS.length + 1) * 10;
         if (ticks == setUp) {
             for (int gap = 0; gap < GLOW.length; gap++) {
                 for (int z : GLOW[gap]) {
@@ -229,8 +239,14 @@ public final class DepotScene {
         return x0 + 0.5 + track * SPACING;
     }
 
+    /** Where train {@code track} stands across: a track of the depot, or the lone train's. */
+    private static double trainX(int track) {
+        return track < TRACKS.length ? trackX(track) : x0 + 0.5 + LONE_X;
+    }
+
+    /** The cars of the depot and the lone train. */
     private static int wagonCount() {
-        int n = 0;
+        int n = LONE.split(" ").length;
         for (String train : TRACKS) {
             n += train.split(" ").length;
         }
@@ -243,20 +259,21 @@ public final class DepotScene {
     }
 
     /**
-     * {@link #BEAM_VIEW_AHEAD} blocks ahead of the first train's leading car,
+     * {@link #BEAM_VIEW_AHEAD} blocks ahead of the lone train's leading car,
      * looking on along the track: the car is behind the camera, its light on
      * the track ahead.
      */
     private static void beamView(Minecraft mc) {
+        double x = trainX(TRACKS.length);
         double front = z0 + 0.5;
         for (Entity entity : mc.level.entitiesForRendering()) {
-            if (entity instanceof WagonEntity wagon && Math.abs(wagon.getX() - trackX(0)) < 1.0) {
+            if (entity instanceof WagonEntity wagon && Math.abs(wagon.getX() - x) < 1.0) {
                 ConsistComposition.Slot slot = ClientConsists.slot(wagon.getConsistId(), wagon.getWagonIndex());
                 double length = slot != null ? slot.type().length() : 0.0;
                 front = Math.max(front, wagon.getZ() + length * 0.5);
             }
         }
-        tp(mc, trackX(0), y0 + 2.5, front + BEAM_VIEW_AHEAD, 0.0F, 30.0F);
+        tp(mc, x, y0 + 2.5, front + BEAM_VIEW_AHEAD, 0.0F, 30.0F);
     }
 
     /** {cars in the depot, cars whose model has loaded}. */
