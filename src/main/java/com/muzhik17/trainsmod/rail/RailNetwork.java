@@ -18,6 +18,7 @@ import org.joml.Vector3f;
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.ServerConfig;
 import com.muzhik17.trainsmod.network.RailGraphSyncPayload;
+import com.muzhik17.trainsmod.network.RailSwitchesPayload;
 import com.muzhik17.trainsmod.path.BedClearing;
 import com.muzhik17.trainsmod.path.BedRaster;
 import com.muzhik17.trainsmod.path.HermiteSegment;
@@ -64,8 +65,10 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * segments and their neighbours at the shared nodes), taking out what is no
  * longer under any rail and laying what now is.
  *
- * <p>{@code revision} increments on every edit — consists and clients use it
- * to know when to rebuild their materialized paths.
+ * <p>{@code revision} increments on every edit and every switch thrown —
+ * consists use it to know when to re-walk their routes and rebuild their
+ * materialized paths. (Clients count the changes they receive instead,
+ * {@code ClientRailGraph.generation()}: the revision is per dimension.)
  */
 public final class RailNetwork extends SavedData {
 
@@ -429,7 +432,10 @@ public final class RailNetwork extends SavedData {
      * one (SPEC §2.2 v1: cycle through the diverging legs). Stands whose node
      * is gone (the junction was demolished) are pruned on the way. A stand
      * whose chunk isn't loaded is passed over without loading it
-     * ({@link SwitchStandPoll}, {@link #standLoaded}).
+     * ({@link SwitchStandPoll}, {@link #standLoaded}). A throw changes the
+     * routes, so the revision moves on, but no track: the players in the
+     * dimension get the new selections alone ({@link RailSwitchesPayload}),
+     * not the whole graph.
      */
     public void tickSwitches(ServerLevel level) {
         int stands = switchStands.size();
@@ -451,12 +457,16 @@ public final class RailNetwork extends SavedData {
         if (risen.isEmpty()) {
             return;
         }
+        List<Integer> nodes = new ArrayList<>(risen.size());
         for (BlockPos stand : risen) {
-            int node = switchStands.get(stand);
-            graph.setSwitchSelection(node, graph.switchSelection(node) + 1);
+            nodes.add(switchStands.get(stand));
             level.playSound(null, stand, SoundEvents.PISTON_CONTRACT, SoundSource.BLOCKS, 0.4F, 0.6F);
         }
-        markChanged(level);
+        Map<Integer, Integer> thrown = graph.throwSwitches(nodes);
+        // the routes follow the switches: consists re-walk theirs on the new revision
+        revision++;
+        setDirty();
+        PacketDistributor.sendToPlayersInDimension(level, RailSwitchesPayload.of(thrown));
     }
 
     /**

@@ -38,6 +38,8 @@ public final class RwatNetwork {
                 (payload, context) -> ClientConsists.handleSnapshot(payload));
         registrar.playToClient(RailGraphSyncPayload.TYPE, RailGraphSyncPayload.STREAM_CODEC,
                 (payload, context) -> ClientRailGraph.handleSync(payload));
+        registrar.playToClient(RailSwitchesPayload.TYPE, RailSwitchesPayload.STREAM_CODEC,
+                (payload, context) -> ClientRailGraph.handleSwitches(payload));
         registrar.playToClient(WagonTypesPayload.TYPE, WagonTypesPayload.STREAM_CODEC,
                 (payload, context) -> WagonTypes.load(payload.types()));
         registrar.playToClient(RiderSyncPayload.TYPE, RiderSyncPayload.STREAM_CODEC,

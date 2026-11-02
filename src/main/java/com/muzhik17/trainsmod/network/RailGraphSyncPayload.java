@@ -18,9 +18,11 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
 /**
- * Full rail graph dump server→client: sent on login/dimension change and
- * after every edit (v0 simplicity — the graph is small; deltas are a later
- * optimization). The client rebuilds its {@link RailGraph} copy wholesale.
+ * Full rail graph dump server→client: sent on login, dimension change and
+ * respawn, and after every edit of the track (built, repainted, demolished
+ * — v0 simplicity: deltas are a later optimization). The client rebuilds
+ * its {@link RailGraph} copy wholesale. A switch thrown by redstone changes
+ * only its selection and sends just that ({@link RailSwitchesPayload}).
  */
 public record RailGraphSyncPayload(int revision, List<SyncNode> nodes, List<SyncSegment> segments,
         List<SyncSwitch> switches) implements CustomPacketPayload {
@@ -37,7 +39,11 @@ public record RailGraphSyncPayload(int revision, List<SyncNode> nodes, List<Sync
             Vector3d dirA, Vector3d dirB, int group, String style, String bed) {
     }
 
-    /** A node's switch selection counter (SPEC §2.2 v1) — only non-zero ones travel. */
+    /**
+     * A node's switch selection counter (SPEC §2.2 v1) — in the full sync
+     * only non-zero ones travel; {@link RailSwitchesPayload} carries those of
+     * the switches just thrown.
+     */
     public record SyncSwitch(int nodeId, int selection) {
     }
 
@@ -113,11 +119,25 @@ public record RailGraphSyncPayload(int revision, List<SyncNode> nodes, List<Sync
             buf.writeUtf(segment.style());
             buf.writeUtf(segment.bed());
         }
-        buf.writeVarInt(payload.switches.size());
-        for (SyncSwitch sw : payload.switches) {
+        writeSwitches(buf, payload.switches);
+    }
+
+    /** Switch selections on the wire — this payload's and {@link RailSwitchesPayload}'s. */
+    static void writeSwitches(FriendlyByteBuf buf, List<SyncSwitch> switches) {
+        buf.writeVarInt(switches.size());
+        for (SyncSwitch sw : switches) {
             buf.writeVarInt(sw.nodeId());
             buf.writeVarInt(sw.selection());
         }
+    }
+
+    static List<SyncSwitch> readSwitches(FriendlyByteBuf buf) {
+        int switchCount = buf.readVarInt();
+        List<SyncSwitch> switches = new ArrayList<>(switchCount);
+        for (int i = 0; i < switchCount; i++) {
+            switches.add(new SyncSwitch(buf.readVarInt(), buf.readVarInt()));
+        }
+        return switches;
     }
 
     private static void writeOptionalDir(FriendlyByteBuf buf, Vector3d dir) {
@@ -152,12 +172,7 @@ public record RailGraphSyncPayload(int revision, List<SyncNode> nodes, List<Sync
                     readOptionalDir(buf), readOptionalDir(buf), buf.readVarInt(), buf.readUtf(),
                     buf.readUtf()));
         }
-        int switchCount = buf.readVarInt();
-        List<SyncSwitch> switches = new ArrayList<>(switchCount);
-        for (int i = 0; i < switchCount; i++) {
-            switches.add(new SyncSwitch(buf.readVarInt(), buf.readVarInt()));
-        }
-        return new RailGraphSyncPayload(revision, nodes, segments, switches);
+        return new RailGraphSyncPayload(revision, nodes, segments, readSwitches(buf));
     }
 
     @Override

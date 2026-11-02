@@ -300,6 +300,46 @@ public final class RailGraph {
         return switchSelections;
     }
 
+    /**
+     * Throw switches: each node listed advances its selection by one, as
+     * many times as it is listed (SPEC §2.2 v1: cycle through the diverging
+     * legs; two stands of one node rising in one tick throw it twice).
+     * Nodes not in the graph are passed over.
+     *
+     * @return each node thrown, once, in the order first listed, with the
+     *         selection it has now — what the clients are told
+     */
+    public Map<Integer, Integer> throwSwitches(List<Integer> nodeIds) {
+        Map<Integer, Integer> thrown = new LinkedHashMap<>();
+        for (int nodeId : nodeIds) {
+            if (node(nodeId) != null) {
+                setSwitchSelection(nodeId, switchSelection(nodeId) + 1);
+                thrown.put(nodeId, switchSelection(nodeId));
+            }
+        }
+        return thrown;
+    }
+
+    /**
+     * Set switch selections as another copy of the graph has them — the
+     * client's copy, from the switches thrown on the server
+     * ({@link #throwSwitches}). Selections of nodes not in this graph are
+     * passed over.
+     *
+     * @return whether any selection changed
+     */
+    public boolean setSwitchSelections(Map<Integer, Integer> selections) {
+        boolean changed = false;
+        for (Map.Entry<Integer, Integer> entry : selections.entrySet()) {
+            int nodeId = entry.getKey();
+            if (node(nodeId) != null && switchSelection(nodeId) != entry.getValue()) {
+                setSwitchSelection(nodeId, entry.getValue());
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
     // --- structure groups (SPEC §2.2): segments built by one click demolish together ---
 
     /** A fresh structure group id. */
