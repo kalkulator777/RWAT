@@ -6,6 +6,7 @@ import java.util.BitSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.ToDoubleFunction;
 
 import com.muzhik17.trainsmod.consist.Handles;
 import com.muzhik17.trainsmod.kinematics.ConsistKinematics;
@@ -27,7 +28,9 @@ import com.muzhik17.trainsmod.stock.ConsistComposition;
  * client tick ({@link #tickAll}) and gently nudged toward (newest snapshot −
  * delay). The client's {@code getGameTime()} is deliberately <i>not</i> used:
  * the server hard-corrects it every 20 ticks, and each correction would jump
- * {@code s} — the periodic back-and-forth jerk seen in play-tests.
+ * {@code s} — the periodic back-and-forth jerk seen in play-tests. In a
+ * snapshot gap the clock runs into the extrapolation cap and holds there
+ * until the stream catches up; it never snaps back for silence alone.
  *
  * <p><b>Phase:</b> {@link #tickPose} (the entity tick / rider seat) samples at
  * the clock; {@link #renderPose} interpolates between the previous and current
@@ -58,17 +61,25 @@ public final class ClientConsists {
     private static final long BUFFER_KEEP_TICKS = 40;
     private static final double MAX_EXTRAPOLATION_TICKS = 20.0;
     /**
-     * Snapshot silence after which a consist's state is dropped wholesale.
-     * Snapshots stop when this client no longer tracks any of the consist's
-     * wagons; the state must not outlive that, or a later re-tracked wagon's
-     * first tick samples the stale buffer and teleports the entity to where
-     * the train was minutes ago — usually a client-unloaded chunk, where it
-     * stops ticking and goes permanently invisible (the "/tp to the parked
-     * train: no locomotive" play-test bug, 2026-06-12). Generous vs the
-     * 20-tick extrapolation cap: a live-but-lagging stream keeps its buffer.
+     * Snapshot silence, in client ticks since the newest snapshot arrived,
+     * after which a consist's state is dropped wholesale. Snapshots stop when
+     * this client no longer tracks any of the consist's wagons; the state must
+     * not outlive that, or a later re-tracked wagon's first tick samples the
+     * stale buffer and teleports the entity to where the train was minutes ago
+     * — usually a client-unloaded chunk, where it stops ticking and goes
+     * permanently invisible (the "/tp to the parked train: no locomotive"
+     * play-test bug, 2026-06-12). Generous vs the 20-tick extrapolation cap: a
+     * live-but-lagging stream keeps its buffer, and a standing train's
+     * keep-alive (every 10 ticks) keeps its state. Counted in ticks, not on
+     * the playback clock: the clock holds at the extrapolation cap in a gap,
+     * so it never gets this far past the newest snapshot.
      */
-    private static final double STALE_DROP_TICKS = 60.0;
-    /** Clock drift beyond this snaps instead of slewing (teleport / lag spike). */
+    private static final int STALE_DROP_TICKS = 60;
+    /**
+     * A tick that brought a snapshot whose target is further than this from
+     * the clock snaps the clock instead of slewing (teleport, the catch-up
+     * burst after a server hitch).
+     */
     private static final double CLOCK_SNAP_TICKS = 20.0;
     /** Max clock slew per tick (5% time dilation — imperceptible). */
     private static final double CLOCK_SLEW_PER_TICK = 0.05;
@@ -90,6 +101,13 @@ public final class ClientConsists {
         double clock = Double.NaN;
         /** The clock one client tick ago — the lerp window vanilla shows riders in. */
         double prevClock = Double.NaN;
+        /** Client ticks since the newest snapshot arrived (see {@link #STALE_DROP_TICKS}). */
+        int silentTicks;
+        /**
+         * The clock ran into the extrapolation cap in a snapshot gap and stands
+         * there until the stream's playback point catches up with it.
+         */
+        boolean holding;
         /** The server frame the buffered {@code s} values are in. */
         int frame;
         /** The driver's handles per the newest snapshot (SPEC §9: cab levers). */
@@ -126,43 +144,57 @@ public final class ClientConsists {
 
     /** Called on the client main thread from the payload handler. */
     public static void handleSnapshot(ConsistSnapshotPayload payload) {
-        State state = STATES.get(payload.consistId());
+        apply(payload.consistId(), payload.s(), payload.v(), payload.gameTime(), payload.pathSpec(),
+                payload.composition(), payload.frame(), payload.frameFrom(), payload.frameShift(),
+                payload.wagonEntityIds(), payload.handles(), payload.handbrakes(),
+                payload.trainBrakePressure(), payload.indBrakePressure(), payload.signals());
+    }
+
+    /**
+     * {@link #handleSnapshot} on the payload's fields, in its order — the
+     * wire-free core, so the playback is unit-testable without the Minecraft
+     * classes the payload type needs.
+     */
+    static void apply(int consistId, double s, double v, long gameTime, TrackPathSpec pathSpec,
+            ConsistComposition composition, int frame, int frameFrom, double frameShift,
+            int[] wagonIds, Handles handles, BitSet handbrakes,
+            float trainBrakePressure, float indBrakePressure, int signals) {
+        State state = STATES.get(consistId);
         if (state == null) {
             state = new State();
-            state.frame = payload.frame();
-            if (payload.frameFrom() != payload.consistId()) {
-                adoptParent(state, STATES.get(payload.frameFrom()), payload.frameShift(),
-                        payload.gameTime());
+            state.frame = frame;
+            if (frameFrom != consistId) {
+                adoptParent(state, STATES.get(frameFrom), frameShift, gameTime);
             }
-            STATES.put(payload.consistId(), state);
+            STATES.put(consistId, state);
         } else {
             Snapshot newest = state.buffer.peekLast();
-            if (newest != null && payload.gameTime() <= newest.gameTime) {
+            if (newest != null && gameTime <= newest.gameTime) {
                 return; // out of order / duplicate (one copy per tracked wagon)
             }
-            if (payload.frame() != state.frame) {
-                reframe(state, payload);
+            if (frame != state.frame) {
+                reframe(state, consistId, frame, frameFrom, frameShift);
             }
         }
-        if (!payload.pathSpec().equals(state.spec)) {
-            state.spec = payload.pathSpec();
+        if (!pathSpec.equals(state.spec)) {
+            state.spec = pathSpec;
             state.path = null; // re-resolve lazily
         }
-        state.composition = payload.composition();
-        state.handles = payload.handles();
-        state.handbrakes = payload.handbrakes();
-        state.trainBrakePressure = payload.trainBrakePressure();
-        state.indBrakePressure = payload.indBrakePressure();
-        state.signals = payload.signals();
-        int[] wagonIds = payload.wagonEntityIds();
+        state.composition = composition;
+        state.handles = handles;
+        state.handbrakes = handbrakes;
+        state.trainBrakePressure = trainBrakePressure;
+        state.indBrakePressure = indBrakePressure;
+        state.signals = signals;
         state.wagonIds = wagonIds;
         for (int i = 0; i < wagonIds.length; i++) {
             if (wagonIds[i] >= 0) {
-                MEMBERS.put(wagonIds[i], new Member(payload.consistId(), i));
+                MEMBERS.put(wagonIds[i], new Member(consistId, i));
             }
         }
-        state.buffer.addLast(new Snapshot(payload.gameTime(), payload.s(), payload.v()));
-        long cutoff = payload.gameTime() - BUFFER_KEEP_TICKS;
+        state.buffer.addLast(new Snapshot(gameTime, s, v));
+        state.silentTicks = 0;
+        long cutoff = gameTime - BUFFER_KEEP_TICKS;
         while (!state.buffer.isEmpty() && state.buffer.peekFirst().gameTime < cutoff) {
             state.buffer.pollFirst();
         }
@@ -175,19 +207,19 @@ public final class ClientConsists {
      * jump while the buffer drains. Missed a frame (the shift is relative to
      * one we never saw): drop the buffer — a short hold, never a slide.
      */
-    private static void reframe(State state, ConsistSnapshotPayload payload) {
-        if (payload.frame() == state.frame + 1 && payload.frameFrom() == payload.consistId()) {
+    private static void reframe(State state, int consistId, int frame, int frameFrom,
+            double frameShift) {
+        if (frame == state.frame + 1 && frameFrom == consistId) {
             List<Snapshot> shifted = new ArrayList<>(state.buffer.size());
             for (Snapshot snapshot : state.buffer) {
-                shifted.add(new Snapshot(snapshot.gameTime, snapshot.s + payload.frameShift(),
-                        snapshot.v));
+                shifted.add(new Snapshot(snapshot.gameTime, snapshot.s + frameShift, snapshot.v));
             }
             state.buffer.clear();
             state.buffer.addAll(shifted);
         } else {
             state.buffer.clear();
         }
-        state.frame = payload.frame();
+        state.frame = frame;
     }
 
     /**
@@ -206,6 +238,7 @@ public final class ClientConsists {
         }
         state.clock = parent.clock;
         state.prevClock = parent.prevClock;
+        state.holding = parent.holding;
     }
 
     /**
@@ -232,7 +265,16 @@ public final class ClientConsists {
     /**
      * Advance every consist's playback clock by one client tick, slewing it
      * toward (newest snapshot − delay). Called once per client tick (Pre).
-     * Also drops states whose snapshot stream has gone silent (untracked
+     *
+     * <p>In a snapshot gap the clock runs into the extrapolation cap
+     * ({@link #MAX_EXTRAPOLATION_TICKS} past the newest snapshot) and holds
+     * there — the train stands where extrapolation took it — until the
+     * resumed stream's playback point catches up with the clock. Snapping back
+     * to (newest − delay) instead made a train saw-tooth through a server
+     * hitch (a second ahead, a jump back, again). Only a tick that brought a
+     * snapshot may snap, when its target is far from the clock.
+     *
+     * <p>Also drops states whose snapshot stream has gone silent (untracked
      * consist) — see {@link #STALE_DROP_TICKS}.
      */
     public static void tickAll() {
@@ -240,19 +282,27 @@ public final class ClientConsists {
         while (iterator.hasNext()) {
             var entry = iterator.next();
             State state = entry.getValue();
-            Snapshot newest = state.buffer.peekLast();
-            if (newest == null) {
-                continue;
-            }
-            if (!Double.isNaN(state.clock)
-                    && state.clock - newest.gameTime > STALE_DROP_TICKS) {
+            boolean fresh = state.silentTicks == 0; // a snapshot came since the last tick
+            if (++state.silentTicks > STALE_DROP_TICKS) {
                 iterator.remove();
                 int consistId = entry.getKey();
                 MEMBERS.values().removeIf(member -> member.consistId == consistId);
                 continue;
             }
+            Snapshot newest = state.buffer.peekLast();
+            if (newest == null) {
+                continue;
+            }
             double target = newest.gameTime - INTERP_DELAY_TICKS;
-            if (Double.isNaN(state.clock) || Math.abs(target - state.clock) > CLOCK_SNAP_TICKS) {
+            if (state.holding) {
+                if (state.clock + 1.0 > target) {
+                    state.prevClock = state.clock;
+                    continue;
+                }
+                state.holding = false; // the stream caught up: play on from here
+            }
+            if (Double.isNaN(state.clock)
+                    || fresh && Math.abs(target - state.clock) > CLOCK_SNAP_TICKS) {
                 state.prevClock = target - 1.0;
                 state.clock = target;
                 continue;
@@ -261,6 +311,11 @@ public final class ClientConsists {
             state.clock += 1.0;
             double err = target - state.clock;
             state.clock += Math.max(-CLOCK_SLEW_PER_TICK, Math.min(CLOCK_SLEW_PER_TICK, err));
+            double cap = newest.gameTime + MAX_EXTRAPOLATION_TICKS;
+            if (state.clock > cap) {
+                state.clock = cap;
+                state.holding = true;
+            }
         }
     }
 
@@ -371,18 +426,8 @@ public final class ClientConsists {
         if (state == null || state.buffer.isEmpty() || Double.isNaN(state.clock)) {
             return 0.0;
         }
-        Snapshot previous = null;
-        for (Snapshot snapshot : state.buffer) {
-            if (snapshot.gameTime >= state.clock) {
-                if (previous == null) {
-                    return snapshot.v;
-                }
-                double f = (state.clock - previous.gameTime) / (snapshot.gameTime - previous.gameTime);
-                return previous.v + (snapshot.v - previous.v) * f;
-            }
-            previous = snapshot;
-        }
-        return state.buffer.peekLast().v;
+        double v = bracketed(state, state.clock, Snapshot::v);
+        return Double.isNaN(v) ? state.buffer.peekLast().v : v;
     }
 
     /** The consist's materialized path (for debug rendering), or null. */
@@ -393,20 +438,34 @@ public final class ClientConsists {
 
     /** Interpolate s between bracketing snapshots; extrapolate past the newest. */
     private static double sampleS(State state, double time) {
-        Snapshot previous = null;
-        for (Snapshot snapshot : state.buffer) {
-            if (snapshot.gameTime >= time) {
-                if (previous == null) {
-                    return snapshot.s;
-                }
-                double f = (time - previous.gameTime) / (snapshot.gameTime - previous.gameTime);
-                return previous.s + (snapshot.s - previous.s) * f;
-            }
-            previous = snapshot;
+        double s = bracketed(state, time, Snapshot::s);
+        if (!Double.isNaN(s)) {
+            return s;
         }
         Snapshot newest = state.buffer.peekLast();
         double dt = Math.min(time - newest.gameTime, MAX_EXTRAPOLATION_TICKS);
         return newest.s + newest.v * dt;
+    }
+
+    /**
+     * A snapshot field interpolated between the snapshots bracketing
+     * {@code time} (the oldest one's value before the buffer), NaN past the
+     * newest.
+     */
+    private static double bracketed(State state, double time, ToDoubleFunction<Snapshot> field) {
+        Snapshot previous = null;
+        for (Snapshot snapshot : state.buffer) {
+            if (snapshot.gameTime >= time) {
+                if (previous == null) {
+                    return field.applyAsDouble(snapshot);
+                }
+                double f = (time - previous.gameTime) / (snapshot.gameTime - previous.gameTime);
+                double from = field.applyAsDouble(previous);
+                return from + (field.applyAsDouble(snapshot) - from) * f;
+            }
+            previous = snapshot;
+        }
+        return Double.NaN;
     }
 
     /** Drop everything (e.g. on logout / level change). */

@@ -324,7 +324,7 @@ public final class RwatNetwork {
         if (context.player() instanceof ServerPlayer player
                 && player.getVehicle() instanceof WagonEntity wagon
                 && wagon.getId() == payload.wagonId()) {
-            wagon.setWalkInput(player, payload.forward(), payload.strafe(),
+            wagon.setWalkInput(player, payload.seq(), payload.forward(), payload.strafe(),
                     payload.relativeYaw(), payload.sneak(), payload.exit());
         }
     }

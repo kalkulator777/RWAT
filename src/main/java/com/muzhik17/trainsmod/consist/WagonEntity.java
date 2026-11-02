@@ -21,9 +21,11 @@ import com.muzhik17.trainsmod.kinematics.PoseMath;
 import com.muzhik17.trainsmod.kinematics.ReturnAboard;
 import com.muzhik17.trainsmod.kinematics.RiderWalk;
 import com.muzhik17.trainsmod.kinematics.WagonPose;
+import com.muzhik17.trainsmod.network.RiderLocal;
 import com.muzhik17.trainsmod.network.RiderPlacePayload;
 import com.muzhik17.trainsmod.stock.ConsistComposition;
 import com.muzhik17.trainsmod.stock.WagonType;
+import com.muzhik17.trainsmod.stock.WagonTypes;
 
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -42,7 +44,9 @@ import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.vehicle.DismountHelper;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.phys.AABB;
@@ -163,6 +167,8 @@ public class WagonEntity extends Entity {
 
     /** Server-authoritative local feet of each walking rider (SPEC v1.5-б). */
     private final Map<UUID, Vector3d> riderLocal = new HashMap<>();
+    /** The number of each rider's last walk input taken in here: the rider sync tells their client. */
+    private final Map<UUID, Integer> walkAck = new HashMap<>();
     /** Set true only while {@link #exitRider} runs, so the dismount guard lets it through. */
     private boolean dismountAllowed;
     /** Set true only while a gangway boards a rider here ({@link #boardAt}): see {@link #carryingOn()}. */
@@ -340,6 +346,29 @@ public class WagonEntity extends Entity {
     }
 
     /**
+     * A wagon destroyed past its train — {@code /kill}, falling out of the
+     * world — leaves the train as if broken up ({@link
+     * ConsistManager#breakWagon}, no item): the consist would otherwise run
+     * on with a ghost wagon. The manager unlists a wagon before it removes
+     * it, and an unloading chunk or a change of dimension doesn't destroy
+     * one, so those removals pass as they are.
+     */
+    @Override
+    public void remove(RemovalReason reason) {
+        if (reason.shouldDestroy() && !isRemoved() && level() instanceof ServerLevel level) {
+            ConsistManager manager = ConsistManager.get(level);
+            Consist owner = manager.ownerOf(getUUID());
+            if (owner != null) {
+                setConsistId(owner.id()); // a stale id (it sat unloaded through a coupling) put right
+                if (manager.breakWagon(level, this, false) && isRemoved()) {
+                    return;
+                }
+            }
+        }
+        super.remove(reason);
+    }
+
+    /**
      * The blow's rock this tick, radians of roll (client): a minecart's
      * wobble ({@code sin(t)·t·wear/10}, degrees, swinging as it fades) at
      * {@link #KNOCK_SHARE} of its size.
@@ -386,12 +415,22 @@ public class WagonEntity extends Entity {
      * boardable} wagon takes a walking rider; otherwise any cab wagon with a
      * free seat takes a driver (SPEC §6.12 — the front-most manned cab is
      * in control). Right-clicking the wagon you already ride exits. A crowbar
-     * in hand isn't for boarding: the click goes on to the item.
+     * in hand isn't for boarding: the click goes on to the item. Both sides
+     * decide alike whether the click is the wagon's: one it passes on goes on
+     * to the item in hand (food, a block) with the crosshair on the car.
      */
     @Override
     public InteractionResult interact(Player player, InteractionHand hand) {
-        if (player.getItemInHand(hand).getItem() instanceof CrowbarItem) {
-            return InteractionResult.PASS;
+        WagonType type = typeNow();
+        if (player.getItemInHand(hand).getItem() instanceof CrowbarItem
+                || type != null && type.doorsOnly()) {
+            return InteractionResult.PASS; // the crowbar's; a doors-only car is in and out by its doors
+        }
+        boolean exits = player.getVehicle() == this;
+        boolean boards = !player.isPassenger() && (type != null && type.boardable()
+                || (type == null || type.drivable()) && getPassengers().isEmpty());
+        if (!exits && !boards) {
+            return InteractionResult.PASS; // riding something else, or nothing here takes them
         }
         if (level().isClientSide) {
             return InteractionResult.sidedSuccess(true);
@@ -399,32 +438,22 @@ public class WagonEntity extends Entity {
         if (!(player instanceof ServerPlayer serverPlayer)) {
             return InteractionResult.PASS;
         }
-        WagonType type = serverType();
-        if (type != null && type.doorsOnly()) {
-            return InteractionResult.PASS; // in and out through the doors only
-        }
-        if (player.getVehicle() == this) {
+        if (exits) {
             exitRider(serverPlayer);
             return InteractionResult.CONSUME;
-        }
-        if (player.isPassenger()) {
-            return InteractionResult.PASS;
         }
         if (type != null && type.boardable()) {
             board(serverPlayer, type);
             return InteractionResult.CONSUME;
         }
-        if ((type == null || type.drivable()) && getPassengers().isEmpty()) {
-            if (type != null && !CabAccess.check(player)) {
-                return InteractionResult.CONSUME; // its seat is the controls (SPEC §9.2)
-            }
-            player.startRiding(this);
-            player.displayClientMessage(inControl(serverPlayer)
-                    ? keysHint("message.railswheelsandtrains.drive_hint")
-                    : Component.translatable("message.railswheelsandtrains.drive_other_cab"), true);
-            return InteractionResult.CONSUME;
+        if (type != null && !CabAccess.check(player)) {
+            return InteractionResult.CONSUME; // its seat is the controls (SPEC §9.2)
         }
-        return InteractionResult.PASS;
+        player.startRiding(this);
+        player.displayClientMessage(inControl(serverPlayer)
+                ? keysHint("message.railswheelsandtrains.drive_hint")
+                : Component.translatable("message.railswheelsandtrains.drive_other_cab"), true);
+        return InteractionResult.CONSUME;
     }
 
     /**
@@ -720,8 +749,10 @@ public class WagonEntity extends Entity {
     /**
      * The cab ({@link CabArea}) a passenger of this wagon is in, −1 if none
      * (SPEC §9.2): the cab of the chair they sit in, else the one their feet
-     * stand in (the server's, or the client's predicted and synced). A rider
-     * of a cab without a walkable interior sits at its controls: cab 0.
+     * stand in (the server's, or the client's predicted and synced feet on
+     * this car, {@link ClientWalk#on} — not those still on the car a gangway
+     * took them from). A rider of a cab without a walkable interior sits at
+     * its controls: cab 0.
      */
     public int cabOf(Entity passenger) {
         WagonType type = typeNow();
@@ -736,7 +767,7 @@ public class WagonEntity extends Entity {
         if (chair >= 0) {
             return area.cabOfChair(chair);
         }
-        Vector3d local = level().isClientSide ? ClientWalk.get(passenger.getId())
+        Vector3d local = level().isClientSide ? ClientWalk.on(passenger.getId(), getId())
                 : riderLocal.get(passenger.getUUID());
         if (local == null) {
             return -1;
@@ -753,7 +784,7 @@ public class WagonEntity extends Entity {
     public int deskOf(Entity passenger) {
         WagonType type = typeNow();
         int cab = isSeated(passenger) ? -1 : cabOf(passenger);
-        Vector3d local = cab < 0 ? null : level().isClientSide ? ClientWalk.get(passenger.getId())
+        Vector3d local = cab < 0 ? null : level().isClientSide ? ClientWalk.on(passenger.getId(), getId())
                 : riderLocal.get(passenger.getUUID());
         if (type == null || local == null) {
             return -1;
@@ -884,6 +915,22 @@ public class WagonEntity extends Entity {
     }
 
     /**
+     * Let a rider off where they stand, by a sanctioned exit (server): for
+     * what carries them elsewhere — a teleport, another dimension, spectating,
+     * another vehicle ({@link ConsistEvents}). Vanilla's own dismount on the
+     * way there is one the guard refuses: the player stayed aboard, or the car
+     * kept them as a ghost passenger. Their chair and floor spot go with them.
+     */
+    public void releaseRider(ServerPlayer player) {
+        if (player.getVehicle() != this) {
+            return;
+        }
+        doorExit = player.position();
+        exitRider(player);
+        doorExit = null;
+    }
+
+    /**
      * Apply one tick of walk input from a rider (server-authoritative, SPEC
      * v1.5-б): the exit edge dismounts; otherwise step the rider's local feet
      * along the floor and clamp inside the interior walls. Crouched
@@ -891,9 +938,14 @@ public class WagonEntity extends Entity {
      * only a gangway into the next car ({@link RiderWalk#exitDoor}).
      * {@code relativeYaw} is the look relative to the car as the client drew
      * it, so the step here is the client's own ({@code WalkInputPayload}).
+     * Every input taken in is acknowledged by its number {@code seq}, applied
+     * or not (seated, the keys drive): the rider sync says which input the
+     * feet are after, and the client puts its prediction right against them
+     * there ({@code ClientWalkLog}).
      */
-    public void setWalkInput(ServerPlayer player, float forward, float strafe, float relativeYaw,
+    public void setWalkInput(ServerPlayer player, int seq, float forward, float strafe, float relativeYaw,
             boolean sneak, boolean exit) {
+        walkAck.put(player.getUUID(), seq);
         if (isSeated(player)) {
             return; // seated: the keys drive (DriveInputPayload), sneaking stands up
         }
@@ -964,8 +1016,8 @@ public class WagonEntity extends Entity {
      * on that end (SPEC §9.5): the wagon ahead for a door in the front (+Z)
      * end wall, the one behind for the rear. Both pose frames point the same
      * way along the train, so the rider keeps their place across the car.
-     * False (the door stays wall) if no wagon is coupled there, it has no
-     * connecting door facing back, or that door is shut.
+     * False (the door stays wall) if no wagon is coupled there or it has no
+     * open connecting door facing back.
      */
     private boolean passGangway(ServerPlayer player, WagonType.Door door, Vector3d local) {
         if (door.axis() != 2 || !(level() instanceof ServerLevel level)) {
@@ -996,10 +1048,10 @@ public class WagonEntity extends Entity {
 
     /**
      * Where a rider coming through the gangway lands here (SPEC §9.5): just
-     * inside this wagon's connecting door in the end wall facing them, at
-     * their place across the car (within the door), on the floor. Null if
-     * there is no such door, it is shut (the rider opens it themselves) or
-     * there is no floor.
+     * inside this wagon's open connecting door in the end wall facing them
+     * (the nearest, if several), at their place across the car (within the
+     * door), on the floor. Null if there is no such door open (the rider
+     * opens it themselves) or there is no floor.
      *
      * @param travel the way they walk along the train: +1 forward (they enter
      *               through this wagon's rear end), -1 back
@@ -1070,12 +1122,14 @@ public class WagonEntity extends Entity {
 
     /**
      * The open doorways the outer hull lets a <b>player</b> through (SPEC
-     * v1.5): one {@link HullCollision.Portal} per open door, read on both
-     * sides — the local player's movement is resolved client-side.
+     * v1.5): one {@link HullCollision.Portal} per open door, in the wall on
+     * its side ({@link HullCollision.Portal#of}), read on both sides — the
+     * local player's movement is resolved client-side.
      */
     public List<HullCollision.Portal> openPortals() {
         List<WagonType.Door> doors = framedDoors();
-        if (doors.isEmpty()) {
+        WagonType.Hull hull = collisionHull();
+        if (doors.isEmpty() || hull == null) {
             return List.of();
         }
         int mask = doorMask();
@@ -1084,11 +1138,7 @@ public class WagonEntity extends Entity {
             // a door between floor zones is inside the hull and a gangway door
             // is no way in from the ground: they cut nothing (SPEC §9.1, §9.5)
             if (doors.get(i).external() && doors.get(i).open(mask, i)) {
-                WagonType.Door door = doors.get(i);
-                portals.add(new HullCollision.Portal(door.axis(),
-                        door.spanMin() + RiderWalk.DOOR_SPAN_INSET,
-                        door.spanMax() - RiderWalk.DOOR_SPAN_INSET,
-                        door.maxY()));
+                portals.add(HullCollision.Portal.of(doors.get(i), hull));
             }
         }
         return portals;
@@ -1176,7 +1226,8 @@ public class WagonEntity extends Entity {
      * the pose is set): the hull let them into the opening ({@link #openPortals}),
      * and once they are past the hull face they become walking riders on the
      * vestibule floor. Entering from the ground works — the step well under a
-     * real vestibule door is what you'd climb.
+     * real vestibule door is what you'd climb. Only through the door's own
+     * wall: a closed door opposite an open one boards nobody.
      */
     public void boardThroughDoors(ServerLevel level) {
         WagonType type = serverType();
@@ -1187,7 +1238,6 @@ public class WagonEntity extends Entity {
         if (portals.isEmpty()) {
             return;
         }
-        WagonType.Hull hull = type.collidableHull();
         Vector3d body = new Vector3d(getX(), getY(), getZ());
         double reach = type.length() / 2.0 + 4.0;
         for (ServerPlayer player : level.players()) {
@@ -1199,14 +1249,9 @@ public class WagonEntity extends Entity {
             Vector3d local = PoseMath.worldToLocal(body, getYRot(), getXRot(),
                     new Vector3d(c.x, c.y, c.z));
             for (HullCollision.Portal portal : portals) {
-                if (!portal.contains(local.x, local.y, local.z)) {
-                    continue;
-                }
-                double across = portal.axis() == 0 ? local.x : local.z;
-                double face = portal.axis() == 0
-                        ? (across > 0 ? hull.maxX() : -hull.minX())
-                        : (across > 0 ? hull.maxZ() : -hull.minZ());
-                if (Math.abs(across) - RiderWalk.PLAYER_HALF_WIDTH < face - BOARD_DEPTH) {
+                // the body's inner side past the door's wall face by BOARD_DEPTH
+                if (portal.contains(local.x, local.y, local.z)
+                        && portal.outside(local.x, local.z) - RiderWalk.PLAYER_HALF_WIDTH < -BOARD_DEPTH) {
                     board(player, type);
                     break;
                 }
@@ -1361,20 +1406,22 @@ public class WagonEntity extends Entity {
     }
 
     /**
-     * This wagon's walking riders as (passenger entity id → local feet), for the
-     * server→client {@code RiderSyncPayload} (SPEC v1.5-б). Keyed by the network
-     * entity id (the same on every client), not UUID, so observers can match it
-     * to the rider entity. Empty when no one walks here — the common case.
+     * This wagon's walking riders' local feet, for the server→client {@code
+     * RiderSyncPayload} (SPEC v1.5-б), each with the number of the rider's last
+     * walk input taken in here. Keyed by the network entity id (the same on
+     * every client), not UUID, so observers can match it to the rider entity.
+     * Empty when no one walks here — the common case.
      */
-    public Map<Integer, Vector3d> walkingRiderLocals() {
+    public List<RiderLocal> walkingRiders() {
         if (riderLocal.isEmpty()) {
-            return Map.of();
+            return List.of();
         }
-        Map<Integer, Vector3d> out = new HashMap<>();
+        List<RiderLocal> out = new ArrayList<>();
         for (Entity passenger : getPassengers()) {
             Vector3d local = riderLocal.get(passenger.getUUID());
             if (local != null) {
-                out.put(passenger.getId(), local);
+                out.add(new RiderLocal(passenger.getId(), getId(), local.x, local.y, local.z,
+                        walkAck.getOrDefault(passenger.getUUID(), RiderLocal.NO_ACK)));
             }
         }
         return out;
@@ -1501,7 +1548,10 @@ public class WagonEntity extends Entity {
         return carryingOn;
     }
 
-    /** Drop a walking rider out the nearer side of the car, by their floor spot. */
+    /**
+     * Drop a walking rider out the nearer side of the car, by their floor
+     * spot; a driver off a cab seat beside the car ({@link #besideTheCab}).
+     */
     @Override
     public Vec3 getDismountLocationForPassenger(LivingEntity passenger) {
         if (doorExit != null) {
@@ -1518,13 +1568,46 @@ public class WagonEntity extends Entity {
                     getYRot(), getXRot(), new Vector3d(side, interior.floorY(), local.z));
             return new Vec3(world.x, world.y, world.z);
         }
+        if (type != null) {
+            return besideTheCab(passenger, type.collidableHull());
+        }
         return super.getDismountLocationForPassenger(passenger);
+    }
+
+    /**
+     * Where a driver getting off a cab without a walkable floor lands
+     * (server): beside the car, clear of its hull, level with the hull's
+     * bottom — a short drop — on the side they look to, or the other if a body
+     * doesn't fit there (vanilla's dismount test). Vanilla's own spot, on top
+     * of the small pick box in the middle, is inside the hull.
+     */
+    private Vec3 besideTheCab(LivingEntity passenger, WagonType.Hull hull) {
+        Vector3d body = new Vector3d(getX(), getY(), getZ());
+        Vec3 look = passenger.getLookAngle();
+        Vector3d ahead = PoseMath.worldToLocal(body, getYRot(), getXRot(),
+                new Vector3d(getX() + look.x, getY() + look.y, getZ() + look.z));
+        int first = ahead.x >= 0.0 ? 1 : -1;
+        Vec3 looked = null;
+        for (int side : new int[]{first, -first}) {
+            double x = side > 0 ? hull.maxX() + RiderWalk.PLAYER_HALF_WIDTH + EXIT_CLEARANCE
+                    : hull.minX() - RiderWalk.PLAYER_HALF_WIDTH - EXIT_CLEARANCE;
+            Vector3d world = PoseMath.localToWorld(body, getYRot(), getXRot(), new Vector3d(x, hull.minY(), 0.0));
+            Vec3 spot = new Vec3(world.x, world.y, world.z);
+            if (DismountHelper.canDismountTo(level(), spot, passenger, Pose.STANDING)) {
+                return spot;
+            }
+            if (looked == null) {
+                looked = spot;
+            }
+        }
+        return looked;
     }
 
     @Override
     protected void removePassenger(Entity passenger) {
         super.removePassenger(passenger);
         riderLocal.remove(passenger.getUUID());
+        walkAck.remove(passenger.getUUID());
         int chair = chairOf(passenger);
         if (!level().isClientSide && chair >= 0) {
             setSeated(chair, -1);
@@ -1549,12 +1632,29 @@ public class WagonEntity extends Entity {
      */
     @Override
     public AABB getBoundingBoxForCulling() {
-        // half the longest stock frame (platzkart ~12.6) plus curve slack
-        double reach = 16.0;
+        // half the longest car's frame plus curve slack
+        double reach = WagonTypes.longest() / 2.0 + 3.4;
         if (level().isClientSide) {
             reach += Math.abs(ClientConsists.speed(getConsistId())) * 2.0;
         }
         return getBoundingBox().inflate(reach);
+    }
+
+    /**
+     * Drawn as far as it is tracked. Vanilla draws an entity out to its box's
+     * size × 64 blocks, times the entity-distance setting ({@link
+     * #getViewScale}) — the 1.5 pick box gave 96, short of the 160 a wagon is
+     * tracked at, so trains came and went six chunks out while the rails ran
+     * on. The car's length stands in for the box's size here, and the range
+     * never falls short of the tracking range: a wagon the server sends is
+     * drawn.
+     */
+    @Override
+    public boolean shouldRenderAtSqrDistance(double distanceSq) {
+        WagonType type = typeNow();
+        double size = type != null ? type.length() : getBoundingBox().getSize();
+        double range = Math.max(size * 64.0 * getViewScale(), getType().clientTrackingRange() * 16.0);
+        return distanceSq < range * range;
     }
 
     /** Server: open the doors a save had open, once this wagon's type is known (SPEC §9.8). */

@@ -1,5 +1,6 @@
 package com.muzhik17.trainsmod.client.sound;
 
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Locale;
@@ -45,9 +46,10 @@ public record SoundSet(Loop idle, Loop horn, Loop bell, Loop wheels, String clac
 
     public static final SoundSet NONE = new SoundSet(null, null, null, null, null, Map.of(), Map.of());
 
+    /** The maps keep the declaration's order (a cab control of a kind is the first declared, {@link #control}). */
     public SoundSet {
-        doors = Map.copyOf(doors);
-        controls = Map.copyOf(controls);
+        doors = Collections.unmodifiableMap(new LinkedHashMap<>(doors));
+        controls = Collections.unmodifiableMap(new LinkedHashMap<>(controls));
     }
 
     /**
@@ -61,6 +63,20 @@ public record SoundSet(Loop idle, Loop horn, Loop bell, Loop wheels, String clac
 
     /** A cab control's sounds: {@code move} on every notch, {@code engage} when it starts moving. */
     public record Control(String move, String engage) {
+    }
+
+    /**
+     * The cab control of a kind: the first declared whose key starts with
+     * {@code kind} or {@code alias} ({@code THROTTLE_1} before
+     * {@code THROTTLE_2}, as the pack lists them); null if none.
+     */
+    public Control control(String kind, String alias) {
+        for (Map.Entry<String, Control> entry : controls.entrySet()) {
+            if (entry.getKey().startsWith(kind) || (alias != null && entry.getKey().startsWith(alias))) {
+                return entry.getValue();
+            }
+        }
+        return null;
     }
 
     /** True if a sound reference names a file rather than a sound event. */

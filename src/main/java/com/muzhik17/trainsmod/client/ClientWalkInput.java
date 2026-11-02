@@ -1,5 +1,6 @@
 package com.muzhik17.trainsmod.client;
 
+import java.util.List;
 import java.util.Locale;
 
 import org.joml.Vector3d;
@@ -17,10 +18,13 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket;
 import net.minecraft.util.Mth;
+import net.minecraft.world.InteractionHand;
 import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
@@ -28,9 +32,13 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * WASD as floor movement, predicts the rider's local feet each tick (the same
  * pure {@link RiderWalk} step the server runs, so {@link ClientWalk} matches
  * the authoritative position with no round-trip), and forwards the input to the
- * server. Right-click (use) requests an exit on a door-less type; one with
- * doors is left by walking out an open door ({@code WagonEntity}), and the
- * click is the door's ({@link ClientDoorInteract}). The cab driver is handled by
+ * server, numbered: the server's feet come back with the number of the input
+ * they are after, and should they be off the prediction after it, they win
+ * ({@link ClientWalkLog}). Right-click (use) requests an exit on a door-less
+ * type, if no pick took the click ({@link #onUse}: a handbrake wheel, a
+ * window, a gangway door or a chair keeps its click); one with doors is left
+ * by walking out an open door ({@code WagonEntity}), and the click is the
+ * door's ({@link ClientDoorInteract}). The cab driver is handled by
  * {@link ClientDriveInput} instead — this only engages on wagons with a
  * boardable interior.
  *
@@ -62,8 +70,13 @@ import net.neoforged.neoforge.network.PacketDistributor;
 @EventBusSubscriber(modid = RailsWheelsAndTrains.MODID, value = Dist.CLIENT)
 public final class ClientWalkInput {
 
-    /** Use-key state, to send the exit as a single edge; true while not riding so a held boarding click doesn't exit. */
+    /**
+     * Use-key state last tick: a use while it was down is vanilla's repeat,
+     * not a new click; true while not riding so a held boarding click doesn't exit.
+     */
     private static boolean useWasDown = true;
+    /** A new right-click no pick took came this tick ({@link #onUse}): the exit, on a door-less type. */
+    private static boolean useClicked;
     /** Wagon yaw last tick, to turn the camera by its per-tick change; null when not aboard. */
     private static Float prevWagonYaw;
     /** The ridden wagon's flipped flag last tick, to notice a coupling turning it; null when not aboard. */
@@ -74,17 +87,8 @@ public final class ClientWalkInput {
     private static boolean sneakWasDown = true;
     /** Entity id of the wagon the predicted feet belong to, or -1 when not walking one. */
     private static int walkedWagon = -1;
-    /** Ticks the walking rider has stood still (no key held), to check the feet against the server's. */
-    private static int stillTicks;
-
-    /**
-     * Standing still this long, the server has run every step the rider took
-     * (a round trip under half a second), so its feet and the prediction must
-     * be the same — or they drifted apart.
-     */
-    private static final int RESYNC_STILL_TICKS = 10;
-    /** How far the prediction may be off the server's feet, standing, before it is put right, blocks. */
-    private static final double RESYNC_TOLERANCE = 0.05;
+    /** The walk inputs sent on that wagon the server hasn't acknowledged, to check its feet against. */
+    private static final ClientWalkLog WALK_LOG = new ClientWalkLog();
     /**
      * The most a car turns in a tick, degrees: well past a train's (300 km/h
      * on the tightest curve ≈ 16°). A bigger jump of its yaw is its pose frame
@@ -99,6 +103,8 @@ public final class ClientWalkInput {
     static void onClientTick(ClientTickEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
         LocalPlayer player = mc.player;
+        boolean clicked = useClicked; // this tick's: vanilla handles the keys before the tick ends
+        useClicked = false;
         if (player == null || !(player.getVehicle() instanceof WagonEntity wagon)) {
             if (player != null && walkedWagon != -1) {
                 // off a walkable car: aboard, the sneak key reached the server
@@ -115,7 +121,7 @@ public final class ClientWalkInput {
             prevFlipped = null;
             prevSeat = null;
             walkedWagon = -1;
-            stillTicks = 0;
+            WALK_LOG.clear();
             ClientWalk.takeServerFeet();
             ClientWalk.clearLocalOwner();
             ClientRiderSteps.resetLocal();
@@ -131,7 +137,7 @@ public final class ClientWalkInput {
             prevWagonYaw = null;
             prevFlipped = null;
             walkedWagon = -1;
-            stillTicks = 0;
+            WALK_LOG.clear();
             ClientWalk.takeServerFeet();
             ClientWalk.clearLocalOwner();
             ClientRiderSteps.resetLocal();
@@ -147,7 +153,7 @@ public final class ClientWalkInput {
             walkedWagon = wagonId;
             prevWagonYaw = null;
             prevFlipped = null;
-            stillTicks = 0;
+            WALK_LOG.clear();
             Vector3d synced = ClientWalk.on(player.getId(), wagonId);
             if (synced != null) {
                 ClientWalk.put(player.getId(), wagonId, synced);
@@ -180,6 +186,7 @@ public final class ClientWalkInput {
             if (feet != null) {
                 ClientWalk.put(player.getId(), wagonId, new Vector3d(-feet.x, feet.y, -feet.z));
             }
+            WALK_LOG.mirror();
         }
         prevFlipped = flipped;
         if (prevWagonYaw != null) {
@@ -214,8 +221,7 @@ public final class ClientWalkInput {
             sneakWasDown = sneak;
             prevSeat = seat;
             useWasDown = true;
-            stillTicks = 0; // the chair's feet aren't walked
-            ClientWalk.takeServerFeet();
+            ClientWalk.takeServerFeet(); // the chair's feet aren't walked
             return;
         }
         if (prevSeat != null) {
@@ -236,9 +242,8 @@ public final class ClientWalkInput {
         // read the key, not the player: crouched is what the server is told
         boolean sneak = mc.options.keyShift.isDown();
 
-        boolean useDown = mc.options.keyUse.isDown();
-        boolean exit = useDown && !useWasDown && !doorsOnly(wagon);
-        useWasDown = useDown;
+        boolean exit = clicked && !doorsOnly(wagon);
+        useWasDown = mc.options.keyUse.isDown();
 
         // predict the local feet (seed from the world position on the first tick aboard)
         Vector3d local = ClientWalk.get(player.getId());
@@ -249,21 +254,31 @@ public final class ClientWalkInput {
                             new Vector3d(player.getX(), player.getY(), player.getZ())),
                     RiderWalk.PLAYER_HALF_WIDTH);
         }
-        // standing still, the prediction must match the server's feet; if it
-        // drifted off, the server's win — else the server keeps the rider where
-        // the client isn't: doors out of reach, the doorway never reached
-        stillTicks = forward == 0.0f && strafe == 0.0f ? stillTicks + 1 : 0;
-        ClientWalk.Feet server = ClientWalk.takeServerFeet();
-        if (server != null && stillTicks >= RESYNC_STILL_TICKS && server.wagonId() == wagonId
-                && server.local().distance(local) > RESYNC_TOLERANCE) {
-            RailsWheelsAndTrains.LOGGER.info(
-                    "[ride-debug] feet on wagon {} re-synced from the server, off by {}: client {} server {}",
-                    wagonId, String.format(Locale.ROOT, "%.2f", server.local().distance(local)),
-                    fmt(local), fmt(server.local()));
-            local = new Vector3d(server.local());
+        // the server's feet after one of our inputs must be where the prediction
+        // had them after it; if they drifted off, the server's win — else it
+        // keeps the rider where the client isn't: doors out of reach, the
+        // doorway never reached — and the inputs still on their way are walked
+        // again from them, on the car as it is now (ClientWalkLog: no round
+        // trip is too long, nobody is pulled back to where they stood)
+        List<WagonType.Door> doors = wagon.framedDoors();
+        int doorMask = wagon.doorMask();
+        ClientWalk.ServerFeet server = ClientWalk.takeServerFeet();
+        if (server != null && server.wagonId() == wagonId) {
+            Vector3d fixed = WALK_LOG.acknowledged(server.local(), server.ack(), (from, input) ->
+                    RiderWalk.step(from, input.forward(), input.strafe(), input.relativeYaw(), 0.0F,
+                            interior, doors, doorMask, input.sneak()));
+            if (fixed != null && fixed.distance(local) > ClientWalkLog.TOLERANCE) {
+                RailsWheelsAndTrains.LOGGER.info(
+                        "[ride-debug] feet on wagon {} re-synced from the server after input {}, off by {}:"
+                                + " client {} now {}", wagonId, server.ack(),
+                        String.format(Locale.ROOT, "%.2f", fixed.distance(local)), fmt(local), fmt(fixed));
+            }
+            if (fixed != null) {
+                local = fixed;
+            }
         }
         Vector3d next = RiderWalk.step(local, forward, strafe, relativeYaw, 0.0F, interior,
-                wagon.framedDoors(), wagon.doorMask(), sneak);
+                doors, doorMask, sneak);
         ClientWalk.put(player.getId(), wagonId, next);
 
         // the body turns toward where it walks, the legs, the view bob and the
@@ -271,7 +286,8 @@ public final class ClientWalkInput {
         ClientRiderSteps.localStep(player, wagon, next.x - local.x, next.z - local.z, sneak);
         player.setYHeadRot(player.getYRot());
 
-        PacketDistributor.sendToServer(new WalkInputPayload(wagonId, forward, strafe, relativeYaw, sneak, exit));
+        int seq = WALK_LOG.sent(forward, strafe, relativeYaw, sneak, next);
+        PacketDistributor.sendToServer(new WalkInputPayload(wagonId, seq, forward, strafe, relativeYaw, sneak, exit));
     }
 
     /** Local feet for the debug log, two decimals. */
@@ -284,6 +300,19 @@ public final class ClientWalkInput {
         ConsistComposition.Slot slot =
                 ClientConsists.slot(wagon.getConsistId(), wagon.getWagonIndex());
         return slot != null && slot.type().doorsOnly();
+    }
+
+    /**
+     * A right-click that reached the end: no pick took it — they cancel the
+     * clicks that are theirs, and the repeats of a button held since one
+     * ({@link ClientWagonRay#onUseHeld}) — so it is the rider's own. Only a
+     * new press counts, not vanilla's repeats while the button is held.
+     */
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    static void onUse(InputEvent.InteractionKeyMappingTriggered event) {
+        if (event.isUseItem() && event.getHand() == InteractionHand.MAIN_HAND && !useWasDown) {
+            useClicked = true;
+        }
     }
 
     /** The synced floor of the wagon the player rides, in its pose frame, or null if not boardable. */

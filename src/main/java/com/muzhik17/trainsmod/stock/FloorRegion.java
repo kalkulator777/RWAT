@@ -18,10 +18,20 @@ import java.util.List;
  * strip edges ± the margin (plus the edges themselves, which matter for a
  * zone exactly a player deep), each slab with the X intervals a centre may
  * take. Pieces are closed boxes in the X–Z plane, in Z order.
+ *
+ * <p>A region may have <b>cuts</b> ({@link Cut}): open boxes no centre stands
+ * in, a shut door between zones (SPEC §9.1). The union can't say a shut door
+ * is wall where the zones on its two sides touch or overlap in its doorway
+ * (the platzkart's compartment, {@code DoorKupe}); the cut does, being taken
+ * out of where centres stand: the pieces end at its faces, and a step must
+ * not pass through it ({@link #throughCut}) — a leaf may be thinner than a step.
+ * Only a cut that takes something out is kept: one in a wall changes nothing.
  */
 public final class FloorRegion {
 
     private static final double EPS = 1.0e-9;
+    /** The thinnest a cut is across the wall: a door box thinner than this still parts the floor. */
+    private static final double MIN_CUT = 0.01;
 
     /** One box of the region: centres with x in [minX, maxX] and z in [minZ, maxZ] fit. */
     public record Piece(double minX, double minZ, double maxX, double maxZ) {
@@ -43,6 +53,63 @@ public final class FloorRegion {
         }
     }
 
+    /**
+     * A box of the X–Z plane no centre stands in: open, its faces are still
+     * floor. A shut door between zones ({@link #shut}).
+     */
+    public record Cut(double minX, double minZ, double maxX, double maxZ) {
+
+        /**
+         * Where shut door {@code door} stands across the floor (SPEC §9.1): no
+         * centre inside its leaf's thickness while the body, {@code margin}
+         * either way of it, overlaps the leaf along the wall — the door's box
+         * across the wall (at least a centimetre thick), its span grown
+         * by the margin along it. The leaf isn't grown across the wall: zones
+         * often run into a doorway or a little under a leaf (the platzkart's
+         * aisle by the compartment, the VL80's walkway by its sliding doors),
+         * and a leaf a body wide would close the floor beside it.
+         */
+        public static Cut shut(WagonType.Door door, double margin) {
+            boolean side = door.axis() == 0;
+            double lo = side ? door.minX() : door.minZ();
+            double hi = side ? door.maxX() : door.maxZ();
+            if (hi - lo < MIN_CUT) {
+                double mid = (lo + hi) * 0.5;
+                lo = mid - MIN_CUT * 0.5;
+                hi = mid + MIN_CUT * 0.5;
+            }
+            double alongLo = door.spanMin() - margin;
+            double alongHi = door.spanMax() + margin;
+            return side ? new Cut(lo, alongLo, hi, alongHi) : new Cut(alongLo, lo, alongHi, hi);
+        }
+
+        /** True if a piece of the region reaches inside this box. */
+        public boolean bites(Piece p) {
+            return p.maxX() > minX + EPS && p.minX() < maxX - EPS && p.maxZ() > minZ + EPS && p.minZ() < maxZ - EPS;
+        }
+
+        /** True if the straight line from (x0, z0) to (x1, z1) passes inside this box (along a face doesn't). */
+        public boolean crossed(double x0, double z0, double x1, double z1) {
+            double[] t = {0.0, 1.0};
+            return clip(x0, x1 - x0, minX + EPS, maxX - EPS, t) && clip(z0, z1 - z0, minZ + EPS, maxZ - EPS, t);
+        }
+
+        /** Narrows {@code t} to where p + t·d lies strictly inside (lo, hi); false if nowhere. */
+        private static boolean clip(double p, double d, double lo, double hi, double[] t) {
+            if (!(hi > lo)) {
+                return false;
+            }
+            if (Math.abs(d) < EPS) {
+                return p > lo && p < hi;
+            }
+            double a = (lo - p) / d;
+            double b = (hi - p) / d;
+            t[0] = Math.max(t[0], Math.min(a, b));
+            t[1] = Math.min(t[1], Math.max(a, b));
+            return t[0] < t[1];
+        }
+    }
+
     private final double margin;
     /** Strip edges along Z; strip {@code k} runs from {@code stripZ[k]} to {@code stripZ[k + 1]}. */
     private final double[] stripZ;
@@ -51,12 +118,15 @@ public final class FloorRegion {
     private final List<Piece> pieces;
     /** {@code pieces.get(i).maxZ()}, non-decreasing: for range lookups. */
     private final double[] pieceMaxZ;
+    /** The cuts taken out of where centres stand (only those that take something out). */
+    private final List<Cut> cuts;
 
-    private FloorRegion(double margin, double[] stripZ, double[][] stripX, List<Piece> pieces) {
+    private FloorRegion(double margin, double[] stripZ, double[][] stripX, List<Piece> pieces, List<Cut> cuts) {
         this.margin = margin;
         this.stripZ = stripZ;
         this.stripX = stripX;
         this.pieces = List.copyOf(pieces);
+        this.cuts = List.copyOf(cuts);
         this.pieceMaxZ = new double[pieces.size()];
         for (int i = 0; i < pieceMaxZ.length; i++) {
             pieceMaxZ[i] = pieces.get(i).maxZ();
@@ -70,6 +140,15 @@ public final class FloorRegion {
      * @param margin the player's half-width, &gt; 0
      */
     public static FloorRegion of(List<WagonType.Interior.Zone> zones, double margin) {
+        return of(zones, margin, List.of());
+    }
+
+    /**
+     * {@link #of(List, double)} with {@code cuts} taken out of where centres
+     * stand (shut doors, {@link Cut#shut}); a cut no centre would stand in
+     * anyway is dropped, so it leaves the pieces as they are.
+     */
+    public static FloorRegion of(List<WagonType.Interior.Zone> zones, double margin, List<Cut> cuts) {
         if (!(margin > EPS)) {
             throw new IllegalArgumentException("margin must be positive: " + margin);
         }
@@ -91,8 +170,18 @@ public final class FloorRegion {
             }
             stripX[k] = merge(spans);
         }
-        FloorRegion bare = new FloorRegion(margin, stripZ, stripX, List.of());
-        return new FloorRegion(margin, stripZ, stripX, bare.buildPieces());
+        List<Piece> whole = new FloorRegion(margin, stripZ, stripX, List.of(), List.of()).buildPieces();
+        List<Cut> biting = new ArrayList<>();
+        for (Cut cut : cuts) {
+            if (whole.stream().anyMatch(cut::bites)) {
+                biting.add(cut);
+            }
+        }
+        if (biting.isEmpty()) {
+            return new FloorRegion(margin, stripZ, stripX, whole, List.of());
+        }
+        FloorRegion bare = new FloorRegion(margin, stripZ, stripX, List.of(), biting);
+        return new FloorRegion(margin, stripZ, stripX, bare.buildPieces(), biting);
     }
 
     /** The half-width this region was shrunk by. */
@@ -103,6 +192,24 @@ public final class FloorRegion {
     /** Every box of the region, in Z order; empty if a player fits nowhere. */
     public List<Piece> pieces() {
         return pieces;
+    }
+
+    /** The cuts taken out of this region (each takes something out), empty if none. */
+    public List<Cut> cuts() {
+        return cuts;
+    }
+
+    /**
+     * True if walking straight from centre (x0, z0) to (x1, z1) passes
+     * through a cut — a shut door between two places that both fit.
+     */
+    public boolean throughCut(double x0, double z0, double x1, double z1) {
+        for (Cut cut : cuts) {
+            if (cut.crossed(x0, z0, x1, z1)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** True if a rider centred at (x, z) fits on the floor. */
@@ -215,14 +322,19 @@ public final class FloorRegion {
         if (hi < lo - EPS) {
             return out; // the whole floor is shallower than a player
         }
-        double[] cuts = new double[stripZ.length * 2 + 2];
+        // slab edges: the strip edges ± the margin, the ends, the cuts' edges
+        double[] edges = new double[stripZ.length * 2 + 2 + cuts.size() * 2];
         for (int k = 0; k < stripZ.length; k++) {
-            cuts[2 * k] = stripZ[k] - margin;
-            cuts[2 * k + 1] = stripZ[k] + margin;
+            edges[2 * k] = stripZ[k] - margin;
+            edges[2 * k + 1] = stripZ[k] + margin;
         }
-        cuts[cuts.length - 2] = lo;
-        cuts[cuts.length - 1] = Math.max(lo, hi);
-        double[] breaks = Arrays.stream(unique(cuts))
+        edges[stripZ.length * 2] = lo;
+        edges[stripZ.length * 2 + 1] = Math.max(lo, hi);
+        for (int c = 0; c < cuts.size(); c++) {
+            edges[stripZ.length * 2 + 2 + 2 * c] = cuts.get(c).minZ();
+            edges[stripZ.length * 2 + 3 + 2 * c] = cuts.get(c).maxZ();
+        }
+        double[] breaks = Arrays.stream(unique(edges))
                 .filter(v -> v >= lo - EPS && v <= Math.max(lo, hi) + EPS).toArray();
         for (int i = 0; i < breaks.length; i++) {
             addSlab(out, breaks[i], breaks[i], slice(breaks[i]));
@@ -241,7 +353,8 @@ public final class FloorRegion {
 
     /**
      * The X intervals a centre at {@code z} may take: the intervals every
-     * strip under the body covers, each shrunk by the margin, intersected.
+     * strip under the body covers, each shrunk by the margin, intersected —
+     * less the cuts {@code z} is inside of.
      */
     private double[] slice(double z) {
         double bodyLo = z - margin;
@@ -259,7 +372,39 @@ public final class FloorRegion {
                 }
             }
         }
-        return fit == null ? new double[0] : fit;
+        if (fit == null) {
+            return new double[0];
+        }
+        for (Cut cut : cuts) {
+            if (z > cut.minZ() + EPS && z < cut.maxZ() - EPS) {
+                fit = without(fit, cut.minX(), cut.maxX());
+            }
+        }
+        return fit;
+    }
+
+    /** Intervals less the open interval (a, b): what reaches into it is cut back to its ends. */
+    private static double[] without(double[] xs, double a, double b) {
+        double[] out = new double[xs.length * 2];
+        int n = 0;
+        for (int i = 0; i + 1 < xs.length; i += 2) {
+            double lo = xs[i];
+            double hi = xs[i + 1];
+            if (hi <= a + EPS || lo >= b - EPS) {
+                out[n++] = lo;
+                out[n++] = hi;
+                continue;
+            }
+            if (lo <= a + EPS) {
+                out[n++] = lo;
+                out[n++] = Math.max(lo, a);
+            }
+            if (hi >= b - EPS) {
+                out[n++] = Math.min(hi, b);
+                out[n++] = hi;
+            }
+        }
+        return Arrays.copyOf(out, n);
     }
 
     /** Intervals pulled in by {@code m} at both ends; one narrower than 2m but within EPS becomes its midpoint. */

@@ -30,7 +30,8 @@ How it goes, in RWAT model space (+Z forward, X across, Y up):
     an added chair behind it is one run with the chair, and the add would
     open a hole in it.
  6. REACHABLE only: the engine's own rule (FloorRegion: a centre fits where
-    a 0.6 × 0.6 square lies inside the union) is run on the boxes; what is
+    a 0.6 × 0.6 square lies inside the union, every inner door shut standing
+    across the floor — FloorRegion.Cut) is run on the boxes; what is
     kept is what a rider can reach from an external or connecting door,
     through inner doors (open-door bridges as RiderWalk makes them). Closets
     with no door, and floor under the frame outside the walls, fall away.
@@ -95,6 +96,8 @@ DOOR_WALL_SLACK = 0.4
 SPAN_STEP = 0.05
 ZONE_HEIGHT = 2.5
 EPS = 1.0e-9
+# the thinnest a shut door's cut is across the wall (stock.FloorRegion.MIN_CUT)
+MIN_CUT = 0.01
 # a surface this close to level is the floor; up-facing = normal.y at least this
 LEVEL_TOLERANCE = 0.04
 # a step this far below the level is still floor (the vestibule sills of the DR1a, 0.13)
@@ -249,6 +252,23 @@ class Door:
             return self.min[0] - BRIDGE_REACH, lo, self.max[0] + BRIDGE_REACH, hi
         return lo, self.min[2] - BRIDGE_REACH, hi, self.max[2] + BRIDGE_REACH
 
+    def cut(self, margin=HALF_WIDTH):
+        """FloorRegion.Cut.shut: (min x, min z, max x, max z), open, where no centre
+        stands with this door shut — its leaf across the wall (at least MIN_CUT
+        thick), its span grown by the margin along it."""
+        a = self.axis
+        lo, hi = self.min[a], self.max[a]
+        if hi - lo < MIN_CUT:
+            mid = (lo + hi) * 0.5
+            lo, hi = mid - MIN_CUT * 0.5, mid + MIN_CUT * 0.5
+        along_lo, along_hi = self.span[0] - margin, self.span[1] + margin
+        return (lo, along_lo, hi, along_hi) if a == 0 else (along_lo, lo, along_hi, hi)
+
+
+def shut_cuts(doors, margin=HALF_WIDTH):
+    """The cuts of every door between zones with a leaf, all shut (FloorCheck's parts)."""
+    return [d.cut(margin) for d in doors if d.inner and not d.fixed]
+
 
 def _unique(values):
     out = []
@@ -293,12 +313,33 @@ def _intersect(a, b):
     return out
 
 
+def _without(spans, a, b):
+    """Spans less the open interval (a, b): what reaches into it is cut back to its ends."""
+    out = []
+    for lo, hi in spans:
+        if hi <= a + EPS or lo >= b - EPS:
+            out.append((lo, hi))
+            continue
+        if lo <= a + EPS:
+            out.append((lo, max(lo, a)))
+        if hi >= b - EPS:
+            out.append((min(hi, b), hi))
+    return out
+
+
+def _bites(cut, p):
+    """True if piece p reaches inside the open box cut."""
+    return p[2] > cut[0] + EPS and p[0] < cut[2] - EPS and p[3] > cut[1] + EPS and p[1] < cut[3] - EPS
+
+
 class Region:
     """Where a rider's centre fits on a union of boxes (a port of
-    stock.FloorRegion): pieces (minX, minZ, maxX, maxZ), closed boxes in Z order."""
+    stock.FloorRegion): pieces (minX, minZ, maxX, maxZ), closed boxes in Z order;
+    cuts (shut doors, Door.cut) taken out of where centres stand — only those
+    that take something out are kept."""
 
-    def __init__(self, boxes, margin=HALF_WIDTH):
-        """boxes: [(min x, min z, max x, max z)]."""
+    def __init__(self, boxes, margin=HALF_WIDTH, cuts=()):
+        """boxes: [(min x, min z, max x, max z)]; cuts: the same, open."""
         self.margin = margin
         self.strip_z = _unique([b[1] for b in boxes] + [b[3] for b in boxes])
         self.strip_x = []
@@ -307,7 +348,10 @@ class Region:
             self.strip_x.append(_merge([(b[0], b[2]) for b in boxes
                                         if b[1] <= lo + EPS and b[3] >= hi - EPS and b[2] >= b[0]]))
         self.shrunk = [_shrink(s, margin) for s in self.strip_x]
-        self.pieces = self.build()
+        self.cuts = []
+        whole = self.build()
+        self.cuts = [c for c in cuts if any(_bites(c, p) for p in whole)]
+        self.pieces = self.build() if self.cuts else whole
         self.max_z = [p[3] for p in self.pieces]
 
     def build(self):
@@ -318,11 +362,13 @@ class Region:
         lo, hi = z[0] + m, z[-1] - m
         if hi < lo - EPS:
             return []
-        cuts = []
+        edges = []
         for v in z:
-            cuts += [v - m, v + m]
-        cuts += [lo, max(lo, hi)]
-        breaks = [v for v in _unique(cuts) if lo - EPS <= v <= max(lo, hi) + EPS]
+            edges += [v - m, v + m]
+        edges += [lo, max(lo, hi)]
+        for c in self.cuts:
+            edges += [c[1], c[3]]
+        breaks = [v for v in _unique(edges) if lo - EPS <= v <= max(lo, hi) + EPS]
         out = []
         for i, v in enumerate(breaks):
             for a, b in self.slice(v):
@@ -345,7 +391,11 @@ class Region:
                 if not fit:
                     break
             k += 1
-        return fit or []
+        fit = fit or []
+        for c in self.cuts:
+            if c[1] + EPS < z < c[3] - EPS:
+                fit = _without(fit, c[0], c[2])
+        return fit
 
     def fits(self, x, z):
         i = bisect.bisect_left(self.max_z, z - EPS)
@@ -420,7 +470,7 @@ class Region:
 
     def door_seeds(self, door):
         """Indices of the pieces from which a rider can walk out through a hull or
-        gangway door (FloorCheck.walkableThrough): a player fits in front of it,
+        gangway door (FloorCheck.walkablePieces): a player fits in front of it,
         inside its span, with the floor ending at its inner face."""
         side = door.axis == 0
         out = door.outward
@@ -890,7 +940,7 @@ def generate(raw, config, doors=(), ir_floor=None, y_lift=0.40625 + 0.03):
         return out
 
     boxes = to_boxes(result.free)
-    region = Region([b[1:] for b in boxes])
+    region = Region([b[1:] for b in boxes], cuts=shut_cuts(door_list))
     labels, count = region.components(door_list)
     seeds = set()
     for door in door_list:
@@ -955,7 +1005,7 @@ def generate(raw, config, doors=(), ir_floor=None, y_lift=0.40625 + 0.03):
                             fixed.append(box)
                         break
     final = fixed
-    result.region = Region([b[1:] for b in final])
+    result.region = Region([b[1:] for b in final], cuts=shut_cuts(door_list))
     result.dropped_area -= result.region.area()
     for level, x0, z0, x1, z1 in final:
         result.interior.append({"min": [round(x0, 4), level, round(z0, 4)],
@@ -1166,7 +1216,7 @@ def main(argv=None):
     for note in floor.notes:
         print("  note:", note)
     hand_zone = plan["hand_interior"]
-    hand = Region(boxes_of(hand_zone)) if hand_zone is not None else None
+    hand = Region(boxes_of(hand_zone), cuts=shut_cuts(doors)) if hand_zone is not None else None
     if args.compare:
         if hand is None:
             print("no hand \"interior\" in the type's file to compare with")

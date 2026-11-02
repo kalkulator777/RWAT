@@ -1,6 +1,8 @@
 package com.muzhik17.trainsmod.stock;
 
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Declaration of one rolling-stock type (SPEC §5.1): the data that makes a
@@ -238,7 +240,8 @@ public record WagonType(
      * §9.8): a rider stands wherever their body fits inside it, so zones that
      * touch join without overlapping and a gap of any width between them is
      * a wall ({@link FloorRegion}). Doors between zones ({@link Door#inner})
-     * bridge such a gap while open.
+     * bridge such a gap while open; shut, one is wall even where the zones
+     * on its two sides touch ({@link #region(double, List, int)}).
      */
     public static final class Interior {
 
@@ -265,11 +268,19 @@ public record WagonType(
 
         private static final double EPS = 1.0e-9;
 
+        /** Sets of shut doors' cuts kept at most: a car has a few inner doors, a test more. */
+        private static final int MAX_SHUT = 64;
+
         private final List<Zone> zones;
         /** Where a centre fits, for the last margin asked (in practice always the player's). */
         private volatile FloorRegion region;
+        /** Where a centre fits with shut doors cut out, per margin and set of cuts. */
+        private final Map<Shut, FloorRegion> shut = new ConcurrentHashMap<>();
         /** This floor turned 180° (a flipped wagon), made once. */
         private volatile Interior mirror;
+
+        private record Shut(double margin, List<FloorRegion.Cut> cuts) {
+        }
 
         public Interior(List<Zone> zones) {
             if (zones.isEmpty()) {
@@ -295,6 +306,39 @@ public record WagonType(
             if (r == null || r.margin() != margin) {
                 r = FloorRegion.of(zones, margin);
                 region = r;
+            }
+            return r;
+        }
+
+        /**
+         * Where a rider centred there fits with the doors between zones that
+         * are shut standing across the floor (SPEC §9.1): {@link #region(double)}
+         * less each shut inner door's {@link FloorRegion.Cut#shut cut}, so a
+         * shut door is wall even where the zones on its two sides touch or
+         * overlap in its doorway. Made once per set of shut doors.
+         *
+         * @param doors    the type's doors, in the frame of this floor
+         * @param openMask bit {@code i} set = door {@code i} open
+         */
+        public FloorRegion region(double margin, List<Door> doors, int openMask) {
+            List<FloorRegion.Cut> cuts = new java.util.ArrayList<>();
+            for (int i = 0; i < doors.size(); i++) {
+                Door door = doors.get(i);
+                if (door.inner() && !door.open(openMask, i)) {
+                    cuts.add(FloorRegion.Cut.shut(door, margin));
+                }
+            }
+            if (cuts.isEmpty()) {
+                return region(margin);
+            }
+            Shut key = new Shut(margin, cuts);
+            FloorRegion r = shut.get(key);
+            if (r == null) {
+                if (shut.size() >= MAX_SHUT) {
+                    shut.clear();
+                }
+                r = FloorRegion.of(zones, margin, cuts);
+                shut.put(key, r);
             }
             return r;
         }
@@ -337,7 +381,20 @@ public record WagonType(
          * fits anywhere gives the nearest zone's midline rather than throwing.
          */
         public org.joml.Vector3d clampFeet(org.joml.Vector3d local, double margin) {
-            double[] at = region(margin).nearest(local.x, local.z);
+            return clampFeet(local, region(margin));
+        }
+
+        /**
+         * {@link #clampFeet(org.joml.Vector3d, double)} with the shut doors
+         * between zones standing across the floor ({@link #region(double, List, int)}).
+         */
+        public org.joml.Vector3d clampFeet(org.joml.Vector3d local, double margin, List<Door> doors, int openMask) {
+            return clampFeet(local, region(margin, doors, openMask));
+        }
+
+        private org.joml.Vector3d clampFeet(org.joml.Vector3d local, FloorRegion region) {
+            double margin = region.margin();
+            double[] at = region.nearest(local.x, local.z);
             if (at != null) {
                 double floor = floorUnder(at[0], at[1]);
                 return new org.joml.Vector3d(at[0], Double.isNaN(floor) ? floorY() : floor, at[1]);

@@ -41,7 +41,20 @@ public final class WagonTypes {
      */
     private static volatile Map<String, String> aliases = Map.of();
 
+    /** The longest type's length in the loaded layer, kept with it ({@link #longest}). */
+    private static volatile double longest = MISSING_LENGTH;
+
     private WagonTypes() {
+    }
+
+    /**
+     * The length of the longest car there can be now, blocks: the longest
+     * loaded type, never under the {@link #missing} placeholder's (an unknown
+     * id is drawn and collided at that length). How far from a car's centre
+     * its hull may reach, for whoever looks for cars near a point.
+     */
+    public static double longest() {
+        return longest;
     }
 
     /** Type by namespaced id (aliases followed); null if no pack declares it. */
@@ -86,6 +99,7 @@ public final class WagonTypes {
     public static void load(Map<String, WagonType> types, Map<String, String> typeAliases) {
         loaded = Map.copyOf(types);
         aliases = Map.copyOf(typeAliases);
+        longest = types.values().stream().mapToDouble(WagonType::length).reduce(MISSING_LENGTH, Math::max);
     }
 
     /** The current loaded layer, for syncing to clients. */

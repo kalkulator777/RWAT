@@ -29,7 +29,10 @@ class BedClearingTest {
     private static final class World {
         final Map<BedRaster.Cell, Occupant> blocks = new HashMap<>();
         final Set<BedRaster.Cell> protectedCells = new LinkedHashSet<>();
+        /** Cells asked whether they may be broken, in order. */
         final List<BedRaster.Cell> asked = new ArrayList<>();
+        /** Cells asked whether a block may be placed there, in order. */
+        final List<BedRaster.Cell> askedToPlace = new ArrayList<>();
 
         World with(BedRaster.Cell cell, Occupant what) {
             blocks.put(cell, what);
@@ -37,10 +40,20 @@ class BedClearingTest {
         }
 
         BedClearing.Plan plan(Set<BedRaster.Cell> bed, Set<BedRaster.Cell> headroom) {
+            return plan(bed, headroom, cells(), cells());
+        }
+
+        BedClearing.Plan plan(Set<BedRaster.Cell> bed, Set<BedRaster.Cell> headroom,
+                Set<BedRaster.Cell> lifted, Set<BedRaster.Cell> laid) {
             return BedClearing.plan(bed, headroom,
                     c -> blocks.getOrDefault(c, Occupant.EMPTY),
+                    new BedClearing.Changes(lifted, laid),
                     c -> {
                         asked.add(c);
+                        return !protectedCells.contains(c);
+                    },
+                    c -> {
+                        askedToPlace.add(c);
                         return !protectedCells.contains(c);
                     });
         }
@@ -137,6 +150,59 @@ class BedClearingTest {
         plan = world.plan(cells(cell(0, 64)), gauge);
         assertEquals(new BedClearing.Blocked(cell(0, 69), BedClearing.Reason.CONTAINER), plan.blocked(),
                 "refused, not skipped: nothing is left standing inside the gauge unannounced");
+    }
+
+    @Test
+    void bedLaidIntoAProtectedCellRefusesTheWholeBuildThoughNothingThereIsBroken() {
+        // a track across someone's land: air and grass, nothing to break — the bed alone is the edit
+        World world = new World()
+                .with(cell(0, 64), Occupant.SOLID)  // a hill before it: would be broken
+                .with(cell(2, 64), Occupant.SOFT);
+        world.protectedCells.add(cell(2, 64));
+        Set<BedRaster.Cell> bed = cells(cell(0, 64), cell(1, 64), cell(2, 64), cell(3, 64));
+
+        BedClearing.Plan plan = world.plan(bed, cells(), cells(), bed);
+
+        assertEquals(new BedClearing.Blocked(cell(2, 64), BedClearing.Reason.PROTECTED_BED), plan.blocked());
+        assertTrue(plan.removed().isEmpty(), "not even the hill before it is broken");
+        assertEquals(List.of(cell(0, 64)), world.asked, "the obstacle is asked to break");
+        assertEquals(List.of(cell(1, 64), cell(2, 64)), world.askedToPlace,
+                "the rest is asked to place, in order, up to the refusal");
+    }
+
+    @Test
+    void bedTakenOutOfAProtectedCellRefusesTheWholeEdit() {
+        // a demolition: the structure's bed reaches into someone's land at its far end
+        World world = new World();
+        world.protectedCells.add(cell(3, 64));
+        BedClearing.Plan plan = world.plan(cells(), cells(),
+                cells(cell(0, 64), cell(1, 64), cell(2, 64), cell(3, 64)), cells());
+
+        assertEquals(new BedClearing.Blocked(cell(3, 64), BedClearing.Reason.PROTECTED_BED), plan.blocked());
+        assertEquals(List.of(cell(0, 64), cell(1, 64), cell(2, 64), cell(3, 64)), world.asked);
+        assertTrue(world.askedToPlace.isEmpty());
+    }
+
+    @Test
+    void everyChangedCellIsAskedOnceAndOnlyWhenNothingRefusesOutright() {
+        World world = new World()
+                .with(cell(0, 64), Occupant.SOLID)   // broken, then the bed goes in
+                .with(cell(1, 64), Occupant.BED);    // the structure's own bed, re-laid
+        Set<BedRaster.Cell> bed = cells(cell(0, 64), cell(1, 64), cell(2, 64));
+
+        BedClearing.Plan plan = world.plan(bed, cells(), cells(cell(1, 64)), bed);
+        assertFalse(plan.refused());
+        assertEquals(List.of(cell(0, 64), cell(1, 64)), world.asked,
+                "the obstacle, then the bed taken out (or touched)");
+        assertEquals(List.of(cell(2, 64)), world.askedToPlace,
+                "only where bed merely comes in: a cell that may be broken is the player's to change");
+
+        World walled = new World()
+                .with(cell(0, 64), Occupant.UNBREAKABLE);
+        BedClearing.Plan refused = walled.plan(bed, cells(), cells(cell(1, 64)), bed);
+        assertEquals(BedClearing.Reason.UNBREAKABLE, refused.blocked().reason());
+        assertTrue(walled.asked.isEmpty() && walled.askedToPlace.isEmpty(),
+                "no events at all for a build bedrock refuses");
     }
 
     @Test

@@ -111,6 +111,11 @@ public final class ClientBogieHit {
         }
     }
 
+    /** Drop the pick (logout, another level): its wagon went with the level. */
+    public static void clear() {
+        framePick = null;
+    }
+
     /** The nearest bogie under the crosshair within entity reach, not behind its car's body, or null. */
     private static Pick pick(Minecraft mc, LocalPlayer player, ClientWagonRay.Look look) {
         float partialTick = look.partialTick();

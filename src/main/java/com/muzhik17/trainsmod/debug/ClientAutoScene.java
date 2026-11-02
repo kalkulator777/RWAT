@@ -593,7 +593,7 @@ public final class ClientAutoScene {
         if (readout == null) {
             return null;
         }
-        int height = com.muzhik17.trainsmod.client.gui.DriverPanel.height(readout);
+        int height = com.muzhik17.trainsmod.client.gui.DriverPanel.height(mc.font, readout);
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < com.muzhik17.trainsmod.client.gui.DriverPanel.WIDTH; x++) {
                 var target = com.muzhik17.trainsmod.client.gui.DriverPanel.targetAt(mc.font,
