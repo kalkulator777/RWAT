@@ -117,7 +117,7 @@ public final class ClientPackReport {
         if (Minecraft.getInstance().level == null) {
             return;
         }
-        Map<String, WagonType> types = WagonTypes.loadedTypes();
+        Map<String, WagonType> types = WagonTypes.currentTypes();
         Map<String, PackOrigin> models = StockModels.origins();
         if (types == staleTypes || types == checkedTypes && models == checkedModels) {
             return;
@@ -137,7 +137,7 @@ public final class ClientPackReport {
     /** The server's types stay until the next sync: don't hold them against this client's models meanwhile. */
     @SubscribeEvent
     static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
-        staleTypes = WagonTypes.loadedTypes();
+        staleTypes = WagonTypes.currentTypes();
         checkedTypes = null;
         checkedModels = null;
         logged = List.of();

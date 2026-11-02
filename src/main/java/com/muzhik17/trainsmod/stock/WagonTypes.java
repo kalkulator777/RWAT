@@ -27,7 +27,8 @@ import java.util.Set;
  * sync never takes the aliases away (D2, 2026-11-02): the integrated server
  * resolves the items and saves that carry an old id through them. When the
  * sync is the server's own layer coming back — decoded anew, but declaring
- * the same — the server's layer is kept as it is, instances and all.
+ * the same — the server's layer is kept as it is, instances and all. Once
+ * that server stops ({@link #serverStopped}) its layer stands for nothing.
  *
  * <p><b>Reloads.</b> Every change of the layer counts a {@link #generation}:
  * the server's consists hold their types as instances, and take the new ones
@@ -130,7 +131,7 @@ public final class WagonTypes {
      * stay (D2): a sync carries none, and in single player the registry is
      * the integrated server's too, which needs them — only those whose type
      * the sync no longer has go, they couldn't resolve. If the sync declares
-     * exactly what this JVM's server loaded last ({@link #sameDeclaration},
+     * exactly what this JVM's running server loaded last ({@link #sameDeclaration},
      * type by type), it is that server's own layer coming back and the
      * server's layer stays, with the instances its consists hold.
      */
@@ -152,6 +153,16 @@ public final class WagonTypes {
     public static synchronized void load(Map<String, WagonType> types, Map<String, String> typeAliases) {
         serverLayer = Layer.of(types, typeAliases);
         swap(serverLayer);
+    }
+
+    /**
+     * This JVM's server stopped (single player: the world was left). Its
+     * load no longer answers {@link #loadedTypes} nor stands for the sync of
+     * the next server this client joins, which may declare the same; the
+     * layer stays until that sync, as a client keeps the last server's types.
+     */
+    public static synchronized void serverStopped() {
+        serverLayer = null;
     }
 
     /** Make {@code next} the layer, counting a generation if it is another one. */
@@ -182,6 +193,17 @@ public final class WagonTypes {
                 return serverLayer.types();
             }
         }
+        return layer.types();
+    }
+
+    /**
+     * The types the registry answers with now — on a client, what the last
+     * sync brought (in single player the server's own layer). Unlike
+     * {@link #loadedTypes} never the integrated server's load when this
+     * client has since joined another server. Another map whenever the layer
+     * changes, so a reader may watch it by identity.
+     */
+    public static Map<String, WagonType> currentTypes() {
         return layer.types();
     }
 

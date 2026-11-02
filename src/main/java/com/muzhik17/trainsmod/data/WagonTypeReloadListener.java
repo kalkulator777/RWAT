@@ -28,6 +28,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.AddReloadListenerEvent;
 import net.neoforged.neoforge.event.OnDatapackSyncEvent;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
@@ -87,6 +88,12 @@ public final class WagonTypeReloadListener extends SimplePreparableReloadListene
     @SubscribeEvent
     static void onAddReloadListeners(AddReloadListenerEvent event) {
         event.addListener(new WagonTypeReloadListener());
+    }
+
+    /** Single player back at the title screen: the next server's sync is not this load coming back. */
+    @SubscribeEvent
+    static void onServerStopped(ServerStoppedEvent event) {
+        WagonTypes.serverStopped();
     }
 
     /** Push the freshly loaded layer to the joining player (or everyone on /reload). */

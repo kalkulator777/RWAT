@@ -205,8 +205,32 @@ class WagonTypesTest {
     void theServerSyncsWhatItLoaded() {
         WagonType car = type("a:car", false, true);
         WagonTypes.load(Map.of(car.id(), car), Map.of());
-        WagonTypes.load(Map.of("b:other", type("b:other", false, false)));
+        WagonType other = type("b:other", false, false);
+        WagonTypes.load(Map.of(other.id(), other));
         assertEquals(Map.of(car.id(), car), WagonTypes.loadedTypes());
+        assertEquals(Map.of(other.id(), other), WagonTypes.currentTypes(), "what the client checks its models with");
+    }
+
+    /**
+     * Single player left, another server joined: the stopped server's load
+     * stands for nothing, even where the new server declares the same — its
+     * sync is a layer of its own (the client's model check sees it come),
+     * and what is synced or checked is no longer the old world's.
+     */
+    @Test
+    void aStoppedServersLoadStandsForNothing() {
+        WagonType car = type("a:car", false, true);
+        WagonTypes.load(Map.of(car.id(), car), Map.of());
+        Map<String, WagonType> singlePlayer = WagonTypes.currentTypes();
+        WagonTypes.serverStopped();
+        assertSame(car, WagonTypes.byId("a:car"), "the client keeps the types until the next sync");
+
+        WagonType remote = type("a:car", false, true);
+        WagonTypes.load(Map.of(remote.id(), remote));
+
+        assertSame(remote, WagonTypes.byId("a:car"));
+        assertNotSame(singlePlayer, WagonTypes.currentTypes());
+        assertSame(remote, WagonTypes.loadedTypes().get("a:car"));
     }
 
     // --- D1: /reload ---
