@@ -13,6 +13,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.muzhik17.trainsmod.kinematics.FloorCheck;
+import com.muzhik17.trainsmod.kinematics.FloorFinding;
 import com.muzhik17.trainsmod.kinematics.RiderWalk;
 import com.muzhik17.trainsmod.stock.FloorRegion;
 import com.muzhik17.trainsmod.stock.WagonType;
@@ -20,9 +21,11 @@ import com.muzhik17.trainsmod.stock.WagonTypeParser;
 
 /**
  * {@code fixtures/golden/floor_check/}: a type as the pack writes it (OBJ
- * frame) → what the floor check tells its author ({@link FloorCheck#problems}
- * after {@link WagonTypeParser#parse}), each as a finding
- * ({@link Golden#finding}); or its ways out ({@code exits_of}): for each hull
+ * frame) → what the floor check tells its author ({@link FloorCheck#findings}
+ * after {@link WagonTypeParser#parse}), each finding as the editor reads it:
+ * {@code {code, subject, index, params, text}} ({@link FloorFinding}: the
+ * code's name, its subject's key, the index or −1, the params in the order
+ * of the line, the line); or its ways out ({@code exits_of}): for each hull
  * or gangway door, the pieces of the floor with every door between zones shut
  * a rider walks out through it from ({@code FloorCheck.walkablePieces}). Ported:
  * {@code tools/floorgen.py} ({@code Region.door_seeds}, the ways out),
@@ -57,9 +60,37 @@ class FloorCheckGolden {
             }
             WagonType type = WagonTypeParser.parse("golden:case", in.getAsJsonObject("type"));
             JsonArray findings = new JsonArray();
-            FloorCheck.problems(type).forEach(text -> findings.add(Golden.finding(text)));
+            FloorCheck.findings(type).forEach(f -> findings.add(finding(f)));
             return findings;
         });
+    }
+
+    private static JsonObject finding(FloorFinding f) {
+        JsonObject params = new JsonObject();
+        f.params().forEach((name, value) -> params.add(name, param(value)));
+        JsonObject out = new JsonObject();
+        out.addProperty("code", f.code().name());
+        out.addProperty("subject", f.subject().key);
+        out.addProperty("index", f.index());
+        out.add("params", params);
+        out.addProperty("text", f.text());
+        return out;
+    }
+
+    /**
+     * A param: a number (NaN and the infinities as strings, the sign of a zero
+     * kept: the line prints it), a string (a door's id), a list of zone indices.
+     */
+    private static JsonElement param(Object value) {
+        if (value instanceof Number number) {
+            return Golden.signed(number.doubleValue());
+        }
+        if (value instanceof List<?> list) {
+            JsonArray array = new JsonArray();
+            list.forEach(item -> array.add((Integer) item));
+            return array;
+        }
+        return Golden.string((String) value);
     }
 
     @SuppressWarnings("unchecked")

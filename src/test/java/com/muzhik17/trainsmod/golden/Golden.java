@@ -211,6 +211,11 @@ final class Golden {
         return new JsonPrimitive(d + 0.0);
     }
 
+    /** {@link #number(double)} with the sign of a zero kept: −0.0 is a text's {@code -0.00}. */
+    static JsonElement signed(double d) {
+        return d == 0.0 ? new JsonPrimitive(d) : number(d);
+    }
+
     /** A float by its shortest decimal (0.6F is 0.6, not 0.6000000238418579): the float nearest it is it. */
     static JsonElement number(float f) {
         return Float.isFinite(f) ? new JsonPrimitive(Double.parseDouble(Float.toString(f + 0.0F))) : number((double) f);
@@ -278,9 +283,10 @@ final class Golden {
 
     /**
      * What the engine tells a pack author, as the editor shows it:
-     * {@code {code, subject, index, params, text}}. The engine gives only the
-     * text yet (FloorCheck, the type reader's warnings and errors): the
-     * other fields stay empty until it gives them (editor.md 4.6, item 2).
+     * {@code {code, subject, index, params, text}}, of a message the engine
+     * gives only the text of yet (the type reader's warnings and errors): the
+     * other fields stay empty until it gives them, as the floor check does
+     * ({@code FloorCheckGolden}).
      */
     static JsonObject finding(String text) {
         JsonObject out = new JsonObject();

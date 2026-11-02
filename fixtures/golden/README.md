@@ -42,7 +42,7 @@ fixtures/golden/
 - **`frame`** — кадр мест в ожидаемом: `obj` (кадр пака, как в Blender), `model` (кадр движка, `stock.ObjFrame`) или `none` (мест нет). Разметка во входе — всегда в кадре OBJ. Вопрос к результату (точка для `fits`, `doorHolding`…) задаётся в кадре ожидаемого.
 - **`tolerance`** — абсолютный допуск порта для чисел: `1e-9` для логики в `double`, `1e-6` для `float`, `0` для текста и правил чисел Java. Эталон сверяет точно.
 - **Числа.** `NaN` и бесконечности записываются строками `"NaN"`, `"Infinity"`, `"-Infinity"` (во входе и в ожидаемом). Значения `float` — кратчайшей записью `float` (`0.6`, а не `0.6000000238418579`): `Math.fround` от неё даёт то же `float`. Исключение — `java_numbers/parse_float.json`: там точное значение `float` в `double`, допуск 0.
-- **Находка** (`$defs/finding`) — то, что движок пишет автору пака: `{code, subject, index, params, text}`. Пока движок отдаёт только текст (сообщения разбора типа в `wagon_type`), `code`, `subject`, `index` — `null`, `params` — `{}`.
+- **Находка** (`$defs/finding`) — то, что движок пишет автору пака: `{code, subject, index, params, text}`. В `floor_check` это `kinematics.FloorFinding`: `code` — имя `FloorFinding.Code` (`ZONE_TOO_NARROW`…), `subject` — `Subject.key` (`floor`, `zone`, `door`, `seat`, `cab`), `index` — номер зоны, двери или кресла в типе, `-1` — без предмета (пол, кабина, список зон), `params` — числа и имена, из которых сделан текст, в порядке строки: число (`NaN`, `Infinity` строками, знак нуля сохранён: `-0.0` печатается `-0.00`), строка (id двери) или массив номеров зон `zones`; `text` — строка лога. Где движок отдаёт только текст (сообщения разбора типа в `wagon_type`), `code`, `subject`, `index` — `null`, `params` — `{}`. Порты сверяют `code`, `subject`, `index`, `text` точно, числа `params` — с допуском; редактор переводит находку по `code`, а `text` держит порт честным.
 
 ## Как сверять
 
@@ -90,7 +90,7 @@ python -I -m unittest discover tools/tests
 | `anim_model` | Java: `IrAnim.toModelSpace` | — | `model_space` | те же тексты → кадры в кадре модели. Не портируется (4.2); запись движка о том, что было в старом `anim.json` |
 | `pivot_axis` | Java: `convention.PivotAxis` | ts | `corners`, `obj_text` | углы маркера по порядку файла или текст OBJ и имя маркера → число точек, шарнир, ось |
 | `floor_region` | Java: `FloorRegion` через `WagonTypeParser.parse` и `Interior.region` | ts, python (`floorgen.Region`: куски, разрезы, `fits`, `reach`) | `region` | тип пака (кадр OBJ), открытые двери, `margin`, вопросы (кадр модели) → куски, разрезы, связи, ответы |
-| `floor_check` | Java: `FloorCheck` после `WagonTypeParser.parse` | ts, python (`floorgen.Region.door_seeds`: выходы) | `findings`, `exits` | тип пака → находки; `exits_of`: тип → по двери куски пола, с которых через неё выходят (`null` у внутренней) |
+| `floor_check` | Java: `FloorCheck.findings` после `WagonTypeParser.parse` | ts, python (`floorgen.Region.door_seeds`: выходы) | `findings`, `exits` | тип пака → находки `{code, subject, index, params, text}`; `exits_of`: тип → по двери куски пола, с которых через неё выходят (`null` у внутренней) |
 | `door_leaves` | Java: `convention.DoorLeaves`, `WagonType.doorHolding` | ts (`modelParts.ts`, M3) | `leaves` | объекты модели, `skip`, `.anim`, двери типа → подвижные двери и створки с их дверью |
 | `wagon_type` | Java: `WagonTypeParser.parse`, `WagonType` | ts | `parse`, `example_pack` | тип пака → ошибка, предупреждения, тип в кадре модели, ответы на вопросы о дверях и полу |
 | `stock_defaults` | Java: `stock.StockDefaults` | ts | `defaults` | масса, система, кабина → сопротивление и тормоза; имя системы; константы |
@@ -105,11 +105,12 @@ python -I -m unittest discover tools/tests
   - `Float.parseFloat` отказывает целой строке, а не читает префикс (`"1.5abc"` — отказ, JS `parseFloat` даёт 1.5); принимает суффиксы `f`/`d`, шестнадцатеричное `0x1p3`, `NaN`, `Infinity`, пробелы до U+0020 по краям; не принимает `nan`, `inf`, неразрывный пробел, `0x10` без двоичного порядка.
   - Чтение сразу во `float`, а не через `double`: `fround(parseFloat("1.0000000596046447753906250001"))` округляет дважды и даёт 1, Java — `1.0000001192092896`.
   - `%.Nf` округляет **половину вверх от кратчайшей десятичной записи** `double`: `1.005` → `1.01`, `2.675` → `2.68`, `0.35` → `0.4` (JS `toFixed` даёт `1.00`, `2.67`, `0.3`); `2.5` при `%.0f` → `3`. Минус ноль печатается со знаком: `-0.0` и `-0.001` → `-0.00`. Большие числа — целиком, без экспоненты (`1e21` → `1000000000000000000000.0`). `NaN` и бесконечности печатаются как `NaN`, `Infinity`, `-Infinity`.
-- **Тексты `FloorCheck`** (дословно, вместе с числами):
-  - `%.2f` и `%.1f` — правило выше; бесконечное расстояние и NaN высоты (на полу некуда встать) печатаются `Infinity` и `NaN`;
+- **Тексты `FloorCheck`** (`FloorFinding.text`, дословно, вместе с числами; порт собирает текст из `code`, `index` и `params`):
+  - `%.2f` и `%.1f` — правило выше: половина вверх от кратчайшей десятичной записи (`1.005` → `1.01`, `2.675` → `2.68`; JS `toFixed` даёт `1.00` и `2.67`); бесконечное расстояние и NaN высоты (на полу некуда встать) печатаются `Infinity` и `NaN`;
   - запас у двери (`slack`) — как `Double.toString`: `0.4`, целое — `1.0`;
-  - список зон — `[1, 2]` (`List.toString`);
-  - место кресла — в кадре OBJ, `x = -z` модели: кресло на `x = -0.0` печатается `-0.00`.
+  - список зон — `[1, 2]` (`List.toString`: запятая и пробел);
+  - двери — `door <index> '<id>'`;
+  - место кресла — в кадре OBJ, `x = -z` модели: кресло на `x = -0.0` печатается `-0.00` (в `params` — `-0.0`).
 - **Сообщения разбора типа (`wagon_type`).** Число из файла в ошибке «не того типа» — как записано в файле (`the number 1`); число в ошибке геометрии — целое без `.0`, иначе как `Double.toString` (`1.0E-5`). Подсказка к незнакомому ключу — `PackJson.nearest` движка, не `suggestion` из `validate_pack` (та — в `validate`).
 - **Шарнир (`pivot_axis`).**
   - Углы — `float32`, как их читает загрузчик OBJ: в TypeScript `Math.fround` каждой координаты до расчёта. Сам расчёт идёт в `double`.

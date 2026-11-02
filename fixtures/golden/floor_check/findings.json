@@ -1,5 +1,5 @@
 {
-  "description": "A type as the pack writes it (format 1, OBJ frame; only length, bogies, mass_t, interior, doors and cab.seats matter here) -> what the floor check tells its author (kinematics.FloorCheck after stock.WagonTypeParser.parse), each a finding {code, subject, index, params, text}: places and sizes in the OBJ frame, the text English as the engine logs it. input.type; expected: the findings, [] if nothing.",
+  "description": "A type as the pack writes it (format 1, OBJ frame; only length, bogies, mass_t, interior, doors and cab.seats matter here) -> what the floor check tells its author (kinematics.FloorCheck after stock.WagonTypeParser.parse), each a finding (kinematics.FloorFinding of FloorCheck.findings): code (the Code's name), subject (floor, zone, door, seat, cab), index (the zone, door or chair; -1: none), params (what the text is made of, in its order: numbers, NaN and the infinities as strings, the sign of a zero kept; a door's id; zones, a list of indices), text (English, as the engine logs it). Places and sizes in the OBJ frame. input.type; expected: the findings, [] if nothing.",
   "frame": "obj",
   "tolerance": 1e-09,
   "cases": [
@@ -22,9 +22,9 @@
       },
       "expected": [
         {
-          "code": null,
-          "subject": null,
-          "index": null,
+          "code": "SEATS_WITHOUT_INTERIOR",
+          "subject": "cab",
+          "index": -1,
           "params": {},
           "text": "cab.seats without an interior: a chair needs a floor to walk to it"
         }
@@ -75,10 +75,10 @@
       },
       "expected": [
         {
-          "code": null,
-          "subject": null,
-          "index": null,
-          "params": {},
+          "code": "ZONES_UNREACHABLE",
+          "subject": "zone",
+          "index": -1,
+          "params": {"zones": [1]},
           "text": "floor zones [1] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
         }
       ]
@@ -99,10 +99,10 @@
       },
       "expected": [
         {
-          "code": null,
-          "subject": null,
-          "index": null,
-          "params": {},
+          "code": "ZONE_TOO_NARROW",
+          "subject": "zone",
+          "index": 1,
+          "params": {"size_x": 5.0, "size_z": 0.40000000000000013, "player_width": 0.6},
           "text": "zone 1 holds no place a player fits (5.00 x 0.40): widen it to 0.6 or join it to a wider zone"
         }
       ]
@@ -120,10 +120,10 @@
       },
       "expected": [
         {
-          "code": null,
-          "subject": null,
-          "index": null,
-          "params": {},
+          "code": "FLOOR_TOO_NARROW",
+          "subject": "floor",
+          "index": -1,
+          "params": {"player_width": 0.6},
           "text": "a player fits nowhere on the floor: every part of it is narrower than 0.6"
         }
       ]
@@ -173,10 +173,10 @@
       },
       "expected": [
         {
-          "code": null,
-          "subject": null,
-          "index": null,
-          "params": {},
+          "code": "DOOR_NOT_AT_FLOOR_END",
+          "subject": "door",
+          "index": 0,
+          "params": {"id": "Trap1", "slack": 0.4},
           "text": "door 0 'Trap1' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
         }
       ]
@@ -202,10 +202,10 @@
       },
       "expected": [
         {
-          "code": null,
-          "subject": null,
-          "index": null,
-          "params": {},
+          "code": "GANGWAY_NOT_IN_END_WALL",
+          "subject": "door",
+          "index": 0,
+          "params": {"id": "side_gangway"},
           "text": "door 0 'side_gangway' is a gangway (connecting) door but not in an end wall"
         }
       ]
@@ -227,24 +227,24 @@
       },
       "expected": [
         {
-          "code": null,
-          "subject": null,
-          "index": null,
-          "params": {},
+          "code": "DOOR_TOO_THICK",
+          "subject": "door",
+          "index": 0,
+          "params": {"id": "thick", "thickness": 0.8},
           "text": "door 0 'thick' is 0.80 thick: is the box the door leaf?"
         },
         {
-          "code": null,
-          "subject": null,
-          "index": null,
-          "params": {},
+          "code": "DOOR_TOO_NARROW",
+          "subject": "door",
+          "index": 1,
+          "params": {"id": "narrow"},
           "text": "door 1 'narrow' is too narrow to walk through"
         },
         {
-          "code": null,
-          "subject": null,
-          "index": null,
-          "params": {},
+          "code": "DOOR_NOT_AT_FLOOR_END",
+          "subject": "door",
+          "index": 1,
+          "params": {"id": "narrow", "slack": 0.4},
           "text": "door 1 'narrow' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
         }
       ]
@@ -280,10 +280,10 @@
       },
       "expected": [
         {
-          "code": null,
-          "subject": null,
-          "index": null,
-          "params": {},
+          "code": "INNER_DOOR_FLOOR_THROUGH",
+          "subject": "door",
+          "index": 0,
+          "params": {"id": "DoorKupe"},
           "text": "door 0 'DoorKupe' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
         }
       ]
@@ -319,17 +319,17 @@
       },
       "expected": [
         {
-          "code": null,
-          "subject": null,
-          "index": null,
-          "params": {},
+          "code": "INNER_DOOR_FLOOR_THROUGH",
+          "subject": "door",
+          "index": 0,
+          "params": {"id": "door"},
           "text": "door 0 'door' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
         },
         {
-          "code": null,
-          "subject": null,
-          "index": null,
-          "params": {},
+          "code": "INNER_DOOR_FLOOR_ROUND",
+          "subject": "door",
+          "index": 0,
+          "params": {"id": "door"},
           "text": "door 0 'door' (inner): its two sides are one floor without it — the floor runs round it or through the wall beside it, so shut it is no wall"
         }
       ]
@@ -348,10 +348,10 @@
       },
       "expected": [
         {
-          "code": null,
-          "subject": null,
-          "index": null,
-          "params": {},
+          "code": "INNER_DOOR_NO_FLOOR",
+          "subject": "door",
+          "index": 0,
+          "params": {"id": "far"},
           "text": "door 0 'far' (inner) touches no floor"
         }
       ]
@@ -370,9 +370,9 @@
       },
       "expected": [
         {
-          "code": null,
-          "subject": null,
-          "index": null,
+          "code": "CAB_WITHOUT_SEAT",
+          "subject": "cab",
+          "index": -1,
           "params": {},
           "text": "a walkable cab needs a driver's chair (cab.seats): in a cab with a floor the keys drive only from a chair"
         }
@@ -412,17 +412,35 @@
       },
       "expected": [
         {
-          "code": null,
-          "subject": null,
-          "index": null,
-          "params": {},
+          "code": "SEAT_NOT_SITTABLE",
+          "subject": "seat",
+          "index": 1,
+          "params": {
+            "x": -9.0,
+            "y": 1.8637499999999998,
+            "z": 4.0,
+            "reach": 3.3,
+            "sit_reach": 2.5,
+            "height": 0.48999999999999977,
+            "min_height": 0.2,
+            "max_height": 1.5
+          },
           "text": "cab.seats[1] (-9.00, 1.86, 4.00): the nearest place to stand is 3.30 off (sitting reaches 2.5), its floor 0.49 below the cushion (0.2..1.5; the seat is the top of the cushion)"
         },
         {
-          "code": null,
-          "subject": null,
-          "index": null,
-          "params": {},
+          "code": "SEAT_NOT_SITTABLE",
+          "subject": "seat",
+          "index": 2,
+          "params": {
+            "x": -8.0,
+            "y": 3.5637499999999998,
+            "z": 0.0,
+            "reach": 0.0,
+            "sit_reach": 2.5,
+            "height": 2.19,
+            "min_height": 0.2,
+            "max_height": 1.5
+          },
           "text": "cab.seats[2] (-8.00, 3.56, 0.00): the nearest place to stand is 0.00 off (sitting reaches 2.5), its floor 2.19 below the cushion (0.2..1.5; the seat is the top of the cushion)"
         }
       ]
@@ -505,10 +523,10 @@
       },
       "expected": [
         {
-          "code": null,
-          "subject": null,
-          "index": null,
-          "params": {},
+          "code": "INNER_DOOR_FLOOR_THROUGH",
+          "subject": "door",
+          "index": 6,
+          "params": {"id": "salon_door"},
           "text": "door 6 'salon_door' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
         }
       ]
@@ -556,10 +574,10 @@
       },
       "expected": [
         {
-          "code": null,
-          "subject": null,
-          "index": null,
-          "params": {},
+          "code": "INNER_DOOR_FLOOR_THROUGH",
+          "subject": "door",
+          "index": 6,
+          "params": {"id": "salon_door"},
           "text": "door 6 'salon_door' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
         }
       ]
@@ -607,10 +625,10 @@
       },
       "expected": [
         {
-          "code": null,
-          "subject": null,
-          "index": null,
-          "params": {},
+          "code": "DOOR_NOT_AT_FLOOR_END",
+          "subject": "door",
+          "index": 0,
+          "params": {"id": "door_fl", "slack": 0.4},
           "text": "door 0 'door_fl' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
         }
       ]
@@ -696,10 +714,10 @@
       },
       "expected": [
         {
-          "code": null,
-          "subject": null,
-          "index": null,
-          "params": {},
+          "code": "GANGWAY_NOT_IN_END_WALL",
+          "subject": "door",
+          "index": 4,
+          "params": {"id": "gangway_front"},
           "text": "door 4 'gangway_front' is a gangway (connecting) door but not in an end wall"
         }
       ]
@@ -770,10 +788,19 @@
       },
       "expected": [
         {
-          "code": null,
-          "subject": null,
-          "index": null,
-          "params": {},
+          "code": "SEAT_NOT_SITTABLE",
+          "subject": "seat",
+          "index": 0,
+          "params": {
+            "x": 1.65,
+            "y": 3.3,
+            "z": -0.8,
+            "reach": 0.0,
+            "sit_reach": 2.5,
+            "height": 1.7000000000000002,
+            "min_height": 0.2,
+            "max_height": 1.5
+          },
           "text": "cab.seats[0] (1.65, 3.30, -0.80): the nearest place to stand is 0.00 off (sitting reaches 2.5), its floor 1.70 below the cushion (0.2..1.5; the seat is the top of the cushion)"
         }
       ]
@@ -811,10 +838,10 @@
       },
       "expected": [
         {
-          "code": null,
-          "subject": null,
-          "index": null,
-          "params": {},
+          "code": "DOOR_NOT_AT_FLOOR_END",
+          "subject": "door",
+          "index": 0,
+          "params": {"id": "steps_left", "slack": 0.4},
           "text": "door 0 'steps_left' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
         }
       ]
@@ -869,17 +896,17 @@
       },
       "expected": [
         {
-          "code": null,
-          "subject": null,
-          "index": null,
-          "params": {},
+          "code": "ZONE_TOO_NARROW",
+          "subject": "zone",
+          "index": 1,
+          "params": {"size_x": 4.0, "size_z": 0.5, "player_width": 0.6},
           "text": "zone 1 holds no place a player fits (4.00 x 0.50): widen it to 0.6 or join it to a wider zone"
         },
         {
-          "code": null,
-          "subject": null,
-          "index": null,
-          "params": {},
+          "code": "ZONES_UNREACHABLE",
+          "subject": "zone",
+          "index": -1,
+          "params": {"zones": [2]},
           "text": "floor zones [2] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
         }
       ]
@@ -898,10 +925,19 @@
       },
       "expected": [
         {
-          "code": null,
-          "subject": null,
-          "index": null,
-          "params": {},
+          "code": "SEAT_NOT_SITTABLE",
+          "subject": "seat",
+          "index": 0,
+          "params": {
+            "x": -0.0,
+            "y": 4.0,
+            "z": 0.0,
+            "reach": 0.0,
+            "sit_reach": 2.5,
+            "height": 2.62625,
+            "min_height": 0.2,
+            "max_height": 1.5
+          },
           "text": "cab.seats[0] (-0.00, 4.00, 0.00): the nearest place to stand is 0.00 off (sitting reaches 2.5), its floor 2.63 below the cushion (0.2..1.5; the seat is the top of the cushion)"
         }
       ]
@@ -920,17 +956,26 @@
       },
       "expected": [
         {
-          "code": null,
-          "subject": null,
-          "index": null,
-          "params": {},
+          "code": "FLOOR_TOO_NARROW",
+          "subject": "floor",
+          "index": -1,
+          "params": {"player_width": 0.6},
           "text": "a player fits nowhere on the floor: every part of it is narrower than 0.6"
         },
         {
-          "code": null,
-          "subject": null,
-          "index": null,
-          "params": {},
+          "code": "SEAT_NOT_SITTABLE",
+          "subject": "seat",
+          "index": 0,
+          "params": {
+            "x": 0.0,
+            "y": 1.87375,
+            "z": 0.0,
+            "reach": "Infinity",
+            "sit_reach": 2.5,
+            "height": "NaN",
+            "min_height": 0.2,
+            "max_height": 1.5
+          },
           "text": "cab.seats[0] (0.00, 1.87, 0.00): the nearest place to stand is Infinity off (sitting reaches 2.5), its floor NaN below the cushion (0.2..1.5; the seat is the top of the cushion)"
         }
       ]
