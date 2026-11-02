@@ -371,7 +371,7 @@
   },
   "limits": [
     {"what": "control groups per car", "value": 64, "x-description-ru": "групп управления на вагон", "code": ["consist/WagonEntity.java#MAX_CONTROL_GROUPS"]},
-    {"what": "control group name length", "value": 32, "x-description-ru": "длина имени группы управления", "code": ["consist/WagonEntity.java#MAX_CONTROL_NAME"]},
+    {"what": "control group name length", "value": 32, "x-description-ru": "длина имени группы управления", "code": ["convention/GroupName.java#MAX_LENGTH"]},
     {"what": "light groups per car", "value": 64, "x-description-ru": "групп света на вагон", "code": ["client/render/model/StockModel.java#tagLit"]},
     {"what": "wheel tread radius, blocks", "value": 0.53, "x-description-ru": "радиус круга катания колеса, блоки", "code": ["client/render/model/IrStockModel.java#WHEEL_RADIUS"]},
     {"what": "door animation, ticks", "value": 40, "x-description-ru": "ход двери, тики", "code": ["consist/WagonEntity.java#DOOR_ANIM_TICKS"]},

@@ -387,7 +387,7 @@ pack.mcmeta в корне пака: секция pack самого Minecraft п�
 | Что | Значение | Код |
 |---|---|---|
 | групп управления на вагон | 64 | [WagonEntity.java#MAX_CONTROL_GROUPS](../src/main/java/com/muzhik17/trainsmod/consist/WagonEntity.java) |
-| длина имени группы управления | 32 | [WagonEntity.java#MAX_CONTROL_NAME](../src/main/java/com/muzhik17/trainsmod/consist/WagonEntity.java) |
+| длина имени группы управления | 32 | [GroupName.java#MAX_LENGTH](../src/main/java/com/muzhik17/trainsmod/convention/GroupName.java) |
 | групп света на вагон | 64 | [StockModel.java#tagLit](../src/main/java/com/muzhik17/trainsmod/client/render/model/StockModel.java) |
 | радиус круга катания колеса, блоки | 0.53 | [IrStockModel.java#WHEEL_RADIUS](../src/main/java/com/muzhik17/trainsmod/client/render/model/IrStockModel.java) |
 | ход двери, тики | 40 | [WagonEntity.java#DOOR_ANIM_TICKS](../src/main/java/com/muzhik17/trainsmod/consist/WagonEntity.java) |
