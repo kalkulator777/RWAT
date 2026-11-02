@@ -28,4 +28,9 @@ public record RiderLocal(int entityId, int wagonId, double x, double y, double z
     public Vector3d local() {
         return new Vector3d(x, y, z);
     }
+
+    /** True if the feet are a place at all: no coordinate NaN or infinite ({@link PacketNumbers}). */
+    public boolean finite() {
+        return PacketNumbers.finite(x, y, z);
+    }
 }

@@ -71,6 +71,14 @@ public record ConsistSnapshotPayload(int consistId, double s, double v, long gam
                 consist.signals());
     }
 
+    /**
+     * True if the snapshot's numbers are numbers ({@link PacketNumbers}): the
+     * head, the speed, the frame's shift — the pressures travel as bytes.
+     */
+    public boolean finite() {
+        return PacketNumbers.finite(s, v, frameShift);
+    }
+
     /** The wagons with their handbrake set, by index. */
     private static BitSet handbrakes(Consist consist) {
         boolean[] mask = consist.handbrakeMask();

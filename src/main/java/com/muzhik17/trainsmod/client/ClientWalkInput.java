@@ -179,7 +179,7 @@ public final class ClientWalkInput {
         boolean turned = prevFlipped != null && flipped != prevFlipped;
         if (turned) {
             // a coupling turned the car in its consist: same spot, mirrored frame
-            RailsWheelsAndTrains.LOGGER.info("[ride-debug] wagon {} (consist #{}[{}]) turned round in its consist,"
+            RailsWheelsAndTrains.LOGGER.debug("[ride-debug] wagon {} (consist #{}[{}]) turned round in its consist,"
                     + " yaw {} -> {}: feet mirrored", wagonId, wagon.getConsistId(), wagon.getWagonIndex(),
                     prevWagonYaw, wagonYaw);
             Vector3d feet = ClientWalk.get(player.getId());
@@ -193,7 +193,7 @@ public final class ClientWalkInput {
             float dYaw = Mth.wrapDegrees(wagonYaw - prevWagonYaw - (turned ? 180.0f : 0.0f));
             if (Math.abs(dYaw) > MAX_CAR_TURN) {
                 // not the car turning: its frame or its pose jumped — the view stays (2026-10-14)
-                RailsWheelsAndTrains.LOGGER.info(
+                RailsWheelsAndTrains.LOGGER.debug(
                         "[ride-debug] wagon {} (consist #{}[{}]) yaw jumped {} -> {}{}: view not carried",
                         wagonId, wagon.getConsistId(), wagon.getWagonIndex(), prevWagonYaw, wagonYaw,
                         turned ? " as it turned round" : "");
@@ -268,7 +268,7 @@ public final class ClientWalkInput {
                     RiderWalk.step(from, input.forward(), input.strafe(), input.relativeYaw(), 0.0F,
                             interior, doors, doorMask, input.sneak()));
             if (fixed != null && fixed.distance(local) > ClientWalkLog.TOLERANCE) {
-                RailsWheelsAndTrains.LOGGER.info(
+                RailsWheelsAndTrains.LOGGER.debug(
                         "[ride-debug] feet on wagon {} re-synced from the server after input {}, off by {}:"
                                 + " client {} now {}", wagonId, server.ack(),
                         String.format(Locale.ROOT, "%.2f", fixed.distance(local)), fmt(local), fmt(fixed));
