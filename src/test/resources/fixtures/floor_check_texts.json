@@ -1,0 +1,1426 @@
+{
+  "$comment": "What kinematics.FloorCheck.problems said of each case before its findings got codes (docs/proposals/editor.md 4.6, item 2), word for word, in order: the example pack's types as written and broken (FloorCheckTextsTest.breaks, every way), the MVP pack's (a lighter set of breaks), and the broken copies ExamplePackLoadTest walks. Case -> the lines, [] if nothing. Type ids, breaks and lines only: nothing of the MVP's models but what the lines say. FloorCheckTextsTest holds the check to it; no flag rewrites it.",
+  "example": {
+    "rwat_example:coach": [],
+    "rwat_example:coach / no interior": [],
+    "rwat_example:coach / every zone 0.4 across": [
+      "a player fits nowhere on the floor: every part of it is narrower than 0.6",
+      "door 0 'door_fl' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 1 'door_fr' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 2 'door_rl' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 3 'door_rr' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 4 'gangway_front' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 5 'gangway_rear' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 6 'salon_door' (inner) touches no floor",
+      "door 7 'salon_arch' (inner) touches no floor"
+    ],
+    "rwat_example:coach / zone 0 0.4 across": [
+      "zone 0 holds no place a player fits (1.70 x 0.40): widen it to 0.6 or join it to a wider zone",
+      "door 0 'door_fl' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 1 'door_fr' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 4 'gangway_front' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "rwat_example:coach / zone 0 2.0 aside": [
+      "door 0 'door_fl' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 1 'door_fr' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 4 'gangway_front' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "rwat_example:coach / zone 0 1.0 along": [
+      "door 0 'door_fl' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 1 'door_fr' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 4 'gangway_front' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 6 'salon_door' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)",
+      "door 6 'salon_door' (inner): its two sides are one floor without it — the floor runs round it or through the wall beside it, so shut it is no wall"
+    ],
+    "rwat_example:coach / zone 1 0.4 across": [
+      "floor zones [1, 2] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+    ],
+    "rwat_example:coach / zone 1 2.0 aside": [
+      "floor zones [1, 2] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+    ],
+    "rwat_example:coach / zone 1 1.0 along": [],
+    "rwat_example:coach / zone 2 0.4 across": [],
+    "rwat_example:coach / zone 2 2.0 aside": [
+      "floor zones [2] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+    ],
+    "rwat_example:coach / zone 2 1.0 along": [],
+    "rwat_example:coach / zone 3 0.4 across": [
+      "zone 3 holds no place a player fits (1.70 x 0.40): widen it to 0.6 or join it to a wider zone",
+      "door 2 'door_rl' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 3 'door_rr' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 5 'gangway_rear' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "rwat_example:coach / zone 3 2.0 aside": [
+      "door 2 'door_rl' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 3 'door_rr' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 5 'gangway_rear' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "floor zones [3] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+    ],
+    "rwat_example:coach / zone 3 1.0 along": [
+      "door 2 'door_rl' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 3 'door_rr' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 5 'gangway_rear' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "floor zones [3] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+    ],
+    "rwat_example:coach / door 0 1.0 along": [
+      "door 0 'door_fl' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "rwat_example:coach / door 0 0.5 across": [
+      "door 0 'door_fl' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "rwat_example:coach / door 0 0.8 thick": [
+      "door 0 'door_fl' is 0.80 thick: is the box the door leaf?"
+    ],
+    "rwat_example:coach / door 0 0.15 wide": [
+      "door 0 'door_fl' is too narrow to walk through",
+      "door 0 'door_fl' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "rwat_example:coach / door 0 a gangway": [
+      "door 0 'door_fl' is a gangway (connecting) door but not in an end wall"
+    ],
+    "rwat_example:coach / door 1 1.0 along": [
+      "door 1 'door_fr' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "rwat_example:coach / door 1 0.5 across": [
+      "door 1 'door_fr' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "rwat_example:coach / door 1 0.8 thick": [
+      "door 1 'door_fr' is 0.80 thick: is the box the door leaf?"
+    ],
+    "rwat_example:coach / door 1 0.15 wide": [
+      "door 1 'door_fr' is too narrow to walk through",
+      "door 1 'door_fr' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "rwat_example:coach / door 1 a gangway": [
+      "door 1 'door_fr' is a gangway (connecting) door but not in an end wall"
+    ],
+    "rwat_example:coach / door 2 1.0 along": [
+      "door 2 'door_rl' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "rwat_example:coach / door 2 0.5 across": [
+      "door 2 'door_rl' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "rwat_example:coach / door 2 0.8 thick": [
+      "door 2 'door_rl' is 0.80 thick: is the box the door leaf?"
+    ],
+    "rwat_example:coach / door 2 0.15 wide": [
+      "door 2 'door_rl' is too narrow to walk through",
+      "door 2 'door_rl' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "rwat_example:coach / door 2 a gangway": [
+      "door 2 'door_rl' is a gangway (connecting) door but not in an end wall"
+    ],
+    "rwat_example:coach / door 3 1.0 along": [
+      "door 3 'door_rr' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "rwat_example:coach / door 3 0.5 across": [
+      "door 3 'door_rr' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "rwat_example:coach / door 3 0.8 thick": [
+      "door 3 'door_rr' is 0.80 thick: is the box the door leaf?"
+    ],
+    "rwat_example:coach / door 3 0.15 wide": [
+      "door 3 'door_rr' is too narrow to walk through",
+      "door 3 'door_rr' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "rwat_example:coach / door 3 a gangway": [
+      "door 3 'door_rr' is a gangway (connecting) door but not in an end wall"
+    ],
+    "rwat_example:coach / door 4 1.0 along": [
+      "door 4 'gangway_front' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "rwat_example:coach / door 4 0.5 across": [],
+    "rwat_example:coach / door 4 0.8 thick": [
+      "door 4 'gangway_front' is 0.80 thick: is the box the door leaf?"
+    ],
+    "rwat_example:coach / door 4 0.15 wide": [
+      "door 4 'gangway_front' is too narrow to walk through",
+      "door 4 'gangway_front' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "rwat_example:coach / door 4 a gangway": [],
+    "rwat_example:coach / door 5 1.0 along": [
+      "door 5 'gangway_rear' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "rwat_example:coach / door 5 0.5 across": [],
+    "rwat_example:coach / door 5 0.8 thick": [
+      "door 5 'gangway_rear' is 0.80 thick: is the box the door leaf?"
+    ],
+    "rwat_example:coach / door 5 0.15 wide": [
+      "door 5 'gangway_rear' is too narrow to walk through",
+      "door 5 'gangway_rear' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "rwat_example:coach / door 5 a gangway": [],
+    "rwat_example:coach / door 6 1.0 along": [
+      "door 6 'salon_door' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "rwat_example:coach / door 6 0.5 across": [],
+    "rwat_example:coach / door 6 0.8 thick": [
+      "door 6 'salon_door' is 0.80 thick: is the box the door leaf?",
+      "door 6 'salon_door' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "rwat_example:coach / door 6 0.15 wide": [
+      "door 6 'salon_door' is too narrow to walk through",
+      "door 6 'salon_door' (inner) touches no floor"
+    ],
+    "rwat_example:coach / door 6 a gangway": [],
+    "rwat_example:coach / door 7 1.0 along": [],
+    "rwat_example:coach / door 7 0.5 across": [],
+    "rwat_example:coach / door 7 0.8 thick": [
+      "door 7 'salon_arch' is 0.80 thick: is the box the door leaf?"
+    ],
+    "rwat_example:coach / door 7 0.15 wide": [
+      "door 7 'salon_arch' is too narrow to walk through",
+      "door 7 'salon_arch' (inner) touches no floor"
+    ],
+    "rwat_example:coach / door 7 a gangway": [],
+    "rwat_example:gondola": [],
+    "rwat_example:shunter": [],
+    "rwat_example:shunter / no interior": [
+      "cab.seats without an interior: a chair needs a floor to walk to it"
+    ],
+    "rwat_example:shunter / every zone 0.4 across": [
+      "a player fits nowhere on the floor: every part of it is narrower than 0.6",
+      "door 0 'steps_left' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 1 'steps_right' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "cab.seats[0] (1.65, 2.10, -0.80): the nearest place to stand is Infinity off (sitting reaches 2.5), its floor NaN below the cushion (0.2..1.5; the seat is the top of the cushion)",
+      "cab.seats[1] (2.95, 2.10, 0.80): the nearest place to stand is Infinity off (sitting reaches 2.5), its floor NaN below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "rwat_example:shunter / zone 0 0.4 across": [
+      "a player fits nowhere on the floor: every part of it is narrower than 0.6",
+      "door 0 'steps_left' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 1 'steps_right' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "cab.seats[0] (1.65, 2.10, -0.80): the nearest place to stand is Infinity off (sitting reaches 2.5), its floor NaN below the cushion (0.2..1.5; the seat is the top of the cushion)",
+      "cab.seats[1] (2.95, 2.10, 0.80): the nearest place to stand is Infinity off (sitting reaches 2.5), its floor NaN below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "rwat_example:shunter / zone 0 2.0 aside": [
+      "zone 1 holds no place a player fits (0.57 x 1.42): widen it to 0.6 or join it to a wider zone",
+      "door 0 'steps_left' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 1 'steps_right' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "rwat_example:shunter / zone 0 1.0 along": [
+      "door 0 'steps_left' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 1 'steps_right' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "rwat_example:shunter / zone 1 0.4 across": [
+      "zone 1 holds no place a player fits (0.57 x 0.40): widen it to 0.6 or join it to a wider zone"
+    ],
+    "rwat_example:shunter / zone 1 2.0 aside": [],
+    "rwat_example:shunter / zone 1 1.0 along": [
+      "zone 1 holds no place a player fits (0.57 x 1.42): widen it to 0.6 or join it to a wider zone"
+    ],
+    "rwat_example:shunter / no chairs": [
+      "a walkable cab needs a driver's chair (cab.seats): in a cab with a floor the keys drive only from a chair"
+    ],
+    "rwat_example:shunter / door 0 1.0 along": [
+      "door 0 'steps_left' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "rwat_example:shunter / door 0 0.5 across": [
+      "door 0 'steps_left' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "rwat_example:shunter / door 0 0.8 thick": [
+      "door 0 'steps_left' is 0.60 thick: is the box the door leaf?",
+      "door 0 'steps_left' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "rwat_example:shunter / door 0 0.15 wide": [
+      "door 0 'steps_left' is too narrow to walk through",
+      "door 0 'steps_left' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "rwat_example:shunter / door 0 a gangway": [
+      "door 0 'steps_left' is a gangway (connecting) door but not in an end wall"
+    ],
+    "rwat_example:shunter / door 1 1.0 along": [],
+    "rwat_example:shunter / door 1 0.5 across": [
+      "door 1 'steps_right' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "rwat_example:shunter / door 1 0.8 thick": [
+      "door 1 'steps_right' is 0.60 thick: is the box the door leaf?",
+      "door 1 'steps_right' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "rwat_example:shunter / door 1 0.15 wide": [
+      "door 1 'steps_right' is too narrow to walk through",
+      "door 1 'steps_right' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "rwat_example:shunter / door 1 a gangway": [
+      "door 1 'steps_right' is a gangway (connecting) door but not in an end wall"
+    ],
+    "rwat_example:shunter / seat 0 1.2 up": [
+      "cab.seats[0] (1.65, 3.30, -0.80): the nearest place to stand is 0.00 off (sitting reaches 2.5), its floor 1.70 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "rwat_example:shunter / seat 0 3.0 across": [],
+    "rwat_example:shunter / seat 1 1.2 up": [
+      "cab.seats[1] (2.95, 3.30, 0.80): the nearest place to stand is 0.00 off (sitting reaches 2.5), its floor 1.70 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "rwat_example:shunter / seat 1 3.0 across": [
+      "cab.seats[1] (2.95, 2.10, 3.80): the nearest place to stand is 2.68 off (sitting reaches 2.5), its floor 0.50 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ]
+  },
+  "mvp": {
+    "mvp:2te116": [],
+    "mvp:2te116 / no interior": [
+      "cab.seats without an interior: a chair needs a floor to walk to it"
+    ],
+    "mvp:2te116 / zone 0 0.4 across": [],
+    "mvp:2te116 / zone 0 2.0 aside": [],
+    "mvp:2te116 / zone 0 1.0 along": [],
+    "mvp:2te116 / no chairs": [
+      "a walkable cab needs a driver's chair (cab.seats): in a cab with a floor the keys drive only from a chair"
+    ],
+    "mvp:2te116 / door 0 1.0 along": [
+      "door 0 'CabDoor' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)",
+      "door 0 'CabDoor' (inner): its two sides are one floor without it — the floor runs round it or through the wall beside it, so shut it is no wall",
+      "floor zones [42, 43, 44, 45, 46, 47, 48, 49, 50, 51] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+    ],
+    "mvp:2te116 / door 1 1.0 along": [
+      "door 1 'side1' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:2te116 / door 2 1.0 along": [],
+    "mvp:2te116 / seat 0 1.2 up": [
+      "cab.seats[0] (-7.94, 4.02, -0.81): the nearest place to stand is 0.05 off (sitting reaches 2.5), its floor 1.87 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:2te116 / seat 0 3.0 across": [],
+    "mvp:2te116 / seat 1 1.2 up": [
+      "cab.seats[1] (-7.95, 4.02, 1.13): the nearest place to stand is 0.50 off (sitting reaches 2.5), its floor 1.87 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:2te116 / seat 1 3.0 across": [
+      "cab.seats[1] (-7.95, 2.82, 4.13): the nearest place to stand is 2.95 off (sitting reaches 2.5), its floor 1.03 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:amendorf": [],
+    "mvp:amendorf / no interior": [],
+    "mvp:amendorf / zone 0 0.4 across": [
+      "zone 0 holds no place a player fits (0.88 x 0.40): widen it to 0.6 or join it to a wider zone",
+      "door 2 'Door3' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 3 'Door4' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 5 'Trap2' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:amendorf / zone 0 2.0 aside": [
+      "door 2 'Door3' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 3 'Door4' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 5 'Trap2' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:amendorf / zone 0 1.0 along": [
+      "door 2 'Door3' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 3 'Door4' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 5 'Trap2' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:amendorf / door 0 1.0 along": [
+      "door 0 'Door1' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:amendorf / door 1 1.0 along": [
+      "door 1 'Door2' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:amendorf / door 2 1.0 along": [
+      "door 2 'Door3' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:amendorf / door 3 1.0 along": [
+      "door 3 'Door4' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:amendorf / door 4 1.0 along": [
+      "door 4 'Trap1' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:amendorf / door 5 1.0 along": [
+      "door 5 'Trap2' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:amendorf / door 6 1.0 along": [
+      "floor zones [13] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+    ],
+    "mvp:amendorf / door 7 1.0 along": [
+      "door 7 'DoorToilet' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)",
+      "floor zones [2] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+    ],
+    "mvp:amendorf / door 8 1.0 along": [],
+    "mvp:amendorf_baggage": [],
+    "mvp:amendorf_baggage / no interior": [],
+    "mvp:amendorf_baggage / zone 0 0.4 across": [
+      "zone 0 holds no place a player fits (0.88 x 0.40): widen it to 0.6 or join it to a wider zone",
+      "door 2 'Door3' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 3 'Door4' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 5 'Trap2' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:amendorf_baggage / zone 0 2.0 aside": [
+      "door 2 'Door3' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 3 'Door4' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 5 'Trap2' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:amendorf_baggage / zone 0 1.0 along": [
+      "door 2 'Door3' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 3 'Door4' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 5 'Trap2' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:amendorf_baggage / door 0 1.0 along": [
+      "door 0 'Door1' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:amendorf_baggage / door 1 1.0 along": [
+      "door 1 'Door2' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:amendorf_baggage / door 2 1.0 along": [
+      "door 2 'Door3' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:amendorf_baggage / door 3 1.0 along": [
+      "door 3 'Door4' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:amendorf_baggage / door 4 1.0 along": [
+      "door 4 'Trap1' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:amendorf_baggage / door 5 1.0 along": [
+      "door 5 'Trap2' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:amendorf_baggage / door 6 1.0 along": [],
+    "mvp:amendorf_baggage / door 7 1.0 along": [],
+    "mvp:amendorf_baggage / door 8 1.0 along": [
+      "door 8 'DoorKupe' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)",
+      "floor zones [6] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+    ],
+    "mvp:amendorf_baggage / door 9 1.0 along": [
+      "door 9 'DoorToilet' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)",
+      "floor zones [2] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+    ],
+    "mvp:amendorf_baggage / door 10 1.0 along": [],
+    "mvp:bmz_16-3000": [],
+    "mvp:bmz_diesel": [],
+    "mvp:bmz_diesel / no interior": [],
+    "mvp:bmz_diesel / zone 0 0.4 across": [],
+    "mvp:bmz_diesel / zone 0 2.0 aside": [
+      "floor zones [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+    ],
+    "mvp:bmz_diesel / zone 0 1.0 along": [],
+    "mvp:bmz_diesel / door 0 1.0 along": [
+      "door 0 'door1' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:bmz_diesel / door 1 1.0 along": [
+      "door 1 'door2' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:bmz_diesel / door 2 1.0 along": [
+      "floor zones [125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+    ],
+    "mvp:bmz_diesel / door 3 1.0 along": [
+      "floor zones [114, 115, 116, 117, 118, 119, 120, 121, 122] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+    ],
+    "mvp:bmz_diesel / door 4 1.0 along": [
+      "door 4 'door5' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "mvp:bmz_diesel / door 5 1.0 along": [
+      "door 5 'door6' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)",
+      "door 5 'door6' (inner): its two sides are one floor without it — the floor runs round it or through the wall beside it, so shut it is no wall"
+    ],
+    "mvp:bmz_diesel / door 6 1.0 along": [
+      "door 6 'door7' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)",
+      "door 6 'door7' (inner): its two sides are one floor without it — the floor runs round it or through the wall beside it, so shut it is no wall"
+    ],
+    "mvp:boardflat": [],
+    "mvp:bunker": [],
+    "mvp:cargoflat": [],
+    "mvp:cargopolu": [],
+    "mvp:chme3": [],
+    "mvp:chme3 / no interior": [
+      "cab.seats without an interior: a chair needs a floor to walk to it"
+    ],
+    "mvp:chme3 / zone 0 0.4 across": [
+      "zone 0 holds no place a player fits (1.05 x 0.40): widen it to 0.6 or join it to a wider zone"
+    ],
+    "mvp:chme3 / zone 0 2.0 aside": [],
+    "mvp:chme3 / zone 0 1.0 along": [],
+    "mvp:chme3 / no chairs": [
+      "a walkable cab needs a driver's chair (cab.seats): in a cab with a floor the keys drive only from a chair"
+    ],
+    "mvp:chme3 / door 0 1.0 along": [
+      "door 0 'door1' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "mvp:chme3 / door 1 1.0 along": [
+      "door 1 'door2' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "mvp:chme3 / door 2 1.0 along": [],
+    "mvp:chme3 / door 3 1.0 along": [],
+    "mvp:chme3 / door 4 1.0 along": [
+      "door 4 'step3' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:chme3 / door 5 1.0 along": [
+      "door 5 'step4' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:chme3 / door 6 1.0 along": [
+      "door 6 'Trap' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:chme3 / seat 0 1.2 up": [
+      "cab.seats[0] (4.65, 3.86, -1.06): the nearest place to stand is 0.10 off (sitting reaches 2.5), its floor 1.98 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:chme3 / seat 0 3.0 across": [],
+    "mvp:chme3 / seat 1 1.2 up": [
+      "cab.seats[1] (4.48, 3.86, 1.06): the nearest place to stand is 0.00 off (sitting reaches 2.5), its floor 1.98 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:chme3 / seat 1 3.0 across": [
+      "cab.seats[1] (4.48, 2.66, 4.06): the nearest place to stand is 2.92 off (sitting reaches 2.5), its floor 0.78 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:chme3_booster": [],
+    "mvp:chme3_booster / no interior": [],
+    "mvp:chme3_booster / zone 0 0.4 across": [
+      "zone 1 holds no place a player fits (6.50 x 0.06): widen it to 0.6 or join it to a wider zone",
+      "door 1 'step2' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 3 'step4' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "floor zones [10, 11, 12, 13, 14, 15, 16] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+    ],
+    "mvp:chme3_booster / zone 0 2.0 aside": [
+      "zone 1 holds no place a player fits (6.50 x 0.06): widen it to 0.6 or join it to a wider zone",
+      "door 1 'step2' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 3 'step4' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "floor zones [6, 7, 10, 11, 12, 13, 14, 15, 16] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+    ],
+    "mvp:chme3_booster / zone 0 1.0 along": [
+      "door 1 'step2' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:chme3_booster / door 0 1.0 along": [],
+    "mvp:chme3_booster / door 1 1.0 along": [],
+    "mvp:chme3_booster / door 2 1.0 along": [
+      "door 2 'step3' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:chme3_booster / door 3 1.0 along": [
+      "door 3 'step4' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:chme3_booster / door 4 1.0 along": [
+      "door 4 'Trap' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:chs4t": [],
+    "mvp:chs4t / no interior": [
+      "cab.seats without an interior: a chair needs a floor to walk to it"
+    ],
+    "mvp:chs4t / zone 0 0.4 across": [
+      "zone 0 holds no place a player fits (1.19 x 0.40): widen it to 0.6 or join it to a wider zone",
+      "door 4 'side3' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 5 'side4' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:chs4t / zone 0 2.0 aside": [
+      "door 4 'side3' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 5 'side4' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "floor zones [2, 3, 4, 5, 6] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+    ],
+    "mvp:chs4t / zone 0 1.0 along": [
+      "door 3 'CabDoor2' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)",
+      "door 4 'side3' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 5 'side4' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:chs4t / no chairs": [
+      "a walkable cab needs a driver's chair (cab.seats): in a cab with a floor the keys drive only from a chair"
+    ],
+    "mvp:chs4t / door 0 1.0 along": [
+      "door 0 'CabDoor1' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)",
+      "floor zones [7, 8, 9, 10, 11] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+    ],
+    "mvp:chs4t / door 1 1.0 along": [
+      "door 1 'side1' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:chs4t / door 2 1.0 along": [
+      "door 2 'side2' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:chs4t / door 3 1.0 along": [
+      "floor zones [2, 3, 4, 5, 6] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+    ],
+    "mvp:chs4t / door 4 1.0 along": [
+      "door 4 'side3' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:chs4t / door 5 1.0 along": [
+      "door 5 'side4' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:chs4t / seat 0 1.2 up": [
+      "cab.seats[0] (-8.38, 3.98, -0.63): the nearest place to stand is 0.05 off (sitting reaches 2.5), its floor 1.86 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:chs4t / seat 0 3.0 across": [],
+    "mvp:chs4t / seat 1 1.2 up": [
+      "cab.seats[1] (-8.36, 3.98, 0.87): the nearest place to stand is 0.54 off (sitting reaches 2.5), its floor 1.86 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:chs4t / seat 1 3.0 across": [
+      "cab.seats[1] (-8.36, 2.78, 3.87): the nearest place to stand is 2.94 off (sitting reaches 2.5), its floor 0.97 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:chs4t / seat 2 1.2 up": [
+      "cab.seats[2] (8.39, 3.98, 0.62): the nearest place to stand is 0.04 off (sitting reaches 2.5), its floor 1.86 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:chs4t / seat 2 3.0 across": [
+      "cab.seats[2] (8.39, 2.78, 3.62): the nearest place to stand is 2.72 off (sitting reaches 2.5), its floor 0.97 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:chs4t / seat 3 1.2 up": [
+      "cab.seats[3] (8.39, 3.98, -0.89): the nearest place to stand is 0.57 off (sitting reaches 2.5), its floor 1.86 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:chs4t / seat 3 3.0 across": [],
+    "mvp:dgku": [],
+    "mvp:dgku / no interior": [
+      "cab.seats without an interior: a chair needs a floor to walk to it"
+    ],
+    "mvp:dgku / zone 0 0.4 across": [],
+    "mvp:dgku / zone 0 2.0 aside": [],
+    "mvp:dgku / zone 0 1.0 along": [],
+    "mvp:dgku / no chairs": [
+      "a walkable cab needs a driver's chair (cab.seats): in a cab with a floor the keys drive only from a chair"
+    ],
+    "mvp:dgku / door 0 1.0 along": [
+      "door 0 'door_1' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:dgku / door 1 1.0 along": [
+      "door 1 'door_2' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:dgku / seat 0 1.2 up": [
+      "cab.seats[0] (-1.72, 3.33, -0.50): the nearest place to stand is 0.00 off (sitting reaches 2.5), its floor 1.92 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:dgku / seat 0 3.0 across": [],
+    "mvp:dgku / seat 1 1.2 up": [
+      "cab.seats[1] (-1.72, 3.33, 0.50): the nearest place to stand is 0.65 off (sitting reaches 2.5), its floor 1.92 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:dgku / seat 1 3.0 across": [
+      "cab.seats[1] (-1.72, 2.13, 3.50): the nearest place to stand is 2.94 off (sitting reaches 2.5), its floor 0.72 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:dr1a_motorhead": [],
+    "mvp:dr1a_motorhead / no interior": [
+      "cab.seats without an interior: a chair needs a floor to walk to it"
+    ],
+    "mvp:dr1a_motorhead / zone 0 0.4 across": [
+      "zone 0 holds no place a player fits (1.44 x 0.40): widen it to 0.6 or join it to a wider zone",
+      "zone 3 holds no place a player fits (1.38 x 0.06): widen it to 0.6 or join it to a wider zone",
+      "zone 4 holds no place a player fits (1.38 x 0.13): widen it to 0.6 or join it to a wider zone",
+      "door 2 'CDR' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:dr1a_motorhead / zone 0 2.0 aside": [
+      "zone 3 holds no place a player fits (1.38 x 0.06): widen it to 0.6 or join it to a wider zone",
+      "zone 4 holds no place a player fits (1.38 x 0.13): widen it to 0.6 or join it to a wider zone",
+      "door 2 'CDR' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 5 'DL_6' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:dr1a_motorhead / zone 0 1.0 along": [
+      "zone 3 holds no place a player fits (1.38 x 0.06): widen it to 0.6 or join it to a wider zone",
+      "zone 4 holds no place a player fits (1.38 x 0.13): widen it to 0.6 or join it to a wider zone",
+      "door 2 'CDR' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:dr1a_motorhead / no chairs": [
+      "a walkable cab needs a driver's chair (cab.seats): in a cab with a floor the keys drive only from a chair"
+    ],
+    "mvp:dr1a_motorhead / door 0 1.0 along": [],
+    "mvp:dr1a_motorhead / door 1 1.0 along": [],
+    "mvp:dr1a_motorhead / door 2 1.0 along": [
+      "door 2 'CDR' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:dr1a_motorhead / door 3 1.0 along": [
+      "door 3 'DL' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:dr1a_motorhead / door 4 1.0 along": [
+      "door 4 'DR' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:dr1a_motorhead / door 5 1.0 along": [
+      "door 5 'DL_6' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:dr1a_motorhead / door 6 1.0 along": [
+      "door 6 'door_7' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:dr1a_motorhead / door 7 1.0 along": [
+      "door 7 'ID4' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "mvp:dr1a_motorhead / door 8 1.0 along": [
+      "door 8 'ID5' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "mvp:dr1a_motorhead / door 9 1.0 along": [
+      "door 9 'ID3' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)",
+      "door 9 'ID3' (inner): its two sides are one floor without it — the floor runs round it or through the wall beside it, so shut it is no wall",
+      "floor zones [35, 36, 37, 50, 51] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+    ],
+    "mvp:dr1a_motorhead / door 10 1.0 along": [
+      "door 10 'ID2' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)",
+      "door 10 'ID2' (inner): its two sides are one floor without it — the floor runs round it or through the wall beside it, so shut it is no wall"
+    ],
+    "mvp:dr1a_motorhead / door 11 1.0 along": [
+      "door 11 'ID1' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "mvp:dr1a_motorhead / door 12 1.0 along": [
+      "door 12 'CD1' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)",
+      "floor zones [231, 232, 233, 234, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+    ],
+    "mvp:dr1a_motorhead / seat 0 1.2 up": [
+      "cab.seats[0] (-11.28, 3.42, -0.59): the nearest place to stand is 0.02 off (sitting reaches 2.5), its floor 1.76 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:dr1a_motorhead / seat 0 3.0 across": [],
+    "mvp:dr1a_motorhead / seat 1 1.2 up": [
+      "cab.seats[1] (-11.51, 3.42, 0.82): the nearest place to stand is 0.26 off (sitting reaches 2.5), its floor 1.76 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:dr1a_motorhead / seat 1 3.0 across": [
+      "cab.seats[1] (-11.51, 2.22, 3.82): the nearest place to stand is 2.70 off (sitting reaches 2.5), its floor 0.56 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:dr1a_motorhead_reversed": [],
+    "mvp:dr1a_motorhead_reversed / no interior": [
+      "cab.seats without an interior: a chair needs a floor to walk to it"
+    ],
+    "mvp:dr1a_motorhead_reversed / zone 0 0.4 across": [
+      "zone 0 holds no place a player fits (1.44 x 0.40): widen it to 0.6 or join it to a wider zone",
+      "zone 3 holds no place a player fits (1.38 x 0.06): widen it to 0.6 or join it to a wider zone",
+      "zone 4 holds no place a player fits (1.38 x 0.13): widen it to 0.6 or join it to a wider zone",
+      "door 2 'CDR' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:dr1a_motorhead_reversed / zone 0 2.0 aside": [
+      "zone 3 holds no place a player fits (1.38 x 0.06): widen it to 0.6 or join it to a wider zone",
+      "zone 4 holds no place a player fits (1.38 x 0.13): widen it to 0.6 or join it to a wider zone",
+      "door 2 'CDR' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 5 'DL_6' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:dr1a_motorhead_reversed / zone 0 1.0 along": [
+      "zone 3 holds no place a player fits (1.38 x 0.06): widen it to 0.6 or join it to a wider zone",
+      "zone 4 holds no place a player fits (1.38 x 0.13): widen it to 0.6 or join it to a wider zone",
+      "door 2 'CDR' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:dr1a_motorhead_reversed / no chairs": [
+      "a walkable cab needs a driver's chair (cab.seats): in a cab with a floor the keys drive only from a chair"
+    ],
+    "mvp:dr1a_motorhead_reversed / door 0 1.0 along": [],
+    "mvp:dr1a_motorhead_reversed / door 1 1.0 along": [],
+    "mvp:dr1a_motorhead_reversed / door 2 1.0 along": [
+      "door 2 'CDR' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:dr1a_motorhead_reversed / door 3 1.0 along": [
+      "door 3 'DL' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:dr1a_motorhead_reversed / door 4 1.0 along": [
+      "door 4 'DR' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:dr1a_motorhead_reversed / door 5 1.0 along": [
+      "door 5 'DL_6' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:dr1a_motorhead_reversed / door 6 1.0 along": [
+      "door 6 'door_7' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:dr1a_motorhead_reversed / door 7 1.0 along": [
+      "door 7 'ID4' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "mvp:dr1a_motorhead_reversed / door 8 1.0 along": [
+      "door 8 'ID5' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "mvp:dr1a_motorhead_reversed / door 9 1.0 along": [
+      "door 9 'ID3' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)",
+      "door 9 'ID3' (inner): its two sides are one floor without it — the floor runs round it or through the wall beside it, so shut it is no wall",
+      "floor zones [35, 36, 37, 50, 51] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+    ],
+    "mvp:dr1a_motorhead_reversed / door 10 1.0 along": [
+      "door 10 'ID2' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)",
+      "door 10 'ID2' (inner): its two sides are one floor without it — the floor runs round it or through the wall beside it, so shut it is no wall"
+    ],
+    "mvp:dr1a_motorhead_reversed / door 11 1.0 along": [
+      "door 11 'ID1' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "mvp:dr1a_motorhead_reversed / door 12 1.0 along": [
+      "door 12 'CD1' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)",
+      "floor zones [231, 232, 233, 234, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+    ],
+    "mvp:dr1a_motorhead_reversed / seat 0 1.2 up": [
+      "cab.seats[0] (-11.28, 3.42, -0.59): the nearest place to stand is 0.02 off (sitting reaches 2.5), its floor 1.76 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:dr1a_motorhead_reversed / seat 0 3.0 across": [],
+    "mvp:dr1a_motorhead_reversed / seat 1 1.2 up": [
+      "cab.seats[1] (-11.51, 3.42, 0.82): the nearest place to stand is 0.26 off (sitting reaches 2.5), its floor 1.76 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:dr1a_motorhead_reversed / seat 1 3.0 across": [
+      "cab.seats[1] (-11.51, 2.22, 3.82): the nearest place to stand is 2.70 off (sitting reaches 2.5), its floor 0.56 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:dr1a_trailed": [],
+    "mvp:dr1a_trailed / no interior": [],
+    "mvp:dr1a_trailed / zone 0 0.4 across": [],
+    "mvp:dr1a_trailed / zone 0 2.0 aside": [],
+    "mvp:dr1a_trailed / zone 0 1.0 along": [],
+    "mvp:dr1a_trailed / door 0 1.0 along": [
+      "door 0 'DL' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:dr1a_trailed / door 1 1.0 along": [
+      "door 1 'DR' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:dr1a_trailed / door 2 1.0 along": [
+      "door 2 'DL_3' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:dr1a_trailed / door 3 1.0 along": [
+      "door 3 'DR_4' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:dr1a_trailed / door 4 1.0 along": [
+      "door 4 'ID1' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "mvp:dr1a_trailed / door 5 1.0 along": [
+      "door 5 'ID2' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "mvp:dr1a_trailed / door 6 1.0 along": [
+      "door 6 'CDF' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:dr1a_trailed / door 7 1.0 along": [
+      "door 7 'CDR' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:er2h": [],
+    "mvp:er2h / no interior": [
+      "cab.seats without an interior: a chair needs a floor to walk to it"
+    ],
+    "mvp:er2h / zone 0 0.4 across": [
+      "zone 1 holds no place a player fits (0.19 x 1.00): widen it to 0.6 or join it to a wider zone"
+    ],
+    "mvp:er2h / zone 0 2.0 aside": [
+      "zone 1 holds no place a player fits (0.19 x 1.00): widen it to 0.6 or join it to a wider zone"
+    ],
+    "mvp:er2h / zone 0 1.0 along": [
+      "zone 1 holds no place a player fits (0.19 x 1.00): widen it to 0.6 or join it to a wider zone"
+    ],
+    "mvp:er2h / no chairs": [
+      "a walkable cab needs a driver's chair (cab.seats): in a cab with a floor the keys drive only from a chair"
+    ],
+    "mvp:er2h / door 0 1.0 along": [],
+    "mvp:er2h / door 1 1.0 along": [
+      "door 1 'DrL_3' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:er2h / door 2 1.0 along": [],
+    "mvp:er2h / door 3 1.0 along": [
+      "door 3 'DrR_7' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:er2h / door 4 1.0 along": [
+      "door 4 'RearD' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "mvp:er2h / door 5 1.0 along": [
+      "door 5 'FrontD' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "mvp:er2h / door 6 1.0 along": [
+      "door 6 'door_14' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:er2h / door 7 1.0 along": [
+      "door 7 'CabD' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)",
+      "floor zones [44, 45, 46, 47, 48, 49, 50, 51, 52, 53] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+    ],
+    "mvp:er2h / door 8 1.0 along": [
+      "floor zones [46, 47, 48, 49, 50, 51, 52, 53] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+    ],
+    "mvp:er2h / seat 0 1.2 up": [
+      "cab.seats[0] (-8.66, 3.24, -0.58): the nearest place to stand is 0.08 off (sitting reaches 2.5), its floor 1.77 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:er2h / seat 0 3.0 across": [],
+    "mvp:er2h / seat 1 1.2 up": [
+      "cab.seats[1] (-8.78, 3.24, 0.96): the nearest place to stand is 0.39 off (sitting reaches 2.5), its floor 1.77 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:er2h / seat 1 3.0 across": [
+      "cab.seats[1] (-8.78, 2.04, 3.96): the nearest place to stand is 3.37 off (sitting reaches 2.5), its floor 0.57 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:er2h_reversed": [],
+    "mvp:er2h_reversed / no interior": [
+      "cab.seats without an interior: a chair needs a floor to walk to it"
+    ],
+    "mvp:er2h_reversed / zone 0 0.4 across": [
+      "zone 1 holds no place a player fits (0.19 x 1.00): widen it to 0.6 or join it to a wider zone"
+    ],
+    "mvp:er2h_reversed / zone 0 2.0 aside": [
+      "zone 1 holds no place a player fits (0.19 x 1.00): widen it to 0.6 or join it to a wider zone"
+    ],
+    "mvp:er2h_reversed / zone 0 1.0 along": [
+      "zone 1 holds no place a player fits (0.19 x 1.00): widen it to 0.6 or join it to a wider zone"
+    ],
+    "mvp:er2h_reversed / no chairs": [
+      "a walkable cab needs a driver's chair (cab.seats): in a cab with a floor the keys drive only from a chair"
+    ],
+    "mvp:er2h_reversed / door 0 1.0 along": [],
+    "mvp:er2h_reversed / door 1 1.0 along": [
+      "door 1 'DrR_3' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:er2h_reversed / door 2 1.0 along": [],
+    "mvp:er2h_reversed / door 3 1.0 along": [
+      "door 3 'DrL_7' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:er2h_reversed / door 4 1.0 along": [
+      "door 4 'RearD' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "mvp:er2h_reversed / door 5 1.0 along": [
+      "door 5 'FrontD' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "mvp:er2h_reversed / door 6 1.0 along": [
+      "door 6 'door_14' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:er2h_reversed / door 7 1.0 along": [
+      "door 7 'CabD' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)",
+      "floor zones [44, 45, 46, 47, 48, 49, 50, 51, 52, 53] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+    ],
+    "mvp:er2h_reversed / door 8 1.0 along": [
+      "floor zones [46, 47, 48, 49, 50, 51, 52, 53] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+    ],
+    "mvp:er2h_reversed / seat 0 1.2 up": [
+      "cab.seats[0] (-8.66, 3.24, -0.58): the nearest place to stand is 0.08 off (sitting reaches 2.5), its floor 1.77 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:er2h_reversed / seat 0 3.0 across": [],
+    "mvp:er2h_reversed / seat 1 1.2 up": [
+      "cab.seats[1] (-8.78, 3.24, 0.96): the nearest place to stand is 0.39 off (sitting reaches 2.5), its floor 1.77 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:er2h_reversed / seat 1 3.0 across": [
+      "cab.seats[1] (-8.78, 2.04, 3.96): the nearest place to stand is 3.37 off (sitting reaches 2.5), its floor 0.57 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:er2m": [],
+    "mvp:er2m / no interior": [],
+    "mvp:er2m / zone 0 0.4 across": [
+      "zone 1 holds no place a player fits (0.19 x 1.00): widen it to 0.6 or join it to a wider zone"
+    ],
+    "mvp:er2m / zone 0 2.0 aside": [
+      "zone 1 holds no place a player fits (0.19 x 1.00): widen it to 0.6 or join it to a wider zone"
+    ],
+    "mvp:er2m / zone 0 1.0 along": [
+      "zone 1 holds no place a player fits (0.19 x 1.00): widen it to 0.6 or join it to a wider zone"
+    ],
+    "mvp:er2m / door 0 1.0 along": [
+      "door 0 'DrL' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:er2m / door 1 1.0 along": [
+      "door 1 'DrL_3' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:er2m / door 2 1.0 along": [
+      "door 2 'DrR' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:er2m / door 3 1.0 along": [
+      "door 3 'DrR_7' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:er2m / door 4 1.0 along": [
+      "door 4 'RearD' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "mvp:er2m / door 5 1.0 along": [
+      "door 5 'FrontD' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "mvp:er2m / door 6 1.0 along": [
+      "door 6 'door_13' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:er2m / door 7 1.0 along": [
+      "door 7 'door_14' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:er2m_reversed": [],
+    "mvp:er2m_reversed / no interior": [],
+    "mvp:er2m_reversed / zone 0 0.4 across": [
+      "zone 1 holds no place a player fits (0.19 x 1.00): widen it to 0.6 or join it to a wider zone"
+    ],
+    "mvp:er2m_reversed / zone 0 2.0 aside": [
+      "zone 1 holds no place a player fits (0.19 x 1.00): widen it to 0.6 or join it to a wider zone"
+    ],
+    "mvp:er2m_reversed / zone 0 1.0 along": [
+      "zone 1 holds no place a player fits (0.19 x 1.00): widen it to 0.6 or join it to a wider zone"
+    ],
+    "mvp:er2m_reversed / door 0 1.0 along": [
+      "door 0 'DrR' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:er2m_reversed / door 1 1.0 along": [
+      "door 1 'DrR_3' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:er2m_reversed / door 2 1.0 along": [
+      "door 2 'DrL' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:er2m_reversed / door 3 1.0 along": [
+      "door 3 'DrL_7' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:er2m_reversed / door 4 1.0 along": [
+      "door 4 'RearD' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "mvp:er2m_reversed / door 5 1.0 along": [
+      "door 5 'FrontD' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "mvp:er2m_reversed / door 6 1.0 along": [
+      "door 6 'door_13' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:er2m_reversed / door 7 1.0 along": [
+      "door 7 'door_14' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:er2t": [],
+    "mvp:er2t / no interior": [],
+    "mvp:er2t / zone 0 0.4 across": [
+      "zone 1 holds no place a player fits (0.19 x 1.00): widen it to 0.6 or join it to a wider zone"
+    ],
+    "mvp:er2t / zone 0 2.0 aside": [
+      "zone 1 holds no place a player fits (0.19 x 1.00): widen it to 0.6 or join it to a wider zone"
+    ],
+    "mvp:er2t / zone 0 1.0 along": [
+      "zone 1 holds no place a player fits (0.19 x 1.00): widen it to 0.6 or join it to a wider zone"
+    ],
+    "mvp:er2t / door 0 1.0 along": [
+      "door 0 'DrL' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:er2t / door 1 1.0 along": [
+      "door 1 'DrL_3' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:er2t / door 2 1.0 along": [
+      "door 2 'DrR' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:er2t / door 3 1.0 along": [
+      "door 3 'DrR_7' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:er2t / door 4 1.0 along": [
+      "door 4 'RearD' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "mvp:er2t / door 5 1.0 along": [
+      "door 5 'FrontD' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "mvp:er2t / door 6 1.0 along": [
+      "door 6 'door_13' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:er2t / door 7 1.0 along": [
+      "door 7 'door_14' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:fitflat": [],
+    "mvp:freight": [],
+    "mvp:freight_break": [],
+    "mvp:fridge": [],
+    "mvp:hopper": [],
+    "mvp:m62": [],
+    "mvp:m62 / no interior": [
+      "cab.seats without an interior: a chair needs a floor to walk to it"
+    ],
+    "mvp:m62 / zone 0 0.4 across": [],
+    "mvp:m62 / zone 0 2.0 aside": [],
+    "mvp:m62 / zone 0 1.0 along": [],
+    "mvp:m62 / no chairs": [
+      "a walkable cab needs a driver's chair (cab.seats): in a cab with a floor the keys drive only from a chair"
+    ],
+    "mvp:m62 / door 0 1.0 along": [
+      "floor zones [9, 10, 11, 12, 13, 14, 15] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+    ],
+    "mvp:m62 / door 1 1.0 along": [
+      "door 1 'side1' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:m62 / door 2 1.0 along": [
+      "door 2 'side2' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:m62 / door 3 1.0 along": [],
+    "mvp:m62 / door 4 1.0 along": [
+      "door 4 'side3' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:m62 / door 5 1.0 along": [],
+    "mvp:m62 / seat 0 1.2 up": [
+      "cab.seats[0] (-7.50, 3.70, -0.84): the nearest place to stand is 0.02 off (sitting reaches 2.5), its floor 1.86 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:m62 / seat 0 3.0 across": [],
+    "mvp:m62 / seat 1 1.2 up": [
+      "cab.seats[1] (-7.49, 3.70, 1.11): the nearest place to stand is 0.53 off (sitting reaches 2.5), its floor 1.86 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:m62 / seat 1 3.0 across": [
+      "cab.seats[1] (-7.49, 2.50, 4.11): the nearest place to stand is 3.03 off (sitting reaches 2.5), its floor 0.66 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:m62 / seat 2 1.2 up": [
+      "cab.seats[2] (7.51, 3.70, 0.86): the nearest place to stand is 0.03 off (sitting reaches 2.5), its floor 1.86 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:m62 / seat 2 3.0 across": [
+      "cab.seats[2] (7.51, 2.50, 3.86): the nearest place to stand is 2.78 off (sitting reaches 2.5), its floor 0.66 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:m62 / seat 3 1.2 up": [
+      "cab.seats[3] (7.51, 3.70, -1.10): the nearest place to stand is 0.53 off (sitting reaches 2.5), its floor 1.86 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:m62 / seat 3 3.0 across": [],
+    "mvp:poluwagon_12-132": [],
+    "mvp:r200c": [],
+    "mvp:r200c / no interior": [],
+    "mvp:r200c / zone 0 0.4 across": [
+      "zone 1 holds no place a player fits (0.19 x 1.00): widen it to 0.6 or join it to a wider zone",
+      "zone 2 holds no place a player fits (0.06 x 1.13): widen it to 0.6 or join it to a wider zone"
+    ],
+    "mvp:r200c / zone 0 2.0 aside": [
+      "zone 1 holds no place a player fits (0.19 x 1.00): widen it to 0.6 or join it to a wider zone",
+      "zone 2 holds no place a player fits (0.06 x 1.13): widen it to 0.6 or join it to a wider zone"
+    ],
+    "mvp:r200c / zone 0 1.0 along": [
+      "zone 1 holds no place a player fits (0.19 x 1.00): widen it to 0.6 or join it to a wider zone",
+      "zone 2 holds no place a player fits (0.06 x 1.13): widen it to 0.6 or join it to a wider zone"
+    ],
+    "mvp:r200c / door 0 1.0 along": [
+      "door 0 'side1' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:r200c / door 1 1.0 along": [
+      "door 1 'side2' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:r200c / door 2 1.0 along": [
+      "door 2 'side3' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:r200c / door 3 1.0 along": [
+      "door 3 'side4' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:r200h": [],
+    "mvp:r200h / no interior": [
+      "cab.seats without an interior: a chair needs a floor to walk to it"
+    ],
+    "mvp:r200h / zone 0 0.4 across": [
+      "zone 1 holds no place a player fits (0.19 x 1.00): widen it to 0.6 or join it to a wider zone",
+      "zone 2 holds no place a player fits (0.06 x 1.13): widen it to 0.6 or join it to a wider zone"
+    ],
+    "mvp:r200h / zone 0 2.0 aside": [
+      "zone 1 holds no place a player fits (0.19 x 1.00): widen it to 0.6 or join it to a wider zone",
+      "zone 2 holds no place a player fits (0.06 x 1.13): widen it to 0.6 or join it to a wider zone"
+    ],
+    "mvp:r200h / zone 0 1.0 along": [
+      "zone 1 holds no place a player fits (0.19 x 1.00): widen it to 0.6 or join it to a wider zone",
+      "zone 2 holds no place a player fits (0.06 x 1.13): widen it to 0.6 or join it to a wider zone"
+    ],
+    "mvp:r200h / no chairs": [
+      "a walkable cab needs a driver's chair (cab.seats): in a cab with a floor the keys drive only from a chair"
+    ],
+    "mvp:r200h / door 0 1.0 along": [
+      "door 0 'CabD' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)",
+      "floor zones [54, 55, 56, 60, 61, 62, 63, 64, 65, 66, 67] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+    ],
+    "mvp:r200h / door 1 1.0 along": [
+      "door 1 'side1' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:r200h / door 2 1.0 along": [
+      "door 2 'side2' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:r200h / door 3 1.0 along": [
+      "door 3 'side3' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:r200h / door 4 1.0 along": [
+      "door 4 'side4' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:r200h / seat 0 1.2 up": [
+      "cab.seats[0] (-8.77, 3.69, -0.46): the nearest place to stand is 0.01 off (sitting reaches 2.5), its floor 1.93 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:r200h / seat 0 3.0 across": [],
+    "mvp:r200h / seat 1 1.2 up": [
+      "cab.seats[1] (-8.83, 3.69, 0.85): the nearest place to stand is 0.58 off (sitting reaches 2.5), its floor 1.93 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:r200h / seat 1 3.0 across": [
+      "cab.seats[1] (-8.83, 2.49, 3.85): the nearest place to stand is 3.10 off (sitting reaches 2.5), its floor 1.16 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:r200m": [],
+    "mvp:r200m / no interior": [],
+    "mvp:r200m / zone 0 0.4 across": [
+      "zone 1 holds no place a player fits (0.19 x 1.00): widen it to 0.6 or join it to a wider zone",
+      "zone 2 holds no place a player fits (0.06 x 1.13): widen it to 0.6 or join it to a wider zone"
+    ],
+    "mvp:r200m / zone 0 2.0 aside": [
+      "zone 1 holds no place a player fits (0.19 x 1.00): widen it to 0.6 or join it to a wider zone",
+      "zone 2 holds no place a player fits (0.06 x 1.13): widen it to 0.6 or join it to a wider zone"
+    ],
+    "mvp:r200m / zone 0 1.0 along": [
+      "zone 1 holds no place a player fits (0.19 x 1.00): widen it to 0.6 or join it to a wider zone",
+      "zone 2 holds no place a player fits (0.06 x 1.13): widen it to 0.6 or join it to a wider zone"
+    ],
+    "mvp:r200m / door 0 1.0 along": [
+      "door 0 'side1' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:r200m / door 1 1.0 along": [
+      "door 1 'side2' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:r200m / door 2 1.0 along": [
+      "door 2 'side3' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:r200m / door 3 1.0 along": [
+      "door 3 'side4' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:sr3h": [],
+    "mvp:sr3h / no interior": [
+      "cab.seats without an interior: a chair needs a floor to walk to it"
+    ],
+    "mvp:sr3h / zone 0 0.4 across": [],
+    "mvp:sr3h / zone 0 2.0 aside": [],
+    "mvp:sr3h / zone 0 1.0 along": [],
+    "mvp:sr3h / no chairs": [
+      "a walkable cab needs a driver's chair (cab.seats): in a cab with a floor the keys drive only from a chair"
+    ],
+    "mvp:sr3h / door 0 1.0 along": [
+      "door 0 'FrontD' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "mvp:sr3h / door 1 1.0 along": [
+      "door 1 'RearD' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)",
+      "door 1 'RearD' (inner): its two sides are one floor without it — the floor runs round it or through the wall beside it, so shut it is no wall"
+    ],
+    "mvp:sr3h / door 2 1.0 along": [
+      "door 2 'CabD' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)",
+      "door 2 'CabD' (inner): its two sides are one floor without it — the floor runs round it or through the wall beside it, so shut it is no wall",
+      "floor zones [37, 38, 39] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+    ],
+    "mvp:sr3h / door 3 1.0 along": [],
+    "mvp:sr3h / door 4 1.0 along": [],
+    "mvp:sr3h / door 5 1.0 along": [
+      "door 5 'side3' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:sr3h / door 6 1.0 along": [
+      "door 6 'side4' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:sr3h / seat 0 1.2 up": [
+      "cab.seats[0] (-9.21, 3.15, -1.26): the nearest place to stand is 0.06 off (sitting reaches 2.5), its floor 1.74 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:sr3h / seat 0 3.0 across": [],
+    "mvp:sr3h / seat 1 1.2 up": [
+      "cab.seats[1] (-9.23, 3.15, 1.25): the nearest place to stand is 0.80 off (sitting reaches 2.5), its floor 1.74 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:sr3h / seat 1 3.0 across": [
+      "cab.seats[1] (-9.23, 1.95, 4.25): the nearest place to stand is 3.34 off (sitting reaches 2.5), its floor 0.54 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:sr3m": [],
+    "mvp:sr3m / no interior": [],
+    "mvp:sr3m / zone 0 0.4 across": [],
+    "mvp:sr3m / zone 0 2.0 aside": [],
+    "mvp:sr3m / zone 0 1.0 along": [],
+    "mvp:sr3m / door 0 1.0 along": [
+      "door 0 'FrontD' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "mvp:sr3m / door 1 1.0 along": [
+      "door 1 'RearD' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)",
+      "door 1 'RearD' (inner): its two sides are one floor without it — the floor runs round it or through the wall beside it, so shut it is no wall"
+    ],
+    "mvp:sr3m / door 2 1.0 along": [],
+    "mvp:sr3m / door 3 1.0 along": [],
+    "mvp:sr3m / door 4 1.0 along": [
+      "door 4 'side3' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:sr3m / door 5 1.0 along": [
+      "door 5 'side4' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:steelflat": [],
+    "mvp:tank_15-1443": [],
+    "mvp:tank_15-865": [],
+    "mvp:tem2": [],
+    "mvp:tem2 / no interior": [
+      "cab.seats without an interior: a chair needs a floor to walk to it"
+    ],
+    "mvp:tem2 / zone 0 0.4 across": [
+      "zone 0 holds no place a player fits (2.06 x 0.40): widen it to 0.6 or join it to a wider zone",
+      "door 5 'step4' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:tem2 / zone 0 2.0 aside": [
+      "door 5 'step4' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:tem2 / zone 0 1.0 along": [],
+    "mvp:tem2 / no chairs": [
+      "a walkable cab needs a driver's chair (cab.seats): in a cab with a floor the keys drive only from a chair"
+    ],
+    "mvp:tem2 / door 0 1.0 along": [
+      "door 0 'CD1' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "mvp:tem2 / door 1 1.0 along": [
+      "door 1 'CD2' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "mvp:tem2 / door 2 1.0 along": [],
+    "mvp:tem2 / door 3 1.0 along": [],
+    "mvp:tem2 / door 4 1.0 along": [
+      "door 4 'step3' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:tem2 / door 5 1.0 along": [
+      "door 5 'step4' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:tem2 / seat 0 1.2 up": [
+      "cab.seats[0] (5.59, 3.92, -1.25): the nearest place to stand is 0.05 off (sitting reaches 2.5), its floor 1.83 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:tem2 / seat 0 3.0 across": [],
+    "mvp:tem2 / seat 1 1.2 up": [
+      "cab.seats[1] (5.35, 3.92, 1.19): the nearest place to stand is 0.00 off (sitting reaches 2.5), its floor 1.83 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:tem2 / seat 1 3.0 across": [
+      "cab.seats[1] (5.35, 2.72, 4.19): the nearest place to stand is 2.87 off (sitting reaches 2.5), its floor 0.63 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:tem2y": [],
+    "mvp:tem2y / no interior": [
+      "cab.seats without an interior: a chair needs a floor to walk to it"
+    ],
+    "mvp:tem2y / zone 0 0.4 across": [
+      "zone 0 holds no place a player fits (0.69 x 0.40): widen it to 0.6 or join it to a wider zone",
+      "door 4 'step3' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 5 'step4' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:tem2y / zone 0 2.0 aside": [
+      "door 5 'step4' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:tem2y / zone 0 1.0 along": [
+      "door 4 'step3' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "door 5 'step4' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)",
+      "floor zones [2, 3] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+    ],
+    "mvp:tem2y / no chairs": [
+      "a walkable cab needs a driver's chair (cab.seats): in a cab with a floor the keys drive only from a chair"
+    ],
+    "mvp:tem2y / door 0 1.0 along": [
+      "door 0 'Door1' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "mvp:tem2y / door 1 1.0 along": [
+      "door 1 'Door2' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "mvp:tem2y / door 2 1.0 along": [],
+    "mvp:tem2y / door 3 1.0 along": [],
+    "mvp:tem2y / door 4 1.0 along": [
+      "door 4 'step3' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:tem2y / door 5 1.0 along": [
+      "door 5 'step4' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:tem2y / seat 0 1.2 up": [
+      "cab.seats[0] (5.56, 4.01, -1.19): the nearest place to stand is 0.05 off (sitting reaches 2.5), its floor 1.86 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:tem2y / seat 0 3.0 across": [],
+    "mvp:tem2y / seat 1 1.2 up": [
+      "cab.seats[1] (5.39, 4.01, 1.13): the nearest place to stand is 0.00 off (sitting reaches 2.5), its floor 1.86 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:tem2y / seat 1 3.0 across": [
+      "cab.seats[1] (5.39, 2.81, 4.13): the nearest place to stand is 2.99 off (sitting reaches 2.5), its floor 0.66 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:tep70": [],
+    "mvp:tep70 / no interior": [
+      "cab.seats without an interior: a chair needs a floor to walk to it"
+    ],
+    "mvp:tep70 / zone 0 0.4 across": [],
+    "mvp:tep70 / zone 0 2.0 aside": [],
+    "mvp:tep70 / zone 0 1.0 along": [],
+    "mvp:tep70 / no chairs": [
+      "a walkable cab needs a driver's chair (cab.seats): in a cab with a floor the keys drive only from a chair"
+    ],
+    "mvp:tep70 / door 0 1.0 along": [
+      "floor zones [19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32] can't be walked to from zone 0 or a way in: join them (zones that touch join), put an inner door between them, or a door out of them"
+    ],
+    "mvp:tep70 / door 1 1.0 along": [
+      "door 1 'side1' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:tep70 / door 2 1.0 along": [
+      "door 2 'side2' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:tep70 / door 3 1.0 along": [
+      "door 3 'CabDoor2' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "mvp:tep70 / door 4 1.0 along": [
+      "door 4 'side3' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:tep70 / door 5 1.0 along": [
+      "door 5 'side4' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:tep70 / seat 0 1.2 up": [
+      "cab.seats[0] (-9.72, 3.95, -0.67): the nearest place to stand is 0.47 off (sitting reaches 2.5), its floor 1.97 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:tep70 / seat 0 3.0 across": [],
+    "mvp:tep70 / seat 1 1.2 up": [
+      "cab.seats[1] (-9.73, 3.95, 0.93): the nearest place to stand is 0.60 off (sitting reaches 2.5), its floor 1.97 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:tep70 / seat 1 3.0 across": [
+      "cab.seats[1] (-9.73, 2.75, 3.93): the nearest place to stand is 2.97 off (sitting reaches 2.5), its floor 0.77 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:tep70 / seat 2 1.2 up": [
+      "cab.seats[2] (9.72, 3.95, 0.67): the nearest place to stand is 0.47 off (sitting reaches 2.5), its floor 1.97 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:tep70 / seat 2 3.0 across": [
+      "cab.seats[2] (9.72, 2.75, 3.67): the nearest place to stand is 2.72 off (sitting reaches 2.5), its floor 0.77 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:tep70 / seat 3 1.2 up": [
+      "cab.seats[3] (9.73, 3.95, -0.93): the nearest place to stand is 0.60 off (sitting reaches 2.5), its floor 1.97 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:tep70 / seat 3 3.0 across": [],
+    "mvp:tgm23": [],
+    "mvp:tgm23 / no interior": [
+      "cab.seats without an interior: a chair needs a floor to walk to it"
+    ],
+    "mvp:tgm23 / zone 0 0.4 across": [
+      "door 3 'step2' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:tgm23 / zone 0 2.0 aside": [
+      "door 3 'step2' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:tgm23 / zone 0 1.0 along": [],
+    "mvp:tgm23 / no chairs": [
+      "a walkable cab needs a driver's chair (cab.seats): in a cab with a floor the keys drive only from a chair"
+    ],
+    "mvp:tgm23 / door 0 1.0 along": [
+      "door 0 'door_1' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)",
+      "door 0 'door_1' (inner): its two sides are one floor without it — the floor runs round it or through the wall beside it, so shut it is no wall"
+    ],
+    "mvp:tgm23 / door 1 1.0 along": [
+      "door 1 'door_2' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "mvp:tgm23 / door 2 1.0 along": [],
+    "mvp:tgm23 / door 3 1.0 along": [
+      "door 3 'step2' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:tgm23 / seat 0 1.2 up": [
+      "cab.seats[0] (1.93, 3.76, -0.97): the nearest place to stand is 0.00 off (sitting reaches 2.5), its floor 1.92 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:tgm23 / seat 0 3.0 across": [],
+    "mvp:tgm23 / seat 1 1.2 up": [
+      "cab.seats[1] (1.89, 3.76, 1.00): the nearest place to stand is 0.00 off (sitting reaches 2.5), its floor 1.92 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:tgm23 / seat 1 3.0 across": [
+      "cab.seats[1] (1.89, 2.56, 4.00): the nearest place to stand is 2.86 off (sitting reaches 2.5), its floor 0.72 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:tgm4": [],
+    "mvp:tgm4 / no interior": [
+      "cab.seats without an interior: a chair needs a floor to walk to it"
+    ],
+    "mvp:tgm4 / zone 0 0.4 across": [
+      "zone 0 holds no place a player fits (1.56 x 0.40): widen it to 0.6 or join it to a wider zone",
+      "door 2 'step2' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:tgm4 / zone 0 2.0 aside": [
+      "door 2 'step2' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:tgm4 / zone 0 1.0 along": [],
+    "mvp:tgm4 / no chairs": [
+      "a walkable cab needs a driver's chair (cab.seats): in a cab with a floor the keys drive only from a chair"
+    ],
+    "mvp:tgm4 / door 0 1.0 along": [
+      "door 0 'CabDoor' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "mvp:tgm4 / door 1 1.0 along": [],
+    "mvp:tgm4 / door 2 1.0 along": [
+      "door 2 'step2' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:tgm4 / seat 0 1.2 up": [
+      "cab.seats[0] (3.37, 3.92, -1.12): the nearest place to stand is 0.00 off (sitting reaches 2.5), its floor 1.87 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:tgm4 / seat 0 3.0 across": [],
+    "mvp:tgm4 / seat 1 1.2 up": [
+      "cab.seats[1] (3.94, 3.92, 1.07): the nearest place to stand is 0.50 off (sitting reaches 2.5), its floor 1.87 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:tgm4 / seat 1 3.0 across": [
+      "cab.seats[1] (3.94, 2.72, 4.07): the nearest place to stand is 2.90 off (sitting reaches 2.5), its floor 0.67 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:thermos": [],
+    "mvp:timber": [],
+    "mvp:up4": [],
+    "mvp:vl80c": [],
+    "mvp:vl80c / no interior": [
+      "cab.seats without an interior: a chair needs a floor to walk to it"
+    ],
+    "mvp:vl80c / zone 0 0.4 across": [
+      "zone 0 holds no place a player fits (0.66 x 0.40): widen it to 0.6 or join it to a wider zone",
+      "zone 1 holds no place a player fits (0.31 x 1.38): widen it to 0.6 or join it to a wider zone"
+    ],
+    "mvp:vl80c / zone 0 2.0 aside": [],
+    "mvp:vl80c / zone 0 1.0 along": [
+      "zone 1 holds no place a player fits (0.31 x 1.38): widen it to 0.6 or join it to a wider zone"
+    ],
+    "mvp:vl80c / no chairs": [
+      "a walkable cab needs a driver's chair (cab.seats): in a cab with a floor the keys drive only from a chair"
+    ],
+    "mvp:vl80c / door 0 1.0 along": [],
+    "mvp:vl80c / door 1 1.0 along": [
+      "door 1 'DoorEngine2' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:vl80c / door 2 1.0 along": [],
+    "mvp:vl80c / door 3 1.0 along": [],
+    "mvp:vl80c / door 4 1.0 along": [
+      "door 4 'Slide3' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "mvp:vl80c / door 5 1.0 along": [],
+    "mvp:vl80c / door 6 1.0 along": [],
+    "mvp:vl80c / door 7 1.0 along": [],
+    "mvp:vl80c / door 8 1.0 along": [],
+    "mvp:vl80c / door 9 1.0 along": [
+      "door 9 'DoorConn' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "mvp:vl80c / seat 0 1.2 up": [
+      "cab.seats[0] (-6.25, 3.86, -0.91): the nearest place to stand is 0.05 off (sitting reaches 2.5), its floor 1.95 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:vl80c / seat 0 3.0 across": [],
+    "mvp:vl80c / seat 1 1.2 up": [
+      "cab.seats[1] (-6.30, 3.86, 1.03): the nearest place to stand is 0.01 off (sitting reaches 2.5), its floor 1.95 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "mvp:vl80c / seat 1 3.0 across": [
+      "cab.seats[1] (-6.30, 2.66, 4.03): the nearest place to stand is 2.89 off (sitting reaches 2.5), its floor 0.75 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ]
+  },
+  "broken": {
+    "rwat_example:coach / aisle into the vestibule": [
+      "door 6 'salon_door' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "rwat_example:coach / salon_door in the salon": [
+      "door 6 'salon_door' (inner): the floor runs through its doorway — the zones on its two sides touch or overlap in it, and a player stands half in the shut leaf: part them (any gap is wall; open, the door bridges it)"
+    ],
+    "rwat_example:coach / door_fl off the wall": [
+      "door 0 'door_fl' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "rwat_example:coach / salon_arch off the aisle": [],
+    "rwat_example:coach / gangway_front in the side": [
+      "door 4 'gangway_front' is a gangway (connecting) door but not in an end wall"
+    ],
+    "rwat_example:shunter / the second chair facing forward": [],
+    "rwat_example:shunter / the first chair too high": [
+      "cab.seats[0] (1.65, 3.30, -0.80): the nearest place to stand is 0.00 off (sitting reaches 2.5), its floor 1.70 below the cushion (0.2..1.5; the seat is the top of the cushion)"
+    ],
+    "rwat_example:shunter / steps off the wall": [
+      "door 0 'steps_left' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "rwat_example:coach / a door box away from its leaf": [
+      "door 2 'door_rl' isn't where the floor ends: nobody can walk through it (a player must fit in front of it, inside its span, with the floor ending within 0.4 of its inner face)"
+    ],
+    "rwat_example:coach / a door moved by nothing": []
+  }
+}
