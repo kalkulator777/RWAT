@@ -92,4 +92,38 @@ class PackReportTest {
         assertTrue(problem.message().startsWith("no wagon type 'a:chme3_old' on the server"), problem.message());
         assertTrue(PackReport.modelsWithoutType(Map.of("a:m", MODEL), Set.of("a:m")).isEmpty());
     }
+
+    /**
+     * The reverse: a type the server sent and this client declares no model
+     * for is drawn as a box. It is named by the server's file for the type,
+     * under the pack "server", in sorted order, one warning each.
+     */
+    @Test
+    void typesWithoutModel_areWarnedAboutBySortedId() {
+        List<PackProblem> problems = PackReport.typesWithoutModel(Set.of("a:m", "b:tank/big", "a:chme3"),
+                Set.of("a:m"));
+        assertEquals(2, problems.size());
+        PackProblem first = problems.get(0);
+        assertFalse(first.isError());
+        assertEquals(PackReport.SERVER_PACK, first.pack());
+        assertEquals("data/a/wagon_types/chme3.json", first.file());
+        assertTrue(first.message().startsWith("wagon type 'a:chme3' has no model on this client"), first.message());
+        assertTrue(first.message().contains("assets/a/wagon_models/chme3.json"), first.message());
+        assertEquals("data/b/wagon_types/tank/big.json", problems.get(1).file());
+        assertTrue(PackReport.typesWithoutModel(Set.of("a:m"), Set.of("a:m", "a:spare")).isEmpty(),
+                "a model for a type nobody has is the other check's");
+        assertTrue(PackReport.typesWithoutModel(Set.of(), Set.of()).isEmpty());
+    }
+
+    /** One list for the client's report and log: the models without a type first, then the types without a model. */
+    @Test
+    void theModelTypeCheckReportsBothDirections() {
+        List<PackProblem> problems = PackReport.modelTypeProblems(
+                Map.of("a:m", MODEL, "a:orphan", MODEL), Set.of("a:m", "a:boxed"));
+        assertEquals(2, problems.size());
+        assertTrue(problems.get(0).message().startsWith("no wagon type 'a:orphan'"), problems.get(0).message());
+        assertTrue(problems.get(1).message().startsWith("wagon type 'a:boxed' has no model"),
+                problems.get(1).message());
+        assertTrue(PackReport.modelTypeProblems(Map.of("a:m", MODEL), Set.of("a:m")).isEmpty());
+    }
 }

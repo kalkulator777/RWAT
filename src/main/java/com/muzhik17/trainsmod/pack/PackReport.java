@@ -16,7 +16,7 @@ import java.util.TreeSet;
  * {@link #SERVER} holds the server's loaders (its scan of the pack folders
  * as data packs, wagon types, track beds), {@link #CLIENT} the client's (its
  * scan as resource packs, wagon models with their sounds, rail styles,
- * models without a type, the model files' check).
+ * models without a type and types without a model, the model files' check).
  *
  * <p>Each loader owns its {@link Source} and replaces it wholesale on every
  * reload ({@link #replace}), so a fixed file's problems go with the reload
@@ -32,6 +32,9 @@ public final class PackReport {
     public static final PackReport SERVER = new PackReport();
     /** This client's loaders: its pack scan, wagon models (with their sounds), rail styles and the checks on them. */
     public static final PackReport CLIENT = new PackReport();
+
+    /** The pack id under which the client reports a type: it knows the type only by what the server synced. */
+    public static final String SERVER_PACK = "server";
 
     /** A loader; each replaces only its own part of the report. */
     public enum Source {
@@ -49,7 +52,10 @@ public final class PackReport {
         WAGON_MODELS("wagon_models"),
         /** {@code assets/<ns>/rail_models/} as the client draws them. */
         RAIL_STYLES("rail_styles"),
-        /** Models declared for no wagon type the server sent (client, after the sync). */
+        /**
+         * The client's models against the types the server sent (client,
+         * after the sync): models declared for no type, types with no model.
+         */
         MODEL_TYPES("model_types"),
         /** The models' OBJ, MTL, texture and animation files, checked on demand (client). */
         MODEL_FILES("model_files");
@@ -152,6 +158,45 @@ public final class PackReport {
                         + "' on the server: this model is never drawn (a model and its type share the id)"));
             }
         });
+        return problems;
+    }
+
+    /**
+     * The reverse of {@link #modelsWithoutType}: the wagon types this client
+     * has no model declaration for, which it draws as a plain box. The server
+     * sent the type, so a pack the server has is missing here, or a model
+     * names another id. The client knows no more of a type than its id, so
+     * the problem is reported against the type's file as the server's packs
+     * would hold it ({@code data/<ns>/wagon_types/<path>.json}), under the
+     * pack {@link #SERVER_PACK}.
+     *
+     * @param typeIds  the wagon types there are
+     * @param modelIds the type ids this client has a model declaration for
+     */
+    public static List<PackProblem> typesWithoutModel(Set<String> typeIds, Set<String> modelIds) {
+        List<PackProblem> problems = new ArrayList<>();
+        new TreeSet<>(typeIds).forEach(id -> {
+            if (!modelIds.contains(id)) {
+                int colon = id.indexOf(':');
+                String namespace = colon < 0 ? "minecraft" : id.substring(0, colon);
+                String path = id.substring(colon + 1);
+                problems.add(PackProblem.warning(SERVER_PACK,
+                        PackOrigin.file("data", namespace, "wagon_types/" + path + ".json"),
+                        "wagon type '" + id + "' has no model on this client: it is drawn as a box (declare it in"
+                                + " assets/" + namespace + "/wagon_models/" + path + ".json of a pack this client has)"));
+            }
+        });
+        return problems;
+    }
+
+    /**
+     * Both halves of the client's check of its models against the server's
+     * types: the models without a type ({@link #modelsWithoutType}), then the
+     * types without a model ({@link #typesWithoutModel}).
+     */
+    public static List<PackProblem> modelTypeProblems(Map<String, PackOrigin> models, Set<String> typeIds) {
+        List<PackProblem> problems = modelsWithoutType(models, typeIds);
+        problems.addAll(typesWithoutModel(typeIds, models.keySet()));
         return problems;
     }
 }
