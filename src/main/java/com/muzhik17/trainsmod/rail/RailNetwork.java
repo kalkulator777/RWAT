@@ -477,7 +477,10 @@ public final class RailNetwork extends SavedData {
      * a forced chunk; the ticket a block read adds is not one of those — and
      * every block its signal is read from is loaded: its six neighbours and
      * those of the cell below ({@link #tickSwitches}), one block around it in
-     * x and z, so up to four chunks.
+     * x and z, so up to four chunks. A stand within a block of a chunk border
+     * at the very edge of the loaded area is therefore not polled until the
+     * player comes a chunk nearer — accepted: that is where redstone stops
+     * ticking anyway.
      */
     private static boolean standLive(ServerLevel level, BlockPos stand) {
         if (!level.shouldTickBlocksAt(stand)) {
