@@ -12,8 +12,10 @@ import net.minecraft.resources.ResourceLocation;
  * the mouse ({@link Scope#SWITCH}, {@link Scope#GLOBAL_SWITCH}: on wagon
  * {@code targetId}), or a light group switched from the driver's menu
  * ({@link Scope#PANEL}: on every wagon of consist {@code targetId}). The
- * server checks the sender may operate it: aboard (or within reach of) that
- * wagon / driving that train.
+ * server checks the sender may operate it ({@code TouchRules}): aboard (or
+ * within reach of) that wagon / driving that train; the driver's key, if the
+ * server wants it, for a switch of a car with a cab and for a {@code GLOBAL}
+ * one of a train with a cab anywhere in it.
  */
 public record ControlGroupPayload(int targetId, Scope scope, String group, float value)
         implements CustomPacketPayload {

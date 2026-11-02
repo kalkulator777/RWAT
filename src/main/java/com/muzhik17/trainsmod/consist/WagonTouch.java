@@ -37,7 +37,7 @@ public final class WagonTouch {
         return TouchRules.Facts.of(present(player), player.mayBuild(), CabAccess.mayWork(player),
                         player.getMainHandItem().is(RailsWheelsAndTrains.CROWBAR.get()))
                 .aboard(player.getVehicle() == wagon, player.getVehicle() instanceof WagonEntity)
-                .cab(type != null && type.drivable());
+                .cab(type != null && type.drivable(), wagon.trainHasCab());
     }
 
     /**

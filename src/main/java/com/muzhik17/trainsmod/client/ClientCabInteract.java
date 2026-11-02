@@ -214,8 +214,9 @@ public final class ClientCabInteract {
      * Why the local player can't work this control or chair ({@code control}
      * null) now, as a translation key; null if they can. First as the server
      * decides ({@link TouchRules}; a pick is within reach): anything of a car
-     * with a cab wants the driver's key, if the server wants it (SPEC §9.2);
-     * the handbrake wheel turns only for a rider of its car (the crowbar in
+     * with a cab wants the driver's key, if the server wants it (SPEC §9.2),
+     * and so does a {@code GLOBAL} switch of a train with a cab anywhere in
+     * it; the handbrake wheel turns only for a rider of its car (the crowbar in
      * hand: from wherever it reaches the car); switches, windows and the rest
      * from anywhere in reach. Then a handle lever moves from the controls of
      * its own wagon — the driver's chair, a cab without a walkable interior —

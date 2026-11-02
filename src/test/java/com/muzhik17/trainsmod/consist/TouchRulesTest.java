@@ -14,8 +14,9 @@ import com.muzhik17.trainsmod.consist.TouchRules.Refusal;
 /**
  * Who may touch a wagon (SPEC §9.2–§9.3): the rule the server decides by and
  * the client hints by. The cases of the audit are here as they were played:
- * a spectator opening doors and cutting trains (M1), a handbrake wheel
- * turned from 15 blocks away, outside the car (M3).
+ * a spectator opening doors and cutting trains (M1), a {@code GLOBAL}
+ * switch opening a locomotive's cab doors without the key (M2), a handbrake
+ * wheel turned from 15 blocks away, outside the car (M3).
  */
 class TouchRulesTest {
 
@@ -61,7 +62,7 @@ class TouchRulesTest {
 
     @Test
     void theHandbrakeByCrowbar_withinReachOfTheBody_withoutTheKey() {
-        Facts crowbar = Facts.of(true, true, false, true).cab(true);
+        Facts crowbar = Facts.of(true, true, false, true).cab(true, true);
         assertEquals(Refusal.OUT_OF_REACH, TouchRules.check(Action.HANDBRAKE, crowbar));
         assertNull(TouchRules.check(Action.HANDBRAKE, crowbar.inReach(true)), "the crowbar wants no key");
     }
@@ -69,8 +70,24 @@ class TouchRulesTest {
     @Test
     void theHandbrakeWheelOfACarWithACab_wantsTheKey() {
         assertEquals(Refusal.NEED_KEY, TouchRules.check(Action.HANDBRAKE,
-                keyless().aboard(true, true).cab(true)));
+                keyless().aboard(true, true).cab(true, true)));
         assertNull(TouchRules.check(Action.HANDBRAKE, keyless().aboard(true, true)), "a coach's wheel");
+    }
+
+    /**
+     * M2: a {@code GLOBAL} switch of a coach sets its group on every car of
+     * the train — the locomotive's cab doors open by their group too. Without
+     * the key it was taken, as the coach has no cab of its own.
+     */
+    @Test
+    void aGlobalSwitch_wantsTheKey_ifAnyCarOfTheTrainHasACab() {
+        Facts coachOfATrainWithALoco = keyless().inReach(true).cab(false, true);
+        assertEquals(Refusal.NEED_KEY, TouchRules.check(Action.GLOBAL_SWITCH, coachOfATrainWithALoco));
+        assertNull(TouchRules.check(Action.SWITCH, coachOfATrainWithALoco), "the coach's own switch");
+        assertNull(TouchRules.check(Action.GLOBAL_SWITCH, keyless().inReach(true).cab(false, false)),
+                "a train of coaches");
+        assertEquals(Refusal.NEED_KEY, TouchRules.check(Action.GLOBAL_SWITCH,
+                keyless().aboard(true, true).cab(true, false)), "the locomotive's own GLOBAL switch");
     }
 
     @Test
@@ -78,21 +95,21 @@ class TouchRulesTest {
         assertEquals(Refusal.OUT_OF_REACH, TouchRules.check(Action.SWITCH, player()));
         assertNull(TouchRules.check(Action.SWITCH, player().aboard(true, true)));
         assertNull(TouchRules.check(Action.SWITCH, player().inReach(true)));
-        assertEquals(Refusal.NEED_KEY, TouchRules.check(Action.SWITCH, keyless().inReach(true).cab(true)));
+        assertEquals(Refusal.NEED_KEY, TouchRules.check(Action.SWITCH, keyless().inReach(true).cab(true, true)));
     }
 
     @Test
     void aDoor_withinReach_theKeyOnlyForADoorIntoACab() {
         assertEquals(Refusal.OUT_OF_REACH, TouchRules.check(Action.DOOR, player().aboard(true, true)),
                 "aboard, but the leaf at the other end of the car");
-        Facts byALocosDoor = keyless().inReach(true).cab(true);
+        Facts byALocosDoor = keyless().inReach(true).cab(true, true);
         assertNull(TouchRules.check(Action.DOOR, byALocosDoor), "a passengers' door of a car with a cab");
         assertEquals(Refusal.NEED_KEY, TouchRules.check(Action.DOOR, byALocosDoor.cabDoor(true)));
     }
 
     @Test
     void uncoupling_wantsTheCrowbar_theReach_andTheRightToBuild_butNoKey() {
-        Facts crowbar = Facts.of(true, true, false, true).cab(true);
+        Facts crowbar = Facts.of(true, true, false, true).cab(true, true);
         assertEquals(Refusal.NO_TOOL, TouchRules.check(Action.UNCOUPLE, player().inReach(true)));
         assertEquals(Refusal.OUT_OF_REACH, TouchRules.check(Action.UNCOUPLE, crowbar));
         assertNull(TouchRules.check(Action.UNCOUPLE, crowbar.inReach(true)));
@@ -110,32 +127,32 @@ class TouchRulesTest {
         assertEquals(Refusal.OUT_OF_REACH, TouchRules.check(Action.STRIKE, player()));
         assertEquals(Refusal.MAY_NOT_BUILD, TouchRules.check(Action.STRIKE,
                 Facts.of(true, false, true, false).inReach(true)));
-        assertNull(TouchRules.check(Action.STRIKE, keyless().inReach(true).cab(true)), "no key for a blow");
+        assertNull(TouchRules.check(Action.STRIKE, keyless().inReach(true).cab(true, true)), "no key for a blow");
     }
 
     @Test
     void aChair_aboardAndWithinSittingReach_withTheKey() {
         assertEquals(Refusal.OUT_OF_REACH, TouchRules.check(Action.SEAT, player().aboard(true, true)));
         assertEquals(Refusal.OUT_OF_REACH, TouchRules.check(Action.SEAT, player().inReach(true)));
-        assertNull(TouchRules.check(Action.SEAT, player().aboard(true, true).inReach(true).cab(true)));
+        assertNull(TouchRules.check(Action.SEAT, player().aboard(true, true).inReach(true).cab(true, true)));
         assertEquals(Refusal.NEED_KEY, TouchRules.check(Action.SEAT,
-                keyless().aboard(true, true).inReach(true).cab(true)));
+                keyless().aboard(true, true).inReach(true).cab(true, true)));
     }
 
     @Test
     void leversThePanelAndTheWalk_onlyFromAboard() {
         for (Action action : new Action[] {Action.LEVER, Action.PANEL, Action.WALK}) {
             assertEquals(Refusal.OUT_OF_REACH, TouchRules.check(action, player().inReach(true)), action.name());
-            assertNull(TouchRules.check(action, player().aboard(true, true).cab(true)), action.name());
+            assertNull(TouchRules.check(action, player().aboard(true, true).cab(true, true)), action.name());
         }
-        assertEquals(Refusal.NEED_KEY, TouchRules.check(Action.LEVER, keyless().aboard(true, true).cab(true)));
-        assertNull(TouchRules.check(Action.WALK, keyless().aboard(true, true).cab(true)),
+        assertEquals(Refusal.NEED_KEY, TouchRules.check(Action.LEVER, keyless().aboard(true, true).cab(true, true)));
+        assertNull(TouchRules.check(Action.WALK, keyless().aboard(true, true).cab(true, true)),
                 "walking a cab wants no key: its doors keep the keyless out");
     }
 
     @Test
     void whereToGoIsNamedBeforeTheKey() {
-        assertEquals(Refusal.OUT_OF_REACH, TouchRules.check(Action.LEVER, keyless().cab(true)));
+        assertEquals(Refusal.OUT_OF_REACH, TouchRules.check(Action.LEVER, keyless().cab(true, true)));
     }
 
     @Test

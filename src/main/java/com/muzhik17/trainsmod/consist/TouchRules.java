@@ -21,7 +21,9 @@ package com.muzhik17.trainsmod.consist;
  *     protection.
  * <li><b>The driver's key</b>, when the server wants it ({@code cab_access =
  *     KEY}): a door into a cab; a switch, chair, lever, the panel or the
- *     handbrake wheel of a car with a cab. The crowbar is a tool of its own:
+ *     handbrake wheel of a car with a cab; a {@code GLOBAL} switch — it sets
+ *     its group on the whole train, the cab doors of the locomotive included
+ *     — if any car of the train has one. The crowbar is a tool of its own:
  *     uncoupling and the handbrake by crowbar want no key.
  * </ul>
  *
@@ -85,44 +87,45 @@ public final class TouchRules {
      * @param inReach     the touched part within reach (a chair: within sitting reach)
      * @param cabCar      the car has a cab
      * @param cabDoor     the door touched leads into a cab
+     * @param cabTrain    some car of the train has a cab
      */
     public record Facts(boolean present, boolean mayBuild, boolean keyed, boolean crowbar,
             boolean aboard, boolean aboardWagon, boolean inReach,
-            boolean cabCar, boolean cabDoor) {
+            boolean cabCar, boolean cabDoor, boolean cabTrain) {
 
         /** The player's own facts; aboard nothing, nothing in reach, no cab. */
         public static Facts of(boolean present, boolean mayBuild, boolean keyed, boolean crowbar) {
-            return new Facts(present, mayBuild, keyed, crowbar, false, false, false, false, false);
+            return new Facts(present, mayBuild, keyed, crowbar, false, false, false, false, false, false);
         }
 
         /** Riding this car ({@code car}) or any car ({@code anyWagon}; riding this one is riding one). */
         public Facts aboard(boolean car, boolean anyWagon) {
             return new Facts(present, mayBuild, keyed, crowbar, car, car || anyWagon, inReach,
-                    cabCar, cabDoor);
+                    cabCar, cabDoor, cabTrain);
         }
 
         /** The touched part within reach. */
         public Facts inReach(boolean reach) {
             return new Facts(present, mayBuild, keyed, crowbar, aboard, aboardWagon, reach,
-                    cabCar, cabDoor);
+                    cabCar, cabDoor, cabTrain);
         }
 
         /** And may change the world just here (spawn protection, a claimed region) — on top of {@link #mayBuild}. */
         public Facts mayBuildHere(boolean here) {
             return new Facts(present, mayBuild && here, keyed, crowbar, aboard, aboardWagon, inReach,
-                    cabCar, cabDoor);
+                    cabCar, cabDoor, cabTrain);
         }
 
-        /** The car has a cab. */
-        public Facts cab(boolean car) {
+        /** The car has a cab ({@code car}); some car of its train has one ({@code train}). */
+        public Facts cab(boolean car, boolean train) {
             return new Facts(present, mayBuild, keyed, crowbar, aboard, aboardWagon, inReach,
-                    car, cabDoor);
+                    car, cabDoor, car || train);
         }
 
         /** The door touched leads into a cab. */
         public Facts cabDoor(boolean door) {
             return new Facts(present, mayBuild, keyed, crowbar, aboard, aboardWagon, inReach,
-                    cabCar, door);
+                    cabCar, door, cabTrain);
         }
     }
 
@@ -172,7 +175,8 @@ public final class TouchRules {
     private static boolean needsKey(Action action, Facts facts) {
         return switch (action) {
             case DOOR -> facts.cabDoor();
-            case SWITCH, GLOBAL_SWITCH, SEAT, LEVER, PANEL -> facts.cabCar();
+            case SWITCH, SEAT, LEVER, PANEL -> facts.cabCar();
+            case GLOBAL_SWITCH -> facts.cabTrain();
             case HANDBRAKE -> !facts.crowbar() && facts.cabCar();
             case UNCOUPLE, WALK, STRIKE -> false;
         };

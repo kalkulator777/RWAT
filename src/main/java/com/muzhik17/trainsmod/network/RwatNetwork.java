@@ -106,9 +106,11 @@ public final class RwatNetwork {
      * A control group set by a player (SPEC §8–§9). A wagon's switch: the
      * player rides it or stands within reach of it; a {@code GLOBAL} one sets
      * the group on every wagon of its train, as IR does. A switch of a car
-     * with a cab wants the driver's key if the server wants it (SPEC §9.2).
-     * A light group for the whole train (the driver's panel): only by its
-     * driver at the controls (SPEC §9.7). Decided by {@link TouchRules}.
+     * with a cab wants the driver's key if the server wants it (SPEC §9.2) —
+     * a {@code GLOBAL} one if any car of its train has a cab: its group opens
+     * the doors of that group on every car, a locomotive's cab doors among
+     * them. A light group for the whole train (the driver's panel): only by
+     * its driver at the controls (SPEC §9.7). Decided by {@link TouchRules}.
      */
     private static void handleControlGroup(ControlGroupPayload payload, IPayloadContext context) {
         if (!(context.player() instanceof ServerPlayer player)

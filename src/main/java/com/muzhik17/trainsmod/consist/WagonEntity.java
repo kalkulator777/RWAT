@@ -519,6 +519,31 @@ public class WagonEntity extends Entity {
         return slot != null ? slot.type() : null;
     }
 
+    /**
+     * True if some car of this wagon's train has a cab, on either side (the
+     * server consist, the synced client copy): a {@code GLOBAL} switch sets
+     * its group on every car, the cab doors of the locomotive included, so it
+     * wants the driver's key the server may want (SPEC §9.2, {@link TouchRules}).
+     */
+    public boolean trainHasCab() {
+        ConsistComposition composition = null;
+        if (level().isClientSide) {
+            composition = ClientConsists.composition(getConsistId());
+        } else if (level() instanceof ServerLevel level) {
+            Consist consist = ConsistManager.get(level).byId(getConsistId());
+            composition = consist == null ? null : consist.composition();
+        }
+        if (composition == null) {
+            return false;
+        }
+        for (int i = 0; i < composition.wagonCount(); i++) {
+            if (composition.slot(i).type().drivable()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** True if the wagon runs turned 180° in its consist (SPEC §5.5 step 3). */
     public boolean isFlipped() {
         ConsistComposition.Slot slot = slotNow();
