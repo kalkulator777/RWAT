@@ -65,11 +65,20 @@ of the same file wins over the generated one:
       "step_down": 0.15              a surface this far below the level is floor too
     }
 
+A "floor" that isn't valid (an unknown key, a string where a number goes, a
+regex that doesn't compile) raises FloorConfigError naming the member; the
+converter then reports an error for that type and writes IR's passenger
+area as its floor instead.
+
 Command line, one type at a time (map of floor / obstacles / where a centre
 fits / doors; --compare against the type's hand "interior"):
 
     python -I tools/floorgen.py packs/mvp.json amendorf --ascii
     python -I tools/floorgen.py packs/mvp.json amendorf --png SCRATCH/am.png --compare
+
+It says what went wrong without a traceback: exit status 2 for a recipe it
+can't read or a type it can't find, 1 when no floor could be generated (the
+reason given) or the map can't be written.
 
 Python 3.9+, standard library only.
 """
@@ -181,30 +190,73 @@ def find_levels(triangles, merge=0.02):
 
 # -------------------------------------------------------------- configuration
 
+class FloorConfigError(ValueError):
+    """A per-type "floor" the generator can't take: an unknown key, a value of the wrong kind."""
+
+
+def _number(value, what):
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        raise FloorConfigError(f"\"floor\".{what} must be a number, not {value!r}")
+    return float(value)
+
+
+def _list(options, key):
+    value = options.get(key, [])
+    if not isinstance(value, list):
+        raise FloorConfigError(f"\"floor\".{key} must be a list, not {value!r}")
+    return value
+
+
 class FloorConfig:
-    """The per-type "floor" object (see the module docstring)."""
+    """The per-type "floor" object (see the module docstring). Raises
+    FloorConfigError, naming the member, for anything it can't take."""
 
     def __init__(self, options=None):
-        options = dict(options or {})
+        if options is None:
+            options = {}
+        if not isinstance(options, dict):
+            raise FloorConfigError(f"\"floor\" must be an object (or false), not {options!r}")
         unknown = set(options) - OPTIONS
         if unknown:
-            raise ValueError(f"\"floor\": unknown key(s) {sorted(unknown)}; known: {sorted(OPTIONS)}")
-        self.clearance = float(options.get("clearance", 0.1))
+            raise FloorConfigError(f"\"floor\": unknown key(s) {sorted(unknown)}; known: {sorted(OPTIONS)}")
+        self.clearance = _number(options.get("clearance", 0.1), "clearance")
+        if self.clearance < 0:
+            raise FloorConfigError("\"floor\".clearance can't be negative")
         level = options.get("level")
-        self.levels = None if level is None else [float(v) for v in (level if isinstance(level, list) else [level])]
-        self.add = [self.box(b, "add") for b in options.get("add", [])]
-        self.remove = [self.box(b, "remove") for b in options.get("remove", [])]
-        self.ignore = [re.compile(p) for p in options.get("ignore", [])]
+        if level is None:
+            self.levels = None
+        else:
+            heights = level if isinstance(level, list) else [level]
+            if not heights:
+                raise FloorConfigError("\"floor\".level is a height or a list of heights, not []")
+            self.levels = [_number(v, "level") for v in heights]
+        self.add = [self.box(b, "add") for b in _list(options, "add")]
+        self.remove = [self.box(b, "remove") for b in _list(options, "remove")]
+        self.ignore = []
+        for pattern in _list(options, "ignore"):
+            if not isinstance(pattern, str):
+                raise FloorConfigError(f"\"floor\".ignore lists object names or regexes (strings), not {pattern!r}")
+            try:
+                self.ignore.append(re.compile(pattern))
+            except re.error as problem:
+                raise FloorConfigError(f"\"floor\".ignore: {pattern!r} isn't a valid regex ({problem})")
         slab = options.get("slab", [0.3, 1.8])
-        self.slab = (float(slab[0]), float(slab[1]))
-        self.cell = float(options.get("cell", CELL))
-        self.step_down = float(options.get("step_down", STEP_DOWN))
+        if not (isinstance(slab, list) and len(slab) == 2):
+            raise FloorConfigError(f"\"floor\".slab is [from, to] above the floor, not {slab!r}")
+        self.slab = (_number(slab[0], "slab"), _number(slab[1], "slab"))
+        if self.slab[1] <= self.slab[0]:
+            raise FloorConfigError(f"\"floor\".slab: its top must be above its bottom, not {slab!r}")
+        self.cell = _number(options.get("cell", CELL), "cell")
+        if not 0 < self.cell <= 1:
+            raise FloorConfigError(f"\"floor\".cell is a grid step above 0 and at most 1, not {self.cell}")
+        self.step_down = _number(options.get("step_down", STEP_DOWN), "step_down")
 
     @staticmethod
     def box(b, what):
-        if not (isinstance(b, dict) and len(b.get("min", [])) == 3 and len(b.get("max", [])) == 3):
-            raise ValueError(f"\"floor\".{what}: each entry is {{\"min\": [x, y, z], \"max\": [x, y, z]}}")
-        return {"min": [float(v) for v in b["min"]], "max": [float(v) for v in b["max"]]}
+        if not (isinstance(b, dict) and isinstance(b.get("min"), list) and isinstance(b.get("max"), list)
+                and len(b["min"]) == 3 and len(b["max"]) == 3):
+            raise FloorConfigError(f"\"floor\".{what}: each entry is {{\"min\": [x, y, z], \"max\": [x, y, z]}}")
+        return {"min": [_number(v, what) for v in b["min"]], "max": [_number(v, what) for v in b["max"]]}
 
 
 # ---------------------------------------------------------- the engine's rule
@@ -1199,15 +1251,23 @@ def main(argv=None):
     parser.add_argument("--slab", type=float, nargs=2, help="override the body slab (from, to above the floor)")
     parser.add_argument("--json", action="store_true", help="print the generated interior as JSON")
     args = parser.parse_args(argv)
-    sys.stdout.reconfigure(errors="replace")
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="replace")
 
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import ir2rwat
-    converter = ir2rwat.Converter(args.recipe)
-    plan = converter.plan(args.type, force_floor=True,
-                          floor_override={k: v for k, v in (("clearance", args.clearance), ("level", args.level),
-                                                            ("slab", args.slab)) if v is not None})
+    try:
+        converter = ir2rwat.Converter(args.recipe)
+        plan = converter.plan(args.type, force_floor=True,
+                              floor_override={k: v for k, v in (("clearance", args.clearance), ("level", args.level),
+                                                                ("slab", args.slab)) if v is not None})
+    except Exception as problem:  # a bad recipe, an unknown type, an unreadable definition: say so, no traceback
+        print(f"floorgen: error: {ir2rwat.describe(problem)}", file=sys.stderr)
+        return 2
     floor = plan["floor"]
+    if floor is None:
+        print(f"floorgen: error: {args.type}: no floor generated — {plan['floor_problem']}", file=sys.stderr)
+        return 1
     doors = [Door(d) for d in plan["doors"]]
     print(f"{args.type}: level(s) {floor.levels}, {len(floor.interior)} box(es), "
           f"{sum(boxes_area(b) for b in boxes_of(floor.interior)):.3f} m2 of floor, "
@@ -1227,8 +1287,13 @@ def main(argv=None):
     if args.ascii:
         print(ascii_map(floor, doors, args.step, args.z))
     if args.png:
-        png_map(args.png, floor, doors, hand if args.compare else None, args.px, args.z)
+        try:
+            png_map(args.png, floor, doors, hand if args.compare else None, args.px, args.z)
+        except OSError as problem:
+            print(f"floorgen: error: cannot write {args.png}: {problem.strerror or problem}", file=sys.stderr)
+            return 1
         print("wrote", args.png)
+    return 0
 
 
 def boxes_area(b):
@@ -1236,4 +1301,4 @@ def boxes_area(b):
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
