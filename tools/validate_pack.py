@@ -4,8 +4,8 @@ against the format schemas in schema/ (roadmap R4).
 
 A minimal validator for the subset of JSON Schema draft 2020-12 the RWAT
 schemas use: type, enum, const, minimum/maximum and their exclusive forms,
-minLength, pattern, minItems/maxItems, items, properties, required,
-additionalProperties, propertyNames, dependentRequired, $ref (across the
+minLength, pattern, minItems/maxItems, items, properties, patternProperties,
+required, additionalProperties, propertyNames, dependentRequired, $ref (across the
 schema files, with JSON pointers), allOf/anyOf/oneOf, not. "deprecated: true"
 on a subschema that applies is a warning, not an error.
 
@@ -263,9 +263,7 @@ class Validator:
                 issues += self.check(item, sub, base, where)
             if key in properties:
                 issues += self.check(item, properties[key], base, where)
-            elif matched:
-                pass
-            elif "additionalProperties" in schema:
+            elif not matched and "additionalProperties" in schema:
                 extra = schema["additionalProperties"]
                 if extra is False:
                     issues.append(Issue("error", where, f"unknown key {key!r}" + suggestion(key, properties)))
