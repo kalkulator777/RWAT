@@ -87,6 +87,9 @@ export const OVERLAY_STYLES: Readonly<Record<string, OverlayStyle>> = Object.fre
   draft: { color: '#495057', fill: 0.08, dashed: true },
   warning: { color: '#e67700', fill: 0.15, dashed: false },
   error: { color: '#e03131', fill: 0.15, dashed: false },
+  /** The arrow of a driver's chair that drives forward, and of one that drives backward (tools/seats). */
+  'seats.forward': { color: '#099268', fill: 0, dashed: false },
+  'seats.back': { color: '#e64980', fill: 0, dashed: false },
 });
 
 /** The style a name stands for; `default` for one the table lacks. */
