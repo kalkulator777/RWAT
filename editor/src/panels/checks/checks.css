@@ -1,0 +1,35 @@
+/* The checks tab (panels/checks): "Check all models" and its run. The list's own styles are the shell's (app/styles.css). */
+
+.checks-models {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-bottom: 6px;
+}
+
+.checks-models button {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.checks-models button:hover:not(:disabled) {
+  background: var(--surface-sunken);
+}
+
+.checks-models button:disabled {
+  cursor: default;
+  color: var(--text-muted);
+}
+
+.checks-models progress {
+  width: 10em;
+}
+
+.checks-models-status {
+  color: var(--text-muted);
+  font-size: 13px;
+}
