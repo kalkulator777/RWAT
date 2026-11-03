@@ -105,6 +105,8 @@ describe('a model scene', () => {
     const a = scene.node('A')?.meshes[0]?.material;
     expect(a?.map).toBeInstanceOf(Texture);
     expect(a?.map?.image).toBe(image);
+    // the worker decodes the picture upside down (flipY) and keeps the OBJ's V: nothing turns it again here
+    expect(a?.map?.flipY).toBe(false);
     expect(a?.alphaTest).toBe(ALPHA_CUTOUT);
     expect(a?.map).toBe(scene.node('B')?.meshes[0]?.material.map);
     expect(scene.node('C')?.meshes[0]?.material.map).toBeNull();

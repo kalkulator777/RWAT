@@ -168,6 +168,75 @@ test('a click selects the object under the pointer, Shift adds another', async (
   expect(errors).toEqual([]);
 });
 
+/** Draws now and reads the drawing's colour at each point of the OBJ frame, as `[r, g, b]`. */
+async function coloursAt(page: Page, points: readonly [number, number, number][]): Promise<[number, number, number][]> {
+  return page.evaluate(async (points) => {
+    const hook = (window as HookWindow).__rwatView;
+    const canvas = document.querySelector<HTMLCanvasElement>('.view3d-gl');
+    if (!hook || !canvas) throw new Error('no view');
+    hook.renderNow();
+    const url = canvas.toDataURL('image/png');
+    const image = new Image();
+    image.src = url;
+    await image.decode();
+    const copy = document.createElement('canvas');
+    copy.width = image.width;
+    copy.height = image.height;
+    const context = copy.getContext('2d');
+    if (!context) throw new Error('no 2d');
+    context.drawImage(image, 0, 0);
+    const rect = canvas.getBoundingClientRect();
+    return points.map((point) => {
+      const at = hook.pointOnPage(point);
+      const x = Math.round(((at.x - rect.left) / rect.width) * image.width);
+      const y = Math.round(((at.y - rect.top) / rect.height) * image.height);
+      const pixel = context.getImageData(x, y, 1, 1).data;
+      return [pixel[0] ?? 0, pixel[1] ?? 0, pixel[2] ?? 0] as [number, number, number];
+    });
+  }, points);
+}
+
+/** The name of the colour a pixel is, lit by any share 0.4…1.3 of white: the nearest after the best share. */
+function nearest(pixel: readonly number[], colours: Readonly<Record<string, number>>): string {
+  let best = '';
+  let bestError = Infinity;
+  for (const [name, c] of Object.entries(colours)) {
+    const rgb = [(c >> 16) & 255, (c >> 8) & 255, c & 255];
+    const k = Math.min(1.3, Math.max(0.4, (pixel[0]! * rgb[0]! + pixel[1]! * rgb[1]! + pixel[2]! * rgb[2]!) / Math.max(1, rgb[0]! ** 2 + rgb[1]! ** 2 + rgb[2]! ** 2)));
+    const error = Math.hypot(pixel[0]! - k * rgb[0]!, pixel[1]! - k * rgb[1]!, pixel[2]! - k * rgb[2]!);
+    if (error < bestError) {
+      bestError = error;
+      best = name;
+    }
+  }
+  return best;
+}
+
+test('the textures stand as their files are drawn: the coach’s cream band under its windows, its dark sill at the bottom', async ({ page }) => {
+  const errors = watchErrors(page);
+  await show(page, 'coach');
+  const view = page.getByTestId('view3d');
+  await view.locator('[data-toggle="camera"] [data-value="side"]').click();
+  await view.locator('[data-toggle="display"] [data-value="textured"]').click();
+  await expect(view).toHaveAttribute('data-display', 'textured');
+  // coach_body.png (tools/gen_example_pack.py tex_bands), mapped onto the side from y 0.95 to
+  // 3.60 by the OBJ's V, up from the picture's bottom: the dark sill at v 0…0.03, the cream
+  // band at v 0.33…0.40 (y 1.82…2.01, under the windows at 2.15…3.05), green the rest. Upside
+  // down the band would cross the windows at y 2.54…2.73 and the green go under them.
+  const band = { sill: 0x1c2a20, cream: 0xe8ddb5, green: 0x2e6b3a };
+  const x = -4.45; // between two windows
+  const side = 1.45; // the left side's outer face, which the side view (from +Z) looks at
+  const [sill, cream, below, between] = await coloursAt(page, [
+    [x, 0.98, side],
+    [x, 1.92, side],
+    [x, 1.4, side],
+    [x, 2.62, side],
+  ]);
+  expect([sill, cream, below, between].map((pixel) => nearest(pixel!, band))).toEqual(['sill', 'cream', 'green', 'green']);
+  await screenshot(page, 'coach-textured-side');
+  expect(errors).toEqual([]);
+});
+
 test('the textured display, the shunter with its headlight group lit, and axe with a model shown', async ({ page }) => {
   const errors = watchErrors(page);
   await show(page, 'coach');
