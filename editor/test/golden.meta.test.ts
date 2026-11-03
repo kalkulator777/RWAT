@@ -19,7 +19,6 @@ import { GOLDEN_DIR } from '../src/testing/repo.node';
 
 /** Folders that name `ts` in ports.json and whose port is not written yet: ждёт M2 (docs/proposals/editor.md §7, M2). */
 const WAITING_FOR_M2 = [
-  'anim', // ждёт M2: .anim parser and door travel
   'control_pose', // ждёт M2: organ poses
   'door_leaves', // ждёт M2: door leaves
   'floor_check', // ждёт M2: floor findings
