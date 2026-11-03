@@ -20,6 +20,7 @@ import com.muzhik17.trainsmod.client.ClientDoorInteract;
 import com.muzhik17.trainsmod.client.ClientFloorDebug;
 import com.muzhik17.trainsmod.client.ClientRide;
 import com.muzhik17.trainsmod.client.ClientWagonRay;
+import com.muzhik17.trainsmod.client.render.model.IrAnim;
 import com.muzhik17.trainsmod.client.render.model.StockModel;
 import com.muzhik17.trainsmod.client.render.model.StockModels;
 import com.muzhik17.trainsmod.client.render.model.WagonModel;
@@ -553,11 +554,7 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
                 }
             }
             for (BakedStockModel.BakedPiece piece : door.pieces()) {
-                Matrix4f[] frames = piece.frames();
-                float f = progress * (frames.length - 1);
-                int i0 = Math.min((int) f, frames.length - 1);
-                int i1 = Math.min(i0 + 1, frames.length - 1);
-                frames[i0].lerp(frames[i1], f - i0, DOOR_FRAME);
+                IrAnim.frameAt(piece.frames(), progress, DOOR_FRAME);
                 poseStack.pushPose();
                 poseStack.mulPose(DOOR_FRAME);
                 draw(piece.meshes(), poseStack);

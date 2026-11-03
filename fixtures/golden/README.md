@@ -86,7 +86,7 @@ python -I -m unittest discover tools/tests
 | `control_pose` | Java: `ControlValue.value`, `visible`; `convention.ControlPose.transform` | ts | `pose` | имя, положение 0…1, шарнир (кадр OBJ) → значение, видимость, матрица 4×4 по строкам |
 | `obj` | Java: `ObjLoader.loadModel`, `ObjectRole.objectName` | ts, python (`floorgen.object_name_of`) | `object_names`, `parse`, `example_pack` | строка `o`/`g` → имя; текст OBJ → части (объект, материал, квады) или `{error: true}`; OBJ пака-примера → части вкратце |
 | `mtl` | Java: `MtlParser` (`materialName`, `parse`, `resolve`, `folderOf`, `fileNameOf`) | ts, python (`ir2rwat.material_name`, `parse_mtl`) | `material_names`, `parse`, `paths`, `example_pack` | строка → имя материала; текст MTL → материал → путь `map_Kd`; пути |
-| `anim` | Java: `IrAnim.parse` | ts, python (`ir2rwat.anim_objects`: имена) | `parse` (и `salon_door.anim` пака-примера) | текст `.anim` → дорожки, как в файле, или `{error: true}` |
+| `anim` | Java: `IrAnim.parse`, `IrAnim.frameAt` | ts, python (`ir2rwat.anim_objects`: имена) | `parse`, `frame_at` (и `salon_door.anim` пака-примера) | текст `.anim` → дорожки, как в файле, или `{error: true}`; с `progress` — ещё `at`: кадр каждой дорожки при этом прогрессе |
 | `anim_model` | Java: `IrAnim.toModelSpace` | — | `model_space` | те же тексты → кадры в кадре модели. Не портируется (4.2); запись движка о том, что было в старом `anim.json` |
 | `pivot_axis` | Java: `convention.PivotAxis` | ts | `corners`, `obj_text` | углы маркера по порядку файла или текст OBJ и имя маркера → число точек, шарнир, ось |
 | `floor_region` | Java: `FloorRegion` через `WagonTypeParser.parse` и `Interior.region` | ts, python (`floorgen.Region`: куски, разрезы, `fits`, `reach`) | `region` | тип пака (кадр OBJ), открытые двери, `margin`, вопросы (кадр модели) → куски, разрезы, связи, ответы |
@@ -121,7 +121,7 @@ python -I -m unittest discover tools/tests
   - Точки — каждая позиция один раз, первое появление; `-0` и `0` — одна позиция.
   - Из текста OBJ углы — все углы всех граней всех частей объекта по порядку, как их хранит загрузчик: четыре у квада, у треугольника последний дважды, многоугольник веером от первого угла.
 - **OBJ (`obj`).** `v` у вершины — `1 − v` файла (Minecraft берёт V сверху); без `vt` — `u = 0`, `v = 0`; без `vn` — нормаль `0 1 0`. Отрицательный индекс, вершина «из будущего», мусорное число — отказ всего файла (`{error: true}`). Координаты — `Float.parseFloat` (см. выше).
-- **`.anim`.** Кадры — `float32`, по строкам, как в файле.
+- **`.anim`.** Кадры — `float32`, по строкам, как в файле. `frameAt`: номер кадра `(int) f` — усечение к нулю (`Math.trunc`, не `Math.floor`): при прогрессе ниже 0 первые два кадра продолжаются назад; смесь — `(b − a) · t + a` поэлементно во `float` (JOML `Matrix4f.lerp`).
 - **Пол (`floor_region`).**
   - Тип — в кадре OBJ, ответы и вопросы — в кадре модели: так тип хранит движок, редактор переводит разметку через `obj_frame`.
   - `margin` по умолчанию — 0.3, полуширина игрока; 0 движок не принимает.
@@ -143,5 +143,4 @@ python -I -m unittest discover tools/tests
 
 ## Чего нет и почему
 
-- **Выбор кадра `.anim` и интерполяция** (`frameAt`: кадр = прогресс × (N − 1), поэлементно) живут в `client/render/WagonRenderer` с Minecraft: эталону нечего вызвать. Нужна чистая точка входа (например, `IrAnim.frameAt(frames, progress)`).
 - **Выходы `floor_check`** берутся из `FloorCheck.walkablePieces` (пакетный доступ) отражением.
