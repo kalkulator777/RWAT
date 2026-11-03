@@ -23,13 +23,11 @@ const WAITING_FOR_M2 = [
   'control_pose', // ждёт M2: organ poses
   'door_leaves', // ждёт M2: door leaves
   'floor_check', // ждёт M2: floor findings
-  'floor_region', // ждёт M2: floor under a point
   'java_numbers', // ждёт M2: Java number parsing and printing
   'mtl', // ждёт M2: MTL parser
   'obj', // ждёт M2: OBJ parser
   'object_role', // ждёт M2: object name roles
   'pivot_axis', // ждёт M2: hinge axis
-  'wagon_type', // ждёт M2: wagon type parser messages
 ];
 
 const RUNNER = /^const FOLDER = .*fixtures\/golden\/([a-z0-9_]+)/m;
