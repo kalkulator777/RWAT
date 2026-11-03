@@ -1,10 +1,11 @@
 /**
- * Where a zone's edge goes when it is drawn, moved or stretched (docs/proposals/editor.md
- * §2.3): to another zone's edge, to a vertex of the model, to the grid of 1/16 block — in
- * that order, each when it is near enough (the grid always is). Zones' edges come first
- * because zones that touch join and a gap of any width between them is a wall: an edge a
- * hair off its neighbour's would cut the floor. Each axis of the plan snaps by itself
- * (x along the car, z across, OBJ frame).
+ * Where an edge, a corner or a point goes when a markup tool draws, moves or stretches it
+ * (docs/proposals/editor.md §2.3, §3.9): to an edge of the tool's own shapes or the floor
+ * zones', to a vertex of the model, to the grid of 1/16 block — in that order, each when it
+ * is near enough (the grid always is). The zones' edges come first because zones that touch
+ * join and a gap of any width between them is a wall: an edge a hair off its neighbour's
+ * would cut the floor. Each axis snaps by itself (OBJ frame). The zones tool, the doors
+ * tool and the chairs tool snap so.
  *
  * A vertex is taken as the OBJ writes it: the shortest decimal that reads back as the
  * same float (`1.15`, not `1.149999976158142`). Pure: no DOM, no signals.
@@ -85,6 +86,7 @@ function unique(values: Iterable<number>): Float64Array {
 }
 
 const VERTEX_LINES = new WeakMap<LoadedModel, { xs: Float64Array; zs: Float64Array }>();
+const Y_LINES = new WeakMap<LoadedModel, Float64Array>();
 
 /**
  * The x and the z of every vertex of the model, sorted, as the OBJ writes them; made once
@@ -109,6 +111,22 @@ export function vertexLines(model: LoadedModel | null): { xs: Float64Array; zs: 
     VERTEX_LINES.set(model, lines);
   }
   return lines;
+}
+
+/** The y of every vertex of the model, sorted, as the OBJ writes them; made once a model (x and z: {@link vertexLines}). */
+export function vertexYs(model: LoadedModel | null): Float64Array {
+  if (model === null) return new Float64Array();
+  let ys = Y_LINES.get(model);
+  if (ys === undefined) {
+    const seen = new Set<number>();
+    for (const part of model.parts) {
+      const p = part.positions;
+      for (let i = 1; i < p.length; i += 3) seen.add(p[i] as number);
+    }
+    ys = unique([...seen].map(floatDecimal));
+    Y_LINES.set(model, ys);
+  }
+  return ys;
 }
 
 /** A value and what it snapped to. */

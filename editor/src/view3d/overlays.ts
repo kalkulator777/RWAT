@@ -60,7 +60,7 @@ export const OVERLAY_STYLES: Readonly<Record<string, OverlayStyle>> = Object.fre
   bridge: { color: '#1c7ed6', fill: 0.28, dashed: false },
   /** A piece from which a door is walked out of. */
   exit: { color: '#f08c00', fill: 0.3, dashed: false },
-  /** A cab's area; a car's other cabs take the shades after it (tools/floor `CAB_STYLES`). */
+  /** A cab's area; a car's other cabs take the shades after it (tools/common `CAB_STYLES`). */
   cab: { color: '#7048e8', fill: 0.18, dashed: false },
   'cab-2': { color: '#ae3ec9', fill: 0.18, dashed: false },
   'cab-3': { color: '#3b5bdb', fill: 0.18, dashed: false },

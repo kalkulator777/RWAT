@@ -19,7 +19,7 @@
 import { batch, effect, signal, type ReadonlySignal, type Signal } from '@preact/signals';
 import type { Command, Link, PickHit, Vec3 } from '../../core/contracts';
 import type { WagonType } from '../../ports/wagonType';
-import { free } from '../floor/snap';
+import { free } from '../common/snap';
 import { zonesOf } from '../floor/zones';
 import type { ToolContext, ToolSession, ToolSubject } from '../registry';
 import { analysePlaces, SEAT_LAYERS, seatsPicture, type PlaceAnalysis, type PlaceView, type SeatsPicture } from './analysis';

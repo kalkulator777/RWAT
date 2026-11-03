@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { exampleModel } from '../../model/testing.node';
 import { boxModel } from '../../view3d/testModel.node';
-import { ALL_SNAPPING, clean, floatDecimal, free, GRID, nearest, snapShift, snapValue, vertexLines, zoneEdges, type SnapLines } from './snap';
+import { ALL_SNAPPING, clean, floatDecimal, free, GRID, nearest, snapShift, snapValue, vertexLines, vertexYs, zoneEdges, type SnapLines } from './snap';
 
 const NONE = { grid: false, vertices: false, zones: false };
 
@@ -9,7 +9,7 @@ function lines(zones: number[], vertices: number[]): SnapLines {
   return { zones, vertices: Float64Array.from(vertices) };
 }
 
-describe('the numbers the floor tool writes', () => {
+describe('the numbers the tools write', () => {
   it('take a vertex as the OBJ writes it, a sum without its binary noise, a free value to a thousandth', () => {
     expect(floatDecimal(Math.fround(1.15))).toBe(1.15);
     expect(floatDecimal(Math.fround(-9.6))).toBe(-9.6);
@@ -62,7 +62,7 @@ describe('an edge snaps', () => {
   });
 });
 
-describe('the vertices a zone snaps to', () => {
+describe('the vertices an edge snaps to', () => {
   it('are every part’s — the ghosts and the floor guides too —, x and z apart, as the OBJ writes them, made once a model', async () => {
     const model = boxModel('test:box', [
       ['FLOOR', 'body', [-1.15, 0, -0.5], [2, 1.3, 0.5]],
@@ -78,5 +78,18 @@ describe('the vertices a zone snaps to', () => {
     for (const x of [-9.6, -7.9, -7.8, -1.2, 1.2, 7.8, 7.9, 9.6]) expect(coach.xs).toContain(x);
     for (const z of [-1.4, -0.55, 0.55, 1.4]) expect(coach.zs).toContain(z);
     expect([...coach.xs].every((x, i, all) => i === 0 || x > (all[i - 1] as number))).toBe(true);
+  });
+
+  it('along y are every part’s too, sorted, each once, as the OBJ writes them, made once a model', async () => {
+    const model = boxModel('test:box', [
+      ['FLOOR', 'body', [-1.15, 0, -0.5], [2, 1.3, 0.5]],
+      ['GUIDE_FLOOR_0', 'skip', [7, 1.3, 7], [8, 8, 8]],
+    ]);
+    const found = vertexYs(model);
+    expect([...found]).toEqual([0, 1.3, 8]);
+    expect(vertexYs(model)).toBe(found);
+    expect(vertexYs(null).length).toBe(0);
+    // the window sill of the coach, which a door's edge snaps to from the side
+    expect(vertexYs(await exampleModel('coach'))).toContain(2.3);
   });
 });

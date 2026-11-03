@@ -18,7 +18,7 @@
 import type { Command, JsonPointer, Link, LoadedModel, Op } from '../../core/contracts';
 import { isJsonObject } from '../../core/json';
 import { equalsIgnoreCase } from '../../ports/wagonType';
-import { floatDecimal } from '../floor/snap';
+import { floatDecimal } from '../common/snap';
 import { zoneJson, zoneOf, type ZoneBox } from '../floor/zones';
 
 /** A door's box in the OBJ frame: its least and greatest corners (the shape a floor zone has). */

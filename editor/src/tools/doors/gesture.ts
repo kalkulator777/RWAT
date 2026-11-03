@@ -7,44 +7,21 @@
  * away from every door is the view's: the camera, and a click that picks an object of the
  * model (for «Дверь по выделенному»). From the perspective view the tool takes nothing.
  *
- * Edges snap as the floor's do (../floor/snap.ts): to the other doors' and the floor
+ * Edges snap as the floor's do (../common/snap.ts): to the other doors' and the floor
  * zones' edges, to the model's vertices, to the grid of 1/16 — the floor zones' edges are
  * their `min.y` along y, where a door's foot belongs. Alt held snaps to nothing. Each drag
  * is one journal entry: its commands share a key and merge until the button is released.
  */
 
-import type { Command, LoadedModel, ViewDragger, ViewPointer } from '../../core/contracts';
-import { clean, floatDecimal, SNAP_PX, snapShift, snapValue, vertexLines, zoneEdges, type SnapLines, type Snapping } from '../floor/snap';
+import type { Command, ViewDragger, ViewPointer } from '../../core/contracts';
+import { nearEnd, planeOf, planePoint, type Axis, type ViewPlane } from '../common/plane';
+import { clean, SNAP_PX, snapShift, snapValue, vertexLines, vertexYs, zoneEdges, type SnapLines, type Snapping } from '../common/snap';
 import { zonesOf } from '../floor/zones';
 import type { ToolSubject } from '../registry';
 import { doorsOf, setDoorBox, type DoorBox } from './doors';
 
 /** How near an edge, in screen pixels, a press grabs it. */
 export const GRAB_PX = 6;
-
-/** An axis of the OBJ frame: 0 x, 1 y, 2 z. */
-export type Axis = 0 | 1 | 2;
-
-/** A view the tool works in: its two axes on the screen (`u` to the right, `v` up or down) and the one it looks along. */
-export interface ViewPlane {
-  readonly u: Axis;
-  readonly v: Axis;
-  readonly n: Axis;
-  /** True when +v runs down the screen (the top view: +z, the left side, at the bottom). */
-  readonly vDown: boolean;
-}
-
-/** The views the tool takes presses from (view3d/cameras: the top as Blender's 7, the side as 1 from +Z, the front as 3 from −X). */
-export const PLANES: Readonly<Record<'top' | 'side' | 'front', ViewPlane>> = {
-  top: { u: 0, v: 2, n: 1, vDown: true },
-  side: { u: 0, v: 1, n: 2, vDown: false },
-  front: { u: 2, v: 1, n: 0, vDown: false },
-};
-
-/** The plane of a view the tool works in, or null for one it does not (the perspective). */
-export function planeOf(view: ViewPointer['view']): ViewPlane | null {
-  return view === 'top' || view === 'side' || view === 'front' ? PLANES[view] : null;
-}
 
 const MIN = ['minX', 'minY', 'minZ'] as const;
 const MAX = ['maxX', 'maxY', 'maxZ'] as const;
@@ -64,21 +41,6 @@ export type DoorGrab =
   | { readonly kind: 'move'; readonly index: number }
   /** An edge (one axis of the view) or a corner (both): which end of u and of v moves. */
   | { readonly kind: 'stretch'; readonly index: number; readonly u: 'min' | 'max' | null; readonly v: 'min' | 'max' | null };
-
-/** Where a ray meets the plane of a view through `level` on its axis: the point's u and v; null for a ray along the plane. */
-export function planePoint(at: ViewPointer, plane: ViewPlane, level: number): [number, number] | null {
-  const d = at.direction[plane.n];
-  if (Math.abs(d) < 1e-6) return null;
-  const t = (level - at.origin[plane.n]) / d;
-  return [at.origin[plane.u] + t * at.direction[plane.u], at.origin[plane.v] + t * at.direction[plane.v]];
-}
-
-function nearEnd(value: number, min: number, max: number, tolerance: number): 'min' | 'max' | null {
-  const toMin = Math.abs(value - min);
-  const toMax = Math.abs(value - max);
-  if (Math.min(toMin, toMax) > tolerance) return null;
-  return toMin <= toMax ? 'min' : 'max';
-}
 
 /**
  * What a press at (u, v) grabs of one door's outline in a view: an edge or a corner within
@@ -114,24 +76,6 @@ export function cursorOf(grab: DoorGrab, plane: ViewPlane): string {
   if (grab.kind === 'move') return 'move';
   if (grab.u !== null && grab.v !== null) return ((grab.u === 'max') === (grab.v === 'max')) === plane.vDown ? 'nwse-resize' : 'nesw-resize';
   return grab.u !== null ? 'ew-resize' : 'ns-resize';
-}
-
-const Y_LINES = new WeakMap<LoadedModel, Float64Array>();
-
-/** The y of every vertex of the model, sorted, as the OBJ writes them; made once a model (x and z: ../floor/snap `vertexLines`). */
-export function vertexYs(model: LoadedModel | null): Float64Array {
-  if (model === null) return new Float64Array();
-  let ys = Y_LINES.get(model);
-  if (ys === undefined) {
-    const seen = new Set<number>();
-    for (const part of model.parts) {
-      const p = part.positions;
-      for (let i = 1; i < p.length; i += 3) seen.add(p[i] as number);
-    }
-    ys = Float64Array.from(new Set([...seen].map(floatDecimal))).sort();
-    Y_LINES.set(model, ys);
-  }
-  return ys;
 }
 
 /**

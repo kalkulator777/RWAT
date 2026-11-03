@@ -7,7 +7,8 @@ import floorTool from '../floor/index';
 import { ToolHost } from '../registry';
 import { bench, type Bench } from '../testing.node';
 import doorsTool, { type DoorsSession } from './index';
-import { cursorOf, grabAt, grabOfDoor, PLANES, planePoint, vertexYs } from './gesture';
+import { PLANES } from '../common/plane';
+import { cursorOf, grabAt, grabOfDoor } from './gesture';
 import { doorLink, doorsOf, type DoorBox } from './doors';
 import type { DoorsTool } from './session';
 
@@ -193,7 +194,6 @@ describe('a door’s box by hand', () => {
     tool.snapping.value = { ...tool.snapping.value, vertices: true };
     // the side view's y: to a vertex (the window sill, 2.3, of the light switch's plate)
     drag(b, 'side', [-8.75, 1.15], [-8.75, 2.31], {}, 0.005);
-    expect(vertexYs(coachModel)).toContain(2.3);
     expect(boxes(b)[8]).toMatchObject({ minY: 2.3 });
     stop();
   });
@@ -274,9 +274,7 @@ describe('the keyboard’s doors', () => {
 });
 
 describe('the gestures’ geometry', () => {
-  it('meets a ray at a view’s plane, grabs edges, corners and insides, and shows each by its cursor', () => {
-    expect(planePoint({ ...pointer('top', 0, 0), origin: [0, 5, 0], direction: [0.6, -0.8, 0] }, PLANES.top, 1)).toEqual([3, 0]);
-    expect(planePoint({ ...pointer('top', 0, 0), direction: [1, 0, 0] }, PLANES.top, 1)).toBeNull();
+  it('grabs edges, corners and insides in a view’s plane, and shows each by its cursor', () => {
     const box = { minX: 0, minY: 1, minZ: 0, maxX: 2, maxY: 3, maxZ: 1 };
     expect(grabOfDoor(box, 0, PLANES.side, 1, 2, 0.05)).toEqual({ kind: 'move', index: 0 });
     expect(grabOfDoor(box, 0, PLANES.side, 2.04, 2, 0.05)).toEqual({ kind: 'stretch', index: 0, u: 'max', v: null });

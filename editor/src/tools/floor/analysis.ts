@@ -25,6 +25,7 @@ import { Cut, type Piece } from '../../ports/floorRegion';
 import { toObj } from '../../ports/objFrame';
 import { PLAYER_HALF_WIDTH } from '../../ports/riderWalk';
 import type { Door, WagonType } from '../../ports/wagonType';
+import { cabStyle } from '../common/styles';
 import { zoneLink, zonesOf, type PlanRect, type ZoneBox } from './zones';
 
 /** Which doors stand open for the drawing of the floor: none, all, or those the preview opened. */
@@ -37,8 +38,6 @@ export const FLOOR_LAYERS = ['floor.cabs', 'floor.pieces', 'floor.exits', 'floor
 
 export type FloorLayer = (typeof FLOOR_LAYERS)[number];
 
-/** The cabs' shades (view3d overlay styles), the first cab's first; more cabs take them over again. */
-export const CAB_STYLES = ['cab', 'cab-2', 'cab-3', 'cab-4'] as const;
 
 /** The space between the strokes of the hatching, blocks along the car. */
 const HATCH_STEP = 0.3;
@@ -209,7 +208,7 @@ export function floorPicture(wagon: string, typeJson: unknown, type: WagonType |
     cabs = area.cabs();
     area.region?.pieces.forEach((piece, p) => {
       const cab = area.cabOfPiece[p] ?? -1;
-      if (cab >= 0) layers['floor.cabs'].push(pieceRect(zones, piece, CAB_STYLES[cab % CAB_STYLES.length] as string));
+      if (cab >= 0) layers['floor.cabs'].push(pieceRect(zones, piece, cabStyle(cab)));
     });
   }
   return { zones, findings: found, openMask, layers, pieces, cabs, unreachable: unreached };

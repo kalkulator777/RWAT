@@ -12,7 +12,7 @@
 
 import { batch, effect, signal, type ReadonlySignal, type Signal } from '@preact/signals';
 import type { Command, Link, PickHit } from '../../core/contracts';
-import { ALL_SNAPPING, type Snapping } from '../floor/snap';
+import { ALL_SNAPPING, type Snapping } from '../common/snap';
 import { zonesOf } from '../floor/zones';
 import type { ToolContext, ToolSession, ToolSubject } from '../registry';
 import { DOORS_LAYERS, doorsPicture, type DoorsPicture } from './analysis';

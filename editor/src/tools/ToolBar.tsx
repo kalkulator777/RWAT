@@ -2,10 +2,12 @@
  * The tools on the screen (docs/proposals/editor.md §6.1): the switch in the 3D view's bar
  * (the plain selection, then each tool, greyed while it does not apply to the open wagon)
  * and, in the inspector, the section of the tool that is on. Both read a {@link ToolHost}.
+ * The section's look is the tools' common one (./common/section.css).
  */
 
 import { t } from '../i18n';
 import type { ToolHost } from './registry';
+import './common/section.css';
 
 /** The tool switch of the view's bar: one button pressed — the selection or a tool. */
 export function ToolSwitcher({ host }: { host: ToolHost }) {

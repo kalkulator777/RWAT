@@ -6,7 +6,8 @@
  */
 
 import type { LoadedModel, Vec3 } from '../../core/contracts';
-import { floatDecimal } from './snap';
+import { LEVEL } from '../common/faces';
+import { floatDecimal } from '../common/snap';
 import type { PlanRect } from './zones';
 
 /**
@@ -29,9 +30,6 @@ export function vertexYNear(model: LoadedModel, object: string, point: Vec3): nu
   }
   return best === null ? null : floatDecimal(best);
 }
-
-/** A face this close to level (the y of its normal) is a floor. */
-const LEVEL = 0.95;
 
 /** The z of the plan's cross product (b − a) × (p − a): which side of the edge a→b the point p is on. */
 function side(ax: number, az: number, bx: number, bz: number, px: number, pz: number): number {

@@ -4,9 +4,9 @@ import { exampleModel } from '../../model/testing.node';
 import { ToolHost } from '../registry';
 import { bench, drawing, type Bench } from '../testing.node';
 import floorTool, { type FloorSession } from './index';
-import { cursorOf, grabAt, planPoint } from './gesture';
+import { cursorOf, grabAt } from './gesture';
 import { FLOOR_TIMING, heightFor, startFloor, type FloorTool } from './session';
-import { GRID, vertexLines } from './snap';
+import { GRID, vertexLines } from '../common/snap';
 import { zoneLink, zonesOf, type ZoneBox } from './zones';
 
 const COACH = 'rwat_example:coach';
@@ -298,9 +298,7 @@ describe('the drawing of a big floor', () => {
 });
 
 describe('the gestures’ geometry', () => {
-  it('meets a ray at the floor, grabs edges, corners and insides, and shows each by its cursor', () => {
-    expect(planPoint({ ...top(0, 0), origin: [0, 5, 0], direction: [0.6, -0.8, 0] }, 1)).toEqual([3, 0]);
-    expect(planPoint({ ...top(0, 0), direction: [1, 0, 0] }, 1)).toBeNull();
+  it('grabs edges, corners and insides on the floor, and shows each by its cursor', () => {
     const zone = { minX: 0, minY: 1, minZ: 0, maxX: 2, maxY: 3, maxZ: 1 };
     expect(grabAt([zone], null, 1, 0.5, 0.05)).toEqual({ kind: 'move', index: 0 });
     expect(grabAt([zone], null, 2.04, 0.5, 0.05)).toEqual({ kind: 'stretch', index: 0, x: 'max', z: null });

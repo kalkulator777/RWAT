@@ -136,7 +136,7 @@ test('the shunter’s doors are its two fixed steps, walked out of on each side'
   await view.locator('[data-toggle="tool"] [data-tool="doors"]').click();
   const tool = page.getByTestId('doors-tool');
   await expect(tool).toHaveAttribute('data-doors', '2');
-  await page.locator('[data-testid="doors-list"] [data-door="0"] .floor-zone-name').click();
+  await page.locator('[data-testid="doors-list"] [data-door="0"] .tool-item-name').click();
   await expect(page.getByTestId('doors-facts')).toHaveAttribute('data-out', 'left');
   await expect(page.getByTestId('doors-movers')).toHaveText('A fixed opening moves no leaf: it stands shut.');
   expect(await count(page, 'doors.spans')).toBe(2);
@@ -157,7 +157,7 @@ test('the arch moved off the aisle, which no check finds, shows by its bridge be
   await pickWagon(page, 'rwat_example:coach');
   const view = page.getByTestId('view3d');
   await view.locator('[data-toggle="tool"] [data-tool="doors"]').click();
-  await page.locator('[data-testid="doors-list"] [data-door="7"] .floor-zone-name').click();
+  await page.locator('[data-testid="doors-list"] [data-door="7"] .tool-item-name').click();
   await expect(page.getByTestId('doors-facts')).toHaveAttribute('data-bridge', 'both');
   const style = () => page.evaluate(() => (window as HookWindow).__rwatView?.view.overlays.get('doors.bridges')?.[1]?.style);
   expect(await style()).toBe('bridge');
@@ -177,7 +177,7 @@ test('the arch moved off the aisle, which no check finds, shows by its bridge be
   await expect(page.getByTestId('doors-findings')).toHaveAttribute('data-count', '0');
   await expect(page.getByTestId('checks-summary')).toHaveText('No findings.');
   // the salon door selected instead, the arch's bridge shows in its own colour
-  await page.locator('[data-testid="doors-list"] [data-door="6"] .floor-zone-name').click();
+  await page.locator('[data-testid="doors-list"] [data-door="6"] .tool-item-name').click();
   await screenshot(page, 'coach-arch-off-the-aisle');
   expect(errors).toEqual([]);
 });

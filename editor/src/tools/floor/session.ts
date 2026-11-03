@@ -17,7 +17,7 @@ import type { ToolContext, ToolSession, ToolSubject } from '../registry';
 import { FLOOR_LAYERS, floorPicture, type DoorState, type FloorPicture } from './analysis';
 import { FloorDragger } from './gesture';
 import { floorUnder, vertexYNear } from './height';
-import { ALL_SNAPPING, type Snapping } from './snap';
+import { ALL_SNAPPING, type Snapping } from '../common/snap';
 import { addZone, moveZoneTo, removeZone, selectedZones, setZoneHeight, setZoneNumber, zoneLink, zoneOver, zonesOf, type ZoneBox } from './zones';
 
 /**

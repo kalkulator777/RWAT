@@ -35,11 +35,11 @@ describe('the doors tool’s section of the inspector', () => {
     const { b, stop, view, q } = await shown();
     expect(q('[data-testid="doors-tool"]')?.getAttribute('data-doors')).toBe('8');
     expect(view.container.querySelectorAll('[data-testid="doors-list"] [data-door]')).toHaveLength(8);
-    expect(q('[data-door="0"] .floor-zone-name')?.textContent).toBe('Door 0door_flhull, group DoorsL');
-    expect(q('[data-door="7"] .floor-zone-name')?.textContent).toBe('Door 7salon_archinner, opening');
+    expect(q('[data-door="0"] .tool-item-name')?.textContent).toBe('Door 0door_flhull, group DoorsL');
+    expect(q('[data-door="7"] .tool-item-name')?.textContent).toBe('Door 7salon_archinner, opening');
     expect(q('[data-testid="doors-door"]')).toBeNull();
 
-    fireEvent.click(q('[data-door="0"] .floor-zone-name') as HTMLElement);
+    fireEvent.click(q('[data-door="0"] .tool-item-name') as HTMLElement);
     expect(b.selection.value).toEqual([doorLink(COACH, 0)]);
     expect(q<HTMLInputElement>('#doors-id')?.value).toBe('door_fl');
     expect(q<HTMLInputElement>('#doors-group')?.value).toBe('DoorsL');
@@ -99,7 +99,7 @@ describe('the doors tool’s section of the inspector', () => {
     });
     expect(doors()).toHaveLength(9);
     expect(q('[data-door="8"]')?.getAttribute('data-selected')).toBe('true');
-    expect(q('[data-door="8"] .floor-zone-flag')?.textContent).toBe('2 findings');
+    expect(q('[data-door="8"] .tool-item-flag')?.textContent).toBe('2 findings');
     const findings = q('[data-testid="doors-findings"]');
     expect(findings?.getAttribute('data-codes')).toBe('floor.door-too-narrow floor.door-not-at-floor-end');
     expect(findings?.textContent).toContain('door 8 “door_8” is too narrow to walk through');
@@ -112,7 +112,7 @@ describe('the doors tool’s section of the inspector', () => {
     expect(q('[data-testid="doors-tool"]')?.textContent).toContain('The model is still being read');
     fireEvent.click(q('[data-door="7"] [aria-label="Door 7 up"]') as HTMLElement);
     expect(doors()[6]?.id).toBe('salon_arch');
-    fireEvent.keyDown(q('[data-door="6"] .floor-zone-name') as HTMLElement, { key: 'Delete' });
+    fireEvent.keyDown(q('[data-door="6"] .tool-item-name') as HTMLElement, { key: 'Delete' });
     expect(doors()).toHaveLength(7);
     fireEvent.click(q('[data-door="0"] [aria-label="Remove door 0"]') as HTMLElement);
     expect(doors()).toHaveLength(6);

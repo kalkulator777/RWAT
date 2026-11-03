@@ -31,10 +31,10 @@ describe('the floor tool’s section of the inspector', () => {
     const { b, stop, view, q } = await shown();
     expect(q('[data-testid="floor-tool"]')?.getAttribute('data-zones')).toBe('4');
     expect(view.container.querySelectorAll('[data-testid="floor-zones"] [data-zone]')).toHaveLength(4);
-    expect(q('[data-zone="1"] .floor-zone-summary')?.textContent).toBe('x -7.8…7.8, z -0.55…0.55, floor 1.3');
+    expect(q('[data-zone="1"] .tool-item-summary')?.textContent).toBe('x -7.8…7.8, z -0.55…0.55, floor 1.3');
     expect(q('[data-testid="floor-numbers"]')).toBeNull();
 
-    fireEvent.click(q('[data-zone="1"] .floor-zone-name') as HTMLElement);
+    fireEvent.click(q('[data-zone="1"] .tool-item-name') as HTMLElement);
     expect(b.selection.value).toEqual([zoneLink(COACH, 1)]);
     const maxX = q<HTMLInputElement>('#floor-max-x');
     expect(maxX?.value).toBe('7.8');
@@ -53,7 +53,7 @@ describe('the floor tool’s section of the inspector', () => {
     fireEvent.click(q('[data-zone="3"] [aria-label="Zone 3 up"]') as HTMLElement);
     expect(zonesOf(b.pack.value?.json(FILE))[2]?.minX).toBe(7.9);
     expect(b.selection.value).toEqual([zoneLink(COACH, 2)]);
-    fireEvent.keyDown(q('[data-zone="2"] .floor-zone-name') as HTMLElement, { key: 'Delete' });
+    fireEvent.keyDown(q('[data-zone="2"] .tool-item-name') as HTMLElement, { key: 'Delete' });
     expect(zonesOf(b.pack.value?.json(FILE))).toHaveLength(3);
     fireEvent.click(q('[data-zone="0"] [aria-label="Remove zone 0"]') as HTMLElement);
     expect(zonesOf(b.pack.value?.json(FILE))).toHaveLength(2);
@@ -69,7 +69,7 @@ describe('the floor tool’s section of the inspector', () => {
     await act(() => b.journal.dispatch({ label: 'x', ops: [{ op: 'insert', file: FILE, at: '/interior/-', value: { min: [3, 1.3, 0.55], max: [3.4, 3.8, 0.95] } }] }));
     const findings = q('[data-testid="floor-findings"]');
     expect(findings?.getAttribute('data-codes')).toBe('ZONE_TOO_NARROW');
-    expect(q('[data-zone="4"] .floor-zone-flag')?.textContent).toBe('no room for a player');
+    expect(q('[data-zone="4"] .tool-item-flag')?.textContent).toBe('no room for a player');
     const finding = q('[data-code="ZONE_TOO_NARROW"] button') as HTMLElement;
     expect(finding.textContent).toBe('zone 4 holds no place a player fits (0.40 × 0.40): widen it to 0.6 or join it to a wider zone');
     expect(finding.getAttribute('title')).toMatch(/^zone 4 .*0\.40/);

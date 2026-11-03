@@ -9,73 +9,28 @@
  */
 
 import { Fragment } from 'preact';
-import { useState } from 'preact/hooks';
 import { floorProblem } from '../../checks/floor/problems';
 import { problemMessage } from '../../checks/messages';
-import { numberText, parseNumber } from '../../forms/values';
 import { formatNumber, t } from '../../i18n';
 import { overlayStyle } from '../../view3d/overlays';
-import { CAB_STYLES, DOOR_STATES } from './analysis';
+import { NumberInput } from '../common/inputs';
+import { CAB_STYLES } from '../common/styles';
+import { DOOR_STATES } from './analysis';
 import type { ToolSubject } from '../registry';
 import type { FloorTool } from './session';
-import type { Snapping } from './snap';
+import type { Snapping } from '../common/snap';
 import { selectedZones, type ZoneBox } from './zones';
-import './floor.css';
+import '../common/section.css';
 
 const AXES = ['x', 'y', 'z'] as const;
 const CORNERS = ['min', 'max'] as const;
 const KEYS = { min: ['minX', 'minY', 'minZ'], max: ['maxX', 'maxY', 'maxZ'] } as const;
 
-/** A number typed in, applied on Enter or leaving the field; a text that is no number is said and kept. */
-function NumberInput(props: { id: string; label: string; value: number; disabled: boolean; onCommit: (value: number) => void }) {
-  const [draft, setDraft] = useState<string | null>(null);
-  const [error, setError] = useState(false);
-  return (
-    <span class="field-input-wrap field-input-short">
-      <input
-        id={props.id}
-        type="text"
-        class="field-input"
-        inputMode="decimal"
-        spellcheck={false}
-        autoComplete="off"
-        aria-label={props.label}
-        aria-invalid={error ? 'true' : undefined}
-        disabled={props.disabled}
-        value={draft ?? numberText(props.value)}
-        onInput={(event) => setDraft(event.currentTarget.value)}
-        onChange={(event) => {
-          const parsed = parseNumber(event.currentTarget.value);
-          if ('error' in parsed) {
-            setError(true);
-            return;
-          }
-          setError(false);
-          setDraft(null);
-          if (parsed.value !== props.value) props.onCommit(parsed.value);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape' && draft !== null) {
-            setDraft(null);
-            setError(false);
-            event.preventDefault();
-          }
-        }}
-      />
-      {error && (
-        <span class="field-input-error" role="alert">
-          {t('tools.floor.notNumber')}
-        </span>
-      )}
-    </span>
-  );
-}
-
 function DoorsChoice({ tool }: { tool: FloorTool }) {
   const current = tool.doorState.value;
   return (
-    <div class="floor-row">
-      <span class="floor-label" id="floor-doors-label">
+    <div class="tool-row">
+      <span class="tool-label" id="floor-doors-label">
         {t('tools.floor.doors')}
       </span>
       <div class="toggle" role="group" aria-labelledby="floor-doors-label" data-toggle="floor-doors">
@@ -103,10 +58,10 @@ function SnapChoice({ tool }: { tool: FloorTool }) {
   const snapping = tool.snapping.value;
   const keys: (keyof Snapping)[] = ['zones', 'vertices', 'grid'];
   return (
-    <fieldset class="floor-snap">
+    <fieldset class="tool-box">
       <legend>{t('tools.floor.snap')}</legend>
       {keys.map((key) => (
-        <label key={key} class="floor-check" data-snap={key}>
+        <label key={key} class="tool-check" data-snap={key}>
           <input
             type="checkbox"
             checked={snapping[key]}
@@ -117,7 +72,7 @@ function SnapChoice({ tool }: { tool: FloorTool }) {
           {t(`tools.floor.snap.${key}`)}
         </label>
       ))}
-      <p class="floor-note">{t('tools.floor.snap.alt')}</p>
+      <p class="tool-note">{t('tools.floor.snap.alt')}</p>
     </fieldset>
   );
 }
@@ -137,17 +92,17 @@ function ZoneList({ tool, zones, chosen, readOnly }: { tool: FloorTool; zones: r
   const narrow = new Set(tool.picture.value?.findings.filter((f) => f.code === 'ZONE_TOO_NARROW').map((f) => f.index) ?? []);
   const unreachable = new Set(tool.picture.value?.unreachable ?? []);
   return (
-    <div class="floor-zones">
-      <h3 class="floor-heading">{t('tools.floor.zones', { count: zones.length })}</h3>
+    <div class="tool-items">
+      <h3 class="tool-heading">{t('tools.floor.zones', { count: zones.length })}</h3>
       {zones.length === 0 ? (
-        <p class="floor-note">{t('tools.floor.zones.none')}</p>
+        <p class="tool-note">{t('tools.floor.zones.none')}</p>
       ) : (
-        <ol class="floor-zone-list" data-testid="floor-zones" start={0}>
+        <ol class="tool-list" data-testid="floor-zones" start={0}>
           {zones.map((zone, i) => (
-            <li key={i} class="floor-zone" data-zone={i} data-selected={chosen.includes(i) ? 'true' : undefined}>
+            <li key={i} class="tool-item" data-zone={i} data-selected={chosen.includes(i) ? 'true' : undefined}>
               <button
                 type="button"
-                class="floor-zone-name"
+                class="tool-item-name"
                 aria-pressed={chosen.includes(i)}
                 onClick={(event) => tool.select(i, event.shiftKey)}
                 onKeyDown={(event) => {
@@ -157,18 +112,18 @@ function ZoneList({ tool, zones, chosen, readOnly }: { tool: FloorTool; zones: r
                   }
                 }}
               >
-                <span class="floor-zone-index">{t('tools.floor.zone', { index: i })}</span>
-                <span class="floor-zone-summary">{zoneSummary(zone)}</span>
-                {narrow.has(i) && <span class="floor-zone-flag">{t('tools.floor.zone.narrow')}</span>}
-                {unreachable.has(i) && <span class="floor-zone-flag">{t('tools.floor.zone.unreachable')}</span>}
+                <span class="tool-item-index">{t('tools.floor.zone', { index: i })}</span>
+                <span class="tool-item-summary">{zoneSummary(zone)}</span>
+                {narrow.has(i) && <span class="tool-item-flag">{t('tools.floor.zone.narrow')}</span>}
+                {unreachable.has(i) && <span class="tool-item-flag">{t('tools.floor.zone.unreachable')}</span>}
               </button>
-              <span class="floor-zone-actions">
-                <button type="button" class="floor-icon" aria-label={t('tools.floor.up', { index: i })} title={t('tools.floor.up', { index: i })} disabled={readOnly || i === 0} onClick={() => tool.reorder(i, i - 1)}>
+              <span class="tool-item-actions">
+                <button type="button" class="tool-icon" aria-label={t('tools.floor.up', { index: i })} title={t('tools.floor.up', { index: i })} disabled={readOnly || i === 0} onClick={() => tool.reorder(i, i - 1)}>
                   ↑
                 </button>
                 <button
                   type="button"
-                  class="floor-icon"
+                  class="tool-icon"
                   aria-label={t('tools.floor.down', { index: i })}
                   title={t('tools.floor.down', { index: i })}
                   disabled={readOnly || i === zones.length - 1}
@@ -176,7 +131,7 @@ function ZoneList({ tool, zones, chosen, readOnly }: { tool: FloorTool; zones: r
                 >
                   ↓
                 </button>
-                <button type="button" class="floor-icon" aria-label={t('tools.floor.remove', { index: i })} title={t('tools.floor.remove', { index: i })} disabled={readOnly} onClick={() => tool.remove(i)}>
+                <button type="button" class="tool-icon" aria-label={t('tools.floor.remove', { index: i })} title={t('tools.floor.remove', { index: i })} disabled={readOnly} onClick={() => tool.remove(i)}>
                   ✕
                 </button>
               </span>
@@ -184,8 +139,8 @@ function ZoneList({ tool, zones, chosen, readOnly }: { tool: FloorTool; zones: r
           ))}
         </ol>
       )}
-      <p class="floor-note">{t('tools.floor.zone0')}</p>
-      <button type="button" class="floor-add" data-action="floor-add" disabled={readOnly} onClick={() => tool.add()}>
+      <p class="tool-note">{t('tools.floor.zone0')}</p>
+      <button type="button" class="tool-button" data-action="floor-add" disabled={readOnly} onClick={() => tool.add()}>
         {t('tools.floor.add')}
       </button>
     </div>
@@ -195,18 +150,18 @@ function ZoneList({ tool, zones, chosen, readOnly }: { tool: FloorTool; zones: r
 function ZoneNumbers({ tool, index, zone, readOnly }: { tool: FloorTool; index: number; zone: ZoneBox; readOnly: boolean }) {
   const picking = tool.pickingHeight.value === index;
   return (
-    <fieldset class="floor-numbers" data-testid="floor-numbers" data-zone={index}>
+    <fieldset class="tool-box" data-testid="floor-numbers" data-zone={index}>
       <legend>{t('tools.floor.zone', { index })}</legend>
-      <div class="floor-grid">
+      <div class="tool-grid">
         <span />
         {AXES.map((axis) => (
-          <span key={axis} class="floor-axis">
+          <span key={axis} class="tool-axis">
             {axis}
           </span>
         ))}
         {CORNERS.map((corner) => (
           <Fragment key={corner}>
-            <span class="floor-corner">{t(`tools.floor.${corner}`)}</span>
+            <span class="tool-axis">{t(`tools.floor.${corner}`)}</span>
             {AXES.map((axis, a) => (
               <NumberInput
                 key={`${corner}-${axis}`}
@@ -220,10 +175,10 @@ function ZoneNumbers({ tool, index, zone, readOnly }: { tool: FloorTool; index: 
           </Fragment>
         ))}
       </div>
-      <p class="floor-note">{t('tools.floor.numbers.note')}</p>
+      <p class="tool-note">{t('tools.floor.numbers.note')}</p>
       <button
         type="button"
-        class="floor-pick"
+        class="tool-button"
         data-action="floor-pick-height"
         aria-pressed={picking}
         disabled={readOnly}
@@ -245,15 +200,15 @@ function ZoneNumbers({ tool, index, zone, readOnly }: { tool: FloorTool; index: 
 function Findings({ tool, subject }: { tool: FloorTool; subject: ToolSubject }) {
   const found = tool.picture.value?.findings ?? [];
   return (
-    <section class="floor-findings" data-testid="floor-findings" data-count={found.length} data-codes={found.map((f) => f.code).join(' ')} aria-live="polite">
-      <h3 class="floor-heading">{t('tools.floor.findings', { count: found.length })}</h3>
+    <section class="tool-findings" data-testid="floor-findings" data-count={found.length} data-codes={found.map((f) => f.code).join(' ')} aria-live="polite">
+      <h3 class="tool-heading">{t('tools.floor.findings', { count: found.length })}</h3>
       {found.length > 0 && (
-        <ul class="floor-finding-list">
+        <ul class="tool-finding-list">
           {found.map((finding, i) => {
             const problem = floorProblem(finding, subject.wagon, subject.typeFile, subject.typeJson);
             return (
               <li key={i} data-code={finding.code} data-index={finding.index}>
-                <button type="button" class="floor-finding" title={finding.text} disabled={problem.at.length === 0} onClick={() => tool.show(problem.at)}>
+                <button type="button" class="tool-finding" title={finding.text} disabled={problem.at.length === 0} onClick={() => tool.show(problem.at)}>
                   {problemMessage(problem)}
                 </button>
               </li>
@@ -261,7 +216,7 @@ function Findings({ tool, subject }: { tool: FloorTool; subject: ToolSubject }) 
           })}
         </ul>
       )}
-      <p class="floor-note">{t('tools.floor.findings.note')}</p>
+      <p class="tool-note">{t('tools.floor.findings.note')}</p>
     </section>
   );
 }
@@ -278,10 +233,10 @@ function Legend() {
     ['unreachable', 'tools.floor.legend.unreachable'],
   ];
   return (
-    <ul class="floor-legend" aria-label={t('tools.floor.legend')}>
+    <ul class="tool-legend" aria-label={t('tools.floor.legend')}>
       {entries.map(([style, key]) => (
         <li key={style}>
-          <span class="floor-swatch" style={{ background: overlayStyle(style).color }} aria-hidden="true" />
+          <span class="tool-swatch" style={{ background: overlayStyle(style).color }} aria-hidden="true" />
           {t(key)}
         </li>
       ))}
@@ -298,14 +253,14 @@ export function FloorInspector({ tool }: { tool: FloorTool }) {
   const index = chosen.at(-1);
   const zone = index === undefined ? null : (picture.zones[index] ?? null);
   return (
-    <div class="floor-tool" data-testid="floor-tool" data-zones={picture.zones.length} data-pieces={picture.pieces} data-cabs={picture.cabs}>
-      <p class="floor-note">{t('tools.floor.howto')}</p>
-      {subject.type === null && <p class="floor-note floor-warning">{t('tools.floor.noType')}</p>}
+    <div class="tool-body" data-testid="floor-tool" data-zones={picture.zones.length} data-pieces={picture.pieces} data-cabs={picture.cabs}>
+      <p class="tool-note">{t('tools.floor.howto')}</p>
+      {subject.type === null && <p class="tool-note tool-warning">{t('tools.floor.noType')}</p>}
       <DoorsChoice tool={tool} />
       <ZoneList tool={tool} zones={picture.zones} chosen={chosen} readOnly={subject.readOnly} />
       {index !== undefined && zone !== null && <ZoneNumbers tool={tool} index={index} zone={zone} readOnly={subject.readOnly} />}
       <Findings tool={tool} subject={subject} />
-      <p class="floor-note" data-testid="floor-stats">
+      <p class="tool-note" data-testid="floor-stats">
         {t('tools.floor.stats', { pieces: picture.pieces, cabs: picture.cabs })}
       </p>
       <SnapChoice tool={tool} />
