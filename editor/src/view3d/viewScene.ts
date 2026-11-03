@@ -364,12 +364,13 @@ export class ViewScene {
 
   /**
    * A click at a point of the drawing: tells the pick listeners what it hit and how it was
-   * clicked, then selects it (Shift: adds it, or takes it out); a click on nothing keeps the
-   * selection. Returns the hit.
+   * clicked, then selects it (Shift: adds it, or takes it out) — unless a listener took the
+   * click as its own (a tool that placed something there selects that); a click on nothing
+   * keeps the selection. Returns the hit.
    */
   clickAt(x: number, y: number, keys: ClickKeys = {}): ViewHit {
     const hit = this.hitAt(x, y);
-    this.state.emitPick(pickOf(hit, keys, false));
+    if (this.state.emitPick(pickOf(hit, keys, false))) return hit;
     const model = this.modelScene?.model.id ?? null;
     const link = hit.object !== undefined && model !== null ? objectLink(model, hit.object.object) : (hit.link ?? null);
     const next = selectionAfterClick(this.selection.peek(), link, keys.shift === true);

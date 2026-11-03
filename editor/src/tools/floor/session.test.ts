@@ -1,9 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Vec3 } from '../../core/contracts';
+import type { Vec3, ViewPointer } from '../../core/contracts';
 import { exampleModel } from '../../model/testing.node';
-import type { ViewPointer } from '../../core/contracts';
 import { ToolHost } from '../registry';
-import { bench, type Bench } from '../testing.node';
+import { bench, drawing, type Bench } from '../testing.node';
 import floorTool, { type FloorSession } from './index';
 import { cursorOf, grabAt, planPoint } from './gesture';
 import { FLOOR_TIMING, heightFor, startFloor, type FloorTool } from './session';
@@ -207,14 +206,32 @@ describe('a zone’s floor height', () => {
     const floor = coachModel.objects.find((o) => o.name === 'FLOOR') ?? coachModel.objects.find((o) => o.role === 'interior');
     if (floor === undefined) throw new Error('no floor object');
     const point: Vec3 = [(floor.bbox[0][0] + floor.bbox[1][0]) / 2, floor.bbox[1][1], (floor.bbox[0][2] + floor.bbox[1][2]) / 2];
-    b.view.emitPick({ object: floor.name, point, shift: false, ctrl: false, alt: false, double: false });
+    expect(b.view.emitPick({ object: floor.name, point, shift: false, ctrl: false, alt: false, double: false })).toBe(true);
     expect(tool.pickingHeight.value).toBeNull();
     expect(zones(b)[1]?.minY).toBe(Math.round(floor.bbox[1][1] * 1e6) / 1e6);
     expect(zones(b)[1]?.maxY).toBeCloseTo((zones(b)[1]?.minY ?? 0) + 2.3, 9);
     expect(b.selection.value).toEqual([zoneLink(COACH, 1)]);
-    // a click while no zone waits changes nothing
-    b.view.emitPick({ object: floor.name, point: [0, 9, 0], shift: false, ctrl: false, alt: false, double: false });
+    // a click while no zone waits changes nothing, and is the view's
+    expect(b.view.emitPick({ object: floor.name, point: [0, 9, 0], shift: false, ctrl: false, alt: false, double: false })).toBe(false);
     expect(b.journal.state().done).toHaveLength(1);
+    stop();
+  });
+
+  it('is clicked on the model with the zone kept selected: the view selects nothing by the click', async () => {
+    const { b, host, stop } = await on();
+    const tool = toolOf(host);
+    const view = drawing(b, coachModel, 'side');
+    b.selection.value = [zoneLink(COACH, 1)];
+    tool.pickingHeight.value = 1;
+    const hit = view.click([0, 1.3, 1.6]);
+    expect(hit.object).toBeDefined();
+    expect(tool.pickingHeight.value).toBeNull();
+    expect(b.journal.state().done.at(-1)?.label).toBe('tools.floor.cmd.height');
+    expect(b.selection.value).toEqual([zoneLink(COACH, 1)]);
+    // with no zone waiting, a click on the model is the view's: it selects the object
+    view.click([0, 1.3, 1.6]);
+    expect(b.selection.value).toEqual([{ kind: 'object', model: COACH, name: hit.object?.object }]);
+    view.stop();
     stop();
   });
 

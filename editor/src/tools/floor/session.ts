@@ -2,7 +2,7 @@
  * The floor tool while it is on (docs/proposals/editor.md §2.3, §3.9): the view goes to the
  * top, the tool takes its presses (./gesture.ts), draws its layers (./analysis.ts) again
  * after every edit, and, asked to, takes a zone's floor height from the next click on the
- * model (./height.ts). Its state — the doors' state the floor is drawn with, what edges
+ * model (./height.ts) — a click it takes as its own: the zone stays selected. Its state — the doors' state the floor is drawn with, what edges
  * snap to, the zone waiting for its height — lives here, read by the inspector's section
  * (./FloorInspector.tsx).
  *
@@ -171,15 +171,16 @@ export function startFloor(context: ToolContext, options: { settleMs?: number; s
     else timer = setTimeout(draw, settle);
   });
 
-  // a zone's height from a click on the model
+  // a zone's height from a click on the model: the click is the tool's, the zone stays selected
   const stopPicking = context.view.onPick((hit: PickHit) => {
     const index = pickingHeight.peek();
-    if (index === null || hit.object === undefined || hit.point === undefined) return;
+    if (index === null || hit.object === undefined || hit.point === undefined) return false;
     const model = subject().model;
     const y = model === null ? null : vertexYNear(model, hit.object, hit.point);
     pickingHeight.value = null;
     if (y !== null) tool.setHeight(index, y);
     select(index);
+    return true;
   });
 
   const dragger = new FloorDragger({

@@ -177,12 +177,13 @@ export function startDoors(context: ToolContext): Pick<ToolSession, 'dispose'> &
 
   // a double click on an object of the model: its door if it moves with one, else a door made of it
   const stopPicking = context.view.onPick((hit: PickHit) => {
-    if (!hit.double || hit.object === undefined) return;
+    if (!hit.double || hit.object === undefined) return false;
     const model = subject().model;
-    if (model === null || !selectedObjects(context.selection.peek(), model.id).includes(hit.object)) return;
+    if (model === null || !selectedObjects(context.selection.peek(), model.id).includes(hit.object)) return false;
     const mover = picture.peek()?.movers.find((m) => m.door >= 0 && m.objects.includes(hit.object as string));
-    if (mover !== undefined) select(mover.door);
-    else tool.fromObjects([hit.object]);
+    if (mover === undefined) return tool.fromObjects([hit.object]);
+    select(mover.door);
+    return true;
   });
 
   const dragger = new DoorsDragger({ subject, selected, select, dispatch, snapping: () => snapping.peek() });

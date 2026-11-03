@@ -71,7 +71,7 @@ export class ViewState implements ViewApi {
   readonly overlays = new Map<string, readonly OverlayShape[]>();
 
   private sink: ViewSink | null = null;
-  private readonly listeners = new Set<(hit: PickHit) => void>();
+  private readonly listeners = new Set<(hit: PickHit) => boolean | void>();
   private draggerOf: ViewDragger | null = null;
 
   show(model: LoadedModel | null): void {
@@ -133,16 +133,18 @@ export class ViewState implements ViewApi {
     this.sink?.overlayChanged(layer);
   }
 
-  onPick(listener: (hit: PickHit) => void): () => void {
+  onPick(listener: (hit: PickHit) => boolean | void): () => void {
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);
     };
   }
 
-  /** Tells every pick listener what a click hit (the drawing calls it). */
-  emitPick(hit: PickHit): void {
-    for (const listener of [...this.listeners]) listener(hit);
+  /** Tells every pick listener what a click hit (the drawing calls it); true when one of them took the click as its own. */
+  emitPick(hit: PickHit): boolean {
+    let taken = false;
+    for (const listener of [...this.listeners]) if (listener(hit) === true) taken = true;
+    return taken;
   }
 
   /** Gives the presses of the left button to a tool, or back to the camera (null). One tool at a time: the last set wins. */

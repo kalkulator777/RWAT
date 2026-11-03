@@ -140,6 +140,24 @@ describe('the view scene', () => {
     expect(scene.model?.texture(body)?.image).toBe(coach.textures[body]);
   });
 
+  it('selects nothing by a click a pick listener takes as its own; every listener hears it all the same', () => {
+    const { state, selection, scene } = setUp();
+    state.show(coach);
+    state.setCamera('top');
+    selection.value = [{ kind: 'zone', type: COACH, index: 1 }];
+    const before = vi.fn<(hit: PickHit) => void>();
+    const after = vi.fn<(hit: PickHit) => void>();
+    state.onPick(before);
+    const off = state.onPick(() => true);
+    state.onPick(after);
+    scene.clickAt(0, 0);
+    expect([before.mock.calls.length, after.mock.calls.length]).toEqual([1, 1]);
+    expect(selection.value).toEqual([{ kind: 'zone', type: COACH, index: 1 }]);
+    off();
+    scene.clickAt(0, 0);
+    expect(selection.value).toEqual([objectLink(COACH, 'ROOF')]);
+  });
+
   it('draws overlay layers, picks a shape with a link where no object is hit, and marks it when selected', () => {
     const { state, selection, scene } = setUp();
     const zone: OverlayShape = { shape: 'rect', min: [-2, 1.2, -1], max: [2, 1.2, 1], style: 'zone', link: { kind: 'zone', type: COACH, index: 1 } };

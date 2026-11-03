@@ -361,8 +361,13 @@ export interface ViewApi {
   setTexture(path: string, bitmap: ImageBitmap | null): void;
   /** Replaces everything drawn in the layer; an empty list clears it. */
   overlay(layer: string, shapes: OverlayShape[]): void;
-  /** Called with every click in the view; returns the function that removes the listener. */
-  onPick(listener: (hit: PickHit) => void): () => void;
+  /**
+   * Called with every click in the view; returns the function that removes the listener.
+   * A listener returns true when the click is its own (a markup tool placed a chair, took a
+   * zone's height, made a door): the view then selects nothing by it — the tool selects
+   * what it made. Every listener is told either way.
+   */
+  onPick(listener: (hit: PickHit) => boolean | void): () => void;
   /** Switches the camera to a view, or lines it up afresh if it is that view already (a markup tool works from the top). */
   setCamera(camera: CameraView): void;
   /** Gives the presses of the left button to a tool, or back to the camera (null). One tool at a time: the last set wins. */

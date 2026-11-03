@@ -4,7 +4,7 @@ import { exampleModel } from '../../model/testing.node';
 import type { ViewPointer } from '../../core/contracts';
 import floorTool from '../floor/index';
 import { ToolHost } from '../registry';
-import { bench, type Bench } from '../testing.node';
+import { bench, drawing, type Bench } from '../testing.node';
 import { DIAL_RADIUS } from './analysis';
 import { chairsOf } from './chairs';
 import { dialYaw, facingPoint, grabAt, movedTo } from './gesture';
@@ -94,21 +94,34 @@ describe('the chairs tool turned on', () => {
 });
 
 describe('a chair placed by a click on the model', () => {
-  it('sits on the cushion clicked, faces forward, is one entry of the journal and is selected even after the view selects the object', async () => {
+  it('sits on the cushion clicked, faces forward, is one entry of the journal and is selected: the click is the tool’s', async () => {
     const { b, tool, stop } = await on();
     const before = b.journal.state().done.length;
-    b.view.emitPick(pick('INTERIOR_CHAIRS_LCG_IL', [3.0, 2.1, 0.7]));
+    expect(b.view.emitPick(pick('INTERIOR_CHAIRS_LCG_IL', [3.0, 2.1, 0.7]))).toBe(true);
     expect(chairs(b)).toHaveLength(3);
     expect(chairs(b)[2]).toEqual({ at: [2.95, 2.1, 0.8], yaw: 0 });
     expect(b.journal.state().done.length).toBe(before + 1);
     expect(b.journal.state().done.at(-1)?.label).toBe('tools.seats.cmd.place');
-    // the view selects the object it hit right after the pick: the chair is selected again
-    b.selection.value = [{ kind: 'object', model: SHUNTER, name: 'INTERIOR_CHAIRS_LCG_IL' }];
-    await Promise.resolve();
     expect(b.selection.value).toEqual([seat(2)]);
     expect(tool.selected()?.index).toBe(2);
     b.journal.undo();
     expect(chairs(b)).toHaveLength(2);
+    stop();
+  });
+
+  it('placed by a click on the screen stays selected at once: the view selects nothing by the click', async () => {
+    const { b, stop } = await on();
+    const view = drawing(b, shunterModel);
+    // the long hood's top, as the browser test clicks it
+    const hit = view.click([-1.5, 3.3, 0.2]);
+    expect(hit.object).toBeDefined();
+    expect(chairs(b)).toHaveLength(3);
+    expect(b.selection.value).toEqual([seat(2)]);
+    // Shift held places nothing: the click is the view's, which adds the object
+    view.click([-1.5, 3.3, 0.2], { shift: true });
+    expect(chairs(b)).toHaveLength(3);
+    expect(b.selection.value).toEqual([seat(2), { kind: 'object', model: SHUNTER, name: hit.object?.object }]);
+    view.stop();
     stop();
   });
 
