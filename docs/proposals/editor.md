@@ -155,7 +155,14 @@
    - группа `CG`, подпись `LABEL`, флаги;
    - маркер шарнира (`<KEY>_ROT`): точка, ось, угол.
    
-   Ползунок «значение» 0…1 двигает орган так же, как игра (`ControlValue.value`, `StockModel.Control.transform`). У реверсора значение центрировано, у прибора — через `RANGE`. Ось, которая крутит не туда, видна сразу; лечится в Blender (маркер и порядок вершин).
+   Ползунок двигает орган так же, как игра (`ControlValue.position` → `ControlValue.value` → `ControlPose.transform`), и ставит то, что ставит игрок, а не голое 0…1 (`preview/inputs.ts`, M3):
+   - рукоятки поезда (`THROTTLE`, `TRAIN_BRAKE`, `INDEPENDENT_BRAKE`) — позиции 0…8, ход = позиция / 8; реверсор — −1, 0, +1, ход = (шаг + 1) / 2, значение центрировано;
+   - прибор — показание через `RANGE` (ход = (показание − min) / (max − min), в 0…1); прибор тяги и прибор реверсора показывают позицию своей рукоятки;
+   - комбинированная рукоятка (`THROTTLE_BRAKE`) — 0…1 от середины ½ (в игре всегда в нейтрали);
+   - ручник — 0 отпущен … 1 затянут;
+   - остальное (переключатели, окна, кнопки, виджеты) — значение группы управления 0…1, одно на все органы группы и на группу света с тем же именем; `TOGGLE`/`PRESS` — 0 или 1.
+
+   Потом `OFFSET`, `INVERT`, `HIDE` — как в игре. Ось, которая крутит не туда, видна сразу; лечится в Blender (маркер и порядок вершин).
 2. **Ручник.** Список `handbrake` модели — выбор из органов модели (`WIDGET_<n>` и т. п.); `HANDBRAKE_<n>` распознаётся сам.
 3. **Свет.**
    - Вкладка «Свет» в предпросмотре: переключатели групп `LCG` (не больше 64).
@@ -536,8 +543,9 @@ export interface ViewApi {
 
 | Логика | Java (эталон) | Python | TS (`ports/`) | Что нужно редактору | golden | Этап |
 |---|---|---|---|---|---|---|
-| Числа Java | `Float.parseFloat`, `Integer.parseInt` (переполнение → `MAX_VALUE` в `ObjectRole.number`), `String.format(Locale.ROOT, "%.Nf")` | — | `javaNumbers.ts`: `parseJavaFloat(s): number \| null` (грамматика Java: знак, `NaN`, `Infinity`, суффиксы `f`/`d`, hex, пробелы по краям) с `Math.fround`; `formatFixed(x, n)` | разбор `OFFSET`, `RANGE`, `TL`, `ROT_<град>`; тексты `FloorCheck` | `java_numbers` | M2 |
-| Кадры | `stock/ObjFrame` | `floorgen.point_/box_from_obj` и обратные | `objFrame.ts`: `point`, `box`, `toObj`, `Y_LIFT` | перевод разметки для портов пола и обратно | `obj_frame` | M2 |
+| Числа Java | `Float.parseFloat`, `Integer.parseInt` (переполнение → `MAX_VALUE` в `ObjectRole.number`), `String.format(Locale.ROOT, "%.Nf")`, `Double.toString` | — | `javaNumbers.ts`: `parseJavaFloat(s): number \| null` (грамматика Java: знак, `NaN`, `Infinity`, суффиксы `f`/`d`, hex, пробелы по краям) с `Math.fround`; `parseJavaInt(s): number \| null`; `formatFixed(x, n)`; `javaDoubleToString(x)` | разбор `OFFSET`, `RANGE`, `TL`, `ROT_<град>`, номеров органов; тексты `FloorCheck` и сообщений разбора типа | `java_numbers` | M2 |
+| JSON пака строго | `pack/PackJson` (незнакомый ключ — предупреждение с подсказкой, `null` и не тот тип — ошибка с путём поля, числа конечные) | — | `packJson.ts` | разбор типа и декларации модели, как в движке, с его текстами | через `wagon_type` | M2 |
+| Кадры | `stock/ObjFrame`; линия колёс `path/SwitchThroat.WHEEL_LINE` | `floorgen.point_/box_from_obj` и обратные | `objFrame.ts`: `point`, `box`, `toObj`, `Y_LIFT`, `WHEEL_LINE` (M3; тест сверяет с исходником Java) | перевод разметки для портов пола и обратно; рельсы в виде | `obj_frame` | M2 |
 | Имена объектов | `convention/ObjectRole` (`parse`, `door`, `coupled`, `hasToken`, `Control`) | частично `ir2rwat` (`DOOR_KEY`, `CONTROL_GROUP`…) | `objectRole.ts`: регулярные выражения берутся из `schema/obj-conventions.json`, порядок и правила — код | роли, флаги, модификаторы, ключи органов; ключи `sounds.controls` | `object_role` | M2 |
 | Положение органа | `ControlValue.value`, `visible`; `convention/ControlPose.transform` (сдвиг, потом поворот) | — | `controlPose.ts` | ползунок значения | `control_pose` | M2 |
 | OBJ | `client/render/model/ObjLoader` (части по `o`/`g`/`usemtl`, квады, веер, вырожденный квад у треугольника, порядок вершин) | `ir2rwat.parse_obj` (имена и габариты) | `obj.ts` | геометрия, порядок вершин для `PivotAxis` | `obj` | M2 |
@@ -550,8 +558,9 @@ export interface ViewApi {
 | Пол | `stock/FloorRegion` | `floorgen.Region` | `floorRegion.ts` | «где может стоять игрок» | `floor_region` | M2 |
 | Проверки пола | `kinematics/FloorCheck` + константы и `facesDoor`, `along` из `RiderWalk` | `floorgen` (`door_seeds` = `walkablePieces`) | `floorCheck.ts`, `riderWalk.ts` (только константы и эти функции) | панель проверок, выходы | `floor_check` | M2 |
 | Кабины | `kinematics/CabArea` | — | `cabArea.ts` | кабины, двери под ключом, кресло → кабина | `cab_area` | M2 |
-| Разбор модели | новый чистый `ModelParts` (из `IrStockModel.load`, M0): порядок шагов, `movingDoors`, слияние флагов органа, колёса, `measurePivots`, шарниры и головы сцепок, кандидаты в лампы и группы салона, фары | — | `modelParts.ts` | раскраска по ролям, список объектов, предпросмотр | `model_parts` | M3 |
-| Свет фар | `ModelParts.lit`, `ModelParts.litMask`: правило огня — без группы всегда, с группой пока включена, с `LINVERT` пока выключена (одно для граней, ламп и фар; сделано в M0) | — | `lights.ts` | предпросмотр света | `lights` | M3 |
+| Разбор модели | новый чистый `ModelParts` (из `IrStockModel.load`, M0): порядок шагов, `movingDoors`, слияние флагов органа, колёса, `measurePivots`, шарниры и головы сцепок, кандидаты в лампы и группы салона, фары; `GroupName` (предел имени группы); поля модели `WagonModelDecl.parse` | — | `modelParts.ts`: `modelParts(parts, decl)`, `partsOf`, `animatedBy`, `modelDeclaration`, `dropped`, `fitGroups` | раскраска по ролям, список объектов, предпросмотр (воркер модели, `model/build.ts`) | `model_parts` | M3 |
+| Створки | `convention/DoorLeaves` (`of`, `leaf`, `door`) и `WagonType.doorHolding` | — | `doorLeaves.ts`: `DoorLeaves.of`, `leaf`, `leafDoor` | створки по именам и их двери: разбор модели, предпросмотр | `door_leaves` | M3 |
+| Свет фар | `ModelParts.lit`, `ModelParts.litMask`: правило огня — без группы всегда, с группой пока включена, с `LINVERT` пока выключена (одно для граней, ламп и фар; сделано в M0) | — | `lights.ts`: `lit`, `shines`, `litMask`, `groupsOn` | предпросмотр света | `lights` | M3 |
 | Проверка моделей | `pack/ModelCheck` | — | `modelCheck.ts` | находки по моделям | `model_check` | M4 |
 | JSON пака | — | `ir2rwat.dump`/`encode` | `core/json/dump.ts` | новые файлы | `json_dump` | M1 |
 | Проверка схемы | — | `validate_pack.py` (валидатор подмножества 2020-12, `suggestion`) | Ajv на той же схеме + порт `suggestion` | находки схемы | `validate` (файл → указатели и важность находок) | M1 |
@@ -619,7 +628,7 @@ export interface ViewApi {
    | `stock_defaults` | ts | 17 | сопротивление, тормоза систем, имена систем, константы |
    | `json_dump` | ts (эталон Python) | 28 | вид файла, числа Python, экранирование, файлы пака-примера |
    | `validate` | ts (эталон Python) | 37 | файлы пака-примера (0 находок), поломки, `suggestion` |
-   | `door_leaves` | ts (`modelParts.ts`, M3) | 12 | створки и их двери |
+   | `door_leaves` | ts (`doorLeaves.ts`, M3) | 12 | створки и их двери |
    | `anim_model` | — | 14 | кадры `.anim` в кадре модели |
    | `cab_area` | ts | 13 | кабины машиниста: кабина кресла и куска пола, двери под ключ, боковые двери пассажиров, `cabAt`, `nearestChair`, `cabDoor`, `facing`, `leftSide` (`kinematics.CabArea`; набор добавлен в M2, A2.3) |
 
@@ -627,7 +636,7 @@ export interface ViewApi {
 
 - **`frame: "none"`** — у логики без мест (имена, числа, тексты) нет кадра; без третьего значения пришлось бы писать неправду.
 - **`floor_check`: ожидаемое — список находок**, как сказано в п. 6. Выходы (`walkablePieces`, которые портирует `floorgen.door_seeds`) — отдельные случаи того же типа с ключом входа `exits_of` в файле `exits.json`: вопрос задаёт вход, а не имя файла.
-- **Две папки вне таблицы 4.1.** `door_leaves` — правило `DoorLeaves` из старого golden; порт придёт с `modelParts.ts` (M3), владелец `model_parts` (A0.1) может забрать случаи к себе. `anim_model` — кадры `.anim` в кадре модели (`IrAnim.toModelSpace`) из старого `anim.json`: по 4.2 не портируется, портов у папки нет, она хранит прежнее покрытие и может быть удалена, если хватает `IrAnimTest`. В `anim/` остались дорожки как в файле.
+- **Папка вне таблицы 4.1** — `anim_model`: кадры `.anim` в кадре модели (`IrAnim.toModelSpace`) из старого `anim.json`: по 4.2 не портируется, портов у папки нет, она хранит прежнее покрытие и может быть удалена, если хватает `IrAnimTest`. В `anim/` остались дорожки как в файле. (`door_leaves`, правило `DoorLeaves` из старого golden, в M3 получила свой порт `doorLeaves.ts` и строку в таблице 4.1.)
 - **`pivot_axis` от текста OBJ** — файл `obj_text.json`: углы — все грани всех частей объекта по порядку, как их хранит `ObjLoader` (так их собирает `IrStockModel.ControlBuilder`). Пока нет `ModelParts` (4.6, п. 1), раннер сам берёт части с именем маркера; выбор маркера органа («первый `ROT`») — дело golden `model_parts`.
 - **`json_dump`: вход — текст JSON** (`"json"`) или файл пака-примера (`"value"`), а не разобранное значение: `JSON.parse` склеивает `100.0` и `100`, а `dump` их различает.
 - **`validate`: ожидаемое — `{pointer, severity, text}`** (указатель RFC 6901, `""` — весь файл). Ajv формулирует находки иначе, поэтому порт сверяет места и важность, текст — справочно; подсказку к незнакомому ключу проверяет `suggestion.json`.

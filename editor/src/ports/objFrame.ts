@@ -13,6 +13,12 @@
 
 /** Railhead height above the path spline (`ObjFrame.RAILHEAD_Y`). */
 export const RAILHEAD_Y = 0.40625;
+/**
+ * Where the wheels run: the rail axis's distance from the track's centre line, blocks
+ * (`path/SwitchThroat.WHEEL_LINE`, SPEC §6.10). In the OBJ frame the rails lie along X at
+ * z = ±WHEEL_LINE on the railhead; in the model frame at x = ±WHEEL_LINE.
+ */
+export const WHEEL_LINE = 0.8125;
 /** OBJ y where the wheel tread bottoms out (`ObjFrame.TREAD_BOTTOM_Y`). */
 export const TREAD_BOTTOM_Y = -0.03;
 /** How far the model frame lifts the OBJ: the wheel tread onto the railhead, 0.43625 (`ObjFrame.Y_LIFT`). */

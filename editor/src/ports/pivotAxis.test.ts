@@ -4,8 +4,9 @@
  * expected. Everything of the folder is compared: how many distinct points, the hinge,
  * the axis. The corners come as written (`corners`, read as floats by the port) or from
  * the text of an OBJ (`obj`, `object`): the corners ./obj.ts keeps of every face of every
- * part of that object, in order — what the control builder hands PivotAxis (until
- * `modelParts.ts` does it, M3; as PivotAxisGolden does).
+ * part of that object, in order — what the control builder hands PivotAxis, as
+ * PivotAxisGolden does. Which object of a control is its marker ("the first `ROT`") is
+ * golden model_parts' question, through ./modelParts.ts.
  */
 
 import { describe, expect, it } from 'vitest';

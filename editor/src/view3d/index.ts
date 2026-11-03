@@ -15,7 +15,7 @@
 export { view, GHOSTS_LAYER, type Hover, type ViewState } from './state';
 export { GHOST_ROLES, isGhostRole, ROLE_COLORS, roleColor, roleColorCss, UNKNOWN_ROLE_COLOR, VIEW_BACKGROUND } from './roleColors';
 export { OVERLAY_STYLES, overlayStyle, type OverlayStyle } from './overlays';
-export { frameGuides, RAIL_Z, RAILHEAD_OBJ_Y, wagonFrame, type FrameGuides, type WagonFrame } from './frame';
+export { frameGuides, RAILHEAD_OBJ_Y, wagonFrame, type FrameGuides, type WagonFrame } from './frame';
 export { CAMERA_VIEWS, type CameraView } from './cameras';
 export { DISPLAY_MODES, type DisplayMode } from './modelScene';
 export { ViewPanel } from './ViewPanel';

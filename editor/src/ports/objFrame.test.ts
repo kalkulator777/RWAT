@@ -1,13 +1,24 @@
 /**
  * Golden runner of fixtures/golden/obj_frame/ (editor.md §4.5; fixtures/golden/README.md):
  * ./objFrame against `stock/ObjFrame.java`, the reference that writes the expected —
- * points and boxes from the OBJ frame to the model frame and back.
+ * points and boxes from the OBJ frame to the model frame and back; and the wheel line,
+ * which the engine keeps in `path/SwitchThroat.java`, read from there.
  */
 
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { mismatch, readGoldenFolder } from '../testing/golden.node';
 import { REPO_ROOT } from '../testing/repo.node';
-import { box, boxToObj, point, toObj, Y_LIFT } from './objFrame';
+import { box, boxToObj, point, toObj, WHEEL_LINE, Y_LIFT } from './objFrame';
+
+describe('the wheel line', () => {
+  it('is the engine’s, path/SwitchThroat.WHEEL_LINE', () => {
+    const java = readFileSync(`${REPO_ROOT}src/main/java/com/muzhik17/trainsmod/path/SwitchThroat.java`, 'utf8');
+    const declared = /public static final double WHEEL_LINE = ([0-9.]+);/.exec(java);
+    expect(declared?.[1]).toBeDefined();
+    expect(WHEEL_LINE).toBe(Number(declared![1]));
+  });
+});
 
 const FOLDER = `${REPO_ROOT}fixtures/golden/obj_frame`;
 

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { loadWagonType } from '../ports/wagonType';
 import { EXAMPLE_PACK } from '../testing/repo.node';
-import { frameGuides, RAIL_Z, RAILHEAD_OBJ_Y, wagonFrame } from './frame';
+import { frameGuides, RAILHEAD_OBJ_Y, wagonFrame } from './frame';
 
 function exampleType(id: string) {
   const json: unknown = JSON.parse(readFileSync(join(EXAMPLE_PACK, 'data', 'rwat_example', 'wagon_types', `${id}.json`), 'utf8'));
@@ -13,9 +13,8 @@ function exampleType(id: string) {
 }
 
 describe('the guides of the OBJ frame', () => {
-  it('put the railhead where the wheel treads bottom out, and the rails on the wheel line', () => {
+  it('put the railhead where the wheel treads bottom out', () => {
     expect(RAILHEAD_OBJ_Y).toBeCloseTo(-0.03, 12);
-    expect(RAIL_Z).toBe(0.8125);
   });
 
   it("take the coach's pivots, ends, couplers and hull from the port, turned into the OBJ frame", () => {

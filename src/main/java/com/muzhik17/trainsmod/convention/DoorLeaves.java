@@ -19,15 +19,20 @@ import com.muzhik17.trainsmod.stock.WagonType;
  * <ul>
  *   <li>its name reads as that door ({@link ObjectRole#door}: {@code DOOR_<n>}
  *       anywhere in it, a copy suffix aside);</li>
- *   <li>the model draws it as its own part: no {@code HIDE} in the name, no
- *       skipped prefix, not a bogie's ({@code BOGEY_FRONT…}, {@code BOGEY_REAR…}),
- *       not a coupler head, not moved by an {@code .anim} (named in one exactly);</li>
+ *   <li>it is a part of its own: no {@code HIDE} in the name, no skipped
+ *       prefix, not a bogie's ({@code BOGEY_FRONT…}, {@code BOGEY_REAR…}), not a
+ *       coupler head, not moved by an {@code .anim} (named in one exactly). Its
+ *       texture doesn't matter: a hinge marker of a material without one is not
+ *       drawn and still makes the leaf;</li>
  *   <li>and the door moves by name: one of its objects so read is the hinge
  *       marker {@code DOOR_<n>_ROT[_<degrees>]} or slides ({@code TL_<f>_<axis>}).</li>
  * </ul>
  * Any other {@code DOOR_<n>} object is rigid body: a door the asset doesn't
  * move. A leaf swings with the type's door whose box holds the centre of its
  * drawn faces ({@link #door}).
+ *
+ * <p>Ported: {@code editor/src/ports/doorLeaves.ts}; golden:
+ * {@code fixtures/golden/door_leaves/}.
  */
 public final class DoorLeaves {
 
@@ -86,7 +91,7 @@ public final class DoorLeaves {
         return type.doorHolding(centre[0], centre[1], centre[2]);
     }
 
-    /** The object read as a door ({@link ObjectRole#door}) if it is drawn as a part of its own; else null. */
+    /** The object read as a door ({@link ObjectRole#door}) if it is a part of its own (drawn or not); else null. */
     private static ObjectRole doorPart(String object, List<String> skipPrefixes, Set<String> animated) {
         if (object.contains("HIDE") || object.startsWith("BOGEY_FRONT") || object.startsWith("BOGEY_REAR")
                 || animated.contains(object) || ObjectRole.coupled(object) != null) {

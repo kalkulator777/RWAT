@@ -25,8 +25,9 @@ import com.muzhik17.trainsmod.stock.WagonTypeParser;
  * not, box in the OBJ frame), its skip and animated objects, and the type's
  * doors as the pack writes them → its door leaves and the door each is
  * ({@link DoorLeaves}; the door by {@link WagonType#doorHolding} at the
- * centre of the leaf's textured box). To be ported with the model's reading
- * ({@code editor/src/ports/modelParts.ts}, editor.md 4.1).
+ * centre of the leaf's textured box). Ported: {@code editor/src/ports/doorLeaves.ts}
+ * (runner {@code editor/src/ports/doorLeaves.test.ts}), which the model's reading
+ * ({@code modelParts.ts}) builds its leaves by.
  */
 class DoorLeavesGolden {
 

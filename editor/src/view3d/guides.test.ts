@@ -1,6 +1,7 @@
 import { Box3, LineDashedMaterial, LineSegments, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { RAIL_Z, RAILHEAD_OBJ_Y, type WagonFrame } from './frame';
+import { WHEEL_LINE } from '../ports/objFrame';
+import { RAILHEAD_OBJ_Y, type WagonFrame } from './frame';
 import { GRID_STEP, gridExtent, gridLines, Guides } from './guides';
 
 const COACH: WagonFrame = {
@@ -36,7 +37,7 @@ describe('the guides', () => {
   it('lay the rails at ±0.8125 on the railhead, and the frame only once the type is known', () => {
     const guides = new Guides();
     const rails = guides.layers.rails.children[0] as LineSegments;
-    expect(new Set(points(rails).map((p) => p[2]))).toEqual(new Set([-RAIL_Z, RAIL_Z]));
+    expect(new Set(points(rails).map((p) => p[2]))).toEqual(new Set([-WHEEL_LINE, WHEEL_LINE]));
     expect(guides.layers.frame.children).toHaveLength(0);
     guides.update(new Box3(new Vector3(-10, 0, -1.5), new Vector3(10, 4, 1.5)), COACH);
     const [hull, pivots, couplers] = guides.layers.frame.children as LineSegments[];

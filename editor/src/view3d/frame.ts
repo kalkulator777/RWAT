@@ -17,12 +17,6 @@ export type { WagonFrame } from '../core/contracts';
 /** The railhead in the OBJ frame: the plane the wheel treads stand on (`ObjFrame.RAILHEAD_Y` taken back to the OBJ, −0.03). */
 export const RAILHEAD_OBJ_Y = toObj(0, RAILHEAD_Y, 0)[1];
 
-/**
- * How far the rails are from the track's centre line, blocks: the wheel line of
- * `path/SwitchThroat.WHEEL_LINE`, which no port carries yet. The rails run along X at
- * z = ±RAIL_Z on the railhead.
- */
-export const RAIL_Z = 0.8125;
 
 /** The guides' numbers of a type the port has read (core/contracts `WagonFrame`, what `ViewApi.setFrame` is told). */
 export function wagonFrame(type: Pick<WagonType, 'length' | 'bogieOffsets' | 'couplerReach' | 'collidableHull'>): WagonFrame {

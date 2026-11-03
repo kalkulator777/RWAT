@@ -7,9 +7,10 @@
  * An object is a part of door `DOOR_<n>`'s leaf when
  * - its name reads as that door (./objectRole.ts `door`: `DOOR_<n>` anywhere in it, a copy
  *   suffix aside);
- * - the model draws it as its own part: no `HIDE` in the raw name, no skipped prefix, not
- *   a bogie's (`BOGEY_FRONT…`, `BOGEY_REAR…`), not a coupler head, not moved by an `.anim`
- *   (named in one exactly);
+ * - it is a part of its own: no `HIDE` in the raw name, no skipped prefix, not a bogie's
+ *   (`BOGEY_FRONT…`, `BOGEY_REAR…`), not a coupler head, not moved by an `.anim` (named in
+ *   one exactly). Its texture doesn't matter: a hinge marker of a material without one is
+ *   not drawn and still makes the leaf;
  * - and the door moves by name: one of its objects so read is the hinge marker
  *   `DOOR_<n>_ROT[_<degrees>]` or slides (`TL_<f>_<axis>`).
  *
@@ -22,7 +23,7 @@ import { point } from './objFrame';
 import { coupled, door, type ObjectRole } from './objectRole';
 import type { WagonType } from './wagonType';
 
-/** The object read as a door (`ObjectRole.door`) if the model draws it as a part of its own; else null. */
+/** The object read as a door (`ObjectRole.door`) if it is a part of its own (drawn or not); else null. */
 function doorPart(object: string, skipPrefixes: readonly string[], animated: ReadonlySet<string>): ObjectRole | null {
   if (object.includes('HIDE') || object.startsWith('BOGEY_FRONT') || object.startsWith('BOGEY_REAR') || animated.has(object) || coupled(object) !== null) {
     return null;

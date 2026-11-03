@@ -8,7 +8,8 @@
 
 import { Box3, BufferGeometry, Float32BufferAttribute, Group, LineBasicMaterial, LineDashedMaterial, LineSegments, type Material } from 'three';
 import type { Vec3 } from '../core/contracts';
-import { frameGuides, RAIL_Z, RAILHEAD_OBJ_Y, type WagonFrame } from './frame';
+import { WHEEL_LINE } from '../ports/objFrame';
+import { frameGuides, RAILHEAD_OBJ_Y, type WagonFrame } from './frame';
 import { boxEdges } from './overlayGeometry';
 
 /** The guide layers, as the view's layer switches name them. */
@@ -128,7 +129,7 @@ export class Guides {
 
     this.layers.rails.add(
       segments(
-        [-RAIL_Z, RAIL_Z].map((z): [Vec3, Vec3] => [
+        [-WHEEL_LINE, WHEEL_LINE].map((z): [Vec3, Vec3] => [
           [extent.minX, y, z],
           [extent.maxX, y, z],
         ]),
