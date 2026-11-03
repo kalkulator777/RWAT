@@ -6,6 +6,7 @@
  */
 
 import { batch } from '@preact/signals';
+import type { Command } from '../core/contracts';
 import { Journal } from '../core/journal';
 import { Pack, PackError } from '../core/pack';
 import { createSchema, fetchSchemaFiles } from '../core/schema';
@@ -83,6 +84,38 @@ export async function savePack(deliver: DeliverZip = downloadZip): Promise<void>
     fail(error);
   }
   revision.value++;
+}
+
+/**
+ * Applies a command of a form or a panel to the open pack (an edit of JSON: no file is
+ * read first). A refused command (a generated pack, a place that is not there) changes
+ * nothing and is said in the failure banner. Returns whether it was applied.
+ */
+export function dispatch(command: Command): boolean {
+  const edits = journal.value;
+  if (edits === null) return false;
+  failure.value = null;
+  try {
+    edits.dispatch(command);
+    return true;
+  } catch (error) {
+    fail(error);
+    return false;
+  }
+}
+
+/** {@link dispatch} for a command that puts, deletes or renames files: what its undo needs is read first. */
+export async function run(command: Command): Promise<boolean> {
+  const edits = journal.value;
+  if (edits === null) return false;
+  failure.value = null;
+  try {
+    await edits.run(command);
+    return true;
+  } catch (error) {
+    fail(error);
+    return false;
+  }
 }
 
 export function undo(): void {

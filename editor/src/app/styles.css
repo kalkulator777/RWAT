@@ -532,3 +532,78 @@ button {
   margin: 0;
   flex: 1;
 }
+
+/* ------------------------------------------------------------ names (panels/names) */
+
+.names {
+  padding: 6px 8px;
+}
+
+.names-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.names-table caption {
+  text-align: left;
+  color: var(--text-muted);
+  font-size: 12px;
+  padding-bottom: 4px;
+}
+
+.names-table th,
+.names-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 2px 4px;
+  text-align: left;
+  font-weight: normal;
+  vertical-align: middle;
+}
+
+.names-table thead th {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.names-key {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.names-kind {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.name-input {
+  width: 100%;
+  font-family: var(--font-ui);
+}
+
+.names-add,
+.name-fields {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin: 8px 0;
+  padding: 4px 8px 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: flex-end;
+}
+
+.names-add label,
+.name-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  flex: 1;
+  min-width: 10em;
+}
+
+.name-lang {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
