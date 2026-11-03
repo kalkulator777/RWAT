@@ -13,8 +13,7 @@
  * on it; from the side or the front a drag moves nothing.
  */
 
-import type { Command, Vec3 } from '../../core/contracts';
-import type { ViewDragger, ViewPointer } from '../../view3d/state';
+import type { Command, Vec3, ViewDragger, ViewPointer } from '../../core/contracts';
 import { rayPoint } from '../../view3d/overlayGeometry';
 import { planPoint } from '../floor/gesture';
 import { clean, free, SNAP_PX, snapValue, vertexLines } from '../floor/snap';

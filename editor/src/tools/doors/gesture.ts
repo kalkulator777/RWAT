@@ -13,8 +13,7 @@
  * is one journal entry: its commands share a key and merge until the button is released.
  */
 
-import type { Command, LoadedModel } from '../../core/contracts';
-import type { ViewDragger, ViewPointer } from '../../view3d/state';
+import type { Command, LoadedModel, ViewDragger, ViewPointer } from '../../core/contracts';
 import { clean, floatDecimal, SNAP_PX, snapShift, snapValue, vertexLines, zoneEdges, type SnapLines, type Snapping } from '../floor/snap';
 import { zonesOf } from '../floor/zones';
 import type { ToolSubject } from '../registry';

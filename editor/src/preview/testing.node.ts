@@ -4,7 +4,7 @@
  * as the engine reads them, and a stand-in of the 3D view that remembers what it is told.
  */
 
-import type { DisplayMode, LoadedModel, OverlayShape, Vec3, ViewApi, WagonFrame } from '../core/contracts';
+import type { CameraView, DisplayMode, LoadedModel, OverlayShape, Vec3, ViewApi, ViewDragger, WagonFrame } from '../core/contracts';
 import { assetPath, exampleApi, exampleModel, exampleReader, packText, type ExampleWagon } from '../model/testing.node';
 import { CORNER_FLOATS, loadModel } from '../ports/obj';
 import { parseWagonType, type WagonType } from '../ports/wagonType';
@@ -68,6 +68,8 @@ export interface RecordingView extends ViewApi {
   display: DisplayMode | null;
   wireframe: boolean;
   frame: WagonFrame | null;
+  camera: CameraView | null;
+  dragger: ViewDragger | null;
   /** Forgets the calls so far (where the objects stand stays). */
   clearCalls(): void;
 }
@@ -85,6 +87,8 @@ export function recordingView(): RecordingView {
     display: null,
     wireframe: false,
     frame: null,
+    camera: null,
+    dragger: null,
     clearCalls() {
       calls.length = 0;
     },
@@ -131,6 +135,14 @@ export function recordingView(): RecordingView {
     },
     onPick() {
       return () => undefined;
+    },
+    setCamera(camera) {
+      calls.push({ method: 'setCamera' });
+      view.camera = camera;
+    },
+    setDragger(dragger) {
+      calls.push({ method: 'setDragger' });
+      view.dragger = dragger;
     },
   };
   return view;

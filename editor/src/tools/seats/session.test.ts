@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Link, LoadedModel, PickHit } from '../../core/contracts';
 import { exampleModel } from '../../model/testing.node';
-import type { ViewPointer } from '../../view3d/state';
+import type { ViewPointer } from '../../core/contracts';
 import floorTool from '../floor/index';
 import { ToolHost } from '../registry';
 import { bench, type Bench } from '../testing.node';

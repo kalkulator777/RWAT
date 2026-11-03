@@ -15,7 +15,7 @@ import type { Link } from '../../core/contracts';
 import { exampleModel } from '../../model/testing.node';
 import { findings } from '../../ports/floorCheck';
 import { EXAMPLE_PACK } from '../../testing/repo.node';
-import type { ViewPointer } from '../../view3d/state';
+import type { ViewPointer } from '../../core/contracts';
 import { ToolHost } from '../registry';
 import { bench } from '../testing.node';
 import doorsTool, { type DoorsSession } from './index';

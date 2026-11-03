@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { createSchema } from '../core/schema';
 import { readSchemaFiles } from '../core/schema/files.node';
 import { exampleModel } from '../model/testing.node';
+import { recordingView } from '../preview/testing.node';
+import floorTool from './floor';
+import { FLOOR_TIMING } from './floor/session';
 import { tools } from './index';
 import { collectTools, covers, defineTool, framedFields, subjectOf, toolAround, toolFor, ToolHost, type ToolContext, type ToolDef } from './registry';
 import { bench, openExamplePack } from './testing.node';
@@ -239,6 +242,22 @@ describe('the tool that is on', () => {
     expect(host.active.value).toBe('picky');
     stop();
     expect(picky.log).toEqual(['on rwat_example:coach', 'off rwat_example:coach']);
+  });
+
+  it('drives the view through its contract alone (core/contracts ViewApi): the camera, the presses, the layers', async () => {
+    FLOOR_TIMING.slowMs = Number.POSITIVE_INFINITY;
+    const b = await bench();
+    const view = recordingView();
+    const host = new ToolHost([floorTool]);
+    const stop = host.connect({ ...b.wiring, view });
+    host.use('floor');
+    expect(view.camera).toBe('top');
+    expect(view.dragger).not.toBeNull();
+    expect(view.overlays.get('floor.zones')).toHaveLength(4);
+    host.use(null);
+    expect(view.dragger).toBeNull();
+    expect(view.overlays.get('floor.zones')).toEqual([]);
+    stop();
   });
 
   it('takes no wagon without a type or a model', async () => {

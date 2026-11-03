@@ -11,8 +11,7 @@
  * the top too, while a zone waits for its height.
  */
 
-import type { Command } from '../../core/contracts';
-import type { ViewDragger, ViewPointer } from '../../view3d/state';
+import type { Command, ViewDragger, ViewPointer } from '../../core/contracts';
 import { clean, SNAP_PX, snapShift, snapValue, vertexLines, zoneEdges, type SnapLines, type Snapping } from './snap';
 import { addZone, setZone, zoneOver, zonesOf, type PlanRect, type ZoneBox } from './zones';
 import type { ToolSubject } from '../registry';

@@ -293,10 +293,52 @@ export interface PickHit {
   double: boolean;
 }
 
+/** What the camera shows: the free orbit or one of the fixed orthographic views — from the top, the side (+Z), the front (−X). */
+export type CameraView = 'orbit' | 'top' | 'side' | 'front';
+
+/** Where the pointer is, as a tool that takes the view's presses reads it ({@link ViewDragger}). */
+export interface ViewPointer {
+  /** The ray from the eye through the pointer, OBJ frame. */
+  readonly origin: Vec3;
+  /** The ray's direction, of length 1. */
+  readonly direction: Vec3;
+  /** How many blocks one CSS pixel spans at the camera's target: a tolerance in pixels made one in blocks. */
+  readonly pixel: number;
+  /** The camera's view: a tool may take the presses of some views only (the floor's, from the top). */
+  readonly view: CameraView;
+  readonly shift: boolean;
+  /** Ctrl, or ⌘ on a Mac. */
+  readonly ctrl: boolean;
+  readonly alt: boolean;
+}
+
+/**
+ * A tool that takes presses of the left button in the view instead of the camera: the
+ * markup tools draw, move and stretch their shapes by dragging (docs/proposals/editor.md
+ * §3.9). The view asks it at every press of the left button; a press it takes moves no
+ * camera and, unless {@link click} gives it back, picks nothing. One at a time
+ * ({@link ViewApi.setDragger}).
+ */
+export interface ViewDragger {
+  /** The left button went down: true takes the press — its drag, and its click unless {@link click} gives it back. */
+  press(at: ViewPointer): boolean;
+  /** The pointer moved, the button held, once it is past the click's slop. */
+  drag(at: ViewPointer): void;
+  /** The button went up after a drag. */
+  release(at: ViewPointer): void;
+  /** The button went up where it went down: true if the tool took the click, false for the view's own (pick and select). */
+  click(at: ViewPointer): boolean;
+  /** The press ended without a release (the pointer was cancelled or lost). */
+  cancel(): void;
+  /** The pointer moves with no button held (null: it left the view): the CSS cursor to show, null for the view's own. */
+  hover?(at: ViewPointer | null): string | null;
+}
+
 /**
  * The 3D view as the other modules drive it (§3.8). It draws and picks; it knows
  * nothing about doors, organs or pack JSON: the model pipeline shows a model, the preview
- * and tools tell it what to move, hide, light, paint and overlay.
+ * and tools tell it what to move, hide, light, paint and overlay, and a markup tool
+ * turns its camera to the view it works in and takes the left button's presses.
  */
 export interface ViewApi {
   /** Shows a model afresh (null: none): every object at rest, shown, unlit, in the model's own textures; the camera frames it. */
@@ -321,4 +363,8 @@ export interface ViewApi {
   overlay(layer: string, shapes: OverlayShape[]): void;
   /** Called with every click in the view; returns the function that removes the listener. */
   onPick(listener: (hit: PickHit) => void): () => void;
+  /** Switches the camera to a view, or lines it up afresh if it is that view already (a markup tool works from the top). */
+  setCamera(camera: CameraView): void;
+  /** Gives the presses of the left button to a tool, or back to the camera (null). One tool at a time: the last set wins. */
+  setDragger(dragger: ViewDragger | null): void;
 }

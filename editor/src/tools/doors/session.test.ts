@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Link } from '../../core/contracts';
 import { exampleModel } from '../../model/testing.node';
 import { findings } from '../../ports/floorCheck';
-import type { ViewPointer } from '../../view3d/state';
+import type { ViewPointer } from '../../core/contracts';
 import floorTool from '../floor/index';
 import { ToolHost } from '../registry';
 import { bench, type Bench } from '../testing.node';

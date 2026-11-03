@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest';
 import { findings } from '../../ports/floorCheck';
 import { exampleModel } from '../../model/testing.node';
 import { EXAMPLE_PACK } from '../../testing/repo.node';
-import type { ViewPointer } from '../../view3d/state';
+import type { ViewPointer } from '../../core/contracts';
 import { ToolHost } from '../registry';
 import { bench } from '../testing.node';
 import floorTool, { type FloorSession } from './index';

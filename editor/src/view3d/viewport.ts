@@ -8,7 +8,7 @@
  *   zooms where it points. A press and release in one place is a click: it picks, with
  *   the modifier keys held; a double click picks once more, marked double. Moving without
  *   a button pressed hovers, once a frame at most.
- * - A markup tool may take the left button's presses (state `dragger`): it is asked at each
+ * - A markup tool may take the left button's presses (`ViewApi.setDragger`): it is asked at each
  *   press, before the orbit controls; a press it takes moves no camera, its moves past the
  *   click's slop are the tool's drag, and its click is the tool's unless the tool gives it
  *   back to be picked as usual. While the pointer hovers, the tool may set the cursor.
@@ -23,10 +23,10 @@
 import type { Signal } from '@preact/signals';
 import { MOUSE, WebGLRenderer, type OrthographicCamera, type PerspectiveCamera } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import type { Link } from '../core/contracts';
+import type { Link, ViewDragger, ViewPointer } from '../core/contracts';
 import { pixelsPerBlock, VIEW_PRESETS, type CameraView } from './cameras';
 import { MINOR_GRID_MIN_PX } from './guides';
-import type { ViewDragger, ViewPointer, ViewState } from './state';
+import type { ViewState } from './state';
 import { ViewScene, type ClickKeys } from './viewScene';
 
 export interface ViewportOptions {

@@ -15,9 +15,10 @@
  */
 
 import { Box3, Matrix4, OrthographicCamera, PerspectiveCamera, Vector3 } from 'three';
+import type { CameraView } from '../core/contracts';
 
-/** What the camera shows: the free orbit or one of the fixed orthographic views. */
-export type CameraView = 'orbit' | 'top' | 'side' | 'front';
+/** What the camera shows (core/contracts): the free orbit or one of the fixed orthographic views. */
+export type { CameraView } from '../core/contracts';
 
 export const CAMERA_VIEWS: readonly CameraView[] = ['orbit', 'top', 'side', 'front'];
 
