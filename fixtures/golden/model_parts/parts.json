@@ -1,0 +1,3240 @@
+{
+  "description": "A wagon model -> what each of its parts is to the engine (convention.ModelParts). input: obj (OBJ text), textured (materials with a texture) and/or mtl (MTL text: a material whose map_Kd stays in the pack from the folder of model.obj has one), model (the wagon model declaration: bogies, skip, handbrake), anim_<door> (the .anim of door <door>: its objects with a frame move with it). expected: parts (per part in file order: object, place HIDDEN/SKIPPED/UNTEXTURED/BODY/INTERIOR/BOGIE/WHEEL/ANIMATED/DOOR_LEAF/CONTROL/COUPLER, front, owner, index in its list, light [group, fullbright, interior, invert]), light_groups, bogies (pivot_z; wheels: object, axle_obj [x, y] OBJ frame, center [y, z] bogie-local, radius), controls and door_leaves (key, kind, group, label, flags, offset, range, interior, pivot, axis, degrees, slide, box_min, box_max), doors (id, objects), couplers (front, shown, pivot), lamps (at, group, invert), headlights (at, dir_z, radius, rgb, group, invert), dropped_groups, skipped. Places in the model frame, as floats.",
+  "frame": "model",
+  "tolerance": 1e-06,
+  "cases": [
+    {
+      "id": "hidden-and-skipped",
+      "note": "HIDE drops a part but a WIDGET and a coupler head; CARGO_FILL and the model's skip drop",
+      "input": {
+        "obj": "v 0.0 1.0 0.0\nv 1.0 1.0 0.0\nv 1.0 2.0 0.0\nv 0.0 2.0 0.0\nv 0.0 1.0 0.1\nv 1.0 1.0 0.1\nv 1.0 2.0 0.1\nv 0.0 2.0 0.1\nv 0.0 2.0 0.0\nv 0.1 2.0 0.0\nv 0.1 2.1 0.0\nv 0.0 2.1 0.0\nv 0.0 2.0 0.1\nv 0.1 2.0 0.1\nv 0.1 2.1 0.1\nv 0.0 2.1 0.1\nv -7.0 0.4 -0.2\nv -6.6 0.4 -0.2\nv -6.6 0.8 -0.2\nv -7.0 0.8 -0.2\nv -7.0 0.4 0.2\nv -6.6 0.4 0.2\nv -6.6 0.8 0.2\nv -7.0 0.8 0.2\nv -2.0 1.0 -1.0\nv 2.0 1.0 -1.0\nv 2.0 2.0 -1.0\nv -2.0 2.0 -1.0\nv -2.0 1.0 1.0\nv 2.0 1.0 1.0\nv 2.0 2.0 1.0\nv -2.0 2.0 1.0\nv -1.0 0.0 -1.0\nv 1.0 0.0 -1.0\nv 1.0 0.1 -1.0\nv -1.0 0.1 -1.0\nv -1.0 0.0 1.0\nv 1.0 0.0 1.0\nv 1.0 0.1 1.0\nv -1.0 0.1 1.0\nv -6.0 3.0 -1.4\nv 6.0 3.0 -1.4\nv 6.0 3.2 -1.4\nv -6.0 3.2 -1.4\nv -6.0 3.0 1.4\nv 6.0 3.0 1.4\nv 6.0 3.2 1.4\nv -6.0 3.2 1.4\no WINDOW_HIDE_GLASS\nusemtl paint\nf 1 2 3 4\nf 5 6 7 8\nf 1 2 6 5\nf 4 3 7 8\nf 1 4 8 5\nf 2 3 7 6\no WIDGET_2_HIDE_CG_TL\nusemtl paint\nf 9 10 11 12\nf 13 14 15 16\nf 9 10 14 13\nf 12 11 15 16\nf 9 12 16 13\nf 10 11 15 14\no COUPLED_FRONT_1_HIDE\nusemtl paint\nf 17 18 19 20\nf 21 22 23 24\nf 17 18 22 21\nf 20 19 23 24\nf 17 20 24 21\nf 18 19 23 22\no CARGO_FILL_20\nusemtl paint\nf 25 26 27 28\nf 29 30 31 32\nf 25 26 30 29\nf 28 27 31 32\nf 25 28 32 29\nf 26 27 31 30\no GUIDE_RAIL\nusemtl paint\nf 33 34 35 36\nf 37 38 39 40\nf 33 34 38 37\nf 36 35 39 40\nf 33 36 40 37\nf 34 35 39 38\no ROOF\nusemtl paint\nf 41 42 43 44\nf 45 46 47 48\nf 41 42 46 45\nf 44 43 47 48\nf 41 44 48 45\nf 42 43 47 46\n",
+        "textured": ["paint"],
+        "model": {"obj": "m.obj", "skip": ["GUIDE_"]}
+      },
+      "expected": {
+        "parts": [
+          {
+            "object": "WINDOW_HIDE_GLASS",
+            "place": "HIDDEN",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "WIDGET_2_HIDE_CG_TL",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "WIDGET_2",
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "COUPLED_FRONT_1_HIDE",
+            "place": "COUPLER",
+            "front": true,
+            "owner": null,
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "CARGO_FILL_20",
+            "place": "SKIPPED",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GUIDE_RAIL",
+            "place": "SKIPPED",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "ROOF",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          }
+        ],
+        "light_groups": [],
+        "bogies": [{"pivot_z": 0.0, "wheels": []}, {"pivot_z": 0.0, "wheels": []}],
+        "controls": [
+          {
+            "key": "WIDGET_2",
+            "kind": "WIDGET",
+            "group": "TL",
+            "label": null,
+            "flags": ["HIDE"],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": null,
+            "axis": [0.0, 1.0, 0.0],
+            "degrees": 0.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [0.0, 2.43625, -0.1],
+            "box_max": [0.1, 2.5362499, 0.0]
+          }
+        ],
+        "door_leaves": [],
+        "doors": [],
+        "couplers": [{"front": true, "shown": "UNCOUPLED", "pivot": [0.0, 1.03625, 6.6]}],
+        "lamps": [],
+        "headlights": [],
+        "dropped_groups": [],
+        "skipped": 3
+      }
+    },
+    {
+      "id": "untextured-parts-are-not-drawn",
+      "note": "a material without a texture isn't drawn, a control's hinge marker still counts",
+      "input": {
+        "obj": "v -6.0 0.5 -1.4\nv 6.0 0.5 -1.4\nv 6.0 3.0 -1.4\nv -6.0 3.0 -1.4\nv -6.0 0.5 1.4\nv 6.0 0.5 1.4\nv 6.0 3.0 1.4\nv -6.0 3.0 1.4\nv -6.0 2.0 -1.41\nv 6.0 2.0 -1.41\nv 6.0 2.5 -1.41\nv -6.0 2.5 -1.41\nv -6.0 2.0 1.41\nv 6.0 2.0 1.41\nv 6.0 2.5 1.41\nv -6.0 2.5 1.41\nv 1.0 2.0 -0.5\nv 1.0 2.0 0.5\nv 0.95 2.0 -0.05\nv 1.05 2.0 -0.05\nv 1.05 2.2 -0.05\nv 0.95 2.2 -0.05\nv 0.95 2.0 0.05\nv 1.05 2.0 0.05\nv 1.05 2.2 0.05\nv 0.95 2.2 0.05\no BODY\nusemtl paint\nf 1 2 3 4\nf 5 6 7 8\nf 1 2 6 5\nf 4 3 7 8\nf 1 4 8 5\nf 2 3 7 6\no GLASS\nusemtl bare\nf 9 10 11 12\nf 13 14 15 16\nf 9 10 14 13\nf 12 11 15 16\nf 9 12 16 13\nf 10 11 15 14\no WIDGET_1_ROT_60\nusemtl bare\nf 17 18 18\no WIDGET_1_TOGGLE_CG_IL\nusemtl paint\nf 19 20 21 22\nf 23 24 25 26\nf 19 20 24 23\nf 22 21 25 26\nf 19 22 26 23\nf 20 21 25 24\n",
+        "textured": ["paint"]
+      },
+      "expected": {
+        "parts": [
+          {
+            "object": "BODY",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GLASS",
+            "place": "UNTEXTURED",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "WIDGET_1_ROT_60",
+            "place": "UNTEXTURED",
+            "front": false,
+            "owner": "WIDGET_1",
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "WIDGET_1_TOGGLE_CG_IL",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "WIDGET_1",
+            "index": 0,
+            "light": [-1, false, false, false]
+          }
+        ],
+        "light_groups": [],
+        "bogies": [{"pivot_z": 0.0, "wheels": []}, {"pivot_z": 0.0, "wheels": []}],
+        "controls": [
+          {
+            "key": "WIDGET_1",
+            "kind": "WIDGET",
+            "group": "IL",
+            "label": null,
+            "flags": ["TOGGLE"],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": [0.0, 2.43625, -1.0],
+            "axis": [1.0, 0.0, 0.0],
+            "degrees": 60.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [-0.05, 2.43625, -1.05],
+            "box_max": [0.05, 2.63625, -0.95]
+          }
+        ],
+        "door_leaves": [],
+        "doors": [],
+        "couplers": [],
+        "lamps": [],
+        "headlights": [],
+        "dropped_groups": [],
+        "skipped": 2
+      }
+    },
+    {
+      "id": "bogie-pivots-measured-and-wheelsets",
+      "note": "pivots from the frames (wheelsets and HIDE aside); a wheelset's untextured part counts for its axle",
+      "input": {
+        "obj": "v -6.0 0.2 -1.0\nv -4.0 0.2 -1.0\nv -4.0 0.8 -1.0\nv -6.0 0.8 -1.0\nv -6.0 0.2 1.0\nv -4.0 0.2 1.0\nv -4.0 0.8 1.0\nv -6.0 0.8 1.0\nv -5.7 -0.03 -0.8\nv -4.64 -0.03 -0.8\nv -4.64 1.03 -0.8\nv -5.7 1.03 -0.8\nv -5.7 -0.03 0.8\nv -4.64 -0.03 0.8\nv -4.64 1.03 0.8\nv -5.7 1.03 0.8\nv -5.8 0.0 -0.1\nv -4.54 0.0 -0.1\nv -4.54 1.0 -0.1\nv -5.8 1.0 -0.1\nv -5.8 0.0 0.1\nv -4.54 0.0 0.1\nv -4.54 1.0 0.1\nv -5.8 1.0 0.1\nv -4.9 -0.03 -0.8\nv -3.84 -0.03 -0.8\nv -3.84 1.03 -0.8\nv -4.9 1.03 -0.8\nv -4.9 -0.03 0.8\nv -3.84 -0.03 0.8\nv -3.84 1.03 0.8\nv -4.9 1.03 0.8\nv 3.0 0.2 -1.0\nv 7.0 0.2 -1.0\nv 7.0 0.8 -1.0\nv 3.0 0.8 -1.0\nv 3.0 0.2 1.0\nv 7.0 0.2 1.0\nv 7.0 0.8 1.0\nv 3.0 0.8 1.0\nv 30.0 0.0 0.0\nv 31.0 0.0 0.0\nv 31.0 1.0 0.0\nv 30.0 1.0 0.0\nv 30.0 0.0 1.0\nv 31.0 0.0 1.0\nv 31.0 1.0 1.0\nv 30.0 1.0 1.0\no BOGEY_FRONT\nusemtl paint\nf 1 2 3 4\nf 5 6 7 8\nf 1 2 6 5\nf 4 3 7 8\nf 1 4 8 5\nf 2 3 7 6\no BOGEY_FRONT_WHEEL_1\nusemtl paint\nf 9 10 11 12\nf 13 14 15 16\nf 9 10 14 13\nf 12 11 15 16\nf 9 12 16 13\nf 10 11 15 14\no BOGEY_FRONT_WHEEL_1\nusemtl bare\nf 17 18 19 20\nf 21 22 23 24\nf 17 18 22 21\nf 20 19 23 24\nf 17 20 24 21\nf 18 19 23 22\no BOGEY_FRONT_WHEEL_2\nusemtl paint\nf 25 26 27 28\nf 29 30 31 32\nf 25 26 30 29\nf 28 27 31 32\nf 25 28 32 29\nf 26 27 31 30\no BOGEY_REAR_FRAME\nusemtl paint\nf 33 34 35 36\nf 37 38 39 40\nf 33 34 38 37\nf 36 35 39 40\nf 33 36 40 37\nf 34 35 39 38\no BOGEY_REAR_HIDE_X\nusemtl paint\nf 41 42 43 44\nf 45 46 47 48\nf 41 42 46 45\nf 44 43 47 48\nf 41 44 48 45\nf 42 43 47 46\n",
+        "textured": ["paint"]
+      },
+      "expected": {
+        "parts": [
+          {
+            "object": "BOGEY_FRONT",
+            "place": "BOGIE",
+            "front": true,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "BOGEY_FRONT_WHEEL_1",
+            "place": "WHEEL",
+            "front": true,
+            "owner": "BOGEY_FRONT_WHEEL_1",
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "BOGEY_FRONT_WHEEL_1",
+            "place": "UNTEXTURED",
+            "front": true,
+            "owner": "BOGEY_FRONT_WHEEL_1",
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "BOGEY_FRONT_WHEEL_2",
+            "place": "WHEEL",
+            "front": true,
+            "owner": "BOGEY_FRONT_WHEEL_2",
+            "index": 1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "BOGEY_REAR_FRAME",
+            "place": "BOGIE",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "BOGEY_REAR_HIDE_X",
+            "place": "HIDDEN",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          }
+        ],
+        "light_groups": [],
+        "bogies": [
+          {
+            "pivot_z": 5.0,
+            "wheels": [
+              {
+                "object": "BOGEY_FRONT_WHEEL_1",
+                "axle_obj": [-5.17, 0.5],
+                "center": [0.93625, 0.17000008],
+                "radius": 0.53
+              },
+              {
+                "object": "BOGEY_FRONT_WHEEL_2",
+                "axle_obj": [-4.37, 0.5],
+                "center": [0.93625, -0.6300001],
+                "radius": 0.53
+              }
+            ]
+          },
+          {"pivot_z": -5.0, "wheels": []}
+        ],
+        "controls": [],
+        "door_leaves": [],
+        "doors": [],
+        "couplers": [],
+        "lamps": [],
+        "headlights": [],
+        "dropped_groups": [],
+        "skipped": 1
+      }
+    },
+    {
+      "id": "bogie-pivots-declared",
+      "note": "the model's bogies: the first and the last pivot",
+      "input": {
+        "obj": "v -6.0 0.2 -1.0\nv -4.0 0.2 -1.0\nv -4.0 0.8 -1.0\nv -6.0 0.8 -1.0\nv -6.0 0.2 1.0\nv -4.0 0.2 1.0\nv -4.0 0.8 1.0\nv -6.0 0.8 1.0\nv 4.0 0.2 -1.0\nv 6.0 0.2 -1.0\nv 6.0 0.8 -1.0\nv 4.0 0.8 -1.0\nv 4.0 0.2 1.0\nv 6.0 0.2 1.0\nv 6.0 0.8 1.0\nv 4.0 0.8 1.0\no BOGEY_FRONT\nusemtl paint\nf 1 2 3 4\nf 5 6 7 8\nf 1 2 6 5\nf 4 3 7 8\nf 1 4 8 5\nf 2 3 7 6\no BOGEY_REAR\nusemtl paint\nf 9 10 11 12\nf 13 14 15 16\nf 9 10 14 13\nf 12 11 15 16\nf 9 12 16 13\nf 10 11 15 14\n",
+        "textured": ["paint"],
+        "model": {"obj": "m.obj", "bogies": [4.44, 0, -4.44]}
+      },
+      "expected": {
+        "parts": [
+          {
+            "object": "BOGEY_FRONT",
+            "place": "BOGIE",
+            "front": true,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "BOGEY_REAR",
+            "place": "BOGIE",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          }
+        ],
+        "light_groups": [],
+        "bogies": [{"pivot_z": 4.44, "wheels": []}, {"pivot_z": -4.44, "wheels": []}],
+        "controls": [],
+        "door_leaves": [],
+        "doors": [],
+        "couplers": [],
+        "lamps": [],
+        "headlights": [],
+        "dropped_groups": [],
+        "skipped": 0
+      }
+    },
+    {
+      "id": "animated-door-pieces",
+      "note": "objects an .anim names move with its door: not a bogie's, not a track without frames, not untextured",
+      "input": {
+        "obj": "v 0.0 1.0 1.4\nv 0.1 1.0 1.4\nv 0.1 1.1 1.4\nv 0.0 1.1 1.4\nv 0.0 1.0 1.5\nv 0.1 1.0 1.5\nv 0.1 1.1 1.5\nv 0.0 1.1 1.5\nv 0.0 0.0 1.2\nv 1.0 0.0 1.2\nv 1.0 0.1 1.2\nv 0.0 0.1 1.2\nv 0.0 0.0 1.4\nv 1.0 0.0 1.4\nv 1.0 0.1 1.4\nv 0.0 0.1 1.4\nv -6.0 0.2 -1.0\nv -4.0 0.2 -1.0\nv -4.0 0.8 -1.0\nv -6.0 0.8 -1.0\nv -6.0 0.2 1.0\nv -4.0 0.2 1.0\nv -4.0 0.8 1.0\nv -6.0 0.8 1.0\nv 0.0 0.5 1.35\nv 1.0 0.5 1.35\nv 1.0 2.5 1.35\nv 0.0 2.5 1.35\nv 0.0 0.5 1.4\nv 1.0 0.5 1.4\nv 1.0 2.5 1.4\nv 0.0 2.5 1.4\nv 2.0 0.5 1.35\nv 3.0 0.5 1.35\nv 3.0 2.5 1.35\nv 2.0 2.5 1.35\nv 2.0 0.5 1.4\nv 3.0 0.5 1.4\nv 3.0 2.5 1.4\nv 2.0 2.5 1.4\no DOOR_1_HANDLE\nusemtl paint\nf 1 2 3 4\nf 5 6 7 8\nf 1 2 6 5\nf 4 3 7 8\nf 1 4 8 5\nf 2 3 7 6\no TRAP\nusemtl bare\nf 9 10 11 12\nf 13 14 15 16\nf 9 10 14 13\nf 12 11 15 16\nf 9 12 16 13\nf 10 11 15 14\no BOGEY_FRONT_X\nusemtl paint\nf 17 18 19 20\nf 21 22 23 24\nf 17 18 22 21\nf 20 19 23 24\nf 17 20 24 21\nf 18 19 23 22\no DOOR_1_LEAF\nusemtl paint\nf 25 26 27 28\nf 29 30 31 32\nf 25 26 30 29\nf 28 27 31 32\nf 25 28 32 29\nf 26 27 31 30\no STILL\nusemtl paint\nf 33 34 35 36\nf 37 38 39 40\nf 33 34 38 37\nf 36 35 39 40\nf 33 36 40 37\nf 34 35 39 38\n",
+        "textured": ["paint"],
+        "anim_door1": "O DOOR_1_LEAF\nA DOOR_1_LEAFAction\nM 1,0,0,0.0,0,1,0,0,0,0,1,0,0,0,0,1\nM 1,0,0,0.1,0,1,0,0,0,0,1,0,0,0,0,1\nM 1,0,0,0.2,0,1,0,0,0,0,1,0,0,0,0,1\nO DOOR_1_HANDLE\nA DOOR_1_HANDLEAction\nM 1,0,0,0.0,0,1,0,0,0,0,1,0,0,0,0,1\nM 1,0,0,0.1,0,1,0,0,0,0,1,0,0,0,0,1\nM 1,0,0,0.2,0,1,0,0,0,0,1,0,0,0,0,1\nO TRAP\nA TRAPAction\nM 1,0,0,0.0,0,1,0,0,0,0,1,0,0,0,0,1\nM 1,0,0,0.1,0,1,0,0,0,0,1,0,0,0,0,1\nM 1,0,0,0.2,0,1,0,0,0,0,1,0,0,0,0,1\nO BOGEY_FRONT_X\nA BOGEY_FRONT_XAction\nM 1,0,0,0.0,0,1,0,0,0,0,1,0,0,0,0,1\nM 1,0,0,0.1,0,1,0,0,0,0,1,0,0,0,0,1\nM 1,0,0,0.2,0,1,0,0,0,0,1,0,0,0,0,1\nO STILL\nA STILLAction\n"
+      },
+      "expected": {
+        "parts": [
+          {
+            "object": "DOOR_1_HANDLE",
+            "place": "ANIMATED",
+            "front": false,
+            "owner": "door1",
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "TRAP",
+            "place": "UNTEXTURED",
+            "front": false,
+            "owner": "door1",
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "BOGEY_FRONT_X",
+            "place": "BOGIE",
+            "front": true,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "DOOR_1_LEAF",
+            "place": "ANIMATED",
+            "front": false,
+            "owner": "door1",
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "STILL",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          }
+        ],
+        "light_groups": [],
+        "bogies": [{"pivot_z": 5.0, "wheels": []}, {"pivot_z": 0.0, "wheels": []}],
+        "controls": [],
+        "door_leaves": [],
+        "doors": [{"id": "door1", "objects": ["DOOR_1_HANDLE", "DOOR_1_LEAF"]}],
+        "couplers": [],
+        "lamps": [],
+        "headlights": [],
+        "dropped_groups": [],
+        "skipped": 1
+      }
+    },
+    {
+      "id": "a-control-merges-its-objects",
+      "note": "one control of every object of its key: flags from any, the first ROT object the hinge, the box of the drawn faces",
+      "input": {
+        "obj": "v 1.0 2.0 -0.5\nv 1.0 2.0 0.5\nv 0.9 2.0 -0.1\nv 1.1 2.0 -0.1\nv 1.1 2.6 -0.1\nv 0.9 2.6 -0.1\nv 0.9 2.0 0.1\nv 1.1 2.0 0.1\nv 1.1 2.6 0.1\nv 0.9 2.6 0.1\nv 0.95 2.6 -0.05\nv 1.05 2.6 -0.05\nv 1.05 2.7 -0.05\nv 0.95 2.7 -0.05\nv 0.95 2.6 0.05\nv 1.05 2.6 0.05\nv 1.05 2.7 0.05\nv 0.95 2.7 0.05\nv 0.0 0.0 0.0\nv 5.0 0.0 0.0\nv 1.2 2.5 0.3\nv 1.21 2.5 0.3\nv 1.21 2.6 0.3\nv 1.2 2.6 0.3\nv 1.2 2.5 0.31\nv 1.21 2.5 0.31\nv 1.21 2.6 0.31\nv 1.2 2.6 0.31\nv 1.3 2.55 0.305\nv 1.1 2.55 0.305\no THROTTLE_1_ROT_-50\nusemtl bare\nf 1 2 2\no THROTTLE_1_LEVER_LABEL_Controller\nusemtl paint\nf 3 4 5 6\nf 7 8 9 10\nf 3 4 8 7\nf 6 5 9 10\nf 3 6 10 7\nf 4 5 9 8\no THROTTLE_1_KNOB_INVERT_INTERIOR\nusemtl paint\nf 11 12 13 14\nf 15 16 17 18\nf 11 12 16 15\nf 14 13 17 18\nf 11 14 18 15\nf 12 13 17 16\no THROTTLE_1_ROT_30_SECOND\nusemtl bare\nf 19 20 20\no GAUGE_SPEED_1_NEEDLE_RANGE_0_1.5\nusemtl paint\nf 21 22 23 24\nf 25 26 27 28\nf 21 22 26 25\nf 24 23 27 28\nf 21 24 28 25\nf 22 23 27 26\no GAUGE_SPEED_1_ROT_-240\nusemtl bare\nf 29 30 30\n",
+        "textured": ["paint"]
+      },
+      "expected": {
+        "parts": [
+          {
+            "object": "THROTTLE_1_ROT_-50",
+            "place": "UNTEXTURED",
+            "front": false,
+            "owner": "THROTTLE_1",
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "THROTTLE_1_LEVER_LABEL_Controller",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "THROTTLE_1",
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "THROTTLE_1_KNOB_INVERT_INTERIOR",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "THROTTLE_1",
+            "index": 0,
+            "light": [-1, false, true, false]
+          },
+          {
+            "object": "THROTTLE_1_ROT_30_SECOND",
+            "place": "UNTEXTURED",
+            "front": false,
+            "owner": "THROTTLE_1",
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GAUGE_SPEED_1_NEEDLE_RANGE_0_1.5",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "GAUGE_SPEED_1",
+            "index": 1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GAUGE_SPEED_1_ROT_-240",
+            "place": "UNTEXTURED",
+            "front": false,
+            "owner": "GAUGE_SPEED_1",
+            "index": 1,
+            "light": [-1, false, false, false]
+          }
+        ],
+        "light_groups": [],
+        "bogies": [{"pivot_z": 0.0, "wheels": []}, {"pivot_z": 0.0, "wheels": []}],
+        "controls": [
+          {
+            "key": "THROTTLE_1",
+            "kind": "THROTTLE",
+            "group": "THROTTLE_1",
+            "label": "Controller",
+            "flags": ["INVERT"],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": true,
+            "pivot": [0.0, 2.43625, -1.0],
+            "axis": [1.0, 0.0, 0.0],
+            "degrees": -50.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [-0.1, 2.43625, -1.1],
+            "box_max": [0.1, 3.13625, -0.9]
+          },
+          {
+            "key": "GAUGE_SPEED_1",
+            "kind": "GAUGE_SPEED",
+            "group": "GAUGE_SPEED_1",
+            "label": null,
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.5],
+            "interior": false,
+            "pivot": [0.305, 2.98625, -1.2],
+            "axis": [0.0, 0.0, -1.0],
+            "degrees": -240.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [0.3, 2.93625, -1.21],
+            "box_max": [0.31, 3.0362499, -1.2]
+          }
+        ],
+        "door_leaves": [],
+        "doors": [],
+        "couplers": [],
+        "lamps": [],
+        "headlights": [],
+        "dropped_groups": [],
+        "skipped": 3
+      }
+    },
+    {
+      "id": "the-handbrake-and-a-control-drawn-by-nothing",
+      "note": "a widget the model names in handbrake is the handbrake wheel; a control without a drawn face is none",
+      "input": {
+        "obj": "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 1.0 1.0 0.0\nv 0.0 1.0 0.0\nv 0.0 0.0 1.0\nv 1.0 0.0 1.0\nv 1.0 1.0 1.0\nv 0.0 1.0 1.0\nv 6.0 1.0 1.0\nv 6.1 1.0 1.0\nv 6.1 1.5 1.0\nv 6.0 1.5 1.0\nv 6.0 1.0 1.5\nv 6.1 1.0 1.5\nv 6.1 1.5 1.5\nv 6.0 1.5 1.5\nv -3.0 2.0 1.4\nv -2.0 2.0 1.4\nv -2.0 2.8 1.4\nv -3.0 2.8 1.4\nv -3.0 2.0 1.45\nv -2.0 2.0 1.45\nv -2.0 2.8 1.45\nv -3.0 2.8 1.45\no REVERSER_1_ROT\nusemtl bare\nf 1 2 3 4\nf 5 6 7 8\nf 1 2 6 5\nf 4 3 7 8\nf 1 4 8 5\nf 2 3 7 6\no WIDGET_5_LABEL_Hand^Brake\nusemtl paint\nf 9 10 11 12\nf 13 14 15 16\nf 9 10 14 13\nf 12 11 15 16\nf 9 12 16 13\nf 10 11 15 14\no WINDOW_1_TL_0.8_Y\nusemtl paint\nf 17 18 19 20\nf 21 22 23 24\nf 17 18 22 21\nf 20 19 23 24\nf 17 20 24 21\nf 18 19 23 22\n",
+        "textured": ["paint"],
+        "model": {"obj": "m.obj", "handbrake": ["WIDGET_5"]}
+      },
+      "expected": {
+        "parts": [
+          {
+            "object": "REVERSER_1_ROT",
+            "place": "UNTEXTURED",
+            "front": false,
+            "owner": "REVERSER_1",
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "WIDGET_5_LABEL_Hand^Brake",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "WIDGET_5",
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "WINDOW_1_TL_0.8_Y",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "WINDOW_1",
+            "index": 1,
+            "light": [-1, false, false, false]
+          }
+        ],
+        "light_groups": [],
+        "bogies": [{"pivot_z": 0.0, "wheels": []}, {"pivot_z": 0.0, "wheels": []}],
+        "controls": [
+          {
+            "key": "WIDGET_5",
+            "kind": "HANDBRAKE",
+            "group": "WIDGET_5",
+            "label": "Hand Brake",
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": null,
+            "axis": [0.0, 1.0, 0.0],
+            "degrees": 0.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [1.0, 1.43625, -6.1],
+            "box_max": [1.5, 1.93625, -6.0]
+          },
+          {
+            "key": "WINDOW_1",
+            "kind": "WINDOW",
+            "group": "WINDOW_1",
+            "label": null,
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": null,
+            "axis": [0.0, 1.0, 0.0],
+            "degrees": 0.0,
+            "slide": [0.0, 0.8, 0.0],
+            "box_min": [1.4, 2.43625, 2.0],
+            "box_max": [1.45, 3.23625, 3.0]
+          }
+        ],
+        "door_leaves": [],
+        "doors": [],
+        "couplers": [],
+        "lamps": [],
+        "headlights": [],
+        "dropped_groups": [],
+        "skipped": 1
+      }
+    },
+    {
+      "id": "door-leaves-moved-by-name",
+      "note": "a DOOR_<n> with a ROT marker or a TL slide is a leaf, one without is body",
+      "input": {
+        "obj": "v 2.0 0.5 1.4\nv 2.0 2.5 1.4\nv 2.0 0.5 1.35\nv 3.0 0.5 1.35\nv 3.0 2.5 1.35\nv 2.0 2.5 1.35\nv 2.0 0.5 1.4\nv 3.0 0.5 1.4\nv 3.0 2.5 1.4\nv 2.0 2.5 1.4\nv 5.0 0.5 1.35\nv 6.0 0.5 1.35\nv 6.0 2.5 1.35\nv 5.0 2.5 1.35\nv 5.0 0.5 1.4\nv 6.0 0.5 1.4\nv 6.0 2.5 1.4\nv 5.0 2.5 1.4\nv 8.0 0.5 1.35\nv 9.0 0.5 1.35\nv 9.0 2.5 1.35\nv 8.0 2.5 1.35\nv 8.0 0.5 1.4\nv 9.0 0.5 1.4\nv 9.0 2.5 1.4\nv 8.0 2.5 1.4\nv 8.8 1.5 1.4\nv 8.9 1.5 1.4\nv 8.9 1.6 1.4\nv 8.8 1.6 1.4\nv 8.8 1.5 1.45\nv 8.9 1.5 1.45\nv 8.9 1.6 1.45\nv 8.8 1.6 1.45\no DOOR_1_ROT_90\nusemtl bare\nf 1 2 2\no DOOR_1_EXTERNAL\nusemtl paint\nf 3 4 5 6\nf 7 8 9 10\nf 3 4 8 7\nf 6 5 9 10\nf 3 6 10 7\nf 4 5 9 8\no DOOR_2_EXTERNAL\nusemtl paint\nf 11 12 13 14\nf 15 16 17 18\nf 11 12 16 15\nf 14 13 17 18\nf 11 14 18 15\nf 12 13 17 16\no DOOR_3_TL_0.6_X\nusemtl paint\nf 19 20 21 22\nf 23 24 25 26\nf 19 20 24 23\nf 22 21 25 26\nf 19 22 26 23\nf 20 21 25 24\no DOOR_3_HANDLE\nusemtl paint\nf 27 28 29 30\nf 31 32 33 34\nf 27 28 32 31\nf 30 29 33 34\nf 27 30 34 31\nf 28 29 33 32\n",
+        "textured": ["paint"]
+      },
+      "expected": {
+        "parts": [
+          {
+            "object": "DOOR_1_ROT_90",
+            "place": "UNTEXTURED",
+            "front": false,
+            "owner": "DOOR_1",
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "DOOR_1_EXTERNAL",
+            "place": "DOOR_LEAF",
+            "front": false,
+            "owner": "DOOR_1",
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "DOOR_2_EXTERNAL",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "DOOR_3_TL_0.6_X",
+            "place": "DOOR_LEAF",
+            "front": false,
+            "owner": "DOOR_3",
+            "index": 1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "DOOR_3_HANDLE",
+            "place": "DOOR_LEAF",
+            "front": false,
+            "owner": "DOOR_3",
+            "index": 1,
+            "light": [-1, false, false, false]
+          }
+        ],
+        "light_groups": [],
+        "bogies": [{"pivot_z": 0.0, "wheels": []}, {"pivot_z": 0.0, "wheels": []}],
+        "controls": [],
+        "door_leaves": [
+          {
+            "key": "DOOR_1",
+            "kind": "DOOR",
+            "group": "DOOR_1",
+            "label": null,
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": [1.4, 1.93625, -2.0],
+            "axis": [0.0, 1.0, 0.0],
+            "degrees": 90.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [1.35, 0.93625, -3.0],
+            "box_max": [1.4, 2.93625, -2.0]
+          },
+          {
+            "key": "DOOR_3",
+            "kind": "DOOR",
+            "group": "DOOR_3",
+            "label": null,
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": null,
+            "axis": [0.0, 1.0, 0.0],
+            "degrees": 0.0,
+            "slide": [0.0, 0.0, -0.6],
+            "box_min": [1.35, 0.93625, -9.0],
+            "box_max": [1.45, 2.93625, -8.0]
+          }
+        ],
+        "doors": [],
+        "couplers": [],
+        "lamps": [],
+        "headlights": [],
+        "dropped_groups": [],
+        "skipped": 1
+      }
+    },
+    {
+      "id": "coupler-heads-turn-on-one-pivot-an-end",
+      "note": "the pivot of an end's heads: centre line, mid-height, inner end",
+      "input": {
+        "obj": "v -7.0 0.4 -0.2\nv -6.6 0.4 -0.2\nv -6.6 0.8 -0.2\nv -7.0 0.8 -0.2\nv -7.0 0.4 0.2\nv -6.6 0.4 0.2\nv -6.6 0.8 0.2\nv -7.0 0.8 0.2\nv -7.2 0.5 -0.2\nv -6.6 0.5 -0.2\nv -6.6 0.9 -0.2\nv -7.2 0.9 -0.2\nv -7.2 0.5 0.2\nv -6.6 0.5 0.2\nv -6.6 0.9 0.2\nv -7.2 0.9 0.2\nv 6.6 0.4 -0.2\nv 7.0 0.4 -0.2\nv 7.0 0.8 -0.2\nv 6.6 0.8 -0.2\nv 6.6 0.4 0.2\nv 7.0 0.4 0.2\nv 7.0 0.8 0.2\nv 6.6 0.8 0.2\nv 7.0 0.4 -0.2\nv 9.0 0.4 -0.2\nv 9.0 0.8 -0.2\nv 7.0 0.8 -0.2\nv 7.0 0.4 0.2\nv 9.0 0.4 0.2\nv 9.0 0.8 0.2\nv 7.0 0.8 0.2\no COUPLED_FRONT_1_HIDE\nusemtl paint\nf 1 2 3 4\nf 5 6 7 8\nf 1 2 6 5\nf 4 3 7 8\nf 1 4 8 5\nf 2 3 7 6\no COUPLED_FRONT_2_HIDE_INVERT\nusemtl paint\nf 9 10 11 12\nf 13 14 15 16\nf 9 10 14 13\nf 12 11 15 16\nf 9 12 16 13\nf 10 11 15 14\no COUPLED_REAR_1\nusemtl paint\nf 17 18 19 20\nf 21 22 23 24\nf 17 18 22 21\nf 20 19 23 24\nf 17 20 24 21\nf 18 19 23 22\no COUPLED_REAR_1\nusemtl bare\nf 25 26 27 28\nf 29 30 31 32\nf 25 26 30 29\nf 28 27 31 32\nf 25 28 32 29\nf 26 27 31 30\n",
+        "textured": ["paint"]
+      },
+      "expected": {
+        "parts": [
+          {
+            "object": "COUPLED_FRONT_1_HIDE",
+            "place": "COUPLER",
+            "front": true,
+            "owner": null,
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "COUPLED_FRONT_2_HIDE_INVERT",
+            "place": "COUPLER",
+            "front": true,
+            "owner": null,
+            "index": 1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "COUPLED_REAR_1",
+            "place": "COUPLER",
+            "front": false,
+            "owner": null,
+            "index": 2,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "COUPLED_REAR_1",
+            "place": "UNTEXTURED",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          }
+        ],
+        "light_groups": [],
+        "bogies": [{"pivot_z": 0.0, "wheels": []}, {"pivot_z": 0.0, "wheels": []}],
+        "controls": [],
+        "door_leaves": [],
+        "doors": [],
+        "couplers": [
+          {"front": true, "shown": "UNCOUPLED", "pivot": [0.0, 1.08625, 6.6]},
+          {"front": true, "shown": "COUPLED", "pivot": [0.0, 1.08625, 6.6]},
+          {"front": false, "shown": "ALWAYS", "pivot": [0.0, 1.03625, -6.6]}
+        ],
+        "lamps": [],
+        "headlights": [],
+        "dropped_groups": [],
+        "skipped": 1
+      }
+    },
+    {
+      "id": "a-coupler-head-that-is-a-control",
+      "note": "a head named a control too is drawn as the control, yet its faces size its end's pivot",
+      "input": {
+        "obj": "v -7.0 0.4 -0.2\nv -6.6 0.4 -0.2\nv -6.6 0.8 -0.2\nv -7.0 0.8 -0.2\nv -7.0 0.4 0.2\nv -6.6 0.4 0.2\nv -6.6 0.8 0.2\nv -7.0 0.8 0.2\nv -7.5 1.0 -0.2\nv -7.2 1.0 -0.2\nv -7.2 2.0 -0.2\nv -7.5 2.0 -0.2\nv -7.5 1.0 0.2\nv -7.2 1.0 0.2\nv -7.2 2.0 0.2\nv -7.5 2.0 0.2\no COUPLED_FRONT_1\nusemtl paint\nf 1 2 3 4\nf 5 6 7 8\nf 1 2 6 5\nf 4 3 7 8\nf 1 4 8 5\nf 2 3 7 6\no COUPLED_FRONT_1_WIDGET_3_CG_X\nusemtl paint\nf 9 10 11 12\nf 13 14 15 16\nf 9 10 14 13\nf 12 11 15 16\nf 9 12 16 13\nf 10 11 15 14\n",
+        "textured": ["paint"]
+      },
+      "expected": {
+        "parts": [
+          {
+            "object": "COUPLED_FRONT_1",
+            "place": "COUPLER",
+            "front": true,
+            "owner": null,
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "COUPLED_FRONT_1_WIDGET_3_CG_X",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "WIDGET_3",
+            "index": 0,
+            "light": [-1, false, false, false]
+          }
+        ],
+        "light_groups": [],
+        "bogies": [{"pivot_z": 0.0, "wheels": []}, {"pivot_z": 0.0, "wheels": []}],
+        "controls": [
+          {
+            "key": "WIDGET_3",
+            "kind": "WIDGET",
+            "group": "X",
+            "label": null,
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": null,
+            "axis": [0.0, 1.0, 0.0],
+            "degrees": 0.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [-0.2, 1.43625, 7.2],
+            "box_max": [0.2, 2.43625, 7.5]
+          }
+        ],
+        "door_leaves": [],
+        "doors": [],
+        "couplers": [{"front": true, "shown": "ALWAYS", "pivot": [0.0, 1.63625, 6.6]}],
+        "lamps": [],
+        "headlights": [],
+        "dropped_groups": [],
+        "skipped": 0
+      }
+    },
+    {
+      "id": "light-groups-in-the-order-named",
+      "note": "groups are numbered as the drawn parts first name them; LINVERT and FULLBRIGHT per part",
+      "input": {
+        "obj": "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 1.0 1.0 0.0\nv 0.0 1.0 0.0\nv 0.0 0.0 1.0\nv 1.0 0.0 1.0\nv 1.0 1.0 1.0\nv 0.0 1.0 1.0\nv 0.0 2.0 0.0\nv 0.5 2.0 0.0\nv 0.5 2.5 0.0\nv 0.0 2.5 0.0\nv 0.0 2.0 0.5\nv 0.5 2.0 0.5\nv 0.5 2.5 0.5\nv 0.0 2.5 0.5\nv -7.0 1.0 1.0\nv -6.9 1.0 1.0\nv -6.9 1.4 1.0\nv -7.0 1.4 1.0\nv -7.0 1.0 1.4\nv -6.9 1.0 1.4\nv -6.9 1.4 1.4\nv -7.0 1.4 1.4\nv 0.5 2.0 0.0\nv 1.0 2.0 0.0\nv 1.0 2.5 0.0\nv 0.5 2.5 0.0\nv 0.5 2.0 0.5\nv 1.0 2.0 0.5\nv 1.0 2.5 0.5\nv 0.5 2.5 0.5\no LAMP_LCG_FHL\nusemtl bare\nf 1 2 3 4\nf 5 6 7 8\nf 1 2 6 5\nf 4 3 7 8\nf 1 4 8 5\nf 2 3 7 6\no PANEL_FULLBRIGHT_LCG_DeskL\nusemtl paint\nf 9 10 11 12\nf 13 14 15 16\nf 9 10 14 13\nf 12 11 15 16\nf 9 12 16 13\nf 10 11 15 14\no BUFFER_FULLBRIGHT_LCG_FBL_LINVERT\nusemtl paint\nf 17 18 19 20\nf 21 22 23 24\nf 17 18 22 21\nf 20 19 23 24\nf 17 20 24 21\nf 18 19 23 22\no PANEL_2_LCG_DeskL\nusemtl paint\nf 25 26 27 28\nf 29 30 31 32\nf 25 26 30 29\nf 28 27 31 32\nf 25 28 32 29\nf 26 27 31 30\n",
+        "textured": ["paint"]
+      },
+      "expected": {
+        "parts": [
+          {
+            "object": "LAMP_LCG_FHL",
+            "place": "UNTEXTURED",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "PANEL_FULLBRIGHT_LCG_DeskL",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [0, true, false, false]
+          },
+          {
+            "object": "BUFFER_FULLBRIGHT_LCG_FBL_LINVERT",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [1, true, false, true]
+          },
+          {
+            "object": "PANEL_2_LCG_DeskL",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [0, false, false, false]
+          }
+        ],
+        "light_groups": ["DeskL", "FBL"],
+        "bogies": [{"pivot_z": 0.0, "wheels": []}, {"pivot_z": 0.0, "wheels": []}],
+        "controls": [],
+        "door_leaves": [],
+        "doors": [],
+        "couplers": [],
+        "lamps": [],
+        "headlights": [],
+        "dropped_groups": [],
+        "skipped": 1
+      }
+    },
+    {
+      "id": "cabin-lamps-of-an-inside-group",
+      "note": "a glowing island of a group that lights something inside is a cabin lamp: not the buffer's, not a dial, not a control's",
+      "input": {
+        "obj": "v -1.0 2.4 -0.2\nv -0.6 2.4 -0.2\nv -0.6 2.5 -0.2\nv -1.0 2.5 -0.2\nv -1.0 2.4 0.2\nv -0.6 2.4 0.2\nv -0.6 2.5 0.2\nv -1.0 2.5 0.2\nv 2.0 2.4 -0.2\nv 2.4 2.4 -0.2\nv 2.4 2.5 -0.2\nv 2.0 2.5 -0.2\nv 2.0 2.4 0.2\nv 2.4 2.4 0.2\nv 2.4 2.5 0.2\nv 2.0 2.5 0.2\nv 0.0 0.5 -1.0\nv 3.0 0.5 -1.0\nv 3.0 1.0 -1.0\nv 0.0 1.0 -1.0\nv 0.0 0.5 1.0\nv 3.0 0.5 1.0\nv 3.0 1.0 1.0\nv 0.0 1.0 1.0\nv -7.0 1.0 1.0\nv -6.9 1.0 1.0\nv -6.9 1.4 1.0\nv -7.0 1.4 1.0\nv -7.0 1.0 1.4\nv -6.9 1.0 1.4\nv -6.9 1.4 1.4\nv -7.0 1.4 1.4\nv 0.0 2.0 0.0\nv 0.05 2.0 0.0\nv 0.05 2.05 0.0\nv 0.0 2.05 0.0\nv 0.0 2.0 0.05\nv 0.05 2.0 0.05\nv 0.05 2.05 0.05\nv 0.0 2.05 0.05\nv 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 1.0 1.0 0.0\nv 0.0 1.0 0.0\nv 0.0 0.0 1.0\nv 1.0 0.0 1.0\nv 1.0 1.0 1.0\nv 0.0 1.0 1.0\no CEILING_LAMPS_FULLBRIGHT_LCG_IL\nusemtl paint\nf 1 2 3 4\nf 5 6 7 8\nf 1 2 6 5\nf 4 3 7 8\nf 1 4 8 5\nf 2 3 7 6\no CEILING_LAMPS_FULLBRIGHT_LCG_IL\nusemtl paint\nf 9 10 11 12\nf 13 14 15 16\nf 9 10 14 13\nf 12 11 15 16\nf 9 12 16 13\nf 10 11 15 14\no INTERIOR_SEATS_LCG_IL\nusemtl paint\nf 17 18 19 20\nf 21 22 23 24\nf 17 18 22 21\nf 20 19 23 24\nf 17 20 24 21\nf 18 19 23 22\no BUFFER_LAMP_FULLBRIGHT_LCG_FBL\nusemtl paint\nf 25 26 27 28\nf 29 30 31 32\nf 25 26 30 29\nf 28 27 31 32\nf 25 28 32 29\nf 26 27 31 30\no DIAL_FULLBRIGHT_LCG_IL\nusemtl paint\nf 33 34 35 36\nf 37 38 39 40\nf 33 34 38 37\nf 36 35 39 40\nf 33 36 40 37\nf 34 35 39 38\no WIDGET_1_FULLBRIGHT_LCG_IL\nusemtl paint\nf 41 42 43 44\nf 45 46 47 48\nf 41 42 46 45\nf 44 43 47 48\nf 41 44 48 45\nf 42 43 47 46\n",
+        "textured": ["paint"]
+      },
+      "expected": {
+        "parts": [
+          {
+            "object": "CEILING_LAMPS_FULLBRIGHT_LCG_IL",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [0, true, false, false]
+          },
+          {
+            "object": "CEILING_LAMPS_FULLBRIGHT_LCG_IL",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [0, true, false, false]
+          },
+          {
+            "object": "INTERIOR_SEATS_LCG_IL",
+            "place": "INTERIOR",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [0, false, true, false]
+          },
+          {
+            "object": "BUFFER_LAMP_FULLBRIGHT_LCG_FBL",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [1, true, false, false]
+          },
+          {
+            "object": "DIAL_FULLBRIGHT_LCG_IL",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [0, true, false, false]
+          },
+          {
+            "object": "WIDGET_1_FULLBRIGHT_LCG_IL",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "WIDGET_1",
+            "index": 0,
+            "light": [0, true, false, false]
+          }
+        ],
+        "light_groups": ["IL", "FBL"],
+        "bogies": [{"pivot_z": 0.0, "wheels": []}, {"pivot_z": 0.0, "wheels": []}],
+        "controls": [
+          {
+            "key": "WIDGET_1",
+            "kind": "WIDGET",
+            "group": "WIDGET_1",
+            "label": null,
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": null,
+            "axis": [0.0, 1.0, 0.0],
+            "degrees": 0.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [0.0, 0.43625, -1.0],
+            "box_max": [1.0, 1.43625, 0.0]
+          }
+        ],
+        "door_leaves": [],
+        "doors": [],
+        "couplers": [],
+        "lamps": [
+          {"at": [0.0, 2.88625, 0.8], "group": 0, "invert": false},
+          {"at": [0.0, 2.88625, -2.2], "group": 0, "invert": false}
+        ],
+        "headlights": [],
+        "dropped_groups": [],
+        "skipped": 0
+      }
+    },
+    {
+      "id": "headlights-shine-out-of-their-half",
+      "note": "a front lamp shines forward from its front face, a rear one back; colour, group, LINVERT",
+      "input": {
+        "obj": "v -7.0 2.8 -0.2\nv -6.9 2.8 -0.2\nv -6.9 3.2 -0.2\nv -7.0 3.2 -0.2\nv -7.0 2.8 0.2\nv -6.9 2.8 0.2\nv -6.9 3.2 0.2\nv -7.0 3.2 0.2\nv 6.9 2.8 -0.1\nv 7.0 2.8 -0.1\nv 7.0 3.0 -0.1\nv 6.9 3.0 -0.1\nv 6.9 2.8 0.1\nv 7.0 2.8 0.1\nv 7.0 3.0 0.1\nv 6.9 3.0 0.1\nv -0.05 3.0 -0.05\nv 0.05 3.0 -0.05\nv 0.05 3.1 -0.05\nv -0.05 3.1 -0.05\nv -0.05 3.0 0.05\nv 0.05 3.0 0.05\nv 0.05 3.1 0.05\nv -0.05 3.1 0.05\no HEADLIGHT_1_0XFFF0CC_FULLBRIGHT_LCG_FHL\nusemtl paint\nf 1 2 3 4\nf 5 6 7 8\nf 1 2 6 5\nf 4 3 7 8\nf 1 4 8 5\nf 2 3 7 6\no HEADLIGHT_2_LCG_RHL_LINVERT\nusemtl paint\nf 9 10 11 12\nf 13 14 15 16\nf 9 10 14 13\nf 12 11 15 16\nf 9 12 16 13\nf 10 11 15 14\no HEADLIGHT_3\nusemtl paint\nf 17 18 19 20\nf 21 22 23 24\nf 17 18 22 21\nf 20 19 23 24\nf 17 20 24 21\nf 18 19 23 22\n",
+        "textured": ["paint"]
+      },
+      "expected": {
+        "parts": [
+          {
+            "object": "HEADLIGHT_1_0XFFF0CC_FULLBRIGHT_LCG_FHL",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [0, true, false, false]
+          },
+          {
+            "object": "HEADLIGHT_2_LCG_RHL_LINVERT",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [1, false, false, true]
+          },
+          {
+            "object": "HEADLIGHT_3",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          }
+        ],
+        "light_groups": ["FHL", "RHL"],
+        "bogies": [{"pivot_z": 0.0, "wheels": []}, {"pivot_z": 0.0, "wheels": []}],
+        "controls": [],
+        "door_leaves": [],
+        "doors": [],
+        "couplers": [],
+        "lamps": [],
+        "headlights": [
+          {
+            "at": [0.0, 3.43625, 7.02],
+            "dir_z": 1.0,
+            "radius": 0.20000005,
+            "rgb": "FFF0CC",
+            "group": 0,
+            "invert": false
+          },
+          {
+            "at": [0.0, 3.3362498, -7.02],
+            "dir_z": -1.0,
+            "radius": 0.100000024,
+            "rgb": "FFFFFF",
+            "group": 1,
+            "invert": true
+          },
+          {
+            "at": [0.0, 3.48625, 0.07],
+            "dir_z": 1.0,
+            "radius": 0.05,
+            "rgb": "FFFFFF",
+            "group": -1,
+            "invert": false
+          }
+        ],
+        "dropped_groups": [],
+        "skipped": 0
+      }
+    },
+    {
+      "id": "a-group-named-too-long",
+      "note": "a group past 32 characters is dropped: an inverted headlight shines always, the other is none",
+      "input": {
+        "obj": "v -7.0 2.8 -0.2\nv -6.9 2.8 -0.2\nv -6.9 3.2 -0.2\nv -7.0 3.2 -0.2\nv -7.0 2.8 0.2\nv -6.9 2.8 0.2\nv -6.9 3.2 0.2\nv -7.0 3.2 0.2\nv 6.9 2.8 -0.1\nv 7.0 2.8 -0.1\nv 7.0 3.0 -0.1\nv 6.9 3.0 -0.1\nv 6.9 2.8 0.1\nv 7.0 2.8 0.1\nv 7.0 3.0 0.1\nv 6.9 3.0 0.1\nv 0.0 2.0 0.0\nv 0.1 2.0 0.0\nv 0.1 2.1 0.0\nv 0.0 2.1 0.0\nv 0.0 2.0 0.1\nv 0.1 2.0 0.1\nv 0.1 2.1 0.1\nv 0.0 2.1 0.1\no HEADLIGHT_1_LCG_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nusemtl paint\nf 1 2 3 4\nf 5 6 7 8\nf 1 2 6 5\nf 4 3 7 8\nf 1 4 8 5\nf 2 3 7 6\no HEADLIGHT_2_LCG_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA_LINVERT\nusemtl paint\nf 9 10 11 12\nf 13 14 15 16\nf 9 10 14 13\nf 12 11 15 16\nf 9 12 16 13\nf 10 11 15 14\no WIDGET_4_CG_BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB\nusemtl paint\nf 17 18 19 20\nf 21 22 23 24\nf 17 18 22 21\nf 20 19 23 24\nf 17 20 24 21\nf 18 19 23 22\n",
+        "textured": ["paint"]
+      },
+      "expected": {
+        "parts": [
+          {
+            "object": "HEADLIGHT_1_LCG_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "HEADLIGHT_2_LCG_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA_LINVERT",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "WIDGET_4_CG_BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "WIDGET_4",
+            "index": 0,
+            "light": [-1, false, false, false]
+          }
+        ],
+        "light_groups": [],
+        "bogies": [{"pivot_z": 0.0, "wheels": []}, {"pivot_z": 0.0, "wheels": []}],
+        "controls": [
+          {
+            "key": "WIDGET_4",
+            "kind": "WIDGET",
+            "group": "WIDGET_4",
+            "label": null,
+            "flags": ["NOTOUCH"],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": null,
+            "axis": [0.0, 1.0, 0.0],
+            "degrees": 0.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [0.0, 2.43625, -0.1],
+            "box_max": [0.1, 2.5362499, 0.0]
+          }
+        ],
+        "door_leaves": [],
+        "doors": [],
+        "couplers": [],
+        "lamps": [],
+        "headlights": [
+          {
+            "at": [0.0, 3.3362498, -7.02],
+            "dir_z": -1.0,
+            "radius": 0.100000024,
+            "rgb": "FFFFFF",
+            "group": -1,
+            "invert": false
+          }
+        ],
+        "dropped_groups": ["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"],
+        "skipped": 0
+      }
+    },
+    {
+      "id": "the-raw-name-and-the-copy-suffix",
+      "note": "the INTERIOR prefix and token read the raw name, the light group the name without .001",
+      "input": {
+        "obj": "v -5.0 0.5 -1.0\nv 5.0 0.5 -1.0\nv 5.0 1.0 -1.0\nv -5.0 1.0 -1.0\nv -5.0 0.5 1.0\nv 5.0 0.5 1.0\nv 5.0 1.0 1.0\nv -5.0 1.0 1.0\nv -5.0 2.0 1.4\nv 5.0 2.0 1.4\nv 5.0 2.5 1.4\nv -5.0 2.5 1.4\nv -5.0 2.0 1.41\nv 5.0 2.0 1.41\nv 5.0 2.5 1.41\nv -5.0 2.5 1.41\nv 0.0 2.0 0.0\nv 0.5 2.0 0.0\nv 0.5 2.5 0.0\nv 0.0 2.5 0.0\nv 0.0 2.0 0.5\nv 0.5 2.0 0.5\nv 0.5 2.5 0.5\nv 0.0 2.5 0.5\nv 1.0 2.0 0.0\nv 1.1 2.0 0.0\nv 1.1 2.1 0.0\nv 1.0 2.1 0.0\nv 1.0 2.0 0.1\nv 1.1 2.0 0.1\nv 1.1 2.1 0.1\nv 1.0 2.1 0.1\no INTERIOR_1\nusemtl paint\nf 1 2 3 4\nf 5 6 7 8\nf 1 2 6 5\nf 4 3 7 8\nf 1 4 8 5\nf 2 3 7 6\no WINDOW_GLASS_INTERIOR\nusemtl paint\nf 9 10 11 12\nf 13 14 15 16\nf 9 10 14 13\nf 12 11 15 16\nf 9 12 16 13\nf 10 11 15 14\no PANEL_LCG_IL_INTERIOR.001\nusemtl paint\nf 17 18 19 20\nf 21 22 23 24\nf 17 18 22 21\nf 20 19 23 24\nf 17 20 24 21\nf 18 19 23 22\no WIDGET_6_TOGGLE.001\nusemtl paint\nf 25 26 27 28\nf 29 30 31 32\nf 25 26 30 29\nf 28 27 31 32\nf 25 28 32 29\nf 26 27 31 30\n",
+        "textured": ["paint"]
+      },
+      "expected": {
+        "parts": [
+          {
+            "object": "INTERIOR_1",
+            "place": "INTERIOR",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, true, false]
+          },
+          {
+            "object": "WINDOW_GLASS_INTERIOR",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, true, false]
+          },
+          {
+            "object": "PANEL_LCG_IL_INTERIOR.001",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [0, false, false, false]
+          },
+          {
+            "object": "WIDGET_6_TOGGLE.001",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "WIDGET_6",
+            "index": 0,
+            "light": [-1, false, false, false]
+          }
+        ],
+        "light_groups": ["IL"],
+        "bogies": [{"pivot_z": 0.0, "wheels": []}, {"pivot_z": 0.0, "wheels": []}],
+        "controls": [
+          {
+            "key": "WIDGET_6",
+            "kind": "WIDGET",
+            "group": "WIDGET_6",
+            "label": null,
+            "flags": ["TOGGLE"],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": null,
+            "axis": [0.0, 1.0, 0.0],
+            "degrees": 0.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [0.0, 2.43625, -1.1],
+            "box_max": [0.1, 2.5362499, -1.0]
+          }
+        ],
+        "door_leaves": [],
+        "doors": [],
+        "couplers": [],
+        "lamps": [],
+        "headlights": [],
+        "dropped_groups": [],
+        "skipped": 0
+      }
+    },
+    {
+      "id": "example-pack-shunter",
+      "note": "the example pack's shunter as the engine reads it",
+      "input_file": {
+        "obj": "run/rwat_packs/RwatExamplePack/assets/rwat_example/stock/shunter/shunter.obj",
+        "mtl": "run/rwat_packs/RwatExamplePack/assets/rwat_example/stock/shunter/shunter.mtl",
+        "model": "run/rwat_packs/RwatExamplePack/assets/rwat_example/wagon_models/shunter.json"
+      },
+      "expected": {
+        "parts": [
+          {
+            "object": "FRAME",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "BUFFER_BEAMS",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "HOODS",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "RADIATOR_GRILLE",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "EXHAUST_STACK",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "CAB_WALLS",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "CAB_ROOF",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "STEPS",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "HEADLIGHT_HOUSINGS",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "HEADLIGHT_1_LCG_FHL_0XFFF2CC",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [0, false, false, false]
+          },
+          {
+            "object": "WIDGET_7_CG_FHL_HIDE_NOTOUCH",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "WIDGET_7",
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "HEADLIGHT_2_LCG_RHL_0XFFF2CC",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [1, false, false, false]
+          },
+          {
+            "object": "TAIL_LAMPS_FULLBRIGHT_LCG_REL",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [2, true, false, false]
+          },
+          {
+            "object": "CAB_LAMP_FULLBRIGHT_LCG_IL",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [3, true, false, false]
+          },
+          {
+            "object": "INTERIOR_CAB_FLOOR_LCG_IL",
+            "place": "INTERIOR",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [3, false, true, false]
+          },
+          {
+            "object": "INTERIOR_DESKS_LCG_IL",
+            "place": "INTERIOR",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [3, false, true, false]
+          },
+          {
+            "object": "INTERIOR_CHAIRS_LCG_IL",
+            "place": "INTERIOR",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [3, false, true, false]
+          },
+          {
+            "object": "BRAKE_VALVE_BASES",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "THROTTLE_1_ROT_-50",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "THROTTLE_1",
+            "index": 1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "THROTTLE_1_LEVER_LABEL_Controller",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "THROTTLE_1",
+            "index": 1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "THROTTLE_1_KNOB",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "THROTTLE_1",
+            "index": 1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "REVERSER_1_ROT_-60",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "REVERSER_1",
+            "index": 2,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "REVERSER_1_LEVER",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "REVERSER_1",
+            "index": 2,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "REVERSER_1_KNOB",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "REVERSER_1",
+            "index": 2,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "TRAIN_BRAKE_1_ROT_90",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "TRAIN_BRAKE_1",
+            "index": 3,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "TRAIN_BRAKE_1_HANDLE",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "TRAIN_BRAKE_1",
+            "index": 3,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "TRAIN_BRAKE_1_KNOB",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "TRAIN_BRAKE_1",
+            "index": 3,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "IND_BRAKE_1_ROT_70",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "IND_BRAKE_1",
+            "index": 4,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "IND_BRAKE_1_HANDLE",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "IND_BRAKE_1",
+            "index": 4,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "IND_BRAKE_1_KNOB",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "IND_BRAKE_1",
+            "index": 4,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "BRAKE_PRESSURE_1_ROT_-180",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "BRAKE_PRESSURE_1",
+            "index": 5,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "BRAKE_PRESSURE_1_NEEDLE",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "BRAKE_PRESSURE_1",
+            "index": 5,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GAUGE_TRAIN_BRAKE_1_ROT_-180",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "GAUGE_TRAIN_BRAKE_1",
+            "index": 6,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GAUGE_TRAIN_BRAKE_1_NEEDLE",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "GAUGE_TRAIN_BRAKE_1",
+            "index": 6,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GAUGE_SPEED_1_ROT_-240",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "GAUGE_SPEED_1",
+            "index": 7,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GAUGE_SPEED_1_NEEDLE_RANGE_0_1.5",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "GAUGE_SPEED_1",
+            "index": 7,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GAUGE_IND_BRAKE_1_ROT_-180",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "GAUGE_IND_BRAKE_1",
+            "index": 8,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GAUGE_IND_BRAKE_1_NEEDLE",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "GAUGE_IND_BRAKE_1",
+            "index": 8,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GAUGE_TEMPERATURE_1_ROT_-180",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "GAUGE_TEMPERATURE_1",
+            "index": 9,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GAUGE_TEMPERATURE_1_NEEDLE",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "GAUGE_TEMPERATURE_1",
+            "index": 9,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GAUGE_THROTTLE_1_TL_-0.72_Z",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "GAUGE_THROTTLE_1",
+            "index": 10,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GAUGE_REVERSER_1_TL_0.08_Y",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "GAUGE_REVERSER_1",
+            "index": 11,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "IND_LAMP_FULLBRIGHT_LCG_FHL_LINVERT",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [0, true, false, true]
+          },
+          {
+            "object": "HORN_CONTROL_1_TL_-0.015_Y_PRESS_LABEL_Horn",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "HORN_CONTROL_1",
+            "index": 12,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "WHISTLE_CONTROL_1_TL_-0.015_Y_PRESS_LABEL_Whistle",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "WHISTLE_CONTROL_1",
+            "index": 13,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "BELL_CONTROL_1_TL_-0.015_Y_PRESS_LABEL_Bell",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "BELL_CONTROL_1",
+            "index": 14,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "ENGINE_START_1_TL_-0.015_Y_TOGGLE_LABEL_Engine^start",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "ENGINE_START_1",
+            "index": 15,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "WIDGET_1_ROT_60",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "WIDGET_1",
+            "index": 16,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "WIDGET_1_TOGGLE_CG_FHL_OFFSET_-0.5",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "WIDGET_1",
+            "index": 16,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "WIDGET_2_ROT_60",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "WIDGET_2",
+            "index": 17,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "WIDGET_2_TOGGLE_CG_RHL_OFFSET_-0.5",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "WIDGET_2",
+            "index": 17,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "WIDGET_3_ROT_60",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "WIDGET_3",
+            "index": 18,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "WIDGET_3_TOGGLE_CG_IL_OFFSET_-0.5",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "WIDGET_3",
+            "index": 18,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "WIDGET_6_ROT_60",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "WIDGET_6",
+            "index": 19,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "WIDGET_6_TOGGLE_CG_DeskL_OFFSET_-0.5",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "WIDGET_6",
+            "index": 19,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "WIDGET_4_ROT_60",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "WIDGET_4",
+            "index": 20,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "WIDGET_4_TOGGLE_GLOBAL_CG_DoorsL_LABEL_Left^doors_OFFSET_-0.5",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "WIDGET_4",
+            "index": 20,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "WIDGET_5_ROT_60",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "WIDGET_5",
+            "index": 21,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "WIDGET_5_TOGGLE_GLOBAL_CG_DoorsR_LABEL_Right^doors_OFFSET_-0.5",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "WIDGET_5",
+            "index": 21,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "WINDOW_1_INVERT_TL_0.8_Y",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "WINDOW_1",
+            "index": 22,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "WINDOW_1_HANDLE",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "WINDOW_1",
+            "index": 22,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "HANDBRAKE_1_ROT_270",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "HANDBRAKE_1",
+            "index": 23,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "HANDBRAKE_1_HANDWHEEL",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "HANDBRAKE_1",
+            "index": 23,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "THROTTLE_2_ROT_-50",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "THROTTLE_2",
+            "index": 24,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "THROTTLE_2_LEVER",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "THROTTLE_2",
+            "index": 24,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "THROTTLE_2_KNOB",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "THROTTLE_2",
+            "index": 24,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "REVERSER_2_ROT_-60",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "REVERSER_2",
+            "index": 25,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "REVERSER_2_LEVER",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "REVERSER_2",
+            "index": 25,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "REVERSER_2_KNOB",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "REVERSER_2",
+            "index": 25,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "TRAIN_BRAKE_2_ROT_90",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "TRAIN_BRAKE_2",
+            "index": 26,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "TRAIN_BRAKE_2_HANDLE",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "TRAIN_BRAKE_2",
+            "index": 26,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "TRAIN_BRAKE_2_KNOB",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "TRAIN_BRAKE_2",
+            "index": 26,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GAUGE_SPEED_2_ROT_240",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "GAUGE_SPEED_2",
+            "index": 27,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GAUGE_SPEED_2_NEEDLE_RANGE_0_1.5",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "GAUGE_SPEED_2",
+            "index": 27,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "BRAKE_PRESSURE_2_ROT_180",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "BRAKE_PRESSURE_2",
+            "index": 28,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "BRAKE_PRESSURE_2_NEEDLE",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "BRAKE_PRESSURE_2",
+            "index": 28,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "DIALS_FULLBRIGHT_LCG_DeskL",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [4, true, false, false]
+          },
+          {
+            "object": "DIALS_FULLBRIGHT_LCG_DeskL",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [4, true, false, false]
+          },
+          {
+            "object": "COUPLED_FRONT_1",
+            "place": "COUPLER",
+            "front": true,
+            "owner": null,
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "COUPLED_FRONT_2",
+            "place": "COUPLER",
+            "front": true,
+            "owner": null,
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "COUPLED_REAR_1",
+            "place": "COUPLER",
+            "front": false,
+            "owner": null,
+            "index": 1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "COUPLED_REAR_2",
+            "place": "COUPLER",
+            "front": false,
+            "owner": null,
+            "index": 1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "BOGEY_FRONT",
+            "place": "BOGIE",
+            "front": true,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "BOGEY_FRONT_WHEEL_1",
+            "place": "WHEEL",
+            "front": true,
+            "owner": "BOGEY_FRONT_WHEEL_1",
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "BOGEY_FRONT_WHEEL_2",
+            "place": "WHEEL",
+            "front": true,
+            "owner": "BOGEY_FRONT_WHEEL_2",
+            "index": 1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "BOGEY_REAR",
+            "place": "BOGIE",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "BOGEY_REAR_WHEEL_1",
+            "place": "WHEEL",
+            "front": false,
+            "owner": "BOGEY_REAR_WHEEL_1",
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "BOGEY_REAR_WHEEL_2",
+            "place": "WHEEL",
+            "front": false,
+            "owner": "BOGEY_REAR_WHEEL_2",
+            "index": 1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GUIDE_FLOOR_0",
+            "place": "SKIPPED",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GUIDE_FLOOR_1",
+            "place": "SKIPPED",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GUIDE_DOORWAY_STEPS_LEFT",
+            "place": "SKIPPED",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GUIDE_DOORWAY_STEPS_RIGHT",
+            "place": "SKIPPED",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GUIDE_CHAIRS",
+            "place": "SKIPPED",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          }
+        ],
+        "light_groups": ["FHL", "RHL", "REL", "IL", "DeskL"],
+        "bogies": [
+          {
+            "pivot_z": 4.0,
+            "wheels": [
+              {
+                "object": "BOGEY_FRONT_WHEEL_1",
+                "axle_obj": [-5.1, 0.5],
+                "center": [0.93625, 1.0999999],
+                "radius": 0.53
+              },
+              {
+                "object": "BOGEY_FRONT_WHEEL_2",
+                "axle_obj": [-2.9, 0.5],
+                "center": [0.93625, -1.0999999],
+                "radius": 0.53
+              }
+            ]
+          },
+          {
+            "pivot_z": -4.0,
+            "wheels": [
+              {
+                "object": "BOGEY_REAR_WHEEL_1",
+                "axle_obj": [2.9, 0.5],
+                "center": [0.93625, 1.0999999],
+                "radius": 0.53
+              },
+              {
+                "object": "BOGEY_REAR_WHEEL_2",
+                "axle_obj": [5.1, 0.5],
+                "center": [0.93625, -1.0999999],
+                "radius": 0.53
+              }
+            ]
+          }
+        ],
+        "controls": [
+          {
+            "key": "WIDGET_7",
+            "kind": "WIDGET",
+            "group": "FHL",
+            "label": null,
+            "flags": ["HIDE", "NOTOUCH"],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": null,
+            "axis": [0.0, 1.0, 0.0],
+            "degrees": 0.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [-0.17, 3.23625, 6.71],
+            "box_max": [0.17, 3.5362499, 6.72]
+          },
+          {
+            "key": "THROTTLE_1",
+            "kind": "THROTTLE",
+            "group": "THROTTLE_1",
+            "label": "Controller",
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": [-0.45, 2.95625, -1.05],
+            "axis": [-1.0, 0.0, 0.0],
+            "degrees": -50.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [-0.5, 2.95625, -1.085],
+            "box_max": [-0.4, 3.25625, -1.015]
+          },
+          {
+            "key": "REVERSER_1",
+            "kind": "REVERSER",
+            "group": "REVERSER_1",
+            "label": null,
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": [-0.2, 2.95625, -1.05],
+            "axis": [-1.0, 0.0, 0.0],
+            "degrees": -60.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [-0.25, 2.95625, -1.085],
+            "box_max": [-0.15, 3.17625, -1.015]
+          },
+          {
+            "key": "TRAIN_BRAKE_1",
+            "kind": "TRAIN_BRAKE",
+            "group": "TRAIN_BRAKE_1",
+            "label": null,
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": [-1.2, 2.98625, -1.0],
+            "axis": [0.0, 1.0, 0.0],
+            "degrees": 90.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [-1.23, 2.93625, -1.19],
+            "box_max": [-1.17, 3.06625, -0.97]
+          },
+          {
+            "key": "IND_BRAKE_1",
+            "kind": "INDEPENDENT_BRAKE",
+            "group": "IND_BRAKE_1",
+            "label": null,
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": [-0.98, 2.98625, -1.05],
+            "axis": [0.0, 1.0, 0.0],
+            "degrees": 70.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [-1.01, 2.93625, -1.2],
+            "box_max": [-0.95, 3.06625, -1.02]
+          },
+          {
+            "key": "BRAKE_PRESSURE_1",
+            "kind": "BRAKE_PRESSURE",
+            "group": "BRAKE_PRESSURE_1",
+            "label": null,
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": [-1.25, 3.10625, -0.769],
+            "axis": [0.0, 0.0, -1.0],
+            "degrees": -180.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [-1.25, 3.10025, -0.774],
+            "box_max": [-1.1735, 3.11225, -0.764]
+          },
+          {
+            "key": "GAUGE_TRAIN_BRAKE_1",
+            "kind": "GAUGE_TRAIN_BRAKE",
+            "group": "GAUGE_TRAIN_BRAKE_1",
+            "label": null,
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": [-1.03, 3.10625, -0.769],
+            "axis": [0.0, 0.0, -1.0],
+            "degrees": -180.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [-1.03, 3.10025, -0.774],
+            "box_max": [-0.9535, 3.11225, -0.764]
+          },
+          {
+            "key": "GAUGE_SPEED_1",
+            "kind": "GAUGE_SPEED",
+            "group": "GAUGE_SPEED_1",
+            "label": null,
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.5],
+            "interior": false,
+            "pivot": [-0.78, 3.10625, -0.769],
+            "axis": [0.0, 0.0, -1.0],
+            "degrees": -240.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [-0.783, 3.05005, -0.774],
+            "box_max": [-0.6887, 3.11145, -0.764]
+          },
+          {
+            "key": "GAUGE_IND_BRAKE_1",
+            "kind": "GAUGE_INDEPENDENT_BRAKE",
+            "group": "GAUGE_IND_BRAKE_1",
+            "label": null,
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": [-0.53, 3.10625, -0.769],
+            "axis": [0.0, 0.0, -1.0],
+            "degrees": -180.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [-0.53, 3.10025, -0.774],
+            "box_max": [-0.4535, 3.11225, -0.764]
+          },
+          {
+            "key": "GAUGE_TEMPERATURE_1",
+            "kind": "GAUGE_OTHER",
+            "group": "GAUGE_TEMPERATURE_1",
+            "label": null,
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": [-0.31, 3.10625, -0.769],
+            "axis": [0.0, 0.0, -1.0],
+            "degrees": -180.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [-0.31, 3.10025, -0.774],
+            "box_max": [-0.2505, 3.11225, -0.764]
+          },
+          {
+            "key": "GAUGE_THROTTLE_1",
+            "kind": "GAUGE_THROTTLE",
+            "group": "GAUGE_THROTTLE_1",
+            "label": null,
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": null,
+            "axis": [0.0, 1.0, 0.0],
+            "degrees": 0.0,
+            "slide": [-0.72, 0.0, 0.0],
+            "box_min": [-0.46, 3.25625, -0.78],
+            "box_max": [-0.42, 3.31625, -0.77]
+          },
+          {
+            "key": "GAUGE_REVERSER_1",
+            "kind": "GAUGE_REVERSER",
+            "group": "GAUGE_REVERSER_1",
+            "label": null,
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": null,
+            "axis": [0.0, 1.0, 0.0],
+            "degrees": 0.0,
+            "slide": [0.0, 0.08, 0.0],
+            "box_min": [-0.28, 3.21625, -0.775],
+            "box_max": [-0.22, 3.23625, -0.765]
+          },
+          {
+            "key": "HORN_CONTROL_1",
+            "kind": "HORN",
+            "group": "HORN_CONTROL_1",
+            "label": "Horn",
+            "flags": ["PRESS"],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": null,
+            "axis": [0.0, 1.0, 0.0],
+            "degrees": 0.0,
+            "slide": [0.0, -0.015, 0.0],
+            "box_min": [0.07, 2.93625, -1.14],
+            "box_max": [0.13, 2.97125, -1.08]
+          },
+          {
+            "key": "WHISTLE_CONTROL_1",
+            "kind": "WHISTLE",
+            "group": "WHISTLE_CONTROL_1",
+            "label": "Whistle",
+            "flags": ["PRESS"],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": null,
+            "axis": [0.0, 1.0, 0.0],
+            "degrees": 0.0,
+            "slide": [0.0, -0.015, 0.0],
+            "box_min": [0.19, 2.93625, -1.14],
+            "box_max": [0.25, 2.97125, -1.08]
+          },
+          {
+            "key": "BELL_CONTROL_1",
+            "kind": "BELL",
+            "group": "BELL_CONTROL_1",
+            "label": "Bell",
+            "flags": ["PRESS"],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": null,
+            "axis": [0.0, 1.0, 0.0],
+            "degrees": 0.0,
+            "slide": [0.0, -0.015, 0.0],
+            "box_min": [0.31, 2.93625, -1.14],
+            "box_max": [0.37, 2.97125, -1.08]
+          },
+          {
+            "key": "ENGINE_START_1",
+            "kind": "ENGINE_START",
+            "group": "ENGINE_START_1",
+            "label": "Engine start",
+            "flags": ["TOGGLE"],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": null,
+            "axis": [0.0, 1.0, 0.0],
+            "degrees": 0.0,
+            "slide": [0.0, -0.015, 0.0],
+            "box_min": [0.43, 2.93625, -1.14],
+            "box_max": [0.49, 2.97125, -1.08]
+          },
+          {
+            "key": "WIDGET_1",
+            "kind": "WIDGET",
+            "group": "FHL",
+            "label": null,
+            "flags": ["TOGGLE"],
+            "offset": -0.5,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": [0.65, 2.95125, -1.05],
+            "axis": [1.0, 0.0, 0.0],
+            "degrees": 60.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [0.63, 2.94625, -1.06],
+            "box_max": [0.67, 3.0362499, -1.04]
+          },
+          {
+            "key": "WIDGET_2",
+            "kind": "WIDGET",
+            "group": "RHL",
+            "label": null,
+            "flags": ["TOGGLE"],
+            "offset": -0.5,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": [0.77, 2.95125, -1.05],
+            "axis": [1.0, 0.0, 0.0],
+            "degrees": 60.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [0.75, 2.94625, -1.06],
+            "box_max": [0.79, 3.0362499, -1.04]
+          },
+          {
+            "key": "WIDGET_3",
+            "kind": "WIDGET",
+            "group": "IL",
+            "label": null,
+            "flags": ["TOGGLE"],
+            "offset": -0.5,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": [0.89, 2.95125, -1.05],
+            "axis": [1.0, 0.0, 0.0],
+            "degrees": 60.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [0.87, 2.94625, -1.06],
+            "box_max": [0.91, 3.0362499, -1.04]
+          },
+          {
+            "key": "WIDGET_6",
+            "kind": "WIDGET",
+            "group": "DeskL",
+            "label": null,
+            "flags": ["TOGGLE"],
+            "offset": -0.5,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": [1.01, 2.95125, -1.05],
+            "axis": [1.0, 0.0, 0.0],
+            "degrees": 60.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [0.99, 2.94625, -1.06],
+            "box_max": [1.03, 3.0362499, -1.04]
+          },
+          {
+            "key": "WIDGET_4",
+            "kind": "WIDGET",
+            "group": "DoorsL",
+            "label": "Left doors",
+            "flags": ["TOGGLE", "GLOBAL"],
+            "offset": -0.5,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": [1.13, 2.95125, -1.05],
+            "axis": [1.0, 0.0, 0.0],
+            "degrees": 60.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [1.11, 2.94625, -1.06],
+            "box_max": [1.15, 3.0362499, -1.04]
+          },
+          {
+            "key": "WIDGET_5",
+            "kind": "WIDGET",
+            "group": "DoorsR",
+            "label": "Right doors",
+            "flags": ["TOGGLE", "GLOBAL"],
+            "offset": -0.5,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": [1.25, 2.95125, -1.05],
+            "axis": [1.0, 0.0, 0.0],
+            "degrees": 60.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [1.23, 2.94625, -1.06],
+            "box_max": [1.27, 3.0362499, -1.04]
+          },
+          {
+            "key": "WINDOW_1",
+            "kind": "WINDOW",
+            "group": "WINDOW_1",
+            "label": null,
+            "flags": ["INVERT"],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": null,
+            "axis": [0.0, 1.0, 0.0],
+            "degrees": 0.0,
+            "slide": [0.0, 0.8, 0.0],
+            "box_min": [-1.53, 2.06625, -1.67],
+            "box_max": [-1.505, 2.96625, -0.83]
+          },
+          {
+            "key": "HANDBRAKE_1",
+            "kind": "HANDBRAKE",
+            "group": "HANDBRAKE_1",
+            "label": null,
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": [-0.9, 2.83625, -3.85],
+            "axis": [0.0, 0.0, -1.0],
+            "degrees": 270.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [-1.1, 2.63625, -3.92],
+            "box_max": [-0.7, 3.0362499, -3.8]
+          },
+          {
+            "key": "THROTTLE_2",
+            "kind": "THROTTLE",
+            "group": "THROTTLE_2",
+            "label": null,
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": [0.35000002, 2.95625, -3.55],
+            "axis": [1.0, 0.0, 0.0],
+            "degrees": -50.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [0.3, 2.95625, -3.585],
+            "box_max": [0.4, 3.25625, -3.515]
+          },
+          {
+            "key": "REVERSER_2",
+            "kind": "REVERSER",
+            "group": "REVERSER_2",
+            "label": null,
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": [0.2, 2.95625, -3.55],
+            "axis": [1.0, 0.0, 0.0],
+            "degrees": -60.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [0.15, 2.95625, -3.585],
+            "box_max": [0.25, 3.17625, -3.515]
+          },
+          {
+            "key": "TRAIN_BRAKE_2",
+            "kind": "TRAIN_BRAKE",
+            "group": "TRAIN_BRAKE_2",
+            "label": null,
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": [1.2, 2.98625, -3.6],
+            "axis": [0.0, 1.0, 0.0],
+            "degrees": 90.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [1.17, 2.93625, -3.63],
+            "box_max": [1.23, 3.06625, -3.41]
+          },
+          {
+            "key": "GAUGE_SPEED_2",
+            "kind": "GAUGE_SPEED",
+            "group": "GAUGE_SPEED_2",
+            "label": null,
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.5],
+            "interior": false,
+            "pivot": [0.78, 3.10625, -3.8309999],
+            "axis": [0.0, 0.0, -1.0],
+            "degrees": 240.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [0.6887, 3.05005, -3.836],
+            "box_max": [0.783, 3.11145, -3.826]
+          },
+          {
+            "key": "BRAKE_PRESSURE_2",
+            "kind": "BRAKE_PRESSURE",
+            "group": "BRAKE_PRESSURE_2",
+            "label": null,
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": [1.1, 3.10625, -3.8309999],
+            "axis": [0.0, 0.0, -1.0],
+            "degrees": 180.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [1.0235, 3.10025, -3.836],
+            "box_max": [1.1, 3.11225, -3.826]
+          }
+        ],
+        "door_leaves": [],
+        "doors": [],
+        "couplers": [
+          {"front": true, "shown": "ALWAYS", "pivot": [0.0, 1.43625, 6.85]},
+          {"front": false, "shown": "ALWAYS", "pivot": [0.0, 1.43625, -6.85]}
+        ],
+        "lamps": [{"at": [0.0, 4.2962503, -2.3], "group": 3, "invert": false}],
+        "headlights": [
+          {
+            "at": [0.0, 3.38625, 6.73],
+            "dir_z": 1.0,
+            "radius": 0.17,
+            "rgb": "FFF2CC",
+            "group": 0,
+            "invert": false
+          },
+          {
+            "at": [0.0, 2.93625, -6.73],
+            "dir_z": -1.0,
+            "radius": 0.17,
+            "rgb": "FFF2CC",
+            "group": 1,
+            "invert": false
+          }
+        ],
+        "dropped_groups": [],
+        "skipped": 5
+      }
+    },
+    {
+      "id": "example-pack-coach",
+      "note": "the example pack's coach as the engine reads it",
+      "input_file": {
+        "obj": "run/rwat_packs/RwatExamplePack/assets/rwat_example/stock/coach/coach.obj",
+        "mtl": "run/rwat_packs/RwatExamplePack/assets/rwat_example/stock/coach/coach.mtl",
+        "model": "run/rwat_packs/RwatExamplePack/assets/rwat_example/wagon_models/coach.json",
+        "anim_salon_door": "run/rwat_packs/RwatExamplePack/assets/rwat_example/stock/coach/salon_door.anim"
+      },
+      "expected": {
+        "parts": [
+          {
+            "object": "BODY_SIDES",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "BODY_ENDS",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "ROOF",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "UNDERFRAME",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "FLOOR",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "STEPS",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GANGWAY_BELLOWS",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "INTERIOR_PARTITIONS_LCG_IL",
+            "place": "INTERIOR",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [0, false, true, false]
+          },
+          {
+            "object": "INTERIOR_WALLS_LCG_IL",
+            "place": "INTERIOR",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [0, false, true, false]
+          },
+          {
+            "object": "INTERIOR_SEATS_LCG_IL",
+            "place": "INTERIOR",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [0, false, true, false]
+          },
+          {
+            "object": "LAMPS_FULLBRIGHT_LCG_IL",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [0, true, false, false]
+          },
+          {
+            "object": "LAMPS_FULLBRIGHT_LCG_IL.001",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [0, true, false, false]
+          },
+          {
+            "object": "DOOR_1_TL_0.95_X",
+            "place": "DOOR_LEAF",
+            "front": false,
+            "owner": "DOOR_1",
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "DOOR_1_HANDLE",
+            "place": "DOOR_LEAF",
+            "front": false,
+            "owner": "DOOR_1",
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "DOOR_2_TL_0.95_X",
+            "place": "DOOR_LEAF",
+            "front": false,
+            "owner": "DOOR_2",
+            "index": 1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "DOOR_2_HANDLE",
+            "place": "DOOR_LEAF",
+            "front": false,
+            "owner": "DOOR_2",
+            "index": 1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "DOOR_3_TL_-0.95_X",
+            "place": "DOOR_LEAF",
+            "front": false,
+            "owner": "DOOR_3",
+            "index": 2,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "DOOR_3_HANDLE",
+            "place": "DOOR_LEAF",
+            "front": false,
+            "owner": "DOOR_3",
+            "index": 2,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "DOOR_4_TL_-0.95_X",
+            "place": "DOOR_LEAF",
+            "front": false,
+            "owner": "DOOR_4",
+            "index": 3,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "DOOR_4_HANDLE",
+            "place": "DOOR_LEAF",
+            "front": false,
+            "owner": "DOOR_4",
+            "index": 3,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "DOOR_5_ROT_90",
+            "place": "DOOR_LEAF",
+            "front": false,
+            "owner": "DOOR_5",
+            "index": 4,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "DOOR_5_LEAF",
+            "place": "DOOR_LEAF",
+            "front": false,
+            "owner": "DOOR_5",
+            "index": 4,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "DOOR_6_ROT_-90",
+            "place": "DOOR_LEAF",
+            "front": false,
+            "owner": "DOOR_6",
+            "index": 5,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "DOOR_6_LEAF",
+            "place": "DOOR_LEAF",
+            "front": false,
+            "owner": "DOOR_6",
+            "index": 5,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "SALON_DOOR_LEAF_INTERIOR_LCG_IL",
+            "place": "ANIMATED",
+            "front": false,
+            "owner": "salon_door",
+            "index": 0,
+            "light": [0, false, true, false]
+          },
+          {
+            "object": "SALON_DOOR_KNOB",
+            "place": "ANIMATED",
+            "front": false,
+            "owner": "salon_door",
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "LIGHT_SWITCH_PLATE",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "WIDGET_1_ROT_60",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "WIDGET_1",
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "WIDGET_1_TOGGLE_CG_IL_OFFSET_-0.5",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "WIDGET_1",
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "HANDBRAKE_1_ROT_270",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "HANDBRAKE_1",
+            "index": 1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "HANDBRAKE_1_HANDWHEEL",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "HANDBRAKE_1",
+            "index": 1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "COUPLED_FRONT_1",
+            "place": "COUPLER",
+            "front": true,
+            "owner": null,
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "COUPLED_FRONT_2_HIDE",
+            "place": "COUPLER",
+            "front": true,
+            "owner": null,
+            "index": 1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "COUPLED_FRONT_3_HIDE_INVERT",
+            "place": "COUPLER",
+            "front": true,
+            "owner": null,
+            "index": 2,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "COUPLED_REAR_1",
+            "place": "COUPLER",
+            "front": false,
+            "owner": null,
+            "index": 3,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "COUPLED_REAR_2_HIDE",
+            "place": "COUPLER",
+            "front": false,
+            "owner": null,
+            "index": 4,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "COUPLED_REAR_3_HIDE_INVERT",
+            "place": "COUPLER",
+            "front": false,
+            "owner": null,
+            "index": 5,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "BOGEY_FRONT",
+            "place": "BOGIE",
+            "front": true,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "BOGEY_FRONT_WHEEL_1",
+            "place": "WHEEL",
+            "front": true,
+            "owner": "BOGEY_FRONT_WHEEL_1",
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "BOGEY_FRONT_WHEEL_2",
+            "place": "WHEEL",
+            "front": true,
+            "owner": "BOGEY_FRONT_WHEEL_2",
+            "index": 1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "BOGEY_REAR",
+            "place": "BOGIE",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "BOGEY_REAR_WHEEL_1",
+            "place": "WHEEL",
+            "front": false,
+            "owner": "BOGEY_REAR_WHEEL_1",
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "BOGEY_REAR_WHEEL_2",
+            "place": "WHEEL",
+            "front": false,
+            "owner": "BOGEY_REAR_WHEEL_2",
+            "index": 1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GUIDE_FLOOR_0",
+            "place": "SKIPPED",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GUIDE_FLOOR_1",
+            "place": "SKIPPED",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GUIDE_FLOOR_2",
+            "place": "SKIPPED",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GUIDE_FLOOR_3",
+            "place": "SKIPPED",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GUIDE_DOORWAY_DOOR_FL",
+            "place": "SKIPPED",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GUIDE_DOORWAY_DOOR_FR",
+            "place": "SKIPPED",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GUIDE_DOORWAY_DOOR_RL",
+            "place": "SKIPPED",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GUIDE_DOORWAY_DOOR_RR",
+            "place": "SKIPPED",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GUIDE_DOORWAY_GANGWAY_FRONT",
+            "place": "SKIPPED",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GUIDE_DOORWAY_GANGWAY_REAR",
+            "place": "SKIPPED",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GUIDE_DOORWAY_SALON_DOOR",
+            "place": "SKIPPED",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "GUIDE_DOORWAY_SALON_ARCH",
+            "place": "SKIPPED",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          }
+        ],
+        "light_groups": ["IL"],
+        "bogies": [
+          {
+            "pivot_z": 7.0,
+            "wheels": [
+              {
+                "object": "BOGEY_FRONT_WHEEL_1",
+                "axle_obj": [-8.2, 0.5],
+                "center": [0.93625, 1.1999998],
+                "radius": 0.53
+              },
+              {
+                "object": "BOGEY_FRONT_WHEEL_2",
+                "axle_obj": [-5.8, 0.5],
+                "center": [0.93625, -1.1999998],
+                "radius": 0.53
+              }
+            ]
+          },
+          {
+            "pivot_z": -7.0,
+            "wheels": [
+              {
+                "object": "BOGEY_REAR_WHEEL_1",
+                "axle_obj": [5.8, 0.5],
+                "center": [0.93625, 1.1999998],
+                "radius": 0.53
+              },
+              {
+                "object": "BOGEY_REAR_WHEEL_2",
+                "axle_obj": [8.2, 0.5],
+                "center": [0.93625, -1.1999998],
+                "radius": 0.53
+              }
+            ]
+          }
+        ],
+        "controls": [
+          {
+            "key": "WIDGET_1",
+            "kind": "WIDGET",
+            "group": "IL",
+            "label": null,
+            "flags": ["TOGGLE"],
+            "offset": -0.5,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": [0.9, 2.83625, 7.93],
+            "axis": [1.0, 0.0, 0.0],
+            "degrees": 60.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [0.86, 2.8062499, 7.92],
+            "box_max": [0.94, 2.86625, 8.02]
+          },
+          {
+            "key": "HANDBRAKE_1",
+            "kind": "HANDBRAKE",
+            "group": "HANDBRAKE_1",
+            "label": null,
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": [1.0, 2.73625, -9.52],
+            "axis": [0.0, 0.0, -1.0],
+            "degrees": 270.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [0.8, 2.5362499, -9.6],
+            "box_max": [1.2, 2.93625, -9.46]
+          }
+        ],
+        "door_leaves": [
+          {
+            "key": "DOOR_1",
+            "kind": "DOOR",
+            "group": "DOOR_1",
+            "label": null,
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": null,
+            "axis": [0.0, 1.0, 0.0],
+            "degrees": 0.0,
+            "slide": [0.0, 0.0, -0.95],
+            "box_min": [1.45, 1.58625, 8.25],
+            "box_max": [1.55, 3.73625, 9.25]
+          },
+          {
+            "key": "DOOR_2",
+            "kind": "DOOR",
+            "group": "DOOR_2",
+            "label": null,
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": null,
+            "axis": [0.0, 1.0, 0.0],
+            "degrees": 0.0,
+            "slide": [0.0, 0.0, -0.95],
+            "box_min": [-1.55, 1.58625, 8.25],
+            "box_max": [-1.45, 3.73625, 9.25]
+          },
+          {
+            "key": "DOOR_3",
+            "kind": "DOOR",
+            "group": "DOOR_3",
+            "label": null,
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": null,
+            "axis": [0.0, 1.0, 0.0],
+            "degrees": 0.0,
+            "slide": [0.0, 0.0, 0.95],
+            "box_min": [1.45, 1.58625, -9.25],
+            "box_max": [1.55, 3.73625, -8.25]
+          },
+          {
+            "key": "DOOR_4",
+            "kind": "DOOR",
+            "group": "DOOR_4",
+            "label": null,
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": null,
+            "axis": [0.0, 1.0, 0.0],
+            "degrees": 0.0,
+            "slide": [0.0, 0.0, 0.95],
+            "box_min": [-1.55, 1.58625, -9.25],
+            "box_max": [-1.45, 3.73625, -8.25]
+          },
+          {
+            "key": "DOOR_5",
+            "kind": "DOOR",
+            "group": "DOOR_5",
+            "label": null,
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": [-0.45, 2.63625, 9.65],
+            "axis": [0.0, 1.0, 0.0],
+            "degrees": 90.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [-0.45, 1.58625, 9.62],
+            "box_max": [0.45, 3.68625, 9.68]
+          },
+          {
+            "key": "DOOR_6",
+            "kind": "DOOR",
+            "group": "DOOR_6",
+            "label": null,
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": [-0.45, 2.63625, -9.65],
+            "axis": [0.0, 1.0, 0.0],
+            "degrees": -90.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [-0.45, 1.58625, -9.68],
+            "box_max": [0.45, 3.68625, -9.62]
+          }
+        ],
+        "doors": [{"id": "salon_door", "objects": ["SALON_DOOR_LEAF_INTERIOR_LCG_IL", "SALON_DOOR_KNOB"]}],
+        "couplers": [
+          {"front": true, "shown": "ALWAYS", "pivot": [0.0, 1.41625, 9.78]},
+          {"front": true, "shown": "UNCOUPLED", "pivot": [0.0, 1.41625, 9.78]},
+          {"front": true, "shown": "COUPLED", "pivot": [0.0, 1.41625, 9.78]},
+          {"front": false, "shown": "ALWAYS", "pivot": [0.0, 1.41625, -9.78]},
+          {"front": false, "shown": "UNCOUPLED", "pivot": [0.0, 1.41625, -9.78]},
+          {"front": false, "shown": "COUPLED", "pivot": [0.0, 1.41625, -9.78]}
+        ],
+        "lamps": [
+          {"at": [0.0, 4.00625, 6.4], "group": 0, "invert": false},
+          {"at": [0.0, 4.00625, 3.8], "group": 0, "invert": false},
+          {"at": [0.0, 4.00625, 1.2], "group": 0, "invert": false},
+          {"at": [0.0, 4.00625, -1.2], "group": 0, "invert": false},
+          {"at": [0.0, 4.00625, -3.8], "group": 0, "invert": false},
+          {"at": [0.0, 4.00625, -6.4], "group": 0, "invert": false},
+          {"at": [0.0, 4.00625, 8.75], "group": 0, "invert": false},
+          {"at": [0.0, 4.00625, -8.75], "group": 0, "invert": false}
+        ],
+        "headlights": [],
+        "dropped_groups": [],
+        "skipped": 12
+      }
+    },
+    {
+      "id": "example-pack-gondola",
+      "note": "the example pack's gondola as the engine reads it",
+      "input_file": {
+        "obj": "run/rwat_packs/RwatExamplePack/assets/rwat_example/stock/gondola/gondola.obj",
+        "mtl": "run/rwat_packs/RwatExamplePack/assets/rwat_example/stock/gondola/gondola.mtl",
+        "model": "run/rwat_packs/RwatExamplePack/assets/rwat_example/wagon_models/gondola.json"
+      },
+      "expected": {
+        "parts": [
+          {
+            "object": "BODY",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "FLOOR",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "UNDERFRAME",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "SPRINGS",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "CARGO_FILL_1",
+            "place": "SKIPPED",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "CARGO_FILL_50",
+            "place": "SKIPPED",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "CARGO_FILL_100",
+            "place": "SKIPPED",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "TARP_HIDE",
+            "place": "HIDDEN",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "WIDGET_1_ROT_270",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "WIDGET_1",
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "WIDGET_1_HANDWHEEL",
+            "place": "CONTROL",
+            "front": false,
+            "owner": "WIDGET_1",
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "HANDBRAKE_COLUMN",
+            "place": "BODY",
+            "front": false,
+            "owner": null,
+            "index": -1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "COUPLED_FRONT_1",
+            "place": "COUPLER",
+            "front": true,
+            "owner": null,
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "COUPLED_FRONT_2",
+            "place": "COUPLER",
+            "front": true,
+            "owner": null,
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "COUPLED_REAR_1",
+            "place": "COUPLER",
+            "front": false,
+            "owner": null,
+            "index": 1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "COUPLED_REAR_2",
+            "place": "COUPLER",
+            "front": false,
+            "owner": null,
+            "index": 1,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "BOGEY_FRONT_WHEEL_1",
+            "place": "WHEEL",
+            "front": true,
+            "owner": "BOGEY_FRONT_WHEEL_1",
+            "index": 0,
+            "light": [-1, false, false, false]
+          },
+          {
+            "object": "BOGEY_REAR_WHEEL_1",
+            "place": "WHEEL",
+            "front": false,
+            "owner": "BOGEY_REAR_WHEEL_1",
+            "index": 0,
+            "light": [-1, false, false, false]
+          }
+        ],
+        "light_groups": [],
+        "bogies": [
+          {
+            "pivot_z": 2.75,
+            "wheels": [
+              {
+                "object": "BOGEY_FRONT_WHEEL_1",
+                "axle_obj": [-2.75, 0.5],
+                "center": [0.93625, 0.0],
+                "radius": 0.53
+              }
+            ]
+          },
+          {
+            "pivot_z": -2.75,
+            "wheels": [
+              {
+                "object": "BOGEY_REAR_WHEEL_1",
+                "axle_obj": [2.75, 0.5],
+                "center": [0.93625, 0.0],
+                "radius": 0.53
+              }
+            ]
+          }
+        ],
+        "controls": [
+          {
+            "key": "WIDGET_1",
+            "kind": "HANDBRAKE",
+            "group": "WIDGET_1",
+            "label": null,
+            "flags": [],
+            "offset": 0.0,
+            "range": [0.0, 1.0],
+            "interior": false,
+            "pivot": [1.58, 2.46625, -4.55],
+            "axis": [0.0, 1.0, 0.0],
+            "degrees": 270.0,
+            "slide": [0.0, 0.0, 0.0],
+            "box_min": [1.4, 2.41625, -4.73],
+            "box_max": [1.76, 2.51625, -4.37]
+          }
+        ],
+        "door_leaves": [],
+        "doors": [],
+        "couplers": [
+          {"front": true, "shown": "ALWAYS", "pivot": [0.0, 1.41625, 4.86]},
+          {"front": false, "shown": "ALWAYS", "pivot": [0.0, 1.41625, -4.86]}
+        ],
+        "lamps": [],
+        "headlights": [],
+        "dropped_groups": [],
+        "skipped": 4
+      }
+    }
+  ]
+}

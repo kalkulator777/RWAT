@@ -6,6 +6,7 @@ import java.util.Map;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
+import com.muzhik17.trainsmod.convention.ModelParts;
 import com.muzhik17.trainsmod.convention.ObjectRole;
 import com.muzhik17.trainsmod.kinematics.EdgeOutline;
 
@@ -52,6 +53,8 @@ import net.minecraft.resources.ResourceLocation;
  * same geometry baked against other textures.
  *
  * <p>Every loader returns this shape; the renderer doesn't know the source.
+ * What each part of the OBJ is — the roles, hinges, lamps — is
+ * {@link ModelParts}'; the loader ({@link IrStockModel}) builds the meshes by it.
  */
 public record StockModel(
         Map<ResourceLocation, Mesh> body,
@@ -67,7 +70,7 @@ public record StockModel(
         List<Headlight> headlights,
         List<Coupler> couplers) {
 
-    /** Quad tag bits (SPEC §8): low byte = light group index + 1 (0 = none). */
+    /** Quad tag bits (SPEC §8, {@link ModelParts.Light}): low byte = light group index + 1 (0 = none). */
     public static final int TAG_GROUP_MASK = 0xFF;
     /** The quad glows at full brightness while its group is lit. */
     public static final int TAG_FULLBRIGHT = 1 << 8;
@@ -80,6 +83,11 @@ public record StockModel(
     public static int tag(int group, boolean fullbright, boolean interior, boolean linvert) {
         return (group + 1 & TAG_GROUP_MASK) | (fullbright ? TAG_FULLBRIGHT : 0)
                 | (interior ? TAG_INTERIOR : 0) | (linvert ? TAG_LINVERT : 0);
+    }
+
+    /** A quad tag of a part's light. */
+    public static int tag(ModelParts.Light light) {
+        return tag(light.group(), light.fullbright(), light.interior(), light.invert());
     }
 
     /** True if a quad with this tag is lit given the model's lit groups. */

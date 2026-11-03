@@ -1,0 +1,131 @@
+{
+  "description": "The faces of one glowing part, four corners each (x, y, z as floats; a triangle repeats its last corner), in the frame the engine gives them (the model frame) -> its cabin lamps (convention.LampIslands.of): faces meeting at a corner rounded to 1e-4 (Math.round(c * 1e4f) on each axis) are one island, through any chain of them; an island whose box diagonal is at least 0.3 is a lamp at the box centre; lamps in the order of their islands' first faces. expected: {lamps: [[x, y, z]]}.",
+  "frame": "model",
+  "tolerance": 1e-06,
+  "cases": [
+    {
+      "id": "no-faces",
+      "note": "a part with no faces has no lamp",
+      "input": {"faces": []},
+      "expected": {"lamps": []}
+    },
+    {
+      "id": "a-face-under-the-size",
+      "note": "a 0.2 square: a 0.28 diagonal is no lamp (a dial's backlight)",
+      "input": {"faces": [[0, 2, 0, 0.2, 2, 0, 0.2, 2, 0.2, 0, 2, 0.2]]},
+      "expected": {"lamps": []}
+    },
+    {
+      "id": "a-face-past-the-size",
+      "note": "a 0.22 square: a 0.31 diagonal is a lamp at its centre",
+      "input": {"faces": [[0, 2, 0, 0.22, 2, 0, 0.22, 2, 0.22, 0, 2, 0.22]]},
+      "expected": {"lamps": [[0.11, 2.0, 0.11]]}
+    },
+    {
+      "id": "touching-faces-are-one-lamp",
+      "note": "two squares sharing an edge are one island",
+      "input": {
+        "faces": [[0, 2, 0, 0.2, 2, 0, 0.2, 2, 0.2, 0, 2, 0.2], [0.2, 2, 0, 0.4, 2, 0, 0.4, 2, 0.2, 0.2, 2, 0.2]]
+      },
+      "expected": {"lamps": [[0.2, 2.0, 0.1]]}
+    },
+    {
+      "id": "faces-apart-are-two-lamps",
+      "note": "two squares 5 blocks apart are two lamps",
+      "input": {"faces": [[0, 2, 0, 0.4, 2, 0, 0.4, 2, 0.4, 0, 2, 0.4], [5, 2, 0, 5.4, 2, 0, 5.4, 2, 0.4, 5, 2, 0.4]]},
+      "expected": {"lamps": [[0.2, 2.0, 0.2], [5.2, 2.0, 0.2]]}
+    },
+    {
+      "id": "a-chain-joins-faces-listed-apart",
+      "note": "the third face touches the first two: one island through it",
+      "input": {
+        "faces": [
+          [0, 2, 0, 0.2, 2, 0, 0.2, 2, 0.2, 0, 2, 0.2],
+          [0.4, 2, 0, 0.6, 2, 0, 0.6, 2, 0.2, 0.4, 2, 0.2],
+          [0.2, 2, 0, 0.4, 2, 0, 0.4, 2, 0.2, 0.2, 2, 0.2]
+        ]
+      },
+      "expected": {"lamps": [[0.3, 2.0, 0.1]]}
+    },
+    {
+      "id": "corners-within-1e-4-are-one",
+      "note": "a corner 0.00004 off another rounds to it",
+      "input": {
+        "faces": [
+          [0, 0, 0, 0.2, 0, 0, 0.2, 0, 0.2, 0, 0, 0.2],
+          [0.20004, 0, 0, 0.40004, 0, 0, 0.40004, 0, 0.2, 0.20004, 0, 0.2]
+        ]
+      },
+      "expected": {"lamps": [[0.20002, 0.0, 0.1]]}
+    },
+    {
+      "id": "corners-2e-4-apart-are-two",
+      "note": "a corner 0.0002 off another is another: two specks, no lamp",
+      "input": {
+        "faces": [
+          [0, 0, 0, 0.2, 0, 0, 0.2, 0, 0.2, 0, 0, 0.2],
+          [0.2002, 0, 0, 0.4002, 0, 0, 0.4002, 0, 0.2, 0.2002, 0, 0.2]
+        ]
+      },
+      "expected": {"lamps": []}
+    },
+    {
+      "id": "a-triangle-repeats-its-last-corner",
+      "note": "a triangle comes as a quad with its last corner twice",
+      "input": {"faces": [[1, 1, 1, 1.5, 1, 1, 1, 1, 1.5, 1, 1, 1.5]]},
+      "expected": {"lamps": [[1.25, 1.0, 1.25]]}
+    },
+    {
+      "id": "lamps-in-the-order-of-their-first-faces",
+      "note": "islands are listed by their first face, not by place",
+      "input": {
+        "faces": [
+          [9, 0, 0, 9.4, 0, 0, 9.4, 0, 0.4, 9, 0, 0.4],
+          [1, 0, 0, 1.4, 0, 0, 1.4, 0, 0.4, 1, 0, 0.4],
+          [5, 0, 0, 5.4, 0, 0, 5.4, 0, 0.4, 5, 0, 0.4],
+          [1.4, 0, 0, 1.8, 0, 0, 1.8, 0, 0.4, 1.4, 0, 0.4]
+        ]
+      },
+      "expected": {"lamps": [[9.2, 0.0, 0.2], [1.4, 0.0, 0.2], [5.2, 0.0, 0.2]]}
+    },
+    {
+      "id": "far-corners-a-hash-took-for-one",
+      "note": "two corners the former 64-bit hash key took for one: two specks, not one lamp 2.4 blocks wide",
+      "input": {
+        "faces": [
+          [-1.9838, 0.322, -1.2204, -1.9738, 0.322, -1.2204, -1.9838, 0.322, -1.2104, -1.9838, 0.322, -1.2104],
+          [
+            -1.5299,
+            -0.5132,
+            0.8569,
+            -1.5199,
+            -0.5132,
+            0.8569,
+            -1.5299,
+            -0.5132,
+            0.8669,
+            -1.5299,
+            -0.5132,
+            0.8669
+          ]
+        ]
+      },
+      "expected": {"lamps": []}
+    },
+    {
+      "id": "a-box-is-one-lamp",
+      "note": "a box's six faces share their corners: one lamp at its centre",
+      "input": {
+        "faces": [
+          [-0.25, 2.3, -0.1, 0.25, 2.3, -0.1, 0.25, 2.4, -0.1, -0.25, 2.4, -0.1],
+          [-0.25, 2.3, 0.1, 0.25, 2.3, 0.1, 0.25, 2.4, 0.1, -0.25, 2.4, 0.1],
+          [-0.25, 2.3, -0.1, 0.25, 2.3, -0.1, 0.25, 2.3, 0.1, -0.25, 2.3, 0.1],
+          [-0.25, 2.4, -0.1, 0.25, 2.4, -0.1, 0.25, 2.4, 0.1, -0.25, 2.4, 0.1],
+          [-0.25, 2.3, -0.1, -0.25, 2.4, -0.1, -0.25, 2.4, 0.1, -0.25, 2.3, 0.1],
+          [0.25, 2.3, -0.1, 0.25, 2.4, -0.1, 0.25, 2.4, 0.1, 0.25, 2.3, 0.1]
+        ]
+      },
+      "expected": {"lamps": [[0.0, 2.35, 0.0]]}
+    }
+  ]
+}

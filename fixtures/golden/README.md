@@ -92,6 +92,8 @@ python -I -m unittest discover tools/tests
 | `floor_region` | Java: `FloorRegion` через `WagonTypeParser.parse` и `Interior.region` | ts, python (`floorgen.Region`: куски, разрезы, `fits`, `reach`) | `region` | тип пака (кадр OBJ), открытые двери, `margin`, вопросы (кадр модели) → куски, разрезы, связи, ответы |
 | `floor_check` | Java: `FloorCheck.findings` после `WagonTypeParser.parse` | ts, python (`floorgen.Region.door_seeds`: выходы) | `findings`, `exits` | тип пака → находки `{code, subject, index, params, text}`; `exits_of`: тип → по двери куски пола, с которых через неё выходят (`null` у внутренней) |
 | `door_leaves` | Java: `convention.DoorLeaves`, `WagonType.doorHolding` | ts (`modelParts.ts`, M3) | `leaves` | объекты модели, `skip`, `.anim`, двери типа → подвижные двери и створки с их дверью |
+| `model_parts` | Java: `convention.ModelParts.of` | ts (`modelParts.ts`, M3) | `parts` (и три модели пака-примера) | OBJ, текстурированные материалы или MTL, декларация модели, `.anim` дверей → каждая часть (место, владелец, свет), группы света, тележки и колёсные пары, органы и створки с шарнирами, двери `.anim`, головы сцепок, лампы салона, фары (кадр модели) |
+| `lamp_islands` | Java: `convention.LampIslands.of` | ts (`lampIslands.ts`) | `islands` | грани светящейся части (по 4 угла) → лампы салона |
 | `wagon_type` | Java: `WagonTypeParser.parse`, `WagonType` | ts | `parse`, `example_pack` | тип пака → ошибка, предупреждения, тип в кадре модели, ответы на вопросы о дверях и полу |
 | `stock_defaults` | Java: `stock.StockDefaults` | ts | `defaults` | масса, система, кабина → сопротивление и тормоза; имя системы; константы |
 | `json_dump` | Python: `ir2rwat.dump` | ts | `dump` | JSON текстом (`json`) или файл пака-примера (`value`) → текст файла |
@@ -126,6 +128,11 @@ python -I -m unittest discover tools/tests
 - **Створки (`door_leaves`).**
   - Тип для поиска двери — обёртка `{"length": 30, "bogies": [8, -8], "mass_t": 40, "doors": …}`: на ответ влияют только двери.
   - Коробка створки — объединение коробок объектов с текстурой. Её центр переводится в кадр модели и ищется в коробках дверей с запасом 0.1.
+- **Разбор модели (`model_parts`).**
+  - Геометрия — во `float`, в кадре модели: `(z, y + Y_LIFT, −x)`, `Y_LIFT = fround(0.43625…)`, каждая операция с `Math.fround`, как во `float` Java. Шарнир — `PivotAxis` в `double`, потом в `float`.
+  - Порядок важен везде: части — как в файле; органы, створки, двери — по первому объекту; группы света — по первой нарисованной части с `_LCG_`; головы сцепок — передние, потом задние.
+  - Префиксы (`BOGEY_FRONT`, `INTERIOR`, `skip`), подстрока `HIDE` и токен `INTERIOR` читают сырое имя; органы, свет, створки, сцепки — имя без суффикса `.001`.
+- **Острова ламп (`lamp_islands`).** Ключ угла — `Math.round(fround(c · 1e4))` по трём осям, без хеша; диагональ коробки — во `float`, порог 0.3; лампы — в порядке первой грани острова.
 - **Пробелы.**
   - Имена объектов: пробелом считаются символы до U+0020 (как `String.trim`). Неразрывный пробел — часть имени.
   - Имена материалов: случаи только с ASCII-пробелами. На прочих пробелах Unicode Java и Python расходятся: `Character.isWhitespace` против `str.split`.

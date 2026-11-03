@@ -12,7 +12,7 @@ import com.muzhik17.trainsmod.stock.WagonType;
 /**
  * Which objects of a wagon model are door leaves the asset moves by name, and
  * which of the wagon type's doors each one is (SPEC §9.5) — the rule the model
- * loader builds the leaves by ({@code IrStockModel}), which the pack checks and
+ * loader builds the leaves by ({@link ModelParts}), which the pack checks and
  * the editor read too. Pure.
  *
  * <p>An object is a part of door {@code DOOR_<n>}'s leaf when
