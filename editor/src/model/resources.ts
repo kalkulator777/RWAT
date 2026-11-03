@@ -3,15 +3,15 @@
  * (`IrStockModel.load`, `materialTextures`, `liveries`, `loadAnimations`): a resource
  * location `ns:path` is the pack file `assets/<ns>/<path>`, and Minecraft takes only
  * lower-case letters, digits and `_ . -` in a namespace, and `/` besides in a path
- * (`ResourceLocation`): a location it refuses names no file. The same rule as the loader
- * checks' resource paths (checks/loader.ts); a file under `assets/` the rule refuses is
- * not loaded by the game, and the model is read as the game reads it.
+ * (`ResourceLocation`): a location it refuses names no file. One rule with the loader
+ * checks' resource paths (core/paths `RESOURCE_NAMESPACE`, `RESOURCE_PATH`); a file under
+ * `assets/` the rule refuses is not loaded by the game, and the model is read as the game
+ * reads it.
  */
 
+import { RESOURCE_NAMESPACE, RESOURCE_PATH } from '../core/paths';
 import * as Mtl from '../ports/mtl';
 
-const NAMESPACE = /^[a-z0-9_.-]+$/;
-const PATH = /^[a-z0-9_./-]+$/;
 
 /** The pack file of a resource location `ns:path` (`ResourceLocation.tryParse`); null when Minecraft refuses it. */
 export function resourceFile(location: string): string | null {
@@ -21,7 +21,7 @@ export function resourceFile(location: string): string | null {
 
 /** `assets/<namespace>/<path>` (`ResourceLocation.tryBuild`); null when Minecraft refuses the namespace or the path. */
 export function assetFile(namespace: string, path: string): string | null {
-  return NAMESPACE.test(namespace) && PATH.test(path) ? `assets/${namespace}/${path}` : null;
+  return RESOURCE_NAMESPACE.test(namespace) && RESOURCE_PATH.test(path) ? `assets/${namespace}/${path}` : null;
 }
 
 /**

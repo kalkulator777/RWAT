@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareForWriting, comparePaths, normalizeEntryName, packPathProblem, parentPath } from './paths';
+import { compareForWriting, comparePaths, isResourcePath, normalizeEntryName, packPathProblem, parentPath } from './paths';
 
 describe('packPathProblem', () => {
   it('accepts paths inside a pack, in any case', () => {
@@ -57,5 +57,19 @@ describe('order and parents', () => {
   it('finds the folder of a path', () => {
     expect(parentPath('a/b/c.json')).toBe('a/b');
     expect(parentPath('c.json')).toBe('');
+  });
+});
+
+describe('isResourcePath', () => {
+  it('takes a file of assets or data the way Minecraft takes a resource location: lower case, digits and _ . - in a namespace, / besides in a path', () => {
+    expect(isResourcePath('assets/rwat_example/stock/coach/coach.obj')).toBe(true);
+    expect(isResourcePath('data/my-pack.v2/wagon_types/a.json')).toBe(true);
+    expect(isResourcePath('assets/ns/A.png')).toBe(false);
+    expect(isResourcePath('data/NS/wagon_types/a.json')).toBe(false);
+    expect(isResourcePath('assets/ns/my file.png')).toBe(false);
+    expect(isResourcePath('assets/ns')).toBe(false);
+    expect(isResourcePath('assets//a.png')).toBe(false);
+    expect(isResourcePath('pack.png')).toBe(false);
+    expect(isResourcePath('lang/ns/a.json')).toBe(false);
   });
 });
