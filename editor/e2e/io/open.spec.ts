@@ -7,9 +7,10 @@
  * picker is replaced by one that hands over the browser's private file system, which
  * needs no dialog).
  *
- * There are no forms yet, so no edit of a field is made here: an edit and its save are
- * the Vitest gate's (test/m1.test.ts); this file checks the shell around them, and that
- * a save with no edits writes the pack back as it was.
+ * No field is edited here: an edit through the forms, its save and the zip opened again
+ * are the forms' gate (e2e/forms/forms.spec.ts), an edit's bytes the Vitest gate's
+ * (test/m1.test.ts). This file checks the shell around them, and that a save with no
+ * edits writes the pack back as it was.
  */
 
 import { createHash } from 'node:crypto';
