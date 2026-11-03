@@ -11,7 +11,7 @@
 export { createModelApi, decodeImage } from './api';
 export { buildModel, roleId, type Built } from './build';
 export { ModelCache, type Stamp } from './cache';
-export { ModelLoader, startModelWorker, type ModelWorker } from './client';
+export { lazyModelWorker, ModelLoader, startModelWorker, type ModelWorker } from './client';
 export { MISSING, packFiles, sourceFiles, type EditedPack, type ModelFiles } from './files';
 export { assetFile, relativeFile, resourceFile } from './resources';
 export type {

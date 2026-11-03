@@ -1,11 +1,9 @@
 /**
- * What the browser tests reach of the view (e2e/view3d/): the view's state, a drawing
- * made now, and where an object is on the page. Given only to a page that asked for it
- * before the editor started — the test sets `window.__RWAT_E2E__ = true` in an init
- * script — so the editor a user opens exposes nothing.
- *
- * Until the model worker is wired in (A3.1), this is also how a test shows a model: it
- * builds one in Node with the ports and hands it over through `view.show`.
+ * What the browser tests reach of the view (e2e/): the view's state, a drawing made now,
+ * and where an object is on the page. Given only to a page that asked for it before the
+ * editor started — the test sets `window.__RWAT_E2E__ = true` in an init script — so the
+ * editor a user opens exposes nothing. The model itself comes the way it comes to a user:
+ * a pack opened, a wagon picked, read by the model worker (app/openModel.ts).
  */
 
 import type { Vec3 } from '../core/contracts';

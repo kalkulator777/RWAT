@@ -4,9 +4,9 @@
  * is `computed` in the module that owns it.
  *
  * Here: what the shell needs and the open pack with its journal, the schema and the
- * findings (M1), and the findings as the panels show them, checked with a delay (M2).
- * The open model and the preview state join when their modules are wired in. Signals
- * only; what changes them is ./session.ts.
+ * findings (M1), and the findings as the panels show them, checked with a delay (M2); the
+ * open wagon and its model (M3). The preview's state is the preview's own
+ * (preview/store). Signals only; what changes them is ./session.ts and ./openModel.ts.
  */
 
 import { computed, signal } from '@preact/signals';
@@ -16,6 +16,7 @@ import type { Link, Problem } from '../core/contracts';
 import type { Journal } from '../core/journal';
 import type { Pack } from '../core/pack';
 import type { Schema } from '../core/schema';
+import type { ParsedModel } from '../model/types';
 
 export { lang, setLang } from '../i18n';
 
@@ -66,11 +67,33 @@ export const problems = computed<Problem[]>(() => {
 });
 
 /**
+ * The open wagon (`<namespace>:<id>`): the one the selection points at, staying open while
+ * it points elsewhere (./openModel.ts); null for none.
+ */
+export const openWagon = signal<string | null>(null);
+
+/** The open wagon's model as the model worker read it (shown in the view, previewed); null while there is none. */
+export const openModel = signal<ParsedModel | null>(null);
+
+/** True while the open wagon's model is being read. */
+export const modelLoading = signal(false);
+
+/** The findings of reading the open model (a model that can't be read, a worker that failed). */
+export const modelProblems = signal<Problem[]>([]);
+
+/** The pack's findings, checked with a delay (checks/live.ts). */
+const packFindings = liveFindings({ pack, schema, revision });
+
+/**
  * The findings the panels show (checks tab, tree, inspector): {@link problems}, checked at
  * once when a pack opens or the schema arrives and 150 ms after the last of a run of edits
- * (checks/live.ts), so typing into a big pack's forms does not check it on every key.
+ * (checks/live.ts), so typing into a big pack's forms does not check it on every key; then
+ * the open model's.
  */
-export const findings = liveFindings({ pack, schema, revision });
+export const findings = computed<Problem[]>(() => {
+  const model = modelProblems.value;
+  return model.length === 0 ? packFindings.value : [...packFindings.value, ...model];
+});
 
 /** The number of files saving would write or delete. */
 export const dirtyCount = computed(() => {

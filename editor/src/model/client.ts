@@ -24,6 +24,19 @@ export interface ModelWorker {
   stop(): void;
 }
 
+/**
+ * The worker's interface, the worker started by the first call: a page that opens no model
+ * starts no worker.
+ */
+export function lazyModelWorker(): ModelWorkerApi {
+  let worker: ModelWorker | null = null;
+  const api = (): Remote<ModelWorkerApi> => (worker ??= startModelWorker()).api;
+  return {
+    load: (request, files) => api().load(request, files),
+    textures: (paths, files) => api().textures(paths, files),
+  };
+}
+
 /** Starts ../workers/model.worker.ts (a module worker, bundled by Vite). */
 export function startModelWorker(): ModelWorker {
   const worker = new Worker(new URL('../workers/model.worker.ts', import.meta.url), { type: 'module', name: 'rwat-model' });

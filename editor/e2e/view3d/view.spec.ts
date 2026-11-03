@@ -7,80 +7,27 @@
  * textured display and the shunter with a light group lit leave screenshots too. axe finds
  * nothing serious or critical with a model shown.
  *
- * Until the model worker is wired in (A3.1), the model is built in Node by the ports, as
- * the worker builds it (src/view3d/testModel.node.ts), and handed to the page through the
- * test hook the page exposes when asked before it starts (src/view3d/testHook.ts).
- * Reference screenshots to compare against are CI's (§5.2): these are not compared.
+ * The model comes as it comes to a user: the example pack opened as a zip, the wagon
+ * picked in the tree, its model read by the model worker (e2e/examplePack.ts). The test
+ * hook the page exposes when asked before it starts (src/view3d/testHook.ts) draws on
+ * demand and says where an object is on the page. Reference screenshots to compare against
+ * are CI's (§5.2): these are not compared.
  */
 
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
-import { loadWagonType } from '../../src/ports/wagonType';
-import { EXAMPLE_PACK } from '../../src/testing/repo.node';
-import { wagonFrame, type WagonFrame } from '../../src/view3d/frame';
 import { roleColor, VIEW_BACKGROUND } from '../../src/view3d/roleColors';
 import type { ViewTestHook } from '../../src/view3d/testHook';
-import { exampleFile, exampleModel, type ExampleWagon } from '../../src/view3d/testModel.node';
+import { openPack, pickWagon, watchErrors } from '../examplePack';
 
 type HookWindow = { __RWAT_E2E__?: boolean; __rwatView?: ViewTestHook | null };
 
-interface SerializedModel {
-  id: string;
-  objects: unknown[];
-  parts: { object: string; material: string; texture: string | null; positions: number[]; normals: number[]; uvs: number[] }[];
-  /** PNG bytes in base64 by pack path. */
-  textures: Record<string, string>;
-}
+type ExampleWagon = 'coach' | 'shunter' | 'gondola';
 
-function serialized(id: ExampleWagon): SerializedModel {
-  const model = exampleModel(id);
-  return {
-    id: model.id,
-    objects: model.objects,
-    parts: model.parts.map((part) => ({
-      object: part.object,
-      material: part.material,
-      texture: part.texture,
-      positions: Array.from(part.positions),
-      normals: Array.from(part.normals),
-      uvs: Array.from(part.uvs),
-    })),
-    textures: Object.fromEntries(Object.keys(model.textures).map((path) => [path, exampleFile(path).toString('base64')])),
-  };
-}
-
-function frameOf(id: ExampleWagon): WagonFrame {
-  const json: unknown = JSON.parse(readFileSync(join(EXAMPLE_PACK, 'data', 'rwat_example', 'wagon_types', `${id}.json`), 'utf8'));
-  const { type } = loadWagonType(`rwat_example:${id}`, json);
-  if (type === null) throw new Error(`${id} does not load`);
-  return wagonFrame(type);
-}
-
-/** Hands the model to the page's view, its textures decoded there as the worker decodes them (flipped upright). */
+/** Opens the example pack (once a page) and picks the wagon: the worker reads its model, the view shows it. */
 async function show(page: Page, id: ExampleWagon): Promise<void> {
-  await page.evaluate(
-    async ({ data, frame }) => {
-      const hook = (window as HookWindow).__rwatView;
-      if (!hook) throw new Error('no view hook');
-      const textures: Record<string, ImageBitmap | null> = {};
-      for (const [path, base64] of Object.entries(data.textures)) {
-        const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-        textures[path] = await createImageBitmap(new Blob([bytes], { type: 'image/png' }), { imageOrientation: 'flipY' });
-      }
-      const parts = data.parts.map((part) => ({
-        ...part,
-        positions: new Float32Array(part.positions),
-        normals: new Float32Array(part.normals),
-        uvs: new Float32Array(part.uvs),
-      }));
-      hook.setFrame(frame);
-      hook.view.show({ id: data.id, parts, objects: data.objects as never, textures, problems: [] });
-    },
-    { data: serialized(id), frame: frameOf(id) },
-  );
-  await expect(page.getByTestId('view3d')).toHaveAttribute('data-model', `rwat_example:${id}`);
+  if ((await page.getByTestId('pack-status').count()) === 0) await openPack(page);
+  await pickWagon(page, `rwat_example:${id}`);
 }
 
 /**
@@ -142,15 +89,6 @@ async function screenshot(page: Page, name: string): Promise<void> {
   const path = test.info().outputPath(`${name}.png`);
   await page.getByTestId('view3d').screenshot({ path });
   await test.info().attach(name, { path, contentType: 'image/png' });
-}
-
-function watchErrors(page: Page): string[] {
-  const errors: string[] = [];
-  page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(message.text());
-  });
-  page.on('pageerror', (error) => errors.push(error.message));
-  return errors;
 }
 
 const DRAWN_ROLES = ['body', 'interior', 'bogie_front', 'bogie_rear', 'wheelset', 'door_leaf', 'anim_object', 'control', 'coupler_head'];
