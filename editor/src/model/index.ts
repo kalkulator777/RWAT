@@ -9,9 +9,9 @@
  */
 
 export { createModelApi, decodeImage } from './api';
-export { buildModel, emptyModel, roleId, type Built } from './build';
+export { buildModel, checkFiles, checkModel, emptyModel, roleId, type Built } from './build';
 export { ModelCache, type Stamp } from './cache';
-export { lazyModelWorker, ModelLoader, startModelWorker, type ModelWorker } from './client';
+export { checkModelFiles, lazyModelWorker, ModelLoader, startModelWorker, type ModelWorker } from './client';
 export { MISSING, packFiles, sourceFiles, type EditedPack, type ModelFiles } from './files';
 export { assetFile, relativeFile, resourceFile } from './resources';
-export type { ModelReader, ModelRequest, ModelWorkerApi, TextureDecoder } from './types';
+export type { ModelCheckApi, ModelReader, ModelRequest, ModelWorkerApi, TextureDecoder } from './types';

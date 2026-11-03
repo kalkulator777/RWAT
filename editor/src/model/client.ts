@@ -10,38 +10,42 @@
  */
 
 import { proxy, releaseProxy, wrap, type Remote } from 'comlink';
-import type { LoadedModel } from '../core/contracts';
+import type { LoadedModel, Problem } from '../core/contracts';
 import { ModelCache, type Stamp } from './cache';
 import type { ModelFiles } from './files';
-import type { ModelReader, ModelRequest, ModelWorkerApi } from './types';
+import type { ModelCheckApi, ModelReader, ModelRequest, ModelWorkerApi } from './types';
 
 /** The stamp of the declaration's value in a cache entry: the value is the request's, not a file's. */
 const DECLARATION = '\u0000declaration';
 
 /** A model worker running: its interface and how to stop it. */
 export interface ModelWorker {
-  api: Remote<ModelWorkerApi>;
+  api: Remote<ModelWorkerApi & ModelCheckApi>;
   /** Stops the worker; a load under way fails. */
   stop(): void;
 }
 
+/** The page's model worker, once started. */
+let pageWorker: ModelWorker | null = null;
+
 /**
  * The worker's interface, the worker started by the first call: a page that opens no model
- * starts no worker.
+ * starts no worker. Every such interface of the page talks to the one worker (§3.11: the
+ * open model and "Check all models" share it).
  */
-export function lazyModelWorker(): ModelWorkerApi {
-  let worker: ModelWorker | null = null;
-  const api = (): Remote<ModelWorkerApi> => (worker ??= startModelWorker()).api;
+export function lazyModelWorker(): ModelWorkerApi & ModelCheckApi {
+  const api = (): Remote<ModelWorkerApi & ModelCheckApi> => (pageWorker ??= startModelWorker()).api;
   return {
     load: (request, files) => api().load(request, files),
     textures: (paths, files) => api().textures(paths, files),
+    check: (request, files) => api().check(request, files),
   };
 }
 
 /** Starts ../workers/model.worker.ts (a module worker, bundled by Vite). */
 export function startModelWorker(): ModelWorker {
   const worker = new Worker(new URL('../workers/model.worker.ts', import.meta.url), { type: 'module', name: 'rwat-model' });
-  const api = wrap<ModelWorkerApi>(worker);
+  const api = wrap<ModelWorkerApi & ModelCheckApi>(worker);
   return {
     api,
     stop: () => {
@@ -63,6 +67,14 @@ function noting(files: ModelFiles, stamps: Map<string, Stamp>): ModelReader {
       return await files.has(path);
     },
   };
+}
+
+/**
+ * What the pack check says of a model's files, checked by `worker` (`ModelCheckApi.check`):
+ * the files read as the model loader reads them, nothing kept.
+ */
+export function checkModelFiles(worker: ModelCheckApi | Remote<ModelCheckApi>, files: ModelFiles, request: ModelRequest): Promise<Problem[]> {
+  return worker.check(request, proxy(noting(files, new Map())));
 }
 
 /** Loads models through a worker, keeping the last few (§3.11: three). */

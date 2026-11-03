@@ -233,9 +233,12 @@ describe('a small model', () => {
     expect(refused.textures).toEqual({});
   });
 
-  it('draws nothing when the MTL is missing, and nothing breaks', async () => {
+  it('draws nothing when the MTL is missing, and nothing breaks: the pack check says so', async () => {
     const model = await loadSmall({ obj: ['mtllib none.mtl', 'v 0 0 0', 'v 1 0 0', 'v 1 1 0', 'o BODY', 'usemtl paint', 'f 1 2 3', ''].join('\n') });
-    expect(model.problems).toEqual([]);
+    expect(model.problems.map((problem) => [problem.code, problem.text, problem.at])).toEqual([
+      ['model.missing-library', 'model t:stock/m.obj: material library t:stock/none.mtl not found', [{ kind: 'file', file: 'assets/t/stock/m.obj' }]],
+      ['model.draws-nothing', 'model t:stock/m.obj draws nothing: no face has a textured material', [{ kind: 'file', file: 'assets/t/stock/m.obj' }]],
+    ]);
     expect(model.objects[0]?.role).toBe('untextured');
   });
 
@@ -270,7 +273,12 @@ describe('a small model', () => {
       [{ declaration: { obj: 'stock/m.obj', bogies: [] } }, 'model.bad-declaration', "assets/t/wagon_models/m.json: 'bogies' must list at least one pivot offset"],
       [{ declaration: { obj: 'stock/M.obj' } }, 'model.bad-path', "model path 't:stock/M.obj' is not a valid resource location"],
       [{ declaration: { obj: 'stock/none.obj' } }, 'model.missing', 'model file t:stock/none.obj not found'],
-      [{ obj: 'v 0 0 0\nf 1 2 3\n' }, 'model.unreadable', "model t:stock/m.obj can't be read: line 2: the corner '2' names 2 of 1"],
+      [
+        { obj: 'v 0 0 0\nf 1 2 3\n' },
+        'model.bad-face-index',
+        "model t:stock/m.obj: a face refers to a vertex, texture coordinate or normal that isn't there (Index 1 out of bounds for length 1); indices count from 1, negative ones aren't supported",
+      ],
+      [{ obj: 'v 0 0 x\nf 1 1 1\n' }, 'model.unreadable', 'model t:stock/m.obj can\'t be read: java.lang.NumberFormatException: For input string: "x"'],
     ];
     for (const [options, code, text] of cases) {
       const model = await loadSmall(options);

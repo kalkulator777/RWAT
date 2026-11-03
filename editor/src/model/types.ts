@@ -7,7 +7,7 @@
  * the preview read it: no type of its own here.
  */
 
-import type { LoadedModel } from '../core/contracts';
+import type { LoadedModel, Problem } from '../core/contracts';
 
 /** What to load: one wagon model of the open pack. */
 export interface ModelRequest {
@@ -39,4 +39,10 @@ export interface ModelWorkerApi {
   load(request: ModelRequest, files: ModelReader): Promise<LoadedModel>;
   /** Decodes textures by pack path (a livery's, say); null for a missing or broken one. Bitmaps are transferred. */
   textures(paths: readonly string[], files: ModelReader): Promise<Record<string, ImageBitmap | null>>;
+}
+
+/** The model worker's check of a model's files ("Check all models", checks/model), beside {@link ModelWorkerApi}. */
+export interface ModelCheckApi {
+  /** What the pack check says of one model's files (ports/modelCheck), without building it: nothing is kept. */
+  check(request: ModelRequest, files: ModelReader): Promise<Problem[]>;
 }

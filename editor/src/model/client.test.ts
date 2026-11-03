@@ -9,9 +9,9 @@ import { expose, wrap, type Remote } from 'comlink';
 import { afterEach, describe, expect, it } from 'vitest';
 import { MemoryPack } from '../io';
 import { createModelApi } from './api';
-import { ModelLoader } from './client';
+import { checkModelFiles, ModelLoader } from './client';
 import { sourceFiles, type ModelFiles } from './files';
-import type { ModelRequest, ModelWorkerApi } from './types';
+import type { ModelCheckApi, ModelRequest, ModelWorkerApi } from './types';
 
 const OBJ = ['mtllib m.mtl', 'v 0 0 0', 'v 1 0 0', 'v 1 1 0', 'o BODY', 'usemtl paint', 'f 1 2 3', ''].join('\n');
 
@@ -25,11 +25,11 @@ afterEach(() => {
 });
 
 /** The worker's interface across a MessageChannel, as in a worker; textures decode to null (Node has no bitmaps). */
-function remoteApi(): Remote<ModelWorkerApi> {
+function remoteApi(): Remote<ModelWorkerApi & ModelCheckApi> {
   const channel = new MessageChannel();
   channels.push(channel);
   expose(createModelApi(() => Promise.resolve(null)), channel.port2);
-  return wrap<ModelWorkerApi>(channel.port1);
+  return wrap<ModelWorkerApi & ModelCheckApi>(channel.port1);
 }
 
 /** A pack of models `m0`…`m<n−1>` and files that count what the worker reads and can be stamped anew. */
@@ -137,5 +137,15 @@ describe('ModelLoader through a worker', () => {
     const model = await loader.load(files, request);
     expect(model.problems.map((p) => p.code)).toEqual(['model.missing']);
     expect(await loader.load(files, request)).toBe(model);
+  });
+
+  it('checks a model alone across the channel: the pack check\'s findings, nothing built, every file read through the proxy', async () => {
+    const { files, reads, requests } = await pack();
+    expect(await checkModelFiles(remoteApi(), files, requests[0]!)).toEqual([]);
+    expect(reads).toEqual(['assets/t/stock/m0.obj', 'assets/t/stock/m.mtl']);
+    const missing = await checkModelFiles(remoteApi(), files, { ...requests[0]!, declaration: { obj: 'stock/m0.obj', liveries: { red: 'red' } } });
+    expect(missing.map((p) => [p.code, p.at])).toEqual([
+      ['model.livery-replaces-nothing', [{ kind: 'field', file: 'assets/t/wagon_models/m0.json', at: '/liveries/red' }]],
+    ]);
   });
 });

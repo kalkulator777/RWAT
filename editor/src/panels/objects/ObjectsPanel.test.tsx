@@ -218,7 +218,8 @@ describe('the objects tab', () => {
 
   it('says why when the wagon’s model can’t be read, in the words of its finding', async () => {
     const broken = new Map(files);
-    broken.set('assets/rwat_example/stock/shunter/shunter.obj', new TextEncoder().encode('v 1 2\n'));
+    // a number Java refuses: the reader's exception (a short line would be an index out of bounds, `model.bad-face-index`)
+    broken.set('assets/rwat_example/stock/shunter/shunter.obj', new TextEncoder().encode('v 1 2 x\n'));
     await openPack(broken, 'broken');
     render(<ObjectsPanel />);
     selection.value = [{ kind: 'file', file: SHUNTER_MODEL }];

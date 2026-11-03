@@ -14,18 +14,23 @@
  * 5. the triangles of each object × material pair in the OBJ frame: positions, normals
  *    and UVs as the file has them (V not turned: the bitmaps are decoded upside down);
  *    a quad is two triangles, a triangle (a quad with its last corner twice) one;
- * 6. the textures the parts use, decoded; the liveries' textures that are there.
+ * 6. the textures the parts use, decoded; the liveries' textures that are there;
+ * 7. what the pack check says of the model's files (ports/modelCheck, `ModelCheck`): a
+ *    missing library or texture, faces without a texture, a group too long, an animation
+ *    that doesn't read, a livery that replaces nothing — as the model's findings
+ *    (checks/model: source `model`, one system of codes).
  *
  * A model that can't be read — a declaration the engine refuses, an OBJ path it refuses,
- * no OBJ, an OBJ it can't read — is no exception: it comes back empty with one finding
- * (source `model`). Everything else the pack checks say of a model (`ModelCheck`: a
- * missing MTL or texture, faces without a texture, a livery that replaces nothing) is
- * not said here.
+ * no OBJ, an OBJ it can't read — is no exception: it comes back empty with one finding,
+ * the one the check stops at. {@link checkModel} is the check alone, without the model
+ * ("Check all models", checks/model).
  */
 
+import { badDeclaration, modelProblem, type CheckedModel } from '../checks/model/problems';
 import type { LoadedModel, ObjectInfo, PartBuffers, Problem, Vec3 } from '../core/contracts';
 import * as Anim from '../ports/anim';
-import { CORNER_FLOATS, loadModel, ObjError, type ObjModel } from '../ports/obj';
+import { checkObj, modelCheck, modelFinding, objOf, type ModelCheckFiles, type ModelFinding } from '../ports/modelCheck';
+import { CORNER_FLOATS, type ObjModel } from '../ports/obj';
 import * as Mtl from '../ports/mtl';
 import {
   animatedBy,
@@ -87,11 +92,50 @@ export function emptyModel(id: string, file: string, obj: string | null = null):
 }
 
 /** A model that can't be read: empty, with one finding. */
-function unreadable(request: ModelRequest, obj: string | null, problem: Omit<Problem, 'severity' | 'source'>): Built {
+function unreadable(request: ModelRequest, obj: string | null, problem: Problem): Built {
+  return { model: { ...emptyModel(request.id, request.file, obj), problems: [problem] }, transfer: [] };
+}
+
+/**
+ * The pack's files as the model check reads them (ports/modelCheck): locations `ns:path`
+ * are the pack files `assets/<ns>/<path>` (./resources.ts), a location Minecraft refuses
+ * names nothing, a file is read as UTF-8 with its byte-order mark kept.
+ */
+export function checkFiles(files: ModelReader): ModelCheckFiles {
   return {
-    model: { ...emptyModel(request.id, request.file, obj), problems: [{ severity: 'error', source: 'model', ...problem }] },
-    transfer: [],
+    valid: (location) => resourceFile(location) !== null,
+    exists: async (location) => {
+      const path = resourceFile(location);
+      return path !== null && (await files.has(path));
+    },
+    read: async (location) => {
+      const path = resourceFile(location);
+      const bytes = path === null ? null : await files.read(path);
+      if (bytes === null) throw new Error(`no file ${location}`);
+      return decoder.decode(bytes);
+    },
   };
+}
+
+/** The declaration of a request as the engine reads it, or the finding of one it refuses. */
+function declarationOf(request: ModelRequest): ModelDeclaration | Problem {
+  try {
+    return modelDeclaration(splitLocation(request.id).namespace, request.declaration);
+  } catch (error) {
+    if (!(error instanceof PackJsonError)) throw error;
+    return badDeclaration(request, error.message);
+  }
+}
+
+/**
+ * What the pack check says of a request's model (ports/modelCheck `modelCheck`), read
+ * through `files`, as findings: the model itself is not built, nothing is kept.
+ */
+export async function checkModel(request: ModelRequest, files: ModelReader): Promise<Problem[]> {
+  const decl = declarationOf(request);
+  if (!('obj' in decl)) return [decl];
+  const subject: CheckedModel = request;
+  return (await modelCheck(decl, checkFiles(files))).map((finding) => modelProblem(finding, subject));
 }
 
 /** The bytes of a file, or null when it is missing or its reading fails. */
@@ -285,46 +329,28 @@ async function liveries(decl: ModelDeclaration, namespace: string, folder: strin
   return Object.fromEntries(out);
 }
 
-/** The model of a request, read through `files`; the textures through `decode`. */
+/**
+ * The model of a request, read through `files`; the textures through `decode`. Its
+ * findings are the pack check's (ports/modelCheck): of the OBJ that can't be read, the one
+ * the check stops at; else everything the check says of the files.
+ */
 export async function buildModel(request: ModelRequest, files: ModelReader, decode: TextureDecoder): Promise<Built> {
-  const declared = { kind: 'field', file: request.file, at: '/obj' } as const;
-  let decl: ModelDeclaration;
-  try {
-    decl = modelDeclaration(splitLocation(request.id).namespace, request.declaration);
-  } catch (error) {
-    if (!(error instanceof PackJsonError)) throw error;
-    return unreadable(request, null, {
-      code: 'model.bad-declaration',
-      params: { error: error.message },
-      text: `${request.file}: ${error.message}`,
-      at: [{ kind: 'file', file: request.file }],
-    });
-  }
+  const decl = declarationOf(request);
+  if (!('obj' in decl)) return unreadable(request, null, decl);
+  const subject: CheckedModel = request;
+  const stop = (finding: ModelFinding, obj: string | null): Built => unreadable(request, obj, modelProblem(finding, subject));
   const objFile = resourceFile(decl.obj);
-  if (objFile === null) {
-    return unreadable(request, null, { code: 'model.bad-path', params: { path: decl.obj }, text: `model path '${decl.obj}' is not a valid resource location`, at: [declared] });
-  }
+  if (objFile === null) return stop(modelFinding('bad-path', { path: decl.obj }), null);
   let bytes: Uint8Array | null;
   try {
     bytes = await files.read(objFile);
   } catch (error) {
-    return unreadable(request, objFile, { code: 'model.unreadable', params: { path: decl.obj, error: String(error) }, text: `model ${decl.obj} can't be read: ${String(error)}`, at: [{ kind: 'file', file: objFile }] });
+    return stop(modelFinding('unreadable', { path: decl.obj, error: String(error) }), objFile);
   }
-  if (bytes === null) {
-    return unreadable(request, null, { code: 'model.missing', params: { path: decl.obj }, text: `model file ${decl.obj} not found`, at: [declared] });
-  }
-  let obj: ObjModel;
-  try {
-    obj = loadModel(decoder.decode(bytes));
-  } catch (error) {
-    if (!(error instanceof ObjError)) throw error;
-    return unreadable(request, objFile, {
-      code: 'model.unreadable',
-      params: { path: decl.obj, error: error.message },
-      text: `model ${decl.obj} can't be read: ${error.message}`,
-      at: [{ kind: 'file', file: objFile }],
-    });
-  }
+  if (bytes === null) return stop(modelFinding('missing', { path: decl.obj }), null);
+  const read = objOf(decl.obj, decoder.decode(bytes));
+  if ('finding' in read) return stop(read.finding, objFile);
+  const obj: ObjModel = read.model;
 
   const { namespace, path } = splitLocation(decl.obj);
   const folder = Mtl.folderOf(path);
@@ -337,7 +363,11 @@ export async function buildModel(request: ModelRequest, files: ModelReader, deco
   const { roles, ...engine } = parts;
   const partBuffers = buffers(obj, roles, textures);
   const used = partBuffers.flatMap((part) => (part.texture === null ? [] : [part.texture]));
-  const [bitmaps, liveryTextures] = await Promise.all([decodeTextures(used, files, decode), liveries(decl, namespace, folder, textures.values(), files)]);
+  const [bitmaps, liveryTextures, checked] = await Promise.all([
+    decodeTextures(used, files, decode),
+    liveries(decl, namespace, folder, textures.values(), files),
+    checkObj(decl, obj, checkFiles(files)),
+  ]);
   const transfer: Transferable[] = partBuffers.flatMap((part) => [part.positions.buffer, part.normals.buffer, part.uvs.buffer] as ArrayBuffer[]);
   for (const bitmap of bitmaps.values()) if (bitmap !== null) transfer.push(bitmap);
   return {
@@ -348,7 +378,7 @@ export async function buildModel(request: ModelRequest, files: ModelReader, deco
       parts: partBuffers,
       objects: objects(obj, parts),
       textures: Object.fromEntries(bitmaps),
-      problems: [],
+      problems: checked.map((finding) => modelProblem(finding, subject)),
       engine,
       materials: Object.fromEntries(textures),
       skip: decl.skip,

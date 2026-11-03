@@ -44,6 +44,14 @@ async function axe(page: Page): Promise<void> {
   expect(serious.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
 }
 
+/**
+ * The findings but the model's: the wizard's wagon is a bare OBJ with no material, so the
+ * model check (checks/model) says it draws nothing — true, and no business of the forms.
+ */
+function formFindings(page: Page): Locator {
+  return page.getByTestId('checks').locator('.finding:not([data-source="model"])');
+}
+
 /** The field of the inspector's form at a pointer. */
 function field(page: Page, at: string): Locator {
   return page.getByTestId('inspector').locator(`[data-pointer="${at}"]`);
@@ -98,7 +106,7 @@ test('a new pack, a wagon, its forms filled in, saved as a zip and opened again 
   await expect(addWagon).toHaveCount(0);
   await expect(page.locator('[data-section="wagons"] [data-stock="my_trains:coach"]')).toBeVisible();
   await expect(page.getByTestId('inspector').locator('.inspector-title')).toHaveText('Wagon type my_trains:coach');
-  await expect(page.getByTestId('checks-summary')).toHaveText('No findings.');
+  await expect(formFindings(page)).toHaveCount(0);
 
   // --- an empty brakes.train_kn shows the engine's number, and follows the brake system and the mass
   const train = field(page, '/brakes/train_kn');
@@ -131,14 +139,14 @@ test('a new pack, a wagon, its forms filled in, saved as a zip and opened again 
 
   // --- a finding, said in the interface language, brings its field into view
   await typeInto(page, '/bogies/0', '11');
-  const finding = page.getByTestId('checks').locator('.finding');
+  const finding = formFindings(page);
   await expect(finding).toHaveCount(1);
   await expect(finding.locator('.finding-text')).toHaveText('“bogies[0]” = 11 is outside the body: a pivot must lie within ±length/2 = ±10');
   await expect(field(page, '/bogies').locator('.field-list-item input').first()).toHaveAttribute('aria-invalid', 'true');
   await finding.click();
   await expect(field(page, '/bogies/0').locator('input')).toBeFocused();
   await typeInto(page, '/bogies/0', '7');
-  await expect(page.getByTestId('checks-summary')).toHaveText('No findings.');
+  await expect(formFindings(page)).toHaveCount(0);
   await screenshot(page, 'form-type-en');
 
   // --- the model's non-spatial fields
@@ -158,7 +166,7 @@ test('a new pack, a wagon, its forms filled in, saved as a zip and opened again 
   await typeInto(page, '/sounds/horn/main', 'minecraft:item.goat_horn.sound.0');
   await commit(field(page, '/sounds/horn/pitch').getByLabel('pitch[0]', { exact: true }), '0.8');
   await commit(field(page, '/sounds/horn/pitch').getByLabel('pitch[1]', { exact: true }), '0.9');
-  await expect(page.getByTestId('checks-summary')).toHaveText('No findings.');
+  await expect(formFindings(page)).toHaveCount(0);
   await screenshot(page, 'form-model-en');
 
   // --- the names tab
@@ -216,7 +224,7 @@ test('a new pack, a wagon, its forms filled in, saved as a zip and opened again 
   await page.getByTestId('open-zip').click();
   await (await chooser).setFiles({ name: 'MyTrains.zip', mimeType: 'application/zip', buffer: zip });
   await expect(page.getByTestId('pack-status')).toHaveAttribute('data-kind', 'zip');
-  await expect(page.getByTestId('checks-summary')).toHaveText('No findings.');
+  await expect(formFindings(page)).toHaveCount(0);
   await page.locator(`[data-stock="my_trains:coach"] [data-file="${TYPE}"]`).click();
   await expect(field(page, '/max_speed_kmh').locator('input')).toHaveValue('120');
   await expect(field(page, '/resistance/c').locator('input')).toHaveValue('1.1');
@@ -257,7 +265,8 @@ test('switching the language changes every text of the forms, the descriptions f
   await expect(page.getByTestId('inspector')).toHaveAttribute('data-kind', 'wagon_type');
   await field(page, '/brakes/dynamic_kn').locator('input').fill('5');
   await field(page, '/brakes/dynamic_kn').locator('input').press('Enter');
-  await expect(page.getByTestId('checks').locator('.finding')).toHaveCount(1);
+  await expect(page.getByTestId('checks').locator('.finding[data-source="model"]')).toHaveCount(1); // the bare OBJ draws nothing
+  await expect(formFindings(page)).toHaveCount(1);
 
   const inspector = page.getByTestId('inspector');
   const texts = () =>
@@ -285,7 +294,7 @@ test('switching the language changes every text of the forms, the descriptions f
   // defaults, statuses, findings, units and badges: the units are the schema's too (pack-layout.json)
   russian.notes.forEach((text, i) => expect(text, `note ${i}: ${english.notes[i]}`).not.toBe(english.notes[i]));
   russian.buttons.forEach((text, i) => expect(text, `button ${i}`).not.toBe(english.buttons[i]));
-  await expect(page.getByTestId('checks').locator('.finding-text')).toHaveText(/^зарезервировано — в игре ничего не меняет: .*[а-я]/);
+  await expect(formFindings(page).locator('.finding-text')).toHaveText(/^зарезервировано — в игре ничего не меняет: .*[а-я]/);
   await screenshot(page, 'form-type-ru');
   await axe(page);
   expect(errors).toEqual([]);

@@ -12,7 +12,7 @@ import { NodeFsSource } from '../io/nodeFs.node';
 import { EXAMPLE_PACK } from '../testing/repo.node';
 import { createModelApi } from './api';
 import { sourceFiles } from './files';
-import type { ModelReader, ModelWorkerApi } from './types';
+import type { ModelCheckApi, ModelReader, ModelWorkerApi } from './types';
 
 /** The example pack's wagons. */
 export type ExampleWagon = 'coach' | 'shunter' | 'gondola';
@@ -40,7 +40,7 @@ export function fakeBitmap(packPath: string): ImageBitmap {
 }
 
 /** The worker's interface in this thread, decoding each texture into a {@link fakeBitmap}. */
-export const exampleApi: ModelWorkerApi = createModelApi((_bytes, path) => Promise.resolve(fakeBitmap(path)));
+export const exampleApi: ModelWorkerApi & ModelCheckApi = createModelApi((_bytes, path) => Promise.resolve(fakeBitmap(path)));
 
 /** The example pack's files as the worker reads them. */
 export async function exampleReader(): Promise<ModelReader> {
