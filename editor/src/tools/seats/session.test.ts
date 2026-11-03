@@ -65,31 +65,30 @@ describe('the chairs tool turned on', () => {
     stop();
   });
 
-  it('is turned on by a chair selected elsewhere — a finding clicked in the checks — and selects it', async () => {
+  it('is turned on by a chair’s finding clicked in the checks, the chair selected', async () => {
     const b = await bench(SHUNTER, shunterModel);
     const host = new ToolHost([floorTool, seatsTool]);
     const stop = host.connect(b.wiring);
     host.use('floor');
-    b.selection.value = [{ kind: 'field', file: SHUNTER_TYPE, at: '/cab/seats/1' }, seat(1)];
+    // as the checks tab does: the finding's links selected, then the tool of their place revealed
+    const links: Link[] = [{ kind: 'field', file: SHUNTER_TYPE, at: '/cab/seats/1' }, seat(1)];
+    b.selection.value = links;
+    host.reveal(links);
     expect(host.active.value).toBe('seats');
     const tool = (host.current.value?.session as SeatsSession).tool;
     expect(tool.selected()?.index).toBe(1);
     expect(b.view.overlays.get('seats.dial')?.[0]?.link).toEqual(seat(1));
-    // a zone selected: no tool of this host selects zones, the chairs stay on
-    b.selection.value = [{ kind: 'zone', type: SHUNTER, index: 0 }];
+    // the chairs without a floor point at the list, the cab without a chair at the cab: the chairs' tool both
+    host.use('floor');
+    host.reveal([{ kind: 'field', file: SHUNTER_TYPE, at: '/cab/seats' }]);
     expect(host.active.value).toBe('seats');
-    stop();
-  });
-
-  it('is turned on for the wagon a chair is of once that wagon opens', async () => {
-    const b = await bench(COACH, null);
-    const host = new ToolHost([seatsTool]);
-    const stop = host.connect(b.wiring);
-    b.selection.value = [seat(0)];
-    expect(host.active.value).toBeNull();
-    b.openWagon.value = SHUNTER;
+    host.use(null);
+    host.reveal([{ kind: 'field', file: SHUNTER_TYPE, at: '/cab' }]);
     expect(host.active.value).toBe('seats');
-    expect(host.current.value?.wagon).toBe(SHUNTER);
+    // the old one-chair form
+    host.use(null);
+    host.reveal([{ kind: 'field', file: SHUNTER_TYPE, at: '/cab/seat' }]);
+    expect(host.active.value).toBe('seats');
     stop();
   });
 });

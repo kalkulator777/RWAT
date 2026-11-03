@@ -32,8 +32,7 @@
  * One tool is on at a time ({@link ToolHost}): the view's bar switches them, a finding
  * clicked in the checks turns on the tool of what it points at ({@link ToolHost.reveal}),
  * the inspector shows the section of the one that is on (./ToolBar.tsx), the shell wires
- * the host to its state (app/start.ts). A selection that comes to hold a zone, door or
- * chair of the open wagon turns on the tool that selects those too ({@link ToolDef.selects}).
+ * the host to its state (app/start.ts).
  */
 
 import { computed, effect, signal, untracked, type ReadonlySignal, type Signal } from '@preact/signals';
@@ -121,29 +120,10 @@ export interface ToolDef {
    * tool. Empty for a tool that only shows (tools/lights, tools/pivots).
    */
   fields: readonly string[];
-  /**
-   * The kinds of markup link the tool selects (`zone`, `door`, `seat`): when the selection
-   * comes to hold one of the open wagon's — a finding clicked in the checks — this tool is
-   * turned on, unless the one on selects that kind too. One tool a kind; none when left out.
-   */
-  selects?: readonly MarkupKind[];
   /** Whether the tool can work on the open wagon; any type paired with a model when left out. */
   applies?(subject: ToolSubject): boolean;
   /** Turns the tool on for the open wagon. */
   activate(context: ToolContext): ToolSession;
-}
-
-/** The kinds of link that name a piece of a wagon type's markup by its index (core/contracts `Link`). */
-export type MarkupKind = 'zone' | 'door' | 'seat';
-
-const MARKUP_KINDS: readonly string[] = ['zone', 'door', 'seat'] satisfies readonly MarkupKind[];
-
-/** A link to a piece of a wagon type's markup. */
-export type MarkupLink = Extract<Link, { kind: MarkupKind }>;
-
-/** True for a link to a zone, door or chair of a wagon type. */
-export function isMarkupLink(link: Link): link is MarkupLink {
-  return MARKUP_KINDS.includes(link.kind);
 }
 
 /** A tool folder's `index.ts` as `import.meta.glob(..., { eager: true })` returns it. */
@@ -234,16 +214,14 @@ export function framedFields(root: FieldDescriptor): string[] {
 /**
  * The tools the modules declare, sorted by order and id. A broken declaration (no default
  * export, a bad or repeated id, no title or hint, a field pattern that is not a pointer,
- * a place two tools claim, a kind of link that is no markup or that two tools select)
- * throws with every problem listed, as the panels' registry does: the editor does not
- * start half-registered, and the unit test of a new tool fails at once.
+ * a place two tools claim) throws with every problem listed, as the panels' registry does:
+ * the editor does not start half-registered, and the unit test of a new tool fails at once.
  */
 export function collectTools(modules: Readonly<Record<string, ToolModule>>): ToolDef[] {
   const problems: string[] = [];
   const tools: ToolDef[] = [];
   const seen = new Map<string, string>();
   const claims: { pattern: string; where: string }[] = [];
-  const selected = new Map<string, string>();
   for (const path of Object.keys(modules).sort()) {
     const def = modules[path]?.default;
     if (def === undefined) {
@@ -267,17 +245,6 @@ export function collectTools(modules: Readonly<Record<string, ToolModule>>): Too
       const clash = claims.find((claim) => claim.where !== owner && (covers(claim.pattern, pattern) || covers(pattern, claim.pattern)));
       if (clash !== undefined) problems.push(`${where}: field '${pattern}' is already ${clash.where}'s ('${clash.pattern}')`);
       claims.push({ pattern, where: owner });
-    }
-    const kinds: readonly unknown[] = def.selects === undefined ? [] : Array.isArray(def.selects) ? (def.selects as readonly unknown[]) : [];
-    if (def.selects !== undefined && !Array.isArray(def.selects)) problems.push(`${where}: selects must be a list of link kinds`);
-    for (const kind of kinds) {
-      if (typeof kind !== 'string' || !MARKUP_KINDS.includes(kind)) {
-        problems.push(`${where}: '${String(kind)}' is no kind of markup link (${MARKUP_KINDS.join(', ')})`);
-        continue;
-      }
-      const first = selected.get(kind);
-      if (first !== undefined && first !== def.id) problems.push(`${where}: '${kind}' links are already tool '${first}''s`);
-      else selected.set(kind, def.id);
     }
     const first = seen.get(def.id);
     if (first !== undefined) problems.push(`${where}: id already used in ${first}`);
@@ -393,12 +360,7 @@ export class ToolHost {
     }
   }
 
-  /**
-   * Follows the shell's state, turning tools on and off, until the returned function is
-   * called (which turns the one on off). A selection that comes to hold a zone, door or
-   * chair turns on the tool that selects it once that link's wagon is the open one (it may
-   * open a moment after the selection points at it).
-   */
+  /** Follows the shell's state, turning tools on and off, until the returned function is called (which turns the one on off). */
   connect(wiring: ToolWiring): () => void {
     this.wiring.value = wiring;
     const stop = effect(() => {
@@ -406,27 +368,7 @@ export class ToolHost {
       const subject = this.subject.value;
       untracked(() => this.follow(wiring, id, subject));
     });
-    let seen = wiring.selection.peek();
-    let wanted: MarkupLink | null = null;
-    const stopSelecting = effect(() => {
-      const links = wiring.selection.value;
-      const subject = this.subject.value;
-      untracked(() => {
-        if (links !== seen) {
-          seen = links;
-          wanted = links.find((link): link is MarkupLink => isMarkupLink(link) && this.tools.some((tool) => tool.selects?.includes(link.kind))) ?? null;
-        }
-        if (wanted === null || subject === null || subject.wagon !== wanted.type) return;
-        const kind = wanted.kind;
-        wanted = null;
-        const on = this.tools.find((tool) => tool.id === this.active.peek());
-        if (on?.selects?.includes(kind)) return;
-        const tool = this.tools.find((candidate) => candidate.selects?.includes(kind));
-        if (tool !== undefined && (tool.applies?.(subject) ?? true)) this.active.value = tool.id;
-      });
-    });
     return () => {
-      stopSelecting();
       stop();
       this.end();
       this.wiring.value = null;

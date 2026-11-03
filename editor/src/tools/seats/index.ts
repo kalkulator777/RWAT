@@ -4,7 +4,8 @@
  * on a dial and typed in the inspector; over them which way each drives, the reach one
  * sits down from, the floor and the band of cushion heights, and the cab each is in — the
  * engine's floor check and cab finder, by their ports, after every edit. A chair finding
- * clicked in the checks turns the tool on (`selects`).
+ * clicked in the checks turns the tool on (`ToolHost.reveal`: its place `/cab/seats/<i>`,
+ * `/cab/seats` or `/cab` holds the tool's fields).
  *
  * The tool goes through kinds of place (./places.ts): the passengers' seats and berths of
  * phase 5 are to be another kind, not another tool.
@@ -27,7 +28,6 @@ export default defineTool({
   hint: 'tools.seats.hint',
   // the whole chair (its yaw too), and the old one-chair form, which the first edit turns into the list
   fields: ['/cab/seats/*', '/cab/seat'],
-  selects: ['seat'],
   activate(context): SeatsSession {
     const { tool, dispose } = startSeats(context);
     return { tool, Inspector: () => h(SeatsInspector, { tool }), dispose };
