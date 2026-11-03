@@ -19,14 +19,11 @@ import { GOLDEN_DIR } from '../src/testing/repo.node';
 
 /**
  * Folders that name `ts` in ports.json and whose port comes with the 3D stage and the
- * reading of the model: ждёт M3 (docs/proposals/editor.md §7, M3). M2 ported everything
- * else.
+ * reading of the model: ждёт M3 (docs/proposals/editor.md §7, M3). None is left: M3 (A3.1)
+ * ported `model_parts`, `lights` and `door_leaves` (ports/modelParts.ts, lights.ts,
+ * doorLeaves.ts), M2 everything else.
  */
-const WAITING_FOR_M3 = [
-  'door_leaves', // ждёт M3: door leaves and their doors, part of the model's reading (modelParts.ts)
-  'lights', // ждёт M3: lit parts and lamps
-  'model_parts', // ждёт M3: model parts (modelParts.ts)
-];
+const WAITING_FOR_M3: string[] = [];
 
 const WAITING = WAITING_FOR_M3;
 

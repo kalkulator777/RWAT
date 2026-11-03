@@ -1,0 +1,243 @@
+/* The objects tab (panels/objects): the table, the role legend and the rule beside it. */
+
+.objects {
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  min-height: 0;
+}
+
+.objects-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.objects-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.objects-field select,
+.objects-field input {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 6px;
+  min-width: 11em;
+}
+
+.objects-search input {
+  min-width: 14em;
+}
+
+.objects-field select:focus-visible,
+.objects-field input:focus-visible,
+.objects-sort:focus-visible,
+.objects-pick:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.objects-summary {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.objects-hint {
+  margin: 4px 0;
+  color: var(--text-muted);
+}
+
+.objects-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 1 1 20em;
+}
+
+.objects-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  cursor: pointer;
+}
+
+.objects-chip[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.objects-chip:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.objects-count {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+.objects-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.objects-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid var(--text-muted);
+  flex: none;
+}
+
+.objects-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(13em, 30%, 24em);
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+
+.objects-scroll {
+  overflow: auto;
+  min-height: 0;
+  min-width: 0;
+}
+
+.objects-table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 56em;
+  font-size: 13px;
+}
+
+.objects-table th,
+.objects-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 2px 6px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.objects-table thead th {
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  z-index: 1;
+}
+
+.objects-sort,
+.objects-pick {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.objects-sort {
+  font-weight: 600;
+}
+
+.objects-pick {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  min-width: 14em;
+  display: inline-block;
+}
+
+.objects-mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.objects-num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.objects-table tbody tr:hover {
+  background: var(--surface-sunken);
+}
+
+.objects-table tr.is-selected {
+  background: var(--surface-sunken);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.objects-detail {
+  border-left: 1px solid var(--border);
+  padding-left: 12px;
+  overflow: auto;
+  min-width: 0;
+}
+
+.objects-subhead {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+
+.objects-why p {
+  margin: 4px 0;
+}
+
+.objects-why-name {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.objects-effect {
+  color: var(--text-muted);
+}
+
+.objects-dropped {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.objects-marks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.objects-marks li {
+  margin: 4px 0;
+}
+
+.objects-kind {
+  color: var(--text-muted);
+}
+
+.objects-code ul {
+  margin: 4px 0;
+  padding-left: 16px;
+  font-size: 12px;
+}
