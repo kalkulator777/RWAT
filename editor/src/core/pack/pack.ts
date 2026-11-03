@@ -18,13 +18,12 @@
  *   from the pack's root; {@link Pack.root} is the folder in the source.
  */
 
-import type { FileChange, Op, PackSink, PackSource, Problem } from '../contracts';
+import type { FileChange, Op, OpTarget, PackSink, PackSource, Problem } from '../contracts';
 import { dumpBytes } from '../json/dump';
 import { editJson } from '../json/edit';
 import { JsonSyntaxError, parseJson, putMember } from '../json/parse';
 import { PointerError, formatPointer, parsePointer } from '../json/pointer';
 import { ValuePathError, deepEqual, insertIn, isJsonObject, removeIn, setIn } from '../json/value';
-import type { OpTarget } from '../journal/journal';
 import { packPathProblem } from '../paths';
 import {
   CONVERSION_MARKER,

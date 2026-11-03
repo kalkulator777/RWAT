@@ -18,21 +18,12 @@
  * Selection and preview are not edits and are not journaled.
  */
 
-import type { Command, Op } from '../contracts';
+import type { Command, Op, OpTarget } from '../contracts';
+
+export type { OpTarget };
 
 /** The default number of commands undo goes back (§3.5). */
 export const JOURNAL_DEPTH = 500;
-
-/** What the journal edits: the pack model. */
-export interface OpTarget {
-  /**
-   * Applies one op and returns the ops that undo it, in the order they are to be
-   * applied. Throws, having changed nothing, when the op cannot be applied.
-   */
-  apply(op: Op): Op[];
-  /** Readies what the ops need (reads the files whose bytes their inverse holds); see {@link Journal.run}. */
-  prepare?(ops: readonly Op[]): Promise<void>;
-}
 
 /** One undoable entry: the command (merged, if it coalesced) and the ops that undo it. */
 interface Entry {
