@@ -29,11 +29,11 @@
  * and the tool edits it (registry.test.ts holds the list of fields still waiting for theirs).
  * A tool that only shows (the lights, the hinges) edits no field.
  *
- * One tool is on at a time ({@link ToolHost}): the view's bar switches them, the
- * inspector shows the section of the one that is on (./ToolBar.tsx), the shell wires the
- * host to its state (app/start.ts). A selection that comes to hold a zone, door or chair
- * of the open wagon — a finding clicked in the checks — turns on the tool that selects
- * those ({@link ToolDef.selects}).
+ * One tool is on at a time ({@link ToolHost}): the view's bar switches them, a finding
+ * clicked in the checks turns on the tool of what it points at ({@link ToolHost.reveal}),
+ * the inspector shows the section of the one that is on (./ToolBar.tsx), the shell wires
+ * the host to its state (app/start.ts). A selection that comes to hold a zone, door or
+ * chair of the open wagon turns on the tool that selects those too ({@link ToolDef.selects}).
  */
 
 import { computed, effect, signal, untracked, type ReadonlySignal, type Signal } from '@preact/signals';
@@ -180,6 +180,26 @@ export function covers(pattern: string, pointer: string): boolean {
 /** The tool that edits a place of the wagon type (`/interior/2`, `/doors/*`), or undefined. */
 export function toolFor(tools: readonly ToolDef[], pointer: string): ToolDef | undefined {
   return tools.find((tool) => tool.fields.some((pattern) => covers(pattern, pointer)));
+}
+
+/**
+ * The tool that edits what a place of the wagon type holds — the place a finding points
+ * at: the tool whose field holds it ({@link toolFor}: `/doors/3`, `/interior/2`), else the
+ * first one with a field inside it (`/cab/seats/0` holds `/cab/seats/*\/at`, `/cab` both
+ * forms of a chair); undefined for the whole file or a place with no tool's field in it or
+ * around it.
+ */
+export function toolAround(tools: readonly ToolDef[], pointer: string): ToolDef | undefined {
+  const holding = toolFor(tools, pointer);
+  if (holding !== undefined) return holding;
+  const place = segmentsOf(pointer);
+  if (place === null || place.length === 0) return undefined;
+  return tools.find((tool) =>
+    tool.fields.some((pattern) => {
+      const field = segmentsOf(pattern);
+      return field !== null && field.length > place.length && place.every((segment, i) => field[i] === '*' || field[i] === segment);
+    }),
+  );
 }
 
 /** A pointer segment as RFC 6901 writes it. */
@@ -351,6 +371,26 @@ export class ToolHost {
   use(id: string | null): void {
     if (id !== null && !this.tools.some((tool) => tool.id === id)) return;
     this.active.value = id;
+  }
+
+  /**
+   * Turns on the tool that edits what `links` point at — a finding the user clicked in the
+   * checks: the tool of the place of a field link into the open wagon's type
+   * ({@link toolAround}: `/doors/3` → the doors tool, `/cab/seats/0` → the chairs'). Call it
+   * after the selection took the links, so that their wagon is the open one; links into no
+   * tool's place change nothing.
+   */
+  reveal(links: readonly Link[]): void {
+    const subject = this.subject.value;
+    if (subject === null) return;
+    for (const link of links) {
+      if (link.kind !== 'field' || link.file !== subject.typeFile) continue;
+      const tool = toolAround(this.tools, link.at);
+      if (tool !== undefined) {
+        this.use(tool.id);
+        return;
+      }
+    }
   }
 
   /**
