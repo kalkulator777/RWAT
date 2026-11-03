@@ -6,14 +6,10 @@
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { EXAMPLE_PACK, REPO_ROOT } from '../../testing/repo.node';
 import type { FileChange, FileEntry, PackSink, PackSource, PackSourceKind } from '../contracts';
 
-/** The repository's root folder. */
-export const REPO_ROOT = fileURLToPath(new URL('../../../../', import.meta.url));
-
-/** The example pack's folder (R11). */
-export const EXAMPLE_PACK = join(REPO_ROOT, 'run', 'rwat_packs', 'RwatExamplePack');
+export { EXAMPLE_PACK, REPO_ROOT };
 
 /** Every file under a folder by its '/'-separated path inside it, in path order. */
 export function readTree(folder: string): Map<string, Uint8Array> {

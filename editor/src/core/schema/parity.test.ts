@@ -9,12 +9,12 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { fileURLToPath } from 'node:url';
+import { REPO_ROOT } from '../../testing/repo.node';
 import { describe, expect, it } from 'vitest';
 import { readSchemaFiles } from './files.node';
 import { createSchema, schemaKindOf, type SchemaKind } from './index';
 
-const REPO = fileURLToPath(new URL('../../../../', import.meta.url));
+const REPO = REPO_ROOT;
 const PACK = `${REPO}run/rwat_packs/RwatExamplePack`;
 const python = spawnSync('python3', ['--version']).status === 0;
 const schema = createSchema(readSchemaFiles());

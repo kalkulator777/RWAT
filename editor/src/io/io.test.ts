@@ -11,7 +11,8 @@ import { NodeFsSink, NodeFsSource } from './nodeFs.node';
 import { PackIoError } from './errors';
 import { buildZip, openZipSource, ZipSink } from './zip';
 import { readAll } from './index';
-import { EXAMPLE_PACK, FakeDirectory, TOOLS_DIR } from './testPack.node';
+import { EXAMPLE_PACK, TOOLS_DIR } from '../testing/repo.node';
+import { FakeDirectory } from './testPack.node';
 
 const havePython = spawnSync('python3', ['--version']).status === 0;
 const text = (s: string) => new TextEncoder().encode(s);
