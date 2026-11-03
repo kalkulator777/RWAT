@@ -7,6 +7,8 @@ import { classify, railNameKey, wagonNameKey } from '../../core/pack';
 import { schemaKindOf, type SchemaKind } from '../../core/schema';
 import { SchemaForm } from '../../forms';
 import { t } from '../../i18n';
+import { toolHost } from '../../tools';
+import { ToolSection } from '../../tools/ToolBar';
 import { nameLangs } from '../names/model';
 import { NameFields } from '../names/NameInput';
 
@@ -56,6 +58,8 @@ function useFocusField(container: { current: HTMLElement | null }, links: readon
  * type, a wagon model (without the spatial markup: floor, doors and chairs are M4's 3D
  * tools), a rail style, `pack.mcmeta` — built from the schema, with the type's or the
  * style's name in each language on top. A selected finding brings its field into view.
+ * While a markup tool is on, its section (numbers, choices, buttons) comes first, alone
+ * when the selection is one of its zones, doors or chairs rather than a file.
  */
 export function InspectorPanel() {
   void revision.value;
@@ -64,8 +68,18 @@ export function InspectorPanel() {
   const links = selection.value;
   useFocusField(container, links);
   if (open === null) return <p class="slot-empty">{t('shell.empty.inspector')}</p>;
+  // the markup tool that is on shows its numbers first; a zone, door or chair it selects is no file
+  const tool = toolHost.current.value === null ? null : <ToolSection host={toolHost} />;
   const file = selectedFile(links);
-  if (file === undefined) return <p class="slot-empty">{t('inspector.pick')}</p>;
+  if (file === undefined) {
+    return tool === null ? (
+      <p class="slot-empty">{t('inspector.pick')}</p>
+    ) : (
+      <div class="inspector" data-testid="inspector">
+        {tool}
+      </div>
+    );
+  }
   if (!open.has(file)) return <p class="slot-empty">{t('inspector.gone', { file })}</p>;
   const declaration = classify(file);
   const kind = schemaKindOf(file);
@@ -108,6 +122,7 @@ export function InspectorPanel() {
   }
   return (
     <div class="inspector" ref={container} data-testid="inspector" data-file={file} data-kind={kind ?? declaration?.kind ?? 'file'}>
+      {tool}
       <header class="inspector-head">
         <h2 class="inspector-title">{heading}</h2>
         <p class="inspector-file">{file}</p>

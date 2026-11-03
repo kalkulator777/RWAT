@@ -1,11 +1,13 @@
 /**
  * The 3D view's panel in the centre of the screen (docs/proposals/editor.md §6.1): its bar
- * (camera, framing, display, wireframe, layers and roles), the drawing, the axis legend,
+ * (the tools' switch the panel is given, camera, framing, display, wireframe, layers and
+ * roles), the drawing, the axis legend,
  * the status line with what is under the pointer, and a description of the model and the
  * selection for a screen reader (§6.3). The drawing itself is ./viewport.ts; what other
  * modules ask of the view is ./state.ts (`view`). The selection is the shell's one signal.
  */
 
+import type { ComponentChildren } from 'preact';
 import type { OrthographicCamera, PerspectiveCamera } from 'three';
 import { Vector3 } from 'three';
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -106,9 +108,10 @@ function LayersMenu() {
   );
 }
 
-function ViewBar() {
+function ViewBar({ tools }: { tools?: ComponentChildren }) {
   return (
     <div class="view3d-bar" role="toolbar" aria-label={t('view3d.bar')}>
+      {tools}
       <Choice name="camera" label={t('view3d.camera')} values={CAMERA_VIEWS} current={view.camera.value} prefix="view3d.camera" onPick={(v) => view.setCamera(v)} />
       <div class="toggle" role="group" aria-label={t('view3d.frame.all')}>
         <button type="button" class="toggle-button" title={t('view3d.frame.all.hint')} data-action="frame-all" onClick={() => view.requestFraming('all')}>
@@ -228,7 +231,7 @@ function describe(): string {
   ].join(' ');
 }
 
-export function ViewPanel() {
+export function ViewPanel({ tools }: { tools?: ComponentChildren } = {}) {
   const host = useRef<HTMLDivElement>(null);
   const axes = useRef<AxisRefs>({ lines: {}, labels: {} });
   const [webgl, setWebgl] = useState<'starting' | 'ok' | 'none'>('starting');
@@ -257,7 +260,7 @@ export function ViewPanel() {
       data-model={model?.id ?? ''}
       data-selected={chosen.join(',')}
     >
-      <ViewBar />
+      <ViewBar tools={tools} />
       <div class="view3d-stage">
         <div
           ref={host}
