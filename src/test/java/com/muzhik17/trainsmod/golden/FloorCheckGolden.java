@@ -1,7 +1,6 @@
 package com.muzhik17.trainsmod.golden;
 
 import java.io.IOException;
-import java.lang.reflect.Method;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -34,22 +33,6 @@ import com.muzhik17.trainsmod.stock.WagonTypeParser;
 class FloorCheckGolden {
 
     static final String FOLDER = "floor_check";
-
-    /**
-     * {@code FloorCheck.walkablePieces(door, region)}: package-private in the
-     * engine, read here by reflection until the check hands its ways out on
-     * its own (editor.md 4.6, item 2).
-     */
-    private static final Method WALKABLE;
-
-    static {
-        try {
-            WALKABLE = FloorCheck.class.getDeclaredMethod("walkablePieces", WagonType.Door.class, FloorRegion.class);
-            WALKABLE.setAccessible(true);
-        } catch (NoSuchMethodException e) {
-            throw new ExceptionInInitializerError(e);
-        }
-    }
 
     @TestFactory
     Stream<DynamicNode> cases() throws IOException {
@@ -93,8 +76,7 @@ class FloorCheckGolden {
         return Golden.string((String) value);
     }
 
-    @SuppressWarnings("unchecked")
-    private static JsonElement exits(WagonType type) throws ReflectiveOperationException {
+    private static JsonElement exits(WagonType type) {
         if (type.interior() == null) {
             return JsonNull.INSTANCE;
         }
@@ -106,7 +88,7 @@ class FloorCheckGolden {
                 continue;
             }
             JsonArray pieces = new JsonArray();
-            ((List<Integer>) WALKABLE.invoke(null, door, shut)).forEach(pieces::add);
+            FloorCheck.walkablePieces(door, shut).forEach(pieces::add);
             exits.add(pieces);
         }
         return exits;

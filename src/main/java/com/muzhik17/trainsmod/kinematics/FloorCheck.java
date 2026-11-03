@@ -252,7 +252,7 @@ public final class FloorCheck {
      * {@link #walkableThrough}), in order; empty if none. {@code
      * tools/floorgen.py}'s {@code door_seeds} is the same rule.
      */
-    static List<Integer> walkablePieces(WagonType.Door door, FloorRegion region) {
+    public static List<Integer> walkablePieces(WagonType.Door door, FloorRegion region) {
         boolean side = door.axis() == 0;
         int out = door.outward();
         double lo = door.spanMin() + RiderWalk.DOOR_SPAN_INSET;
