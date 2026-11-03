@@ -21,7 +21,7 @@ import type { WagonType } from '../ports/wagonType';
 import { doorsMovedWith, stepDoors, swinging, TICK_MS } from './doors';
 import { controlInput } from './inputs';
 import { liveryTextures, undecoded } from './livery';
-import { initialState, LIGHTS_LAYER, previewScene, rig, type PreviewScene, type PreviewState, type Rig } from './scene';
+import { initialState, LIGHTS_LAYER, previewScene, retypedState, rig, type PreviewScene, type PreviewState, type Rig } from './scene';
 
 /** What the preview shows: a model as the model worker read it and the view was shown it, and its wagon type. */
 export interface PreviewSubject {
@@ -101,18 +101,35 @@ export class PreviewController {
     });
   }
 
-  /** Previews another model (or none): its state starts over, at rest. */
+  /**
+   * Previews a model (or none). Another model starts over, at rest. The model it previews
+   * already, with its type edited (app/openModel hands it again after every edit of the
+   * type), keeps its state: a door the type still has by its id stays open, shut or
+   * swinging (./scene.ts `retypedState`), the controls, groups, couplers and livery stay,
+   * and the view, which was not shown the model anew, is told only what changed.
+   */
   load(subject: PreviewSubject | null): void {
-    this.stopSwing();
+    const before = this.subject.peek();
     const r = subject === null ? null : rig(subject.model, subject.type);
-    this.told = null;
-    this.decoded = new Map();
-    this.decoding = new Set();
+    const state = this.state.peek();
+    const oldRig = this.rig.peek();
+    const same = subject !== null && before?.model === subject.model && state !== null && oldRig !== null;
+    if (same) {
+      if (this.told !== null) this.told.subject = subject;
+    } else {
+      this.stopSwing();
+      this.told = null;
+      this.decoded = new Map();
+      this.decoding = new Set();
+    }
     batch(() => {
       this.subject.value = subject;
       this.rig.value = r;
-      this.state.value = r === null ? null : initialState(r);
+      this.state.value = r === null ? null : same ? retypedState(state, oldRig, r) : initialState(r);
     });
+    if (!same) return;
+    if (!swinging(this.state.peek()?.heading ?? [])) this.stopSwing();
+    else this.stopTicking ??= this.ticker.every(TICK_MS, () => this.tick());
   }
 
   /** Every door shut, every control at rest, the groups off, both ends free, the base livery. */

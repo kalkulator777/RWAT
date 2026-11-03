@@ -176,6 +176,11 @@ describe('the open model', () => {
     expect(rig.view.shown).toHaveLength(1);
     expect(rig.preview.subject.value?.model).toBe(before);
     expect(rig.preview.subject.value?.type?.length).toBe(12);
+    // the preview keeps its state through an edit of the type: a door opened stays open
+    rig.preview.setDoor(1, 1);
+    edit({ label: 'edit.field', ops: [{ op: 'set', file: SHUNTER_TYPE, at: '/length', value: 13 }] });
+    await vi.waitFor(() => expect(rig.preview.subject.value?.type?.length).toBe(13));
+    expect(rig.preview.state.value?.doors).toEqual([0, 1]);
 
     edit({ label: 'edit.field', ops: [{ op: 'set', file: SHUNTER_MODEL, at: '/skip', value: ['CAB_'] }] });
     await shown(rig, 2);

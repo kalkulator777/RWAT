@@ -11,7 +11,8 @@
  *   the last of a run (typing into a form): the loader's cache (model/client
  *   `ModelLoader`) answers at once for a model none of whose files changed, so only an
  *   edit of the model's own files reads it again, and only then is it shown anew. An edit
- *   of the type only gives the view the new frame and the preview the new type.
+ *   of the type only gives the view the new frame and the preview the new type, the
+ *   preview keeping what it shows (its doors by their ids, the controls, the lights).
  * - A model that can't be read comes empty with its finding (model/build); a worker that
  *   fails is one finding too, the one "Check all models" makes of it (checks/model
  *   `failedModel`).
