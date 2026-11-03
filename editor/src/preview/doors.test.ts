@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { animatedDoor, DOOR_ANIM_TICKS, doorCount, doorsMovedWith, leafDoor, progressOf, stepDoors, swinging } from './doors';
-import { exampleParts, exampleType } from './testing.node';
+import { exampleModel, exampleType } from './testing.node';
 
 const coach = exampleType('coach');
 
 describe('which of the type’s doors moves what', () => {
-  it('gives each leaf of the coach the door whose box holds it, and the salon animation its door by id', () => {
-    const leaves = exampleParts('coach').doorLeaves.map((leaf) => `${leaf.role.key}→${coach.doors[leafDoor(coach, leaf.boxMin, leaf.boxMax)]?.id}`);
+  it('gives each leaf of the coach the door whose box holds it, and the salon animation its door by id', async () => {
+    const engine = (await exampleModel('coach')).engine!;
+    const leaves = engine.doorLeaves.map((leaf) => `${leaf.role.key}→${coach.doors[leafDoor(coach, leaf.boxMin, leaf.boxMax)]?.id}`);
     expect(leaves).toEqual([
       'DOOR_1→door_fl',
       'DOOR_2→door_fr',

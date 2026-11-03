@@ -14,8 +14,8 @@
 import type { Vec3 } from '../core/contracts';
 import { frameAt } from '../ports/anim';
 import { controlTransform } from '../ports/controlPose';
+import type { ModelControl } from '../ports/modelParts';
 import { toObj } from '../ports/objFrame';
-import type { MovingPart } from './parts';
 
 /** A point of the model frame in the OBJ frame (`ObjFrame.toObj`). */
 export function objPoint(model: Vec3): Vec3 {
@@ -37,7 +37,7 @@ export function objDirection(model: Vec3): Vec3 {
  * A control's value is `ControlValue.value` of its position (ports/controlPose
  * `controlValue`); a leaf's is its door's progress as it is.
  */
-export function movingMatrix(part: MovingPart, value: number): Float32Array {
+export function movingMatrix(part: ModelControl, value: number): Float32Array {
   const pivot = part.pivot === null ? null : objPoint(part.pivot);
   return Float32Array.from(controlTransform(value, objDirection(part.slide), pivot, objDirection(part.axis), part.degrees));
 }

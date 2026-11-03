@@ -4,8 +4,8 @@ import { formatNumber, lang, t } from '../../i18n';
 import { controlValue, controlVisible } from '../../ports/controlPose';
 import type { Control } from '../../ports/objectRole';
 import { controlInput, NOTCHES } from '../../preview/inputs';
-import { lit } from '../../preview/lights';
-import { lightGroupsOn, positionIn, type PreviewState, type Rig } from '../../preview/scene';
+import { shines } from '../../ports/lights';
+import { inputIn, litIn, positionIn, type PreviewState, type Rig } from '../../preview/scene';
 import { preview } from '../../preview/store';
 import './preview.css';
 
@@ -129,7 +129,7 @@ function Controls({ r, state }: { r: Rig; state: PreviewState }) {
         {r.controls.map(({ part }) => {
           const role = part.role;
           const slider = controlInput(role);
-          const input = slider.kind === 'group' ? (state.groups.get(role.group) ?? 0) : (state.inputs.get(role.key) ?? slider.rest);
+          const input = inputIn(state, role);
           const position = positionIn(state, role);
           const value = controlValue(role, position);
           const motion: string[] = [];
@@ -172,10 +172,10 @@ function Controls({ r, state }: { r: Rig; state: PreviewState }) {
 }
 
 function Lights({ r, state }: { r: Rig; state: PreviewState }) {
-  const groups = r.parts.lightGroups;
-  const on = lightGroupsOn(r, state);
-  const lamps = r.parts.lamps.filter((lamp) => lit(lamp.group, lamp.invert, on)).length;
-  const headlights = r.parts.headlights.filter((h) => lit(h.group, h.invert, on)).length;
+  const groups = r.lightGroups;
+  const mask = litIn(r, state);
+  const lamps = r.lamps.filter((lamp) => shines(lamp, mask)).length;
+  const headlights = r.headlights.filter((h) => shines(h, mask)).length;
   return (
     <>
       {groups.length === 0 ? (
@@ -185,7 +185,7 @@ function Lights({ r, state }: { r: Rig; state: PreviewState }) {
           {groups.map((group, i) => (
             <li key={group}>
               <label data-group={group}>
-                <input type="checkbox" checked={on[i] === true} onChange={(e) => preview.setGroup(group, e.currentTarget.checked ? 1 : 0)} />
+                <input type="checkbox" checked={((mask >> BigInt(i)) & 1n) !== 0n} onChange={(e) => preview.setGroup(group, e.currentTarget.checked ? 1 : 0)} />
                 {t('preview.lights.group', { group })}
               </label>
             </li>
@@ -193,7 +193,7 @@ function Lights({ r, state }: { r: Rig; state: PreviewState }) {
         </ul>
       )}
       <p class="preview-note" data-testid="preview-lit">
-        {t('preview.lights.summary', { lamps, lampsAll: r.parts.lamps.length, headlights, headlightsAll: r.parts.headlights.length })}
+        {t('preview.lights.summary', { lamps, lampsAll: r.lamps.length, headlights, headlightsAll: r.headlights.length })}
       </p>
       <button type="button" onClick={() => preview.showLight()}>
         {t('preview.lights.showLit')}
@@ -203,7 +203,7 @@ function Lights({ r, state }: { r: Rig; state: PreviewState }) {
 }
 
 function Liveries({ state }: { state: PreviewState }) {
-  const liveries = [...(preview.subject.value?.liveries ?? new Map<string, ReadonlyMap<string, string>>())];
+  const liveries = Object.entries(preview.subject.value?.model.liveries ?? {});
   if (liveries.length === 0) return <p class="preview-note">{t('preview.liveries.none')}</p>;
   return (
     <fieldset class="preview-fieldset">
@@ -215,7 +215,7 @@ function Liveries({ state }: { state: PreviewState }) {
       {liveries.map(([id, swaps]) => (
         <label key={id} data-livery={id}>
           <input type="radio" name="preview-livery" checked={state.livery === id} onChange={() => preview.setLivery(id)} />
-          {swaps.size === 0 ? t('preview.liveries.empty', { id }) : t('preview.liveries.swaps', { id, count: swaps.size })}
+          {Object.keys(swaps).length === 0 ? t('preview.liveries.empty', { id }) : t('preview.liveries.swaps', { id, count: Object.keys(swaps).length })}
         </label>
       ))}
     </fieldset>
@@ -267,8 +267,8 @@ export function PreviewPanel() {
   const counts: Record<Section, number> = {
     doors: state.doors.filter((_, i) => r.type?.doors[i]?.fixed === false).length,
     controls: r.controls.length,
-    lights: r.parts.lightGroups.length,
-    liveries: preview.subject.value?.liveries.size ?? 0,
+    lights: r.lightGroups.length,
+    liveries: Object.keys(preview.subject.value?.model.liveries ?? {}).length,
     couplers: r.couplers.length,
   };
   return (

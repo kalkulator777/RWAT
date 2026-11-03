@@ -1,22 +1,25 @@
 /**
- * The preview's state and what it shows: from the model's moving things (./parts.ts), its
- * wagon type and the state of the doors, controls, light groups and couplers, the
- * transform, visibility and light of every object the preview drives — computed the way
- * the engine draws them (`WagonRenderer.drawDoors`, `drawControls`, `drawCouplers`; the
- * light rule of `ModelParts.lit`). Pure: the controller (./controller.ts) hands the result to
- * the view.
+ * The preview's state and what it shows: from the model as the model worker reads it
+ * (model/types `ParsedModel`: the engine's reading of its parts, `engine`, in the model
+ * frame; its objects with their places; its `.anim` frames), its wagon type and the state
+ * of the doors, controls, light groups and couplers — the transform, visibility and light
+ * of every object the preview drives, computed the way the engine draws them
+ * (`WagonRenderer.drawDoors`, `drawControls`, `drawCouplers`; the light rule of
+ * `ModelParts.lit`, ports/lights). Pure: the controller (./controller.ts) hands the result
+ * to the view.
  *
  * Nothing here is written to the pack (editor.md §3.3: the preview edits nothing).
  */
 
 import type { OverlayShape, Vec3 } from '../core/contracts';
+import type { ModelObject, ParsedModel } from '../model/types';
 import { controlValue, controlVisible } from '../ports/controlPose';
+import { litMask, shines } from '../ports/lights';
+import { drawn, type Coupler, type Headlight, type Lamp, type Light, type ModelControl, type Place } from '../ports/modelParts';
 import { headShownAt, type Control } from '../ports/objectRole';
 import type { WagonType } from '../ports/wagonType';
 import { animatedDoor, doorCount, leafDoor, progressOf } from './doors';
 import { controlInput, controlPosition } from './inputs';
-import { groupsOn, lit } from './lights';
-import { objectsAt, type CouplerHead, type MovingPart, type PartLight, type PreviewParts } from './parts';
 import { animMatrix, movingMatrix, objDirection, objPoint } from './pose';
 
 /** What the preview shows a model in. Immutable: every change makes a new state. */
@@ -37,7 +40,7 @@ export interface PreviewState {
 
 /** A control or a door leaf with the objects it is drawn as. */
 export interface RigPart {
-  part: MovingPart;
+  part: ModelControl;
   objects: readonly string[];
 }
 
@@ -46,7 +49,7 @@ export interface RigLeaf extends RigPart {
   door: number;
 }
 
-/** An animated door: its pieces and the type's door it follows (−1: none, at rest). */
+/** An animated door: its pieces with their frames and the type's door it follows (−1: none, at rest). */
 export interface RigDoor {
   id: string;
   door: number;
@@ -55,20 +58,23 @@ export interface RigDoor {
 
 /** A coupler head and the objects it is drawn as. */
 export interface RigCoupler {
-  head: CouplerHead;
+  head: Coupler;
   objects: readonly string[];
 }
 
 /** One model's moving things ready for the preview: worked out once per model and type. */
 export interface Rig {
-  parts: PreviewParts;
   type: WagonType | null;
+  /** The light groups, in the model's order (`ModelParts.lightGroups`). */
+  lightGroups: readonly string[];
   controls: readonly RigPart[];
   leaves: readonly RigLeaf[];
   doors: readonly RigDoor[];
   couplers: readonly RigCoupler[];
-  /** Every drawn object with a light group or a glow, and how it is lit. */
-  lights: ReadonlyMap<string, PartLight>;
+  lamps: readonly Lamp[];
+  headlights: readonly Headlight[];
+  /** Every drawn object of a light group or glowing, and how it is lit. */
+  lights: ReadonlyMap<string, Light>;
 }
 
 /** What the view is told: per object, and the light shapes. */
@@ -94,33 +100,36 @@ const LAMP_RADIUS = 0.15;
 /** Length of a headlight's arrow, blocks. */
 const BEAM_LENGTH = 1.5;
 
-/** The drawn places of the OBJ, whose light the view shows (`ModelParts.Place.drawn`). */
-const DRAWN = new Set(['BODY', 'INTERIOR', 'BOGIE', 'WHEEL', 'ANIMATED', 'DOOR_LEAF', 'CONTROL', 'COUPLER']);
+/** The objects the engine draws as item `index` of the list of `place`, in the order they come. */
+function objectsAt(objects: readonly ModelObject[], place: Place, index: number): string[] {
+  return objects.filter((o) => o.place === place && o.index === index).map((o) => o.name);
+}
 
-/** The model's moving things matched up with its objects and its type's doors. */
-export function rig(parts: PreviewParts, type: WagonType | null): Rig {
-  const controls = parts.controls.map((part, i) => ({ part, objects: objectsAt(parts, 'CONTROL', i) }));
-  const leaves = parts.doorLeaves.map((part, i) => ({
-    part,
-    objects: objectsAt(parts, 'DOOR_LEAF', i),
-    door: leafDoor(type, part.boxMin, part.boxMax),
-  }));
-  const doors = parts.doors.map((door) => ({
-    id: door.id,
-    door: animatedDoor(type, door.id),
-    pieces: door.objects.flatMap((object) => {
-      const frames = parts.tracks.get(object);
-      return frames === undefined || frames.length === 0 ? [] : [{ object, frames }];
-    }),
-  }));
-  const couplers = parts.couplers.map((head, i) => ({ head, objects: objectsAt(parts, 'COUPLER', i) }));
-  const lights = new Map<string, PartLight>();
-  for (const part of parts.parts) {
-    if (DRAWN.has(part.place) && (part.light.group >= 0 || part.light.fullbright) && !lights.has(part.object)) {
-      lights.set(part.object, part.light);
-    }
-  }
-  return { parts, type, controls, leaves, doors, couplers, lights };
+/** The model's moving things matched up with its objects and its type's doors; nothing moves in a model that can't be read. */
+export function rig(model: ParsedModel, type: WagonType | null): Rig {
+  const engine = model.engine;
+  const objects = model.objects;
+  const lights = new Map<string, Light>();
+  for (const o of objects) if (drawn(o.place) && (o.light.group >= 0 || o.light.fullbright)) lights.set(o.name, o.light);
+  return {
+    type,
+    lightGroups: engine?.lightGroups ?? [],
+    controls: (engine?.controls ?? []).map((part, i) => ({ part, objects: objectsAt(objects, 'CONTROL', i) })),
+    leaves: (engine?.doorLeaves ?? []).map((part, i) => ({ part, objects: objectsAt(objects, 'DOOR_LEAF', i), door: leafDoor(type, part.boxMin, part.boxMax) })),
+    doors: (engine?.doors ?? []).map((door) => ({
+      id: door.id,
+      door: animatedDoor(type, door.id),
+      pieces: door.objects.flatMap((object) => {
+        // the track of the door the object moves with: the engine draws each piece by its own track
+        const frames = model.animations[door.id]?.[object];
+        return frames === undefined || frames.length === 0 ? [] : [{ object, frames }];
+      }),
+    })),
+    couplers: (engine?.couplers ?? []).map((head, i) => ({ head, objects: objectsAt(objects, 'COUPLER', i) })),
+    lamps: engine?.lamps ?? [],
+    headlights: engine?.headlights ?? [],
+    lights,
+  };
 }
 
 /** The state of a model nobody has touched: doors shut, controls at rest, groups off, both ends free, base livery. */
@@ -136,16 +145,20 @@ export function initialState(r: Rig): PreviewState {
   };
 }
 
-/** The raw position 0…1 a control stands at in the state (`ControlValue.position`). */
-export function positionIn(state: PreviewState, role: Control): number {
+/** The slider value a control stands at in the state: its own, or its group's for a group-driven one. */
+export function inputIn(state: PreviewState, role: Control): number {
   const slider = controlInput(role);
-  const input = slider.kind === 'group' ? (state.groups.get(role.group) ?? 0) : (state.inputs.get(role.key) ?? slider.rest);
-  return controlPosition(role, input);
+  return slider.kind === 'group' ? (state.groups.get(role.group) ?? 0) : (state.inputs.get(role.key) ?? slider.rest);
 }
 
-/** The light groups that are on: a group is on while its control group's value is above 0. */
-export function lightGroupsOn(r: Rig, state: PreviewState): boolean[] {
-  return groupsOn(r.parts.lightGroups, (group) => state.groups.get(group) ?? 0);
+/** The raw position 0…1 a control stands at in the state (`ControlValue.position`). */
+export function positionIn(state: PreviewState, role: Control): number {
+  return controlPosition(role, inputIn(state, role));
+}
+
+/** The model's lit groups in the state (`ModelParts.litMask`): a group is on while its control group's value is above 0. */
+export function litIn(r: Rig, state: PreviewState): bigint {
+  return litMask(r.lightGroups, (group) => state.groups.get(group) ?? 0);
 }
 
 /** Everything the view shows of the rig in this state. */
@@ -174,19 +187,19 @@ export function previewScene(r: Rig, state: PreviewState): PreviewScene {
     const shown = headShownAt(coupler.head.shown, coupler.head.front ? state.coupled.front : state.coupled.rear);
     for (const object of coupler.objects) visible.set(object, shown);
   }
-  const on = lightGroupsOn(r, state);
-  const litObjects = new Map<string, boolean>();
-  for (const [object, light] of r.lights) litObjects.set(object, lit(light.group, light.invert, on));
+  const mask = litIn(r, state);
+  const lit = new Map<string, boolean>();
+  for (const [object, light] of r.lights) lit.set(object, shines(light, mask));
   const lights: OverlayShape[] = [];
-  for (const lamp of r.parts.lamps) {
-    if (lit(lamp.group, lamp.invert, on)) lights.push({ shape: 'circle', centre: objPoint(lamp.at), radius: LAMP_RADIUS, style: LAMP_STYLE });
+  for (const lamp of r.lamps) {
+    if (shines(lamp, mask)) lights.push({ shape: 'circle', centre: objPoint([lamp.x, lamp.y, lamp.z]), radius: LAMP_RADIUS, style: LAMP_STYLE });
   }
-  for (const headlight of r.parts.headlights) {
-    if (!lit(headlight.group, headlight.invert, on)) continue;
-    const from = objPoint(headlight.at);
+  for (const headlight of r.headlights) {
+    if (!shines(headlight, mask)) continue;
+    const from = objPoint([headlight.x, headlight.y, headlight.z]);
     const way = objDirection([0, 0, headlight.dirZ]);
     const to: Vec3 = [from[0] + way[0] * BEAM_LENGTH, from[1] + way[1] * BEAM_LENGTH, from[2] + way[2] * BEAM_LENGTH];
     lights.push({ shape: 'arrow', from, to, style: HEADLIGHT_STYLE });
   }
-  return { transforms, visible, lit: litObjects, lights };
+  return { transforms, visible, lit, lights };
 }

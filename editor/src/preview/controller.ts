@@ -7,30 +7,33 @@
  * The view is told only what changed since it was last told: a slider drags one control
  * and only that control's objects get a new transform. When the view or the model changes,
  * everything is told again; a livery shows the model again with the livery's textures
- * (`ViewApi` has no call to swap a texture), after which everything is told again too.
+ * (`ViewApi` has no call to swap a texture), after which everything is told again too. The
+ * livery's own pictures are decoded first, once, through the subject's `textures`; until
+ * they arrive the view keeps what it shows.
  *
  * The preview writes nothing to the pack and nothing to the journal (§3.3).
  */
 
 import { batch, effect, signal, untracked } from '@preact/signals';
-import type { LoadedModel, ViewApi } from '../core/contracts';
+import type { ViewApi } from '../core/contracts';
+import type { ParsedModel } from '../model/types';
 import type { WagonType } from '../ports/wagonType';
 import { doorsMovedWith, stepDoors, swinging, TICK_MS } from './doors';
 import { controlInput } from './inputs';
-import { inLivery, type LiverySwaps } from './livery';
-import type { PreviewParts } from './parts';
+import { inLivery, undecoded } from './livery';
 import { initialState, LIGHTS_LAYER, previewScene, rig, type PreviewScene, type PreviewState, type Rig } from './scene';
 
-/** What the preview shows: a model as the view has it, what it is made of, and its wagon type. */
+/** What the preview shows: a model as the model worker read it and the view was shown it, and its wagon type. */
 export interface PreviewSubject {
-  /** The model as the view was shown it (`ViewApi.show`), base textures. */
-  model: LoadedModel;
-  /** Its moving things, as `ModelParts` reads the model (./parts.ts). */
-  parts: PreviewParts;
+  /** The model as the view was shown it (`ViewApi.show`), base textures: its moving things are its `engine`, its liveries its `liveries`. */
+  model: ParsedModel;
   /** The wagon type paired with the model, as the engine reads it; null without one (no doors swing). */
   type: WagonType | null;
-  /** Livery id → its texture swaps (./livery.ts `liverySwaps`), in the model's order. */
-  liveries: ReadonlyMap<string, LiverySwaps>;
+  /**
+   * Decodes textures by pack path — a livery's (model/client `ModelLoader.textures`); null
+   * for a missing or broken one. Without it a livery's pictures the model lacks show as missing.
+   */
+  textures?: (paths: readonly string[]) => Promise<Record<string, ImageBitmap | null>>;
 }
 
 /** Runs something every so often until stopped: the doors' swing ticks by it. */
@@ -78,6 +81,11 @@ export class PreviewController {
   readonly state = signal<PreviewState | null>(null);
 
   private told: Told | null = null;
+  /** Livery pictures decoded for the subject (null: none to be had), and those being decoded. */
+  private decoded = new Map<string, ImageBitmap | null>();
+  private decoding = new Set<string>();
+  /** Grows when livery pictures arrive, so the view is told again. */
+  private readonly arrived = signal(0);
   private stopTicking: (() => void) | null = null;
   private readonly stopTelling: () => void;
 
@@ -87,6 +95,7 @@ export class PreviewController {
       const subject = this.subject.value;
       const r = this.rig.value;
       const state = this.state.value;
+      void this.arrived.value;
       // the view's own signals, if it reads any while drawing, are none of the preview's
       untracked(() => this.tell(view, subject, r, state));
     });
@@ -95,8 +104,10 @@ export class PreviewController {
   /** Previews another model (or none): its state starts over, at rest. */
   load(subject: PreviewSubject | null): void {
     this.stopSwing();
-    const r = subject === null ? null : rig(subject.parts, subject.type);
+    const r = subject === null ? null : rig(subject.model, subject.type);
     this.told = null;
+    this.decoded = new Map();
+    this.decoding = new Set();
     batch(() => {
       this.subject.value = subject;
       this.rig.value = r;
@@ -199,7 +210,8 @@ export class PreviewController {
 
   /** Shows the model in a livery of its own, or in the base textures (null or an unknown id). */
   setLivery(livery: string | null): void {
-    const known = livery !== null && this.subject.value?.liveries.has(livery) === true ? livery : null;
+    const liveries = this.subject.value?.model.liveries ?? {};
+    const known = livery !== null && Object.hasOwn(liveries, livery) ? livery : null;
     this.update((state) => ({ ...state, livery: known }));
   }
 
@@ -233,8 +245,14 @@ export class PreviewController {
       told = this.fresh(view, subject, null);
     }
     if (told.livery !== state.livery) {
-      view.show(inLivery(subject.model, state.livery === null ? undefined : subject.liveries.get(state.livery)));
-      told = this.fresh(view, subject, state.livery);
+      const swaps = state.livery === null ? undefined : subject.model.liveries[state.livery];
+      const missing = swaps === undefined || subject.textures === undefined ? [] : undecoded(subject.model, swaps, this.decoded);
+      if (missing.length > 0) {
+        this.decode(subject, missing); // the livery shows once its pictures are here
+      } else {
+        view.show(inLivery(subject.model, swaps, this.decoded));
+        told = this.fresh(view, subject, state.livery);
+      }
     }
     this.told = told;
     const scene: PreviewScene = previewScene(r, state);
@@ -258,6 +276,20 @@ export class PreviewController {
       view.overlay(LIGHTS_LAYER, scene.lights);
       told.lights = lights;
     }
+  }
+
+  /** Decodes the subject's textures not yet asked for; when they arrive (or fail, as none), the view is told again. */
+  private decode(subject: PreviewSubject, paths: readonly string[]): void {
+    const wanted = paths.filter((path) => !this.decoding.has(path));
+    if (wanted.length === 0 || subject.textures === undefined) return;
+    for (const path of wanted) this.decoding.add(path);
+    const decoded = this.decoded;
+    const settle = (bitmaps: Record<string, ImageBitmap | null>): void => {
+      if (this.decoded !== decoded) return; // another model since
+      for (const path of wanted) decoded.set(path, bitmaps[path] ?? null);
+      this.arrived.value++;
+    };
+    subject.textures(wanted).then(settle, () => settle({}));
   }
 
   private fresh(view: ViewApi, subject: PreviewSubject, livery: string | null): Told {

@@ -40,7 +40,9 @@ export function animatedDoor(type: WagonType | null, id: string): number {
 /**
  * The type's door a leaf moved by name swings with (`WagonRenderer.drawDoors`): the first
  * with a leaf whose box, grown by 0.1, holds the centre of the leaf's drawn faces
- * (`WagonType.doorHolding`, model frame); −1 if none — the leaf is drawn shut.
+ * (`WagonType.doorHolding`, model frame); −1 if none — the leaf is drawn shut. It asks
+ * from the box `ModelParts` gives a leaf, in the model frame, as the renderer does;
+ * ports/doorLeaves `leafDoor` asks the same of a box in the OBJ frame (`DoorLeaves.door`).
  */
 export function leafDoor(type: WagonType | null, boxMin: Vec3, boxMax: Vec3): number {
   if (type === null) return -1;

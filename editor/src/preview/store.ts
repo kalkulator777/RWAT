@@ -3,9 +3,10 @@
  *
  * Wiring, done where the open model and the view are wired (app/, by the conductor):
  * - the 3D view, once it exists: `preview.view.value = view`;
- * - each model opened and shown in it (`view.show(model)` first): `preview.load({ model,
- *   parts, type, liveries })` — its moving things (./parts.ts, from ports/modelParts), the
- *   paired wagon type (ports/wagonType) and the livery swaps (./livery.ts `liverySwaps`);
+ * - each model opened and shown in it (`view.show(model)` first), with the files it was
+ *   read from and its paired wagon type (ports/wagonType `loadWagonType(...).type`, null
+ *   for none): `preview.load({ model, type, textures: (paths) => loader.textures(files,
+ *   paths) })` — model/client `ModelLoader`, which decodes a livery's pictures on demand;
  *   `preview.load(null)` when it closes.
  */
 

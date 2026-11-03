@@ -4,9 +4,9 @@ import { controlTransform, rowMajor } from '../ports/controlPose';
 import { point } from '../ports/objFrame';
 import { parseRole } from '../ports/objectRole';
 import { columnMajor, movingMatrix, objDirection, objPoint } from './pose';
-import type { MovingPart } from './parts';
+import type { ModelControl } from '../ports/modelParts';
 
-function part(pivot: Vec3 | null, axis: Vec3, degrees: number, slide: Vec3): MovingPart {
+function part(pivot: Vec3 | null, axis: Vec3, degrees: number, slide: Vec3): ModelControl {
   return { role: parseRole('THROTTLE_1').control!, interior: false, pivot, axis, degrees, slide, boxMin: [0, 0, 0], boxMax: [0, 0, 0] };
 }
 

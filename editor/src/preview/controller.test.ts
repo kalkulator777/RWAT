@@ -1,6 +1,7 @@
 /**
  * The preview against the 3D view's contract (core/contracts `ViewApi`), on the example
- * pack's coach and shunter as the engine reads them (./testing.node.ts): the M3 gates of
+ * pack's coach and shunter as the model worker reads them (./testing.node.ts, through
+ * model/build) and their wagon types as the engine reads them: the M3 gates of
  * the preview (editor.md §7, M3) — the `salon_door` slider moves the door's pieces by its
  * `.anim`, the `THROTTLE_1` slider turns the lever about its marker's axis as far as its
  * name says, the coupler heads switch, a livery swaps the textures — and the rest of what
@@ -16,7 +17,7 @@ import { rowMajor } from '../ports/controlPose';
 import { parseRole } from '../ports/objectRole';
 import { of as hingeOf } from '../ports/pivotAxis';
 import { EXAMPLE_PACK } from '../testing/repo.node';
-import { PreviewController, type Ticker } from './controller';
+import { PreviewController, type PreviewSubject, type Ticker } from './controller';
 import { DOOR_ANIM_TICKS, TICK_MS } from './doors';
 import { HEADLIGHT_STYLE, LAMP_STYLE, LIGHTS_LAYER } from './scene';
 import { assetPath, cornersOf, exampleSubject, objText, recordingView, type RecordingView } from './testing.node';
@@ -42,11 +43,13 @@ function handTicker(): Ticker & { running: number } {
 
 const controllers: PreviewController[] = [];
 
-function setUp(name: 'coach' | 'shunter', ticker: Ticker = handTicker()): { preview: PreviewController; view: RecordingView } {
+/** The example coach and shunter as the model worker reads them (read once: a subject is never changed). */
+const subjects: Record<'coach' | 'shunter', PreviewSubject> = { coach: await exampleSubject('coach'), shunter: await exampleSubject('shunter') };
+
+function setUp(name: 'coach' | 'shunter', ticker: Ticker = handTicker(), subject = subjects[name]): { preview: PreviewController; view: RecordingView } {
   const preview = new PreviewController(ticker);
   controllers.push(preview);
   const view = recordingView();
-  const subject = exampleSubject(name);
   view.show(subject.model); // as the editor does before handing the model to the preview
   preview.view.value = view;
   preview.load(subject);
@@ -167,7 +170,7 @@ describe('the salon_door slider', () => {
     controllers.push(preview);
     const view = recordingView();
     preview.view.value = view;
-    preview.load(exampleSubject('coach'));
+    preview.load(subjects.coach);
     preview.toggleDoor(SALON_DOOR);
     vi.advanceTimersByTime((DOOR_ANIM_TICKS / 2) * TICK_MS);
     expect(preview.state.value!.doors[SALON_DOOR]).toBeCloseTo(0.5, 6);
@@ -305,40 +308,67 @@ describe('the coupler heads', () => {
 });
 
 describe('the livery', () => {
-  const base = assetPath('stock/coach/coach_body.png');
-  const blue = assetPath('stock/coach/l_blue/coach_body.png');
+  const body = assetPath('stock/coach/coach_body.png');
+  const door = assetPath('stock/coach/coach_door.png');
+  const roof = assetPath('stock/coach/coach_roof.png');
+  const blueBody = assetPath('stock/coach/l_blue/coach_body.png');
+  const blueDoor = assetPath('stock/coach/l_blue/coach_door.png');
 
-  it('shows the model again with the livery’s textures in the base textures’ places, and back', () => {
-    const { preview, view } = setUp('coach');
+  it('decodes the livery’s pictures once, then shows the model again with them in the base textures’ places, and back', async () => {
+    const asked: string[][] = [];
+    const { preview, view } = setUp('coach', handTicker(), await exampleSubject('coach', asked));
     const model = preview.subject.value!.model;
     preview.setLivery('blue');
+    expect(asked).toEqual([[blueBody, blueDoor]]);
+    await vi.waitFor(() => expect(view.shown).toHaveLength(2));
     const shown = view.shown.at(-1)!;
-    expect(view.shown).toHaveLength(2);
-    expect(shown.textures[base]).toBe(model.textures[blue]);
-    expect(shown.textures[assetPath('stock/coach/coach_door.png')]).toBe(model.textures[assetPath('stock/coach/l_blue/coach_door.png')]);
-    expect(shown.textures[assetPath('stock/coach/coach_roof.png')]).toBe(model.textures[assetPath('stock/coach/coach_roof.png')]);
+    expect((shown.textures[body] as unknown as { path: string }).path).toBe(blueBody);
+    expect((shown.textures[door] as unknown as { path: string }).path).toBe(blueDoor);
+    expect(shown.textures[roof]).toBe(model.textures[roof]);
     expect(shown.parts).toBe(model.parts);
 
     preview.setLivery(null);
     expect(view.shown).toHaveLength(3);
     expect(view.shown.at(-1)).toBe(model);
+    preview.setLivery('blue');
+    expect(view.shown).toHaveLength(4); // the pictures are here already
+    expect(asked).toHaveLength(1);
   });
 
-  it('tells the view everything again after showing the model anew', () => {
-    const { preview, view } = setUp('coach');
+  it('tells the view everything again after showing the model anew', async () => {
+    const { preview, view } = setUp('coach', handTicker(), await exampleSubject('coach'));
     preview.setDoor(SALON_DOOR, 0.5);
     preview.setCoupled(true, true);
     preview.setLivery('blue');
+    await vi.waitFor(() => expect(view.shown).toHaveLength(2));
     expect(list(view.transforms.get('SALON_DOOR_KNOB'))).toEqual(transposed(framesAt(salonTracks, 0.5).get('SALON_DOOR_KNOB')!));
     expect(view.visible.get('COUPLED_FRONT_3_HIDE_INVERT')).toBe(true);
     expect(view.transforms.has('HANDBRAKE_1_HANDWHEEL')).toBe(true);
   });
 
-  it('takes no livery the model does not have', () => {
-    const { preview, view } = setUp('coach');
+  it('keeps the view as it is while the pictures come, and drops them for another model', async () => {
+    let answer: (bitmaps: Record<string, ImageBitmap | null>) => void = () => undefined;
+    const slow: PreviewSubject = { ...subjects.coach, textures: () => new Promise((resolve) => (answer = resolve)) };
+    const { preview, view } = setUp('coach', handTicker(), slow);
+    preview.setLivery('blue');
+    preview.setDoor(SALON_DOOR, 1);
+    expect(view.shown).toHaveLength(1);
+    expect(view.transforms.has('SALON_DOOR_KNOB')).toBe(true);
+    preview.load(subjects.coach);
+    answer({});
+    await Promise.resolve();
+    expect(view.shown).toHaveLength(1);
+  });
+
+  it('shows a livery picture that can’t be decoded as missing, and takes no livery the model does not have', async () => {
+    const failing: PreviewSubject = { ...subjects.coach, textures: () => Promise.reject(new Error('no worker')) };
+    const { preview, view } = setUp('coach', handTicker(), failing);
     preview.setLivery('red');
     expect(preview.state.value!.livery).toBeNull();
     expect(view.shown).toHaveLength(1);
+    preview.setLivery('blue');
+    await vi.waitFor(() => expect(view.shown).toHaveLength(2));
+    expect(view.shown.at(-1)!.textures[body]).toBeNull();
   });
 });
 
@@ -404,7 +434,7 @@ describe('the preview as a whole', () => {
     const first = recordingView();
     preview.view.value = first;
     expect(first.calls).toEqual([]);
-    preview.load(exampleSubject('coach'));
+    preview.load(subjects.coach);
     expect(first.transforms.size).toBeGreaterThan(0);
     const second = recordingView();
     preview.view.value = second;
@@ -422,7 +452,7 @@ describe('the preview as a whole', () => {
     expect(preview.state.value!.doors).toHaveLength(8);
     const typeless = new PreviewController(handTicker());
     controllers.push(typeless);
-    typeless.load({ ...exampleSubject('coach'), type: null });
+    typeless.load({ ...subjects.coach, type: null });
     typeless.toggleDoor(0);
     expect(typeless.state.value!.doors).toEqual([]);
     expect(typeless.tick()).toBe(false);

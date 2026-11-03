@@ -4,7 +4,7 @@
  * sliders, buttons and switches reach the view as the engine would move the model.
  */
 
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/preact';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/preact';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -25,9 +25,12 @@ function transposed(rows: ArrayLike<number>): number[] {
 
 let view: RecordingView;
 
+/** The example coach and shunter as the model worker reads them. */
+const subjects = { coach: await exampleSubject('coach'), shunter: await exampleSubject('shunter') };
+
 function open(name: 'coach' | 'shunter'): void {
   view = recordingView();
-  const subject = exampleSubject(name);
+  const subject = subjects[name];
   view.show(subject.model);
   preview.view.value = view;
   preview.load(subject);
@@ -127,14 +130,14 @@ describe('the Preview tab', () => {
     expect(view.display).toBe('lit');
   });
 
-  it('shows the coach in its livery and back', () => {
+  it('shows the coach in its livery and back', async () => {
     open('coach');
     render(<PreviewPanel />);
     fireEvent.click(screen.getByRole('button', { name: /^Liveries/ }));
     fireEvent.click(screen.getByRole('radio', { name: 'blue: replaces 2 textures' }));
-    expect(view.shown).toHaveLength(2);
+    await waitFor(() => expect(view.shown).toHaveLength(2));
     const body = assetPath('stock/coach/coach_body.png');
-    expect(view.shown.at(-1)!.textures[body]).toBe(preview.subject.value!.model.textures[assetPath('stock/coach/l_blue/coach_body.png')]);
+    expect((view.shown.at(-1)!.textures[body] as unknown as { path: string }).path).toBe(assetPath('stock/coach/l_blue/coach_body.png'));
     fireEvent.click(screen.getByRole('radio', { name: 'Base' }));
     expect(view.shown.at(-1)).toBe(preview.subject.value!.model);
   });
