@@ -87,6 +87,10 @@ export const OVERLAY_STYLES: Readonly<Record<string, OverlayStyle>> = Object.fre
   draft: { color: '#495057', fill: 0.08, dashed: true },
   warning: { color: '#e67700', fill: 0.15, dashed: false },
   error: { color: '#e03131', fill: 0.15, dashed: false },
+  /** A door's inner face, towards the car's middle: where the floor ends for its way out (tools/doors). */
+  'doors.face': { color: '#c2255c', fill: 0.15, dashed: false },
+  /** A leaf or an animated piece the model moves with a door, at its centre (tools/doors). */
+  'doors.leaf': { color: '#0ca678', fill: 0.6, dashed: false },
 });
 
 /** The style a name stands for; `default` for one the table lacks. */

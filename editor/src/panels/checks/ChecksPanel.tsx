@@ -5,6 +5,7 @@ import { isStale, modelsOf, type SweepState } from '../../checks/model/all';
 import type { Link, Problem, Severity } from '../../core/contracts';
 import type { Pack } from '../../core/pack';
 import { t } from '../../i18n';
+import { toolHost } from '../../tools';
 import { modelSweep, shownFindings } from './findings';
 import './checks.css';
 
@@ -71,10 +72,11 @@ function ModelsBar({ open }: { open: Pack }) {
  * with its severity, its text in the interface language (translated by code,
  * checks/messages.ts; the engine's English line is the tooltip) and its place; the
  * severities can be hidden one by one; clicking a finding selects the places it points
- * at, which brings the inspector to that field and the markup tools to the zone, door or
- * chair. The findings are the pack's, the floor check's and the models' (./findings.ts),
- * checked again a moment after the last edit; "Check all models" reads every model of
- * the pack in the model worker and adds what the pack check says of each.
+ * at, which brings the inspector to that field, and turns on the markup tool of the zone,
+ * door or chair with it selected (tools/registry `ToolHost.reveal`). The findings are the
+ * pack's, the floor check's and the models' (./findings.ts), checked again a moment after
+ * the last edit; "Check all models" reads every model of the pack in the model worker and
+ * adds what the pack check says of each.
  */
 export function ChecksPanel() {
   const [hidden, setHidden] = useState<ReadonlySet<Severity>>(new Set());
@@ -148,6 +150,7 @@ export function ChecksPanel() {
               disabled={problem.at.length === 0}
               onClick={() => {
                 selection.value = problem.at;
+                toolHost.reveal(problem.at);
               }}
             >
               <span class="finding-severity">{t(`checks.severity.${problem.severity}`)}</span>
