@@ -1,5 +1,5 @@
 {
-  "description": "The material libraries and textures of a model, and what draws (pack.ModelCheck.check: textures, checkDrawn): mtllib and map_Kd paths relative to the OBJ's folder, missing files, materials without a texture, faces never drawn (HIDE, skip, CARGO_FILL). input: namespace (the declaring file's, for unqualified paths), declaration (the wagon model's JSON), files (ns:path -> text), present (locations that are there, contents unread: textures); any other key with a colon is a file too (what input_file reads of the example pack). A location is valid as Minecraft takes it: [a-z0-9_.-]+:[a-z0-9/._-]+. expected: the problems in the check's order, each {severity: error | warning, finding}; the engine gives only the finding's text yet (code, subject, index null, params {}).",
+  "description": "The material libraries and textures of a model, and what draws (pack.ModelCheck.findings: textures, checkDrawn): mtllib and map_Kd paths relative to the OBJ's folder, missing files, materials without a texture, faces never drawn (HIDE, skip, CARGO_FILL). input: namespace (the declaring file's, for unqualified paths), declaration (the wagon model's JSON), files (ns:path -> text), present (locations that are there, contents unread: textures); any other key with a colon is a file too (what input_file reads of the example pack). A location is valid as Minecraft takes it: [a-z0-9_.-]+:[a-z0-9/._-]+. expected: the findings in the check's order (pack.ModelCheck.findings), each {severity: error | warning, finding}: code (ModelFinding.Code.key, as the editor names it: missing-texture), subject and index null, params (the names and numbers its line is made of, in the line's order), text (the line).",
   "frame": "none",
   "tolerance": 0,
   "cases": [
@@ -50,10 +50,10 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "draws-nothing",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj"},
             "text": "model t:car/car.obj draws nothing: no face has a textured material"
           }
         }
@@ -76,10 +76,10 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "draws-nothing",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj"},
             "text": "model t:car/car.obj draws nothing: no face has a textured material"
           }
         }
@@ -102,10 +102,10 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "missing-texture",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj", "texture": "t:tex/body.png", "material": "body"},
             "text": "model t:car/car.obj: texture t:tex/body.png of material body not found"
           }
         }
@@ -127,20 +127,20 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "missing-library",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj", "library": "t:car/car.mtl"},
             "text": "model t:car/car.obj: material library t:car/car.mtl not found"
           }
         },
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "draws-nothing",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj"},
             "text": "model t:car/car.obj draws nothing: no face has a textured material"
           }
         }
@@ -163,20 +163,20 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "bad-library-path",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj", "library": "../../car.mtl"},
             "text": "model t:car/car.obj: material library path '../../car.mtl' is invalid"
           }
         },
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "draws-nothing",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj"},
             "text": "model t:car/car.obj draws nothing: no face has a textured material"
           }
         }
@@ -200,20 +200,20 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "bad-library-path",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj", "library": "Car.mtl"},
             "text": "model t:car/car.obj: material library path 'Car.mtl' is invalid"
           }
         },
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "draws-nothing",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj"},
             "text": "model t:car/car.obj draws nothing: no face has a textured material"
           }
         }
@@ -236,20 +236,20 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "bad-texture-path",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj", "material": "body", "texture": "../tex/Body.png"},
             "text": "model t:car/car.obj: material body has an invalid texture path '../tex/Body.png'"
           }
         },
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "draws-nothing",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj"},
             "text": "model t:car/car.obj draws nothing: no face has a textured material"
           }
         }
@@ -288,20 +288,20 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "missing-texture",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj", "texture": "t:tex/gone.png", "material": "body"},
             "text": "model t:car/car.obj: texture t:tex/gone.png of material body not found"
           }
         },
         {
           "severity": "warning",
           "finding": {
-            "code": null,
+            "code": "livery-replaces-nothing",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"livery": "red", "folder": "red"},
             "text": "livery 'red' replaces no texture (folder red next to the model)"
           }
         }
@@ -324,10 +324,10 @@
         {
           "severity": "warning",
           "finding": {
-            "code": null,
+            "code": "untextured-faces",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj", "materials": "glass, lens"},
             "text": "model t:car/car.obj: faces with no texture (map_Kd) aren't drawn, material(s) glass, lens"
           }
         }
@@ -350,10 +350,10 @@
         {
           "severity": "warning",
           "finding": {
-            "code": null,
+            "code": "untextured-faces",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj", "materials": "glow"},
             "text": "model t:car/car.obj: faces with no texture (map_Kd) aren't drawn, material(s) glow"
           }
         }
@@ -376,10 +376,10 @@
         {
           "severity": "warning",
           "finding": {
-            "code": null,
+            "code": "untextured-faces",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj", "materials": "(none)"},
             "text": "model t:car/car.obj: faces with no texture (map_Kd) aren't drawn, material(s) (none)"
           }
         }

@@ -16,20 +16,22 @@ import org.junit.jupiter.api.TestFactory;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 import com.muzhik17.trainsmod.client.render.model.WagonModelDecl;
 import com.muzhik17.trainsmod.pack.ModelCheck;
-import com.muzhik17.trainsmod.pack.PackOrigin;
+import com.muzhik17.trainsmod.pack.ModelFinding;
 import com.muzhik17.trainsmod.pack.PackProblem;
 
 /**
  * {@code fixtures/golden/model_check/}: a wagon model declaration and the
  * files of a pack → what the check of {@code /rwatc packs validate} says of
- * them ({@link ModelCheck#check} after {@link WagonModelDecl#parse}), in its
- * order: each problem's severity and, as the editor reads it, the finding
- * {@code {code, subject, index, params, text}} — the engine gives only the
- * text yet ({@link Golden#finding(String)}). Ported:
- * {@code editor/src/ports/modelCheck.ts}.
+ * them ({@link ModelCheck#findings} after {@link WagonModelDecl#parse}), in
+ * its order: each finding's severity and the finding as the editor reads it,
+ * {@code {code, subject, index, params, text}} ({@link ModelFinding}: the
+ * code's key, no subject or index — null —, the params in the order of the
+ * line, the line). Ported: {@code editor/src/ports/modelCheck.ts}.
  *
  * <p>The input: {@code namespace} (the declaring file's, for unqualified
  * paths), {@code declaration} (its JSON), {@code files} ({@code ns:path} →
@@ -42,8 +44,6 @@ class ModelCheckGolden {
 
     static final String FOLDER = "model_check";
 
-    private static final PackOrigin ORIGIN = new PackOrigin("golden", "wagon_models/case.json");
-
     @TestFactory
     Stream<DynamicNode> cases() throws IOException {
         return Golden.run(FOLDER, input -> {
@@ -51,14 +51,28 @@ class ModelCheckGolden {
             WagonModelDecl decl = WagonModelDecl.parse(in.get("namespace").getAsString(),
                     in.getAsJsonObject("declaration"));
             JsonArray out = new JsonArray();
-            for (PackProblem problem : ModelCheck.check(decl, ORIGIN, files(in))) {
+            for (ModelFinding finding : ModelCheck.findings(decl, files(in))) {
                 JsonObject found = new JsonObject();
-                found.addProperty("severity", problem.isError() ? "error" : "warning");
-                found.add("finding", Golden.finding(problem.message()));
+                found.addProperty("severity", finding.severity() == PackProblem.Severity.ERROR ? "error" : "warning");
+                found.add("finding", finding(finding));
                 out.add(found);
             }
             return out;
         });
+    }
+
+    /** A finding: its code's key, its params (strings and whole numbers) in the line's order, its line. */
+    private static JsonObject finding(ModelFinding finding) {
+        JsonObject params = new JsonObject();
+        finding.params().forEach((name, value) -> params.add(name,
+                value instanceof Integer number ? new JsonPrimitive(number) : Golden.string((String) value)));
+        JsonObject out = new JsonObject();
+        out.addProperty("code", finding.code().key());
+        out.add("subject", JsonNull.INSTANCE);
+        out.add("index", JsonNull.INSTANCE);
+        out.add("params", params);
+        out.addProperty("text", finding.text());
+        return out;
     }
 
     /** The case's pack: its files with their text, and the ones only there. */

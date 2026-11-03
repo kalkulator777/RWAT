@@ -1,5 +1,5 @@
 {
-  "description": "What a model's names and declaration add (pack.ModelCheck.check: checkDrawn's hinge markers, checkGroups, checkAnimations, checkLiveries): untextured hinge markers, control groups too long to send, .anim files, liveries. At most one animation and one livery per case finds something: the engine keeps them by Map.copyOf, in no set order. input: namespace (the declaring file's, for unqualified paths), declaration (the wagon model's JSON), files (ns:path -> text), present (locations that are there, contents unread: textures); any other key with a colon is a file too (what input_file reads of the example pack). A location is valid as Minecraft takes it: [a-z0-9_.-]+:[a-z0-9/._-]+. expected: the problems in the check's order, each {severity: error | warning, finding}; the engine gives only the finding's text yet (code, subject, index null, params {}).",
+  "description": "What a model's names and declaration add (pack.ModelCheck.findings: checkDrawn's hinge markers, checkGroups, checkAnimations, checkLiveries): untextured hinge markers, control groups too long to send, .anim files, liveries. At most one animation and one livery per case finds something: the engine keeps them by Map.copyOf, in no set order. input: namespace (the declaring file's, for unqualified paths), declaration (the wagon model's JSON), files (ns:path -> text), present (locations that are there, contents unread: textures); any other key with a colon is a file too (what input_file reads of the example pack). A location is valid as Minecraft takes it: [a-z0-9_.-]+:[a-z0-9/._-]+. expected: the findings in the check's order (pack.ModelCheck.findings), each {severity: error | warning, finding}: code (ModelFinding.Code.key, as the editor names it: missing-texture), subject and index null, params (the names and numbers its line is made of, in the line's order), text (the line).",
   "frame": "none",
   "tolerance": 0,
   "cases": [
@@ -35,10 +35,10 @@
         {
           "severity": "warning",
           "finding": {
-            "code": null,
+            "code": "untextured-faces",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj", "materials": "marker"},
             "text": "model t:car/car.obj: faces with no texture (map_Kd) aren't drawn, material(s) marker"
           }
         }
@@ -61,10 +61,10 @@
         {
           "severity": "warning",
           "finding": {
-            "code": null,
+            "code": "untextured-faces",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj", "materials": "knob"},
             "text": "model t:car/car.obj: faces with no texture (map_Kd) aren't drawn, material(s) knob"
           }
         }
@@ -87,10 +87,10 @@
         {
           "severity": "warning",
           "finding": {
-            "code": null,
+            "code": "group-too-long",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj", "group": "ThisSwitchNameIsFarTooLongToEverBeSentXY", "limit": 32},
             "text": "model t:car/car.obj: control group 'ThisSwitchNameIsFarTooLongToEverBeSentXY' is longer than 32 characters and is dropped: its switches can't be worked, its lights stay off (an LINVERT one on)"
           }
         }
@@ -113,20 +113,20 @@
         {
           "severity": "warning",
           "finding": {
-            "code": null,
+            "code": "group-too-long",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj", "group": "ThisSwitchNameIsFarTooLongToEverBeSentXY", "limit": 32},
             "text": "model t:car/car.obj: control group 'ThisSwitchNameIsFarTooLongToEverBeSentXY' is longer than 32 characters and is dropped: its switches can't be worked, its lights stay off (an LINVERT one on)"
           }
         },
         {
           "severity": "warning",
           "finding": {
-            "code": null,
+            "code": "group-too-long",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj", "group": "AnotherGroupNameThatIsMuchTooLongToSend", "limit": 32},
             "text": "model t:car/car.obj: control group 'AnotherGroupNameThatIsMuchTooLongToSend' is longer than 32 characters and is dropped: its switches can't be worked, its lights stay off (an LINVERT one on)"
           }
         }
@@ -149,20 +149,20 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "missing-animation",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"door": "door2", "path": "t:car/door2.anim"},
             "text": "animation 'door2': file t:car/door2.anim not found"
           }
         },
         {
           "severity": "warning",
           "finding": {
-            "code": null,
+            "code": "livery-replaces-nothing",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"livery": "blue", "folder": "blue"},
             "text": "livery 'blue' replaces no texture (folder blue next to the model)"
           }
         }
@@ -185,10 +185,10 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "bad-animation-path",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"door": "door1", "path": "t:car/Door1.anim"},
             "text": "animation 'door1': path 't:car/Door1.anim' is not a valid resource location"
           }
         }
@@ -211,10 +211,10 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "missing-animation",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"door": "door1", "path": "t:car/gone.anim"},
             "text": "animation 'door1': file t:car/gone.anim not found"
           }
         }
@@ -237,10 +237,10 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "missing-animation",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"door": "door1", "path": "other:car/door1.anim"},
             "text": "animation 'door1': file other:car/door1.anim not found"
           }
         }
@@ -263,10 +263,14 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "unreadable-animation",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {
+              "door": "door1",
+              "path": "t:car/door1.anim",
+              "error": "java.io.IOException: anim frame with 3 values, expected 16"
+            },
             "text": "animation 'door1': t:car/door1.anim can't be read: java.io.IOException: anim frame with 3 values, expected 16"
           }
         }
@@ -289,10 +293,14 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "unreadable-animation",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {
+              "door": "door1",
+              "path": "t:car/door1.anim",
+              "error": "java.lang.NumberFormatException: For input string: \"x\""
+            },
             "text": "animation 'door1': t:car/door1.anim can't be read: java.lang.NumberFormatException: For input string: \"x\""
           }
         }
@@ -315,10 +323,14 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "unreadable-animation",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {
+              "door": "door1",
+              "path": "t:car/door1.anim",
+              "error": "java.lang.NumberFormatException: empty String"
+            },
             "text": "animation 'door1': t:car/door1.anim can't be read: java.lang.NumberFormatException: empty String"
           }
         }
@@ -356,10 +368,10 @@
         {
           "severity": "warning",
           "finding": {
-            "code": null,
+            "code": "livery-replaces-nothing",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"livery": "x", "folder": "../../.."},
             "text": "livery 'x' replaces no texture (folder ../../.. next to the model)"
           }
         }

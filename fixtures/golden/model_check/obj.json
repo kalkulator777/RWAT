@@ -1,5 +1,5 @@
 {
-  "description": "The OBJ a wagon model declaration names, read as the game reads it (pack.ModelCheck.check after WagonModelDecl.parse; ObjLoader.loadModel): a path Minecraft refuses, a missing file, a face index out of bounds, a number Java refuses, no faces. input: namespace (the declaring file's, for unqualified paths), declaration (the wagon model's JSON), files (ns:path -> text), present (locations that are there, contents unread: textures); any other key with a colon is a file too (what input_file reads of the example pack). A location is valid as Minecraft takes it: [a-z0-9_.-]+:[a-z0-9/._-]+. expected: the problems in the check's order, each {severity: error | warning, finding}; the engine gives only the finding's text yet (code, subject, index null, params {}).",
+  "description": "The OBJ a wagon model declaration names, read as the game reads it (pack.ModelCheck.findings after WagonModelDecl.parse; ObjLoader.loadModel): a path Minecraft refuses, a missing file, a face index out of bounds, a number Java refuses, no faces. input: namespace (the declaring file's, for unqualified paths), declaration (the wagon model's JSON), files (ns:path -> text), present (locations that are there, contents unread: textures); any other key with a colon is a file too (what input_file reads of the example pack). A location is valid as Minecraft takes it: [a-z0-9_.-]+:[a-z0-9/._-]+. expected: the findings in the check's order (pack.ModelCheck.findings), each {severity: error | warning, finding}: code (ModelFinding.Code.key, as the editor names it: missing-texture), subject and index null, params (the names and numbers its line is made of, in the line's order), text (the line).",
   "frame": "none",
   "tolerance": 0,
   "cases": [
@@ -20,10 +20,10 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "missing",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/gone.obj"},
             "text": "model file t:car/gone.obj not found"
           }
         }
@@ -46,10 +46,10 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "bad-path",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:Car/Car.obj"},
             "text": "model path 't:Car/Car.obj' is not a valid resource location"
           }
         }
@@ -72,10 +72,10 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "bad-face-index",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj", "detail": "Index 8 out of bounds for length 4"},
             "text": "model t:car/car.obj: a face refers to a vertex, texture coordinate or normal that isn't there (Index 8 out of bounds for length 4); indices count from 1, negative ones aren't supported"
           }
         }
@@ -98,10 +98,10 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "bad-face-index",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj", "detail": "Index -2 out of bounds for length 4"},
             "text": "model t:car/car.obj: a face refers to a vertex, texture coordinate or normal that isn't there (Index -2 out of bounds for length 4); indices count from 1, negative ones aren't supported"
           }
         }
@@ -124,10 +124,10 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "bad-face-index",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj", "detail": "Index -1 out of bounds for length 4"},
             "text": "model t:car/car.obj: a face refers to a vertex, texture coordinate or normal that isn't there (Index -1 out of bounds for length 4); indices count from 1, negative ones aren't supported"
           }
         }
@@ -150,10 +150,10 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "bad-face-index",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj", "detail": "Index 4 out of bounds for length 1"},
             "text": "model t:car/car.obj: a face refers to a vertex, texture coordinate or normal that isn't there (Index 4 out of bounds for length 1); indices count from 1, negative ones aren't supported"
           }
         }
@@ -176,10 +176,10 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "bad-face-index",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj", "detail": "Index 0 out of bounds for length 0"},
             "text": "model t:car/car.obj: a face refers to a vertex, texture coordinate or normal that isn't there (Index 0 out of bounds for length 0); indices count from 1, negative ones aren't supported"
           }
         }
@@ -202,10 +202,10 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "bad-face-index",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj", "detail": "Index 0 out of bounds for length 0"},
             "text": "model t:car/car.obj: a face refers to a vertex, texture coordinate or normal that isn't there (Index 0 out of bounds for length 0); indices count from 1, negative ones aren't supported"
           }
         }
@@ -228,10 +228,10 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "unreadable",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj", "error": "java.lang.NumberFormatException: For input string: \"x\""},
             "text": "model t:car/car.obj can't be read: java.lang.NumberFormatException: For input string: \"x\""
           }
         }
@@ -254,10 +254,13 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "unreadable",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {
+              "path": "t:car/car.obj",
+              "error": "java.lang.NumberFormatException: For input string: \"99999999999\""
+            },
             "text": "model t:car/car.obj can't be read: java.lang.NumberFormatException: For input string: \"99999999999\""
           }
         }
@@ -280,10 +283,10 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "unreadable",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj", "error": "java.lang.NumberFormatException: For input string: \"abc\""},
             "text": "model t:car/car.obj can't be read: java.lang.NumberFormatException: For input string: \"abc\""
           }
         }
@@ -306,10 +309,10 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "bad-face-index",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj", "detail": "Index 3 out of bounds for length 3"},
             "text": "model t:car/car.obj: a face refers to a vertex, texture coordinate or normal that isn't there (Index 3 out of bounds for length 3); indices count from 1, negative ones aren't supported"
           }
         }
@@ -332,10 +335,10 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "unreadable",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj", "error": "java.lang.NumberFormatException: For input string: \"abc\""},
             "text": "model t:car/car.obj can't be read: java.lang.NumberFormatException: For input string: \"abc\""
           }
         }
@@ -358,10 +361,10 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "bad-face-index",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj", "detail": "Index 2 out of bounds for length 2"},
             "text": "model t:car/car.obj: a face refers to a vertex, texture coordinate or normal that isn't there (Index 2 out of bounds for length 2); indices count from 1, negative ones aren't supported"
           }
         }
@@ -384,10 +387,10 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "no-faces",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj"},
             "text": "model t:car/car.obj has no faces"
           }
         }
@@ -410,10 +413,10 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "draws-nothing",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"path": "t:car/car.obj"},
             "text": "model t:car/car.obj draws nothing: no face has a textured material"
           }
         }

@@ -1,5 +1,5 @@
 {
-  "description": "The example pack's wagon models (CC0) through pack.ModelCheck.check, as /rwatc packs validate checks them: nothing to say; and a copy with files gone. input: namespace (the declaring file's, for unqualified paths), declaration (the wagon model's JSON), files (ns:path -> text), present (locations that are there, contents unread: textures); any other key with a colon is a file too (what input_file reads of the example pack). A location is valid as Minecraft takes it: [a-z0-9_.-]+:[a-z0-9/._-]+. expected: the problems in the check's order, each {severity: error | warning, finding}; the engine gives only the finding's text yet (code, subject, index null, params {}).",
+  "description": "The example pack's wagon models (CC0) through pack.ModelCheck.findings, as /rwatc packs validate checks them: nothing to say; and a copy with files gone. input: namespace (the declaring file's, for unqualified paths), declaration (the wagon model's JSON), files (ns:path -> text), present (locations that are there, contents unread: textures); any other key with a colon is a file too (what input_file reads of the example pack). A location is valid as Minecraft takes it: [a-z0-9_.-]+:[a-z0-9/._-]+. expected: the findings in the check's order (pack.ModelCheck.findings), each {severity: error | warning, finding}: code (ModelFinding.Code.key, as the editor names it: missing-texture), subject and index null, params (the names and numbers its line is made of, in the line's order), text (the line).",
   "frame": "none",
   "tolerance": 0,
   "cases": [
@@ -134,20 +134,24 @@
         {
           "severity": "error",
           "finding": {
-            "code": null,
+            "code": "missing-texture",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {
+              "path": "rwat_example:stock/coach/coach.obj",
+              "texture": "rwat_example:stock/coach/coach_seat.png",
+              "material": "seat"
+            },
             "text": "model rwat_example:stock/coach/coach.obj: texture rwat_example:stock/coach/coach_seat.png of material seat not found"
           }
         },
         {
           "severity": "warning",
           "finding": {
-            "code": null,
+            "code": "livery-replaces-nothing",
             "subject": null,
             "index": null,
-            "params": {},
+            "params": {"livery": "blue", "folder": "l_blue"},
             "text": "livery 'blue' replaces no texture (folder l_blue next to the model)"
           }
         }

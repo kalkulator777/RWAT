@@ -2,15 +2,14 @@
  * Golden runner of fixtures/golden/model_check/ (editor.md §4.5; fixtures/golden/README.md):
  * ./modelCheck against `pack/ModelCheck.java`, the reference that writes the expected — a
  * wagon model declaration and a pack's files → what the check of `/rwatc packs validate`
- * says of them, in its order, each problem's severity and its finding. The engine gives
- * only the finding's text yet (code, subject and index null, params empty): the port's
- * codes and params are held to it through the text, which is made of them alone
- * (`modelFindingText`).
+ * finds in them, in its order, each finding's severity, its code (`ModelFinding.Code.key`),
+ * its params in the line's order and its line; no subject or index (null).
  *
  * A location is valid by the rule of Minecraft's `ResourceLocation` the Java runner writes
  * out (the model worker's own reader, model/build `checkFiles`, is model/resources').
  */
 
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { mismatch, readGoldenFolder } from '../testing/golden.node';
 import { REPO_ROOT } from '../testing/repo.node';
@@ -52,7 +51,7 @@ function filesOf(input: Input): ModelCheckFiles {
 /** What the port makes of an input, laid out as ModelCheckGolden lays the engine's. */
 async function compute(input: Input): Promise<unknown> {
   const findings = await modelCheck(modelDeclaration(input.namespace, input.declaration), filesOf(input));
-  return findings.map((f) => ({ severity: f.severity, finding: { code: null, subject: null, index: null, params: {}, text: f.text } }));
+  return findings.map((f) => ({ severity: f.severity, finding: { code: f.code, subject: null, index: null, params: f.params, text: f.text } }));
 }
 
 describe('golden model_check', () => {
@@ -75,6 +74,15 @@ describe('golden model_check', () => {
 // ---- what the golden cases don't reach
 
 describe('modelCheck', () => {
+  it('knows the engine’s codes by their keys, in their order, each as bad as there (pack/ModelFinding.java)', () => {
+    const java = readFileSync(`${REPO_ROOT}src/main/java/com/muzhik17/trainsmod/pack/ModelFinding.java`, 'utf8');
+    const declared = [...java.matchAll(/^ {8}([A-Z_]+)\(PackProblem\.Severity\.(ERROR|WARNING)\)[,;]$/gm)].map(
+      ([, name, severity]) => [name!.toLowerCase().replaceAll('_', '-'), severity!.toLowerCase()],
+    );
+    expect(declared).toHaveLength(17);
+    expect(Object.entries(MODEL_CODES)).toEqual(declared);
+  });
+
   it('makes each line of its code and params alone, and every code has its severity', () => {
     const codes = Object.keys(MODEL_CODES) as ModelCode[];
     expect(codes).toHaveLength(17);

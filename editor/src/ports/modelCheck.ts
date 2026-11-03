@@ -1,8 +1,8 @@
 /**
  * The files a wagon model declaration names, checked all at once: port of
- * `pack/ModelCheck.java` (`check`), the offline check of `/rwatc packs validate`, which the
- * game otherwise shows only when the wagon first comes into view. Golden:
- * fixtures/golden/model_check/ (reference Java, `ModelCheckGolden`).
+ * `pack/ModelCheck.java` (`findings`) and `pack/ModelFinding.java`, the offline check of
+ * `/rwatc packs validate`, which the game otherwise shows only when the wagon first comes
+ * into view. Golden: fixtures/golden/model_check/ (reference Java, `ModelCheckGolden`).
  *
  * Read by the ports of the readers the game draws with (./obj.ts, ./mtl.ts, ./anim.ts).
  * Errors: the OBJ path is no resource location or the file is missing, a face index points
@@ -13,13 +13,17 @@
  * reads for its axis textured or not; a control group longer than {@link MAX_GROUP_LENGTH}
  * characters, which the loader drops; a livery that replaces no texture.
  *
- * The engine gives only a line of English (`PackProblem`). Here each finding has a stable
- * {@link ModelCode}, the params its line is made of and the line itself, built from them
- * ({@link modelFindingText}) word for word as the engine's — the JVM's own words of why a
- * file doesn't read included: the OBJ's and the `.anim`'s refusals (./obj.ts `ObjError`,
- * ./anim.ts `AnimError`) are put as the exception the engine's reader throws there
- * (`Index 8 out of bounds for length 4`, `java.lang.NumberFormatException: For input
- * string: "x"`); a file that fails to be read at all is the caller's error as it is.
+ * Each finding has a stable {@link ModelCode} (`ModelFinding.Code.key`: `MISSING_TEXTURE`
+ * is `missing-texture`), its severity, the params its line is made of, in the line's
+ * order, and the line itself, built from them ({@link modelFindingText},
+ * `ModelFinding.text`) word for word as the engine's — the golden holds code, params and
+ * line alike. The JVM's own words of why a file doesn't read are params too: the OBJ's and
+ * the `.anim`'s refusals (./obj.ts `ObjError`, ./anim.ts `AnimError`) are put as the
+ * exception the engine's reader throws there (`Index 8 out of bounds for length 4`,
+ * `java.lang.NumberFormatException: For input string: "x"`); a file that fails to be read
+ * at all is the caller's error as it is. Where it is fixed — the material library of a
+ * texture's finding (`library`), the objects of a group too long (`objects`) — is the
+ * port's own, for the editor's links; the engine has no need of it.
  *
  * Order as the engine's: the OBJ (a finding here stops the check), each material library
  * in `mtllib` order with its materials, what draws, the control groups by the parts, the
@@ -48,7 +52,10 @@ export interface ModelCheckFiles {
   read(location: string): Promise<string>;
 }
 
-/** What the check finds, each with how bad it is: an error (the model, or the part named, doesn't load) or a warning. */
+/**
+ * What the check finds, each with how bad it is: an error (the model, or the part named,
+ * doesn't load) or a warning — `ModelFinding.Code` by its keys, in its order.
+ */
 export const MODEL_CODES = {
   'bad-path': 'error',
   missing: 'error',
@@ -94,7 +101,7 @@ function str(params: Readonly<Record<string, ProblemParam>>, name: string): stri
   return String(params[name]);
 }
 
-/** The engine's line of a finding, made of its code and params alone (`ModelCheck`'s messages). */
+/** The engine's line of a finding, made of its code and params alone (`ModelFinding.text`). */
 export function modelFindingText(code: ModelCode, params: Readonly<Record<string, ProblemParam>>): string {
   const p = (name: string): string => str(params, name);
   switch (code) {
@@ -141,13 +148,13 @@ export function modelFindingText(code: ModelCode, params: Readonly<Record<string
   }
 }
 
-/** A finding with its params in the line's order. */
+/** A finding with its params in the line's order (`ModelFinding.of`). */
 export function modelFinding(code: ModelCode, params: Record<string, ProblemParam>, extra: Pick<ModelFinding, 'library' | 'objects'> = {}): ModelFinding {
   return { severity: MODEL_CODES[code], code, params, text: modelFindingText(code, params), ...extra };
 }
 
 /**
- * Every problem of the files `decl` names, in the engine's order (`ModelCheck.check`);
+ * Every finding of the files `decl` names, in the engine's order (`ModelCheck.findings`);
  * empty if none.
  */
 export async function modelCheck(decl: ModelDeclaration, files: ModelCheckFiles): Promise<ModelFinding[]> {

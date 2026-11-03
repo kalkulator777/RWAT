@@ -67,7 +67,7 @@
     },
     "finding": {
       "type": "object",
-      "description": "What the engine tells a pack author, as the editor shows it (FloorCheck, the type reader): code, the subject and its index (-1: none), the params the text is made of, the text. Fields the engine doesn't give yet are null.",
+      "description": "What the engine tells a pack author, as the editor shows it (FloorCheck, ModelCheck, the type reader): code, the subject and its index (-1: none), the params the text is made of, the text. Fields the engine doesn't give (yet) are null.",
       "required": ["code", "subject", "index", "params", "text"],
       "additionalProperties": false,
       "properties": {
