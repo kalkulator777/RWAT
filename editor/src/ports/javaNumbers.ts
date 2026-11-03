@@ -11,7 +11,7 @@
  *   `WagonTypeParser` and `FloorCheck`.
  *
  * Golden: fixtures/golden/java_numbers/ (`parse_float`, `format_fixed`,
- * `double_to_string`). Pure: it runs in workers and in Node.
+ * `double_to_string`, `parse_int`). Pure: it runs in workers and in Node.
  */
 
 import { javaTrim } from './mtl';

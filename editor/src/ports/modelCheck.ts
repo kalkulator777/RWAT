@@ -1,8 +1,8 @@
 /**
  * The files a wagon model declaration names, checked all at once: port of
- * `pack/ModelCheck.java` (`check`), the offline check of `/rwatc packs validate`, which the
- * game otherwise shows only when the wagon first comes into view. Golden:
- * fixtures/golden/model_check/ (reference Java, `ModelCheckGolden`).
+ * `pack/ModelCheck.java` (`findings`) and `pack/ModelFinding.java`, the offline check of
+ * `/rwatc packs validate`, which the game otherwise shows only when the wagon first comes
+ * into view. Golden: fixtures/golden/model_check/ (reference Java, `ModelCheckGolden`).
  *
  * Read by the ports of the readers the game draws with (./obj.ts, ./mtl.ts, ./anim.ts).
  * Errors: the OBJ path is no resource location or the file is missing, a face index points
@@ -13,22 +13,39 @@
  * reads for its axis textured or not; a control group longer than {@link MAX_GROUP_LENGTH}
  * characters, which the loader drops; a livery that replaces no texture.
  *
- * The engine gives only a line of English (`PackProblem`). Here each finding has a stable
- * {@link ModelCode}, the params its line is made of and the line itself, built from them
- * ({@link modelFindingText}) word for word as the engine's — the JVM's own words of why a
- * file doesn't read included: the OBJ's and the `.anim`'s refusals (./obj.ts `ObjError`,
- * ./anim.ts `AnimError`) are put as the exception the engine's reader throws there
- * (`Index 8 out of bounds for length 4`, `java.lang.NumberFormatException: For input
- * string: "x"`); a file that fails to be read at all is the caller's error as it is.
+ * Each finding has a stable {@link ModelCode} (`ModelFinding.Code.key`: `MISSING_TEXTURE`
+ * is `missing-texture`), its severity, the params its line is made of, in the line's
+ * order, and the line itself, built from them ({@link modelFindingText},
+ * `ModelFinding.text`) word for word as the engine's — the golden holds code, params and
+ * line alike. The JVM's own words of why a file doesn't read are params too: the OBJ's and
+ * the `.anim`'s refusals (./obj.ts `ObjError`, ./anim.ts `AnimError`) are put as the
+ * exception the engine's reader throws there (`Index 8 out of bounds for length 4`,
+ * `java.lang.NumberFormatException: For input string: "x"`); a file that fails to be read
+ * at all is the caller's error as it is. Where it is fixed — the material library of a
+ * texture's finding (`library`), the objects of a group too long (`objects`) — is the
+ * port's own, for the editor's links; the engine has no need of it.
  *
  * Order as the engine's: the OBJ (a finding here stops the check), each material library
  * in `mtllib` order with its materials, what draws, the control groups by the parts, the
- * animations, the liveries. The engine's animations and liveries come in no set order
- * (`WagonModelDecl` keeps them by `Map.copyOf`); here they come in the file's.
+ * animations and the liveries, each in the file's order (`WagonModelDecl` keeps it). But
+ * for one thing a JavaScript object does to keys: a key that is an array index (`"2"`,
+ * `"10"`) comes before the others, in ascending order, whatever the file's (./modelParts
+ * `modelDeclaration` reads a parsed value, the engine Gson's object, which keeps the file's
+ * order) — the golden data has no such key.
  *
- * Locations are `ns:path`, as the engine names resources; the caller's
- * {@link ModelCheckFiles} says which Minecraft takes and what is there. Pure: it runs in
- * the model worker (editor.md §3.11) and in Node.
+ * Locations are `ns:path`, as the engine names resources, split as Minecraft's
+ * `ResourceLocation.tryParse` splits them ({@link splitLocation}: `ModelCheck.namespace`,
+ * `path`); the caller's {@link ModelCheckFiles} says which Minecraft takes — the rule is
+ * {@link validLocation} — and what is there.
+ *
+ * Not ported: `/rwatc packs validate` also builds each model the check passes without an
+ * error (`StockModels.checkFiles`, `IrStockModel.load`) and says `model <obj> fails to
+ * build: <exception>` when the build throws. No rule of the pack predicts that line: what
+ * the build refuses, the check above has refused already (the files, the OBJ's indices and
+ * numbers, the `.anim`s), so a throw there is a fault of the engine's, with the JVM's words
+ * for it. The editor builds the model in its own worker (model/build) and says so of its
+ * own failure (`model.failed`), in its words. Pure: it runs in the model worker (editor.md
+ * §3.11) and in Node.
  */
 
 import type { ProblemParam } from '../core/contracts';
@@ -39,16 +56,23 @@ import { fileNameOf, folderOf, javaLines, javaTrim, parse as parseMtl, resolve }
 import { loadModel, ObjError, type ObjModel } from './obj';
 import { door, parseRole } from './objectRole';
 
-/** Where the files are read from (`ModelCheck.Files`): locations are `ns:path` strings. */
+/**
+ * Where the files are read from (`ModelCheck.Files`): locations are `ns:path` strings, a
+ * file named by its namespace and path as {@link splitLocation} gives them (`:a` and `a`
+ * are `minecraft:a`, as Minecraft reads them).
+ */
 export interface ModelCheckFiles {
-  /** True if `location` is a resource location Minecraft takes at all. */
+  /** True if `location` is a resource location Minecraft takes at all ({@link validLocation}). */
   valid(location: string): boolean;
   exists(location: string): boolean | Promise<boolean>;
   /** The file's text, read as UTF-8 (a byte-order mark kept, as Java keeps it); rejects when it can't be read. */
   read(location: string): Promise<string>;
 }
 
-/** What the check finds, each with how bad it is: an error (the model, or the part named, doesn't load) or a warning. */
+/**
+ * What the check finds, each with how bad it is: an error (the model, or the part named,
+ * doesn't load) or a warning — `ModelFinding.Code` by its keys, in its order.
+ */
 export const MODEL_CODES = {
   'bad-path': 'error',
   missing: 'error',
@@ -94,7 +118,7 @@ function str(params: Readonly<Record<string, ProblemParam>>, name: string): stri
   return String(params[name]);
 }
 
-/** The engine's line of a finding, made of its code and params alone (`ModelCheck`'s messages). */
+/** The engine's line of a finding, made of its code and params alone (`ModelFinding.text`). */
 export function modelFindingText(code: ModelCode, params: Readonly<Record<string, ProblemParam>>): string {
   const p = (name: string): string => str(params, name);
   switch (code) {
@@ -141,13 +165,13 @@ export function modelFindingText(code: ModelCode, params: Readonly<Record<string
   }
 }
 
-/** A finding with its params in the line's order. */
+/** A finding with its params in the line's order (`ModelFinding.of`). */
 export function modelFinding(code: ModelCode, params: Record<string, ProblemParam>, extra: Pick<ModelFinding, 'library' | 'objects'> = {}): ModelFinding {
   return { severity: MODEL_CODES[code], code, params, text: modelFindingText(code, params), ...extra };
 }
 
 /**
- * Every problem of the files `decl` names, in the engine's order (`ModelCheck.check`);
+ * Every finding of the files `decl` names, in the engine's order (`ModelCheck.findings`);
  * empty if none.
  */
 export async function modelCheck(decl: ModelDeclaration, files: ModelCheckFiles): Promise<ModelFinding[]> {
@@ -209,7 +233,7 @@ export async function checkObj(decl: ModelDeclaration, model: ObjModel, files: M
 
 /** Material → its texture's location, each library and texture checked on the way (`ModelCheck.textures`). */
 async function materialTextures(obj: string, model: ObjModel, files: ModelCheckFiles, out: ModelFinding[]): Promise<Map<string, string>> {
-  const { namespace, path } = split(obj);
+  const { namespace, path } = splitLocation(obj);
   const folder = folderOf(path);
   const textures = new Map<string, string>();
   for (const library of model.materialLibraries) {
@@ -304,12 +328,12 @@ async function checkAnimations(decl: ModelDeclaration, files: ModelCheckFiles, o
 
 /** A livery should swap at least one texture: one of the same file name in its folder next to the OBJ (`ModelCheck.checkLiveries`). */
 async function checkLiveries(decl: ModelDeclaration, textures: ReadonlyMap<string, string>, files: ModelCheckFiles, out: ModelFinding[]): Promise<void> {
-  const { namespace, path } = split(decl.obj);
+  const { namespace, path } = splitLocation(decl.obj);
   const folder = folderOf(path);
   for (const [livery, liveryFolder] of decl.liveries) {
     let swaps = false;
     for (const base of new Set(textures.values())) {
-      const swap = relative(namespace, folder, `${liveryFolder}/${fileNameOf(split(base).path)}`);
+      const swap = relative(namespace, folder, `${liveryFolder}/${fileNameOf(splitLocation(base).path)}`);
       if (swap !== null && files.valid(swap) && (await files.exists(swap))) {
         swaps = true;
         break;
@@ -325,10 +349,30 @@ function relative(namespace: string, folder: string, path: string): string | nul
   return resolved === null ? null : `${namespace}:${resolved}`;
 }
 
-/** The namespace (`minecraft` when none) and the path of a location (`ModelCheck.namespace`, `path`). */
-function split(location: string): { namespace: string; path: string } {
+/**
+ * The namespace and the path of a location `ns:path` as Minecraft's
+ * `ResourceLocation.tryParse` splits it (`ModelCheck.namespace`, `path`): at the first
+ * colon; the namespace `minecraft` when there is no colon or nothing before it.
+ */
+export function splitLocation(location: string): { namespace: string; path: string } {
   const colon = location.indexOf(':');
-  return colon < 0 ? { namespace: 'minecraft', path: location } : { namespace: location.slice(0, colon), path: location.slice(colon + 1) };
+  return { namespace: colon <= 0 ? 'minecraft' : location.slice(0, colon), path: location.slice(colon + 1) };
+}
+
+/** A path Minecraft takes (`ResourceLocation.isValidPath`): `a-z 0-9 / . _ -`, empty too. */
+const VALID_PATH = /^[a-z0-9/._-]*$/;
+/** A namespace Minecraft takes (`ResourceLocation.isValidNamespace`): `a-z 0-9 . _ -`. */
+const VALID_NAMESPACE = /^[a-z0-9._-]*$/;
+
+/**
+ * True if Minecraft takes `location` for a resource location (`ResourceLocation.tryParse`
+ * of 1.21.1, which the tests of the engine write out as `pack/ResourceLocations`): the path
+ * — all after the first colon, or all — holds only `a-z 0-9 / . _ -` and may be empty, the
+ * namespace before it only `a-z 0-9 . _ -`, and may be empty (it is `minecraft` then).
+ */
+export function validLocation(location: string): boolean {
+  const colon = location.indexOf(':');
+  return VALID_PATH.test(location.slice(colon + 1)) && (colon < 0 || VALID_NAMESPACE.test(location.slice(0, colon)));
 }
 
 // ---------------------------------------------------------------- the engine's exceptions

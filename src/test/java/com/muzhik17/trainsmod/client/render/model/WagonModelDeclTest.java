@@ -44,6 +44,30 @@ class WagonModelDeclTest {
         assertEquals(Map.of("mvp_rzd", "l_mvp_rzd"), decl.liveries());
     }
 
+    /**
+     * The animations and liveries come in the order the file writes them:
+     * what the pack check says of them, and which of two animations moving
+     * one object wins, followed {@code Map.copyOf}'s order, which is none
+     * (it changes from one start of the JVM to the next).
+     */
+    @Test
+    void animationsAndLiveriesKeepTheFilesOrder() {
+        WagonModelDecl decl = parse("""
+                { "obj": "car/car.obj",
+                  "animations": { "zeta": "a/z.anim", "Alpha": "a/a.anim", "mid": "a/m.anim", "door9": "a/9.anim",
+                                  "beta": "a/b.anim", "kappa": "a/k.anim", "Door1": "a/1.anim", "omega": "a/o.anim",
+                                  "door1": "a/one.anim" },
+                  "liveries": { "zz_blue": "blue", "aa_green": "green", "red": "red", "mm_black": "black",
+                                "b2": "b2", "a1": "a1", "c3": "c3", "yy": "yy" } }""");
+        assertEquals(List.of("zeta", "alpha", "mid", "door9", "beta", "kappa", "door1", "omega"),
+                List.copyOf(decl.animations().keySet()));
+        // a key written twice (in either case) keeps its first place and its last file
+        assertEquals("mvp:a/one.anim", decl.animations().get("door1"));
+        assertEquals(List.of("zz_blue", "aa_green", "red", "mm_black", "b2", "a1", "c3", "yy"),
+                List.copyOf(decl.liveries().keySet()));
+        assertThrows(UnsupportedOperationException.class, () -> decl.liveries().put("x", "x"));
+    }
+
     @Test
     void onlyTheObjIsRequired() {
         WagonModelDecl decl = parse("""

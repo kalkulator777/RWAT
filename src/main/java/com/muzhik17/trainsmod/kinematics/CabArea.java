@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 import com.muzhik17.trainsmod.stock.FloorRegion;
+import com.muzhik17.trainsmod.stock.UnionFind;
 import com.muzhik17.trainsmod.stock.WagonType;
 
 /**
@@ -86,12 +87,9 @@ public final class CabArea {
     private static CabArea build(WagonType type) {
         FloorRegion region = type.interior().region(M, type.doors(), 0);
         List<FloorRegion.Piece> pieces = region.pieces();
-        int[] parent = new int[pieces.size()];
-        for (int i = 0; i < parent.length; i++) {
-            parent[i] = i;
-        }
+        int[] parent = UnionFind.of(pieces.size());
         for (int[] link : region.links()) {
-            FloorCheck.union(parent, link[0], link[1]);
+            UnionFind.union(parent, link[0], link[1]);
         }
         // each chair's cab: the floor where one stands to sit down in it, and all it joins
         List<WagonType.Seat> chairs = type.cab().seats();
@@ -104,7 +102,7 @@ public final class CabArea {
             for (int p = 0; p < pieces.size(); p++) {
                 // the floor of a cab found already, within sitting reach
                 double d = distance(pieces.get(p), chair.x(), chair.z());
-                if (d <= reach && roots.contains(FloorCheck.find(parent, p))) {
+                if (d <= reach && roots.contains(UnionFind.find(parent, p))) {
                     piece = p;
                     reach = d;
                 }
@@ -116,7 +114,7 @@ public final class CabArea {
                 cabOfChair[c] = -1;
                 continue;
             }
-            int root = FloorCheck.find(parent, piece);
+            int root = UnionFind.find(parent, piece);
             if (!roots.contains(root)) {
                 roots.add(root);
             }
@@ -124,7 +122,7 @@ public final class CabArea {
         }
         int[] cabOfPiece = new int[pieces.size()];
         for (int p = 0; p < pieces.size(); p++) {
-            cabOfPiece[p] = roots.indexOf(FloorCheck.find(parent, p));
+            cabOfPiece[p] = roots.indexOf(UnionFind.find(parent, p));
         }
         int cabDoors = 0;
         List<WagonType.Door> doors = type.doors();

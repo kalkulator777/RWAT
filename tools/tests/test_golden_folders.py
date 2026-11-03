@@ -4,11 +4,15 @@ fixtures/golden/README.md): every file of fixtures/golden/ follows its schema
 folder's ports.json by its $defs/ports), the ids of a folder are its own, the files
 keep their size, and every folder that names Python is read by its runner,
 tools/tests/test_golden_<folder>.py. The Java suite checks its runners the same way
-(GoldenFoldersTest)."""
+(GoldenFoldersTest). And the update of a folder Python is the reference of rewrites
+nothing but the expected (GoldenUpdateTest, as GoldenUpdateTest.java)."""
 
+import contextlib
 import importlib
+import io
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -112,6 +116,100 @@ class GoldenFormatTest(unittest.TestCase):
         self.assertFalse(golden.close([1.0 + 1e-8], [1], 1e-9))
         self.assertFalse(golden.close(1, True, 0))
         self.assertFalse(golden.close({"b": 1, "a": 2}, {"a": 2, "b": 1}, 0))
+
+
+class GoldenUpdateTest(unittest.TestCase):
+    """The update of a folder Python is the reference of (--update, golden.update) rewrites
+    the expected of the cases and nothing else of a case file, as the Java one does
+    (GoldenUpdateTest.java): an input keeps its numbers as written (2.5e1, 1E1, -0.0), its
+    escapes and its line breaks, a case whose logic fails keeps its expected, and a file the
+    code agrees with is not touched. It used to lay the whole file out anew, from its value:
+    2.5e1 came back 25.0."""
+
+    # a file not as the writer would lay it: numbers in exponent form, an escape, an input over two lines
+    FILE = """{
+  "description": "numbers as a pack writes them \\u2014 and a case to fill in",
+  "frame": "none",
+  "tolerance": 0,
+  "cases": [
+    {
+      "id": "exponents",
+      "note": "2.5e1 and 1E1 are numbers",
+      "input": {"type": {"length": 2.5e1, "bogies": [1E1, -1E1],
+                "mass_t": 100.0}},
+      "expected": [1, 2]
+    },
+    {
+      "id": "a-new-case",
+      "note": "written with expected null",
+      "input": {"length": -0.0, "bogies": []},
+      "expected": null
+    },
+    {
+      "id": "fails",
+      "note": "the logic throws: the expected stays",
+      "input": {"fail": true},
+      "expected": {"kept":   true}
+    }
+  ]
+}
+"""
+    AGREED = FILE.replace('"expected": [1, 2]', '"expected": {"length": 25.0, "bogies": [10.0, -10.0]}') \
+        .replace('"expected": null', '"expected": {"length": -0.0, "bogies": []}')
+
+    @staticmethod
+    def logic(given):
+        """The reference's stand-in: the length and the bogies it reads, or a failure."""
+        if "fail" in given:
+            raise ValueError("no logic for this case")
+        t = given.get("type", given)
+        return {"length": float(t["length"]), "bogies": [float(b) for b in t["bogies"]]}
+
+    def folder(self, root, text):
+        folder = Path(root) / "numbers"
+        folder.mkdir()
+        (folder / "ports.json").write_text('{"reference": "python", "ports": ["ts"]}\n', encoding="utf-8")
+        path = folder / "cases.json"
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def run_update(self, root):
+        with self.assertRaises(SystemExit) as failed, contextlib.redirect_stdout(io.StringIO()):
+            golden.update("numbers", self.logic, Path(root))
+        self.assertIn("numbers/cases.json fails", str(failed.exception))
+
+    def test_the_update_rewrites_only_the_expected(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = self.folder(root, self.FILE)
+            self.run_update(root)
+            self.assertEqual(path.read_text(encoding="utf-8"), self.AGREED)
+
+    def test_a_file_the_code_agrees_with_stays_as_it_is(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = self.folder(root, self.AGREED)
+            before = path.stat().st_mtime_ns
+            self.run_update(root)
+            self.assertEqual(path.read_text(encoding="utf-8"), self.AGREED)
+            self.assertEqual(path.stat().st_mtime_ns, before)
+
+    def test_a_long_expected_is_laid_out_at_the_indent_of_its_key(self):
+        text = '{"cases": [\n    {"id": "a",\n      "expected": 0}\n]}\n'
+        value = ["x" * 60, "y" * 60]
+        self.assertEqual(golden.with_expected(text, [value]),
+                         '{"cases": [\n    {"id": "a",\n      "expected": [\n        "' + "x" * 60
+                         + '",\n        "' + "y" * 60 + '"\n      ]}\n]}\n')
+
+    def test_keys_and_strings_are_read_with_their_escapes(self):
+        text = '{"no\\u0074e": "a \\"cases\\": [] \\\\", "cases": [{"expected": 1, "x": {"expected": 2}}]}'
+        self.assertEqual(golden.with_expected(text, [3]), text.replace('"expected": 1', '"expected": 3'))
+
+    def test_the_cases_of_the_text_are_the_cases_given(self):
+        text = '{"cases": [{"expected": 1}, {"expected": 2}]}'
+        with self.assertRaises(ValueError):
+            golden.with_expected(text, [1])
+        with self.assertRaises(ValueError):
+            golden.with_expected(text + " x", [golden.KEEP, golden.KEEP])
+        self.assertEqual(golden.with_expected(text, [golden.KEEP, None]), '{"cases": [{"expected": 1}, {"expected": null}]}')
 
 
 if __name__ == "__main__":

@@ -223,26 +223,64 @@ export class FloorRegion {
    * How far a centre at (x, z) can go along one axis without leaving the region: the
    * furthest X (`axis` 0) or Z (`axis` 2) in direction `dir` (±1) it can slide to in a
    * straight line. NaN if (x, z) doesn't fit.
+   *
+   * The engine's rule step for step (`FloorRegion.reach`): passes over the pieces in
+   * order, each moving the point to the end of every piece on the line that holds it,
+   * until a pass moves nothing. A pass here visits only the pieces it can move the point
+   * by — the same pieces in the same order, so the same answer to the last bit — where
+   * Java visits them all: the pieces are in Z order (their `minZ` and `maxZ` never fall),
+   * so the ones whose Z span holds z (`axis` 0) or the point (`axis` 2) within EPS are a
+   * run of them, found by halving and left at the first piece past it. Along Z this keeps
+   * the floor check off a quadratic walk: walking towards −Z a pass moves the point by
+   * one piece, and a pass over every piece of MVP's long cars took most of its time.
    */
   reach(x: number, z: number, axis: number, dir: number): number {
     if (!this.fits(x, z)) return NaN;
-    let at = axis === 0 ? x : z;
+    const pieces = this.pieces;
+    const along = axis !== 0;
+    let at = along ? z : x;
     let grew = true;
     while (grew) {
       grew = false;
-      for (const p of this.pieces) {
-        const onLine = axis === 0 ? z >= p.minZ - EPS && z <= p.maxZ + EPS : x >= p.minX - EPS && x <= p.maxX + EPS;
-        const lo = axis === 0 ? p.minX : p.minZ;
-        const hi = axis === 0 ? p.maxX : p.maxZ;
-        if (!onLine || at < lo - EPS || at > hi + EPS) continue;
-        const end = dir > 0 ? hi : lo;
-        if (dir * (end - at) > EPS) {
-          at = end;
-          grew = true;
+      // the pieces before the run: their Z span ends short of it, a pass skips them unmoved
+      for (let i = this.firstPieceNotBefore(along ? at : z); i < pieces.length; i++) {
+        const p = pieces[i] as Piece;
+        if (along) {
+          // past the run: every piece after begins beyond the point, which only a piece holding it moves
+          if (at < p.minZ - EPS) break;
+          if (!(x >= p.minX - EPS && x <= p.maxX + EPS) || at > p.maxZ + EPS) continue;
+          const end = dir > 0 ? p.maxZ : p.minZ;
+          if (dir * (end - at) > EPS) {
+            at = end;
+            grew = true;
+          }
+        } else {
+          if (z < p.minZ - EPS) break;
+          if (at < p.minX - EPS || at > p.maxX + EPS) continue;
+          const end = dir > 0 ? p.maxX : p.minX;
+          if (dir * (end - at) > EPS) {
+            at = end;
+            grew = true;
+          }
         }
       }
     }
     return at;
+  }
+
+  /**
+   * The index of the first piece whose Z span does not end short of `z` by more than EPS:
+   * the first for which `z > maxZ + EPS` (the test of {@link reach}) is false.
+   */
+  private firstPieceNotBefore(z: number): number {
+    let lo = 0;
+    let hi = this.pieceMaxZ.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (z > (this.pieceMaxZ[mid] as number) + EPS) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
   }
 
   /** Pairs of piece indices that touch — one walks from one into the other — for the connectivity check. */
