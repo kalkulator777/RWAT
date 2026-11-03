@@ -20,6 +20,7 @@ import com.muzhik17.trainsmod.client.ClientDoorInteract;
 import com.muzhik17.trainsmod.client.ClientFloorDebug;
 import com.muzhik17.trainsmod.client.ClientRide;
 import com.muzhik17.trainsmod.client.ClientWagonRay;
+import com.muzhik17.trainsmod.client.render.model.IrAnim;
 import com.muzhik17.trainsmod.client.render.model.StockModel;
 import com.muzhik17.trainsmod.client.render.model.StockModels;
 import com.muzhik17.trainsmod.client.render.model.WagonModel;
@@ -229,7 +230,7 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
         long litMask = model.litMask(wagon::controlValue);
         float[] box = null;
         for (StockModel.Headlight lamp : model.headlights()) {
-            if (StockModel.tagLit(StockModel.tag(lamp.group(), false, false, false), litMask)) {
+            if (lamp.lit(litMask)) {
                 box = HeadlightBeam.reach(lamp.x(), lamp.y(), lamp.z(), lamp.dirZ(), lamp.radius(), box);
             }
         }
@@ -338,7 +339,7 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
         }
 
         // headlight flares, beams and track light (SPEC §8): queued, drawn after translucents;
-        // a lamp of no light group is lit with none of the groups on
+        // a lamp shines as its faces glow (ModelParts.lit): of no light group with none of the groups on
         if (!model.headlights().isEmpty()) {
             float skyDarken = wagon.level() instanceof net.minecraft.client.multiplayer.ClientLevel client
                     ? client.getSkyDarken(partialTick) : 1.0F;
@@ -553,11 +554,7 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
                 }
             }
             for (BakedStockModel.BakedPiece piece : door.pieces()) {
-                Matrix4f[] frames = piece.frames();
-                float f = progress * (frames.length - 1);
-                int i0 = Math.min((int) f, frames.length - 1);
-                int i1 = Math.min(i0 + 1, frames.length - 1);
-                frames[i0].lerp(frames[i1], f - i0, DOOR_FRAME);
+                IrAnim.frameAt(piece.frames(), progress, DOOR_FRAME);
                 poseStack.pushPose();
                 poseStack.mulPose(DOOR_FRAME);
                 draw(piece.meshes(), poseStack);

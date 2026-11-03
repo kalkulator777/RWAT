@@ -83,15 +83,18 @@ python -I -m unittest discover tools/tests
 | `java_numbers` | Java: `Float.parseFloat`, `String.format(Locale.ROOT, "%.Nf")` | ts | `parse_float`, `format_fixed` | текст → `float` или `null` (отказ); число и знаки → текст |
 | `obj_frame` | Java: `stock.ObjFrame` | ts, python (`floorgen.point_/box_from_obj`, `…_to_obj`) | `to_model`, `to_obj` | точка или коробка → в другом кадре |
 | `object_role` | Java: `convention.ObjectRole` (`parse`, `door`, `coupled`, `hasToken INTERIOR`) | ts, python (`ir2rwat`: `LIGHT_GROUP`, `DOOR_KEY`, `HEADLIGHT`) | `roles`, `conventions` (все `examples` из `schema/obj-conventions.json` — проверяет `ObjectRoleGolden`) | имя объекта → орган, шарнир, свет, створка, голова сцепки |
-| `control_pose` | Java: `ControlValue.value`, `visible`; `StockModel.Control.transform` | ts | `pose` | имя, положение 0…1, шарнир (кадр OBJ) → значение, видимость, матрица 4×4 по строкам |
+| `control_pose` | Java: `ControlValue.value`, `visible`; `convention.ControlPose.transform` | ts | `pose` | имя, положение 0…1, шарнир (кадр OBJ) → значение, видимость, матрица 4×4 по строкам |
 | `obj` | Java: `ObjLoader.loadModel`, `ObjectRole.objectName` | ts, python (`floorgen.object_name_of`) | `object_names`, `parse`, `example_pack` | строка `o`/`g` → имя; текст OBJ → части (объект, материал, квады) или `{error: true}`; OBJ пака-примера → части вкратце |
 | `mtl` | Java: `MtlParser` (`materialName`, `parse`, `resolve`, `folderOf`, `fileNameOf`) | ts, python (`ir2rwat.material_name`, `parse_mtl`) | `material_names`, `parse`, `paths`, `example_pack` | строка → имя материала; текст MTL → материал → путь `map_Kd`; пути |
-| `anim` | Java: `IrAnim.parse` | ts, python (`ir2rwat.anim_objects`: имена) | `parse` (и `salon_door.anim` пака-примера) | текст `.anim` → дорожки, как в файле, или `{error: true}` |
+| `anim` | Java: `IrAnim.parse`, `IrAnim.frameAt` | ts, python (`ir2rwat.anim_objects`: имена) | `parse`, `frame_at` (и `salon_door.anim` пака-примера) | текст `.anim` → дорожки, как в файле, или `{error: true}`; с `progress` — ещё `at`: кадр каждой дорожки при этом прогрессе |
 | `anim_model` | Java: `IrAnim.toModelSpace` | — | `model_space` | те же тексты → кадры в кадре модели. Не портируется (4.2); запись движка о том, что было в старом `anim.json` |
 | `pivot_axis` | Java: `convention.PivotAxis` | ts | `corners`, `obj_text` | углы маркера по порядку файла или текст OBJ и имя маркера → число точек, шарнир, ось |
 | `floor_region` | Java: `FloorRegion` через `WagonTypeParser.parse` и `Interior.region` | ts, python (`floorgen.Region`: куски, разрезы, `fits`, `reach`) | `region` | тип пака (кадр OBJ), открытые двери, `margin`, вопросы (кадр модели) → куски, разрезы, связи, ответы |
 | `floor_check` | Java: `FloorCheck.findings` после `WagonTypeParser.parse` | ts, python (`floorgen.Region.door_seeds`: выходы) | `findings`, `exits` | тип пака → находки `{code, subject, index, params, text}`; `exits_of`: тип → по двери куски пола, с которых через неё выходят (`null` у внутренней) |
 | `door_leaves` | Java: `convention.DoorLeaves`, `WagonType.doorHolding` | ts (`modelParts.ts`, M3) | `leaves` | объекты модели, `skip`, `.anim`, двери типа → подвижные двери и створки с их дверью |
+| `model_parts` | Java: `convention.ModelParts.of` | ts (`modelParts.ts`, M3) | `parts` (и три модели пака-примера) | OBJ, текстурированные материалы или MTL, декларация модели, `.anim` дверей → каждая часть (место, владелец, свет), группы света, тележки и колёсные пары, органы и створки с шарнирами, двери `.anim`, головы сцепок, лампы салона, фары (кадр модели) |
+| `lights` | Java: `convention.ModelParts.lit`, `litMask` | ts (`lights.ts`, M3) | `lights` | группы света, значения групп, огни (группа, `LINVERT`) → включённые группы и какие огни горят; с моделью пака-примера — её фары, лампы и светящиеся части |
+| `lamp_islands` | Java: `convention.LampIslands.of` | ts (`lampIslands.ts`) | `islands` | грани светящейся части (по 4 угла) → лампы салона |
 | `wagon_type` | Java: `WagonTypeParser.parse`, `WagonType` | ts | `parse`, `example_pack` | тип пака → ошибка, предупреждения, тип в кадре модели, ответы на вопросы о дверях и полу |
 | `stock_defaults` | Java: `stock.StockDefaults` | ts | `defaults` | масса, система, кабина → сопротивление и тормоза; имя системы; константы |
 | `json_dump` | Python: `ir2rwat.dump` | ts | `dump` | JSON текстом (`json`) или файл пака-примера (`value`) → текст файла |
@@ -118,7 +121,7 @@ python -I -m unittest discover tools/tests
   - Точки — каждая позиция один раз, первое появление; `-0` и `0` — одна позиция.
   - Из текста OBJ углы — все углы всех граней всех частей объекта по порядку, как их хранит загрузчик: четыре у квада, у треугольника последний дважды, многоугольник веером от первого угла.
 - **OBJ (`obj`).** `v` у вершины — `1 − v` файла (Minecraft берёт V сверху); без `vt` — `u = 0`, `v = 0`; без `vn` — нормаль `0 1 0`. Отрицательный индекс, вершина «из будущего», мусорное число — отказ всего файла (`{error: true}`). Координаты — `Float.parseFloat` (см. выше).
-- **`.anim`.** Кадры — `float32`, по строкам, как в файле.
+- **`.anim`.** Кадры — `float32`, по строкам, как в файле. `frameAt`: номер кадра `(int) f` — усечение к нулю (`Math.trunc`, не `Math.floor`): при прогрессе ниже 0 первые два кадра продолжаются назад; смесь — `(b − a) · t + a` поэлементно во `float` (JOML `Matrix4f.lerp`).
 - **Пол (`floor_region`).**
   - Тип — в кадре OBJ, ответы и вопросы — в кадре модели: так тип хранит движок, редактор переводит разметку через `obj_frame`.
   - `margin` по умолчанию — 0.3, полуширина игрока; 0 движок не принимает.
@@ -126,6 +129,12 @@ python -I -m unittest discover tools/tests
 - **Створки (`door_leaves`).**
   - Тип для поиска двери — обёртка `{"length": 30, "bogies": [8, -8], "mass_t": 40, "doors": …}`: на ответ влияют только двери.
   - Коробка створки — объединение коробок объектов с текстурой. Её центр переводится в кадр модели и ищется в коробках дверей с запасом 0.1.
+- **Разбор модели (`model_parts`).**
+  - Геометрия — во `float`, в кадре модели: `(z, y + Y_LIFT, −x)`, `Y_LIFT = fround(0.43625…)`, каждая операция с `Math.fround`, как во `float` Java. Шарнир — `PivotAxis` в `double`, потом в `float`.
+  - Порядок важен везде: части — как в файле; органы, створки, двери — по первому объекту; группы света — по первой нарисованной части с `_LCG_`; головы сцепок — передние, потом задние.
+  - Префиксы (`BOGEY_FRONT`, `INTERIOR`, `skip`), подстрока `HIDE` и токен `INTERIOR` читают сырое имя; органы, свет, створки, сцепки — имя без суффикса `.001`.
+- **Свет (`lights`).** Огонь без группы горит всегда; с группой — пока она включена (значение > 0, только первые 64 группы), с `LINVERT` — пока выключена. Одно правило для светящейся грани, лампы салона и фары.
+- **Острова ламп (`lamp_islands`).** Ключ угла — `Math.round(fround(c · 1e4))` по трём осям, без хеша; диагональ коробки — во `float`, порог 0.3; лампы — в порядке первой грани острова.
 - **Пробелы.**
   - Имена объектов: пробелом считаются символы до U+0020 (как `String.trim`). Неразрывный пробел — часть имени.
   - Имена материалов: случаи только с ASCII-пробелами. На прочих пробелах Unicode Java и Python расходятся: `Character.isWhitespace` против `str.split`.
@@ -134,6 +143,4 @@ python -I -m unittest discover tools/tests
 
 ## Чего нет и почему
 
-- **Выбор кадра `.anim` и интерполяция** (`frameAt`: кадр = прогресс × (N − 1), поэлементно) живут в `client/render/WagonRenderer` с Minecraft: эталону нечего вызвать. Нужна чистая точка входа (например, `IrAnim.frameAt(frames, progress)`).
-- **`StockModel.Control.transform`** — в классе с `ResourceLocation`, которого нет в тестовом classpath: `ControlPoseGolden` строит орган и зовёт его метод отражением, код движка тот же. Чистый дом для преобразования убрал бы отражение.
 - **Выходы `floor_check`** берутся из `FloorCheck.walkablePieces` (пакетный доступ) отражением.

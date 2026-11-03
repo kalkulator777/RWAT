@@ -1,5 +1,5 @@
 {
-  "description": "A control's name, its raw position (0..1: a handle's travel, a switch's group value, a gauge's reading in its range) and its hinge (pivot and unit axis, OBJ frame; none: no turn) -> the value that drives it (convention.ControlValue.value: position + OFFSET, mirrored by INVERT, less 1/2 for the reverser and the combined handle), whether it shows (ControlValue.visible: not with HIDE at value 1) and its transform (StockModel.Control.transform at that value: a slide of value x TL, then a turn of value x the ROT degrees about the hinge; 16 floats row by row, OBJ frame).",
+  "description": "A control's name, its raw position (0..1: a handle's travel, a switch's group value, a gauge's reading in its range) and its hinge (pivot and unit axis, OBJ frame; none: no turn) -> the value that drives it (convention.ControlValue.value: position + OFFSET, mirrored by INVERT, less 1/2 for the reverser and the combined handle), whether it shows (ControlValue.visible: not with HIDE at value 1) and its transform (convention.ControlPose.transform at that value, as StockModel.Control draws it: a slide of value x TL, then a turn of value x the ROT degrees about the hinge; 16 floats row by row, OBJ frame).",
   "frame": "obj",
   "tolerance": 1e-06,
   "cases": [

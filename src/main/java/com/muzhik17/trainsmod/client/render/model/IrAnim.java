@@ -68,6 +68,25 @@ public final class IrAnim {
     }
 
     /**
+     * A track's transform at {@code progress} (0 = the first frame, the rest
+     * pose; 1 = the last) into {@code dest}: frame {@code f = progress × (N − 1)}
+     * lies between frames {@code ⌊f⌋} and the next (the last stands for any
+     * past it), and is taken element by element between them
+     * ({@link Matrix4f#lerp}). In any frame: the change of frame is linear.
+     * Ported: {@code editor/src/ports/anim.ts} ({@code frameAt}); golden:
+     * {@code fixtures/golden/anim/} (the cases with a {@code progress}).
+     *
+     * @param frames the track, at least one frame
+     * @return {@code dest}
+     */
+    public static Matrix4f frameAt(Matrix4f[] frames, float progress, Matrix4f dest) {
+        float f = progress * (frames.length - 1);
+        int i0 = Math.min((int) f, frames.length - 1);
+        int i1 = Math.min(i0 + 1, frames.length - 1);
+        return frames[i0].lerp(frames[i1], f - i0, dest);
+    }
+
+    /**
      * One frame in the render model's space: the source-space transform
      * {@code M} conjugated by the loader's placement {@code P} (the +90° turn
      * and the {@code yLift}): {@code P · M · P⁻¹}. Applied to model-space

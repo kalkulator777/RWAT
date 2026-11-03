@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
+import org.joml.Matrix4f;
 import org.junit.jupiter.api.DynamicNode;
 import org.junit.jupiter.api.TestFactory;
 
@@ -17,8 +18,10 @@ import com.muzhik17.trainsmod.client.render.model.IrAnim;
 
 /**
  * {@code fixtures/golden/anim/}: an Immersive Railroading {@code .anim} → its
- * tracks as written ({@link IrAnim#parse}), or that it is broken. Ported:
- * {@code editor/src/ports/anim.ts}; the objects of the tracks also
+ * tracks as written ({@link IrAnim#parse}), or that it is broken; with a
+ * {@code progress}, also each track's transform at it ({@link IrAnim#frameAt},
+ * as a door's pieces are drawn). Ported: {@code editor/src/ports/anim.ts}
+ * ({@code parse}, {@code frameAt}); the objects of the tracks also
  * {@code tools/ir2rwat.py} ({@code anim_objects}).
  */
 class AnimGolden {
@@ -40,6 +43,21 @@ class AnimGolden {
             });
             JsonObject out = new JsonObject();
             out.add("tracks", written);
+            JsonObject in = input.getAsJsonObject();
+            if (in.has("progress")) {
+                float progress = (float) Golden.toDouble(in.get("progress"));
+                JsonObject at = new JsonObject();
+                tracks.forEach((object, frames) -> {
+                    if (!frames.isEmpty()) {
+                        Matrix4f[] matrices = new Matrix4f[frames.size()];
+                        for (int i = 0; i < matrices.length; i++) {
+                            matrices[i] = new Matrix4f().set(frames.get(i)).transpose(); // rows → JOML's columns
+                        }
+                        at.add(object, Golden.rowMajor(IrAnim.frameAt(matrices, progress, new Matrix4f())));
+                    }
+                });
+                out.add("at", at);
+            }
             return out;
         });
     }
