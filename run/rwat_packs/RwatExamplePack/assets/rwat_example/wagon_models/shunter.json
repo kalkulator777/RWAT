@@ -1,0 +1,47 @@
+{
+  "obj": "stock/shunter/shunter.obj",
+  "skip": ["GUIDE_"],
+  "liveries": {
+    "green": "l_green"
+  },
+  "sounds": {
+    "idle": {
+      "start": "minecraft:block.beacon.activate",
+      "main": "minecraft:block.beacon.ambient",
+      "stop": "minecraft:block.beacon.deactivate",
+      "pitch": [0.6, 1.1],
+      "volume": [0.5, 1.0]
+    },
+    "horn": {
+      "main": "minecraft:item.goat_horn.sound.0",
+      "pitch": [0.8, 0.8],
+      "volume": [1.0, 1.0]
+    },
+    "bell": "minecraft:block.note_block.flute",
+    "wheels": {
+      "main": "minecraft:entity.minecart.riding",
+      "pitch": [0.7, 1.1],
+      "volume": [0.2, 0.6]
+    },
+    "clack": "minecraft:block.chain.step",
+    "controls": {
+      "THROTTLE_1": {
+        "move": "minecraft:block.lever.click"
+      },
+      "REVERSER_1": {
+        "move": "minecraft:block.iron_trapdoor.close"
+      },
+      "TRAIN_BRAKE_1": {
+        "move": "minecraft:block.lever.click",
+        "engage": "minecraft:block.fire.extinguish"
+      },
+      "IND_BRAKE_1": {
+        "engage": "minecraft:block.fire.extinguish"
+      },
+      "WIDGET_1": {
+        "move": "minecraft:block.stone_button.click_on"
+      }
+    }
+  },
+  "sway": 0.6
+}

@@ -222,10 +222,19 @@ dependencies {
 
 tasks.named('test', Test).configure {
     useJUnitPlatform()
-    // The pack tests read the recipe (packs/) and the generated packs (run/rwat_packs) from disk;
-    // without these inputs an edit there was answered by a cached run.
+    // The pack tests read the recipe (packs/), the generated packs (run/rwat_packs) and the pack
+    // schemas (schema/: SchemaKeysTest, RwatPackMetaTest) from disk; without these inputs an edit
+    // there was answered by a cached run.
     inputs.files(fileTree('packs')).withPropertyName('recipePacks').withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.files(fileTree('run/rwat_packs')).withPropertyName('generatedPacks').withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.files(fileTree('schema')).withPropertyName('packSchemas').withPathSensitivity(PathSensitivity.RELATIVE)
+    // the golden data shared with the Python and TypeScript ports (golden/<Logic>Golden); `./gradlew
+    // test -Pgolden.update` rewrites the expected values of the folders Java is the reference of from
+    // the code (fixtures/golden/README.md). A Gradle property, so its value is a test input: a run
+    // with it and one without never answer each other from the cache.
+    inputs.files(fileTree('fixtures')).withPropertyName('goldenFixtures').withPathSensitivity(PathSensitivity.RELATIVE)
+    def goldenUpdate = project.findProperty('golden.update')
+    systemProperty 'golden.update', goldenUpdate != null && goldenUpdate.toString() != 'false'
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.

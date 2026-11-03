@@ -20,9 +20,9 @@ import net.minecraft.resources.ResourceLocation;
  * bogie frame, each wheel, each door piece, door leaf and cab control —
  * because each part is drawn with its own per-frame transform (articulation, wheel spin,
  * door swing, lever travel) or only within some distance (interior). Light
- * and livery are baked per instance; the renderer keeps a bounded LRU set of
- * instances, one per (livery, packed light, lit light groups) it actually
- * sees.
+ * and livery are baked per instance, one per (livery, packed light, lit light
+ * groups) the renderer actually sees; its {@link BakeCache} keeps every one a
+ * frame draws, and the least recently drawn of the rest up to a capacity.
  *
  * <p>Light (SPEC §8) is per vertex: a quad of a lit {@code FULLBRIGHT} group
  * glows at full brightness; a quad inside the car is lit by the cabin lamps
@@ -156,7 +156,7 @@ public final class BakedStockModel implements AutoCloseable {
         int sky = LightTexture.sky(packedLight);
         List<StockModel.Lamp> lit = new ArrayList<>();
         for (StockModel.Lamp lamp : model.lamps()) {
-            if (StockModel.tagLit(StockModel.tag(lamp.group(), false, false, false), litMask)) {
+            if (lamp.lit(litMask)) {
                 lit.add(lamp);
             }
         }
@@ -205,7 +205,7 @@ public final class BakedStockModel implements AutoCloseable {
     public static int lampLevelAt(StockModel model, long litMask, float x, float y, float z) {
         float best = 0.0F;
         for (StockModel.Lamp lamp : model.lamps()) {
-            if (!StockModel.tagLit(StockModel.tag(lamp.group(), false, false, false), litMask)) {
+            if (!lamp.lit(litMask)) {
                 continue;
             }
             float dx = lamp.x() - x;

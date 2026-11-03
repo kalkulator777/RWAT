@@ -2,6 +2,7 @@ package com.muzhik17.trainsmod.convention;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -160,6 +161,42 @@ class ObjectRoleTest {
         assertEquals(ObjectRole.Kind.HANDBRAKE, wheel.kind());
         assertEquals("WIDGET_13", wheel.key());
         assertEquals("Hand Brake", wheel.label());
+    }
+
+    /**
+     * A number too long for an int used to throw NumberFormatException out of
+     * {@code parse}, and the whole model failed to load for one object's name.
+     * The object is still a control (decision of the agent: the converter's
+     * port of the rule, whose Python ints don't overflow, reads it as one
+     * too); the key keeps the digits and tells controls apart.
+     */
+    @Test
+    void aControlNumberTooLongForAnInt_isStillAControl() {
+        ObjectRole.Control lever = ObjectRole.parse("THROTTLE_12345678901_ROT_90").control();
+        assertEquals(ObjectRole.Kind.THROTTLE, lever.kind());
+        assertEquals("THROTTLE_12345678901", lever.key());
+        assertEquals("THROTTLE_12345678901", lever.group());
+        assertEquals(Integer.MAX_VALUE, lever.id());
+        assertTrue(ObjectRole.parse("THROTTLE_12345678901_ROT_90").pivot());
+
+        // one past the largest int, and far more digits than any long holds
+        assertEquals(Integer.MAX_VALUE, ObjectRole.parse("WIDGET_2147483648").control().id());
+        ObjectRole.Control huge = ObjectRole.parse("GAUGE_SPEED_1" + "0".repeat(30) + "_RANGE_0_200").control();
+        assertEquals(ObjectRole.Kind.GAUGE_SPEED, huge.kind());
+        assertEquals(200.0F, huge.rangeMax());
+        // two long numbers are two controls, as they are in the key
+        assertNotEquals(ObjectRole.parse("WIDGET_12345678901").control().key(),
+                ObjectRole.parse("WIDGET_12345678902").control().key());
+
+        // a door leaf reads the same way
+        ObjectRole leaf = ObjectRole.door("DOOR_99999999999_ROT_90");
+        assertEquals("DOOR_99999999999", leaf.control().key());
+        assertEquals(90.0F, leaf.pivotDegrees());
+
+        // numbers that fit are what they were
+        assertEquals(Integer.MAX_VALUE, ObjectRole.parse("WIDGET_2147483647").control().id());
+        assertEquals(7, ObjectRole.parse("WIDGET_0000000000007").control().id());
+        assertEquals(12, ObjectRole.parse("THROTTLE_12").control().id());
     }
 
     @Test

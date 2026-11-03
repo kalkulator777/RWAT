@@ -23,6 +23,8 @@ import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.consist.Consist;
 import com.muzhik17.trainsmod.consist.ConsistManager;
 import com.muzhik17.trainsmod.consist.WagonEntity;
+import com.muzhik17.trainsmod.pack.PackReport;
+import com.muzhik17.trainsmod.pack.PackReportView;
 import com.muzhik17.trainsmod.stock.ConsistComposition;
 import com.muzhik17.trainsmod.stock.WagonType;
 import com.muzhik17.trainsmod.stock.WagonTypes;
@@ -49,7 +51,8 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
 
 /**
  * {@code /rwat} debug command (SPEC §2.4a): spawn/remove a consist, set its
- * speed, teleport to it, list the installed stock. v0 spawn lays a straight
+ * speed, teleport to it, list the installed stock and what the content packs
+ * got wrong ({@code /rwat packs}). v0 spawn lays a straight
  * debug path from the player along their horizontal look direction.
  *
  * <p>{@code /rwat spawn with <stock>} takes the consist front first as
@@ -92,6 +95,8 @@ public final class RwatCommands {
                                                         parseConsist(StringArgumentType.getString(ctx, "stock"))))))))
                 .then(Commands.literal("types")
                         .executes(RwatCommands::types))
+                .then(Commands.literal("packs")
+                        .executes(RwatCommands::packs))
                 .then(Commands.literal("list")
                         .executes(RwatCommands::list))
                 .then(Commands.literal("speed")
@@ -337,6 +342,10 @@ public final class RwatCommands {
         double startS = Math.max(nearestS(path, playerPos), minHeadS);
 
         Consist consist = ConsistManager.get(level).spawn(level, spec, path, composition, startS);
+        if (consist == null) {
+            ctx.getSource().sendFailure(Component.literal("A wagon could not join the level: nothing spawned."));
+            return 0;
+        }
 
         double pathLength = path.length();
         ctx.getSource().sendSuccess(() -> Component.literal(String.format(
@@ -433,6 +442,19 @@ public final class RwatCommands {
         return all.size();
     }
 
+    /**
+     * {@code /rwat packs} — the server's content packs: what each loaded
+     * (wagon types, track beds), the RWAT packs its scan found (name,
+     * version, format, loaded or not, short hash) and every error and
+     * warning the scan and the loaders found, by pack and file
+     * ({@link PackReport#SERVER}). The client's half — models, sounds, rail
+     * styles — is {@code /rwatc packs}.
+     */
+    private static int packs(CommandContext<CommandSourceStack> ctx) {
+        PackReportView.show(ctx.getSource(), PackReport.SERVER, true);
+        return 1;
+    }
+
     /** s on the path closest to the point (coarse 1-block sampling — debug precision). */
     private static double nearestS(TrackPath path, Vector3d point) {
         double bestS = 0.0;
@@ -526,13 +548,14 @@ public final class RwatCommands {
             TrackPath path = consist.resolvePath(network.graph(), network.revision());
             String line;
             if (path == null) {
-                line = String.format("#%d  FROZEN (route references removed rails)  wagons=%d",
+                line = String.format("#%d  STRANDED, not placed yet (none of its wagons loaded)  wagons=%d",
                         consist.id(), consist.wagonIds().size());
             } else {
                 Vector3d pos = path.samplePosition(consist.s());
-                line = String.format("#%d  s=%.1f/%.1f  v=%.2f  at [%.0f %.0f %.0f]  wagons=%d  chunks=%d",
+                line = String.format("#%d  s=%.1f/%.1f  v=%.2f  at [%.0f %.0f %.0f]  wagons=%d  chunks=%d%s",
                         consist.id(), consist.s(), path.length(), consist.speed(),
-                        pos.x, pos.y, pos.z, consist.wagonIds().size(), manager.chunksHeld(consist.id()));
+                        pos.x, pos.y, pos.z, consist.wagonIds().size(), manager.chunksHeld(consist.id()),
+                        consist.pathSpec() instanceof TrackPathSpec.Stranded ? "  STRANDED (its rails are gone)" : "");
             }
             ctx.getSource().sendSuccess(() -> Component.literal(line), false);
         }
@@ -631,7 +654,7 @@ public final class RwatCommands {
         TrackPath path = consist.resolvePath(network.graph(), network.revision());
         if (path == null) {
             ctx.getSource().sendFailure(Component.literal(
-                    "Consist #" + id + " is frozen (route references removed rails)."));
+                    "Consist #" + id + " is stranded and not placed yet (none of its wagons loaded)."));
             return 0;
         }
         Vector3d pos = path.samplePosition(consist.s());

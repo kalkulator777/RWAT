@@ -62,13 +62,14 @@ class ClientWalkTest {
     void theServersFeetForTheLocalPlayer_areKeptAsideForTheDriftCheck() {
         ClientWalk.setLocalOwner(ME);
         ClientWalk.put(ME, OLD_CAR, new Vector3d(0.0, 1.81, 3.0));
-        ClientRiderSync.apply(1, List.of(new RiderLocal(ME, OLD_CAR, 0.0, 1.81, 5.5)));
+        ClientRiderSync.apply(1, List.of(new RiderLocal(ME, OLD_CAR, 0.0, 1.81, 5.5, 17)));
         // the prediction places them …
         assertEquals(3.0, ClientWalk.on(ME, OLD_CAR).z, 1.0e-9);
-        // … the server's feet are there to compare, once
-        ClientWalk.Feet server = ClientWalk.takeServerFeet();
+        // … the server's feet are there to compare, once, with the input they are after
+        ClientWalk.ServerFeet server = ClientWalk.takeServerFeet();
         assertEquals(OLD_CAR, server.wagonId());
         assertEquals(5.5, server.local().z, 1.0e-9);
+        assertEquals(17, server.ack());
         assertNull(ClientWalk.takeServerFeet());
     }
 

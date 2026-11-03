@@ -1,0 +1,138 @@
+/*
+ * The lights tool's section of the inspector (src/tools/lights/LightsInspector.tsx).
+ * Colours are the shell's (app/styles.css); the swatches are the view's overlay styles
+ * and the headlights' own colours.
+ */
+
+.lights-tool {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.lights-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.lights-heading {
+  font-weight: 600;
+  font-size: 13px;
+  margin: 0;
+}
+
+.lights-list,
+.lights-objects,
+.lights-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+}
+
+.lights-objects {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.lights-item,
+.lights-legend li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+}
+
+.lights-index {
+  font-weight: 600;
+}
+
+.lights-colour {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.lights-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 10px;
+  border-radius: 2px;
+  border: 1px solid var(--border);
+  flex: none;
+}
+
+.lights-flag {
+  font-size: 11px;
+  padding: 0 4px;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+}
+
+.lights-group,
+.lights-object,
+.lights-button {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  align-items: baseline;
+  text-align: left;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.lights-group {
+  width: 100%;
+}
+
+.lights-group[aria-pressed='true'] {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.lights-group:focus-visible,
+.lights-object:focus-visible,
+.lights-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.lights-button {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+.lights-button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.lights-summary {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.lights-chosen {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px 8px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lights-chosen legend {
+  font-weight: 600;
+  padding: 0 4px;
+}

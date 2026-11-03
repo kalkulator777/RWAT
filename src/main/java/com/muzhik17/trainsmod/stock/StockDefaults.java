@@ -13,6 +13,9 @@ import java.util.Locale;
  * norms and the Davis form, SI): a pack describes the real machine, and how
  * arcade a server plays is its physics profile ({@code physics.PhysicsTuning}),
  * not the data.
+ *
+ * <p>Ported: {@code editor/src/ports/stockDefaults.ts}; golden:
+ * {@code fixtures/golden/stock_defaults/}.
  */
 public final class StockDefaults {
 

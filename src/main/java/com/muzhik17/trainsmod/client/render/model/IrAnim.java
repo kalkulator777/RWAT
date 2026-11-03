@@ -26,6 +26,10 @@ import org.joml.Matrix4f;
  *
  * <p>No MC imports: parsing and the change of space are unit-tested against
  * the real asset.
+ *
+ * <p>Ported: {@code editor/src/ports/anim.ts} ({@code parse}, {@code frameAt}),
+ * {@code tools/ir2rwat.py} ({@code anim_objects}: the objects); golden:
+ * {@code fixtures/golden/anim/}.
  */
 public final class IrAnim {
 
@@ -65,6 +69,25 @@ public final class IrAnim {
             }
         }
         return tracks;
+    }
+
+    /**
+     * A track's transform at {@code progress} (0 = the first frame, the rest
+     * pose; 1 = the last) into {@code dest}: frame {@code f = progress × (N − 1)}
+     * lies between frames {@code ⌊f⌋} and the next (the last stands for any
+     * past it), and is taken element by element between them
+     * ({@link Matrix4f#lerp}). In any frame: the change of frame is linear.
+     * Ported: {@code editor/src/ports/anim.ts} ({@code frameAt}); golden:
+     * {@code fixtures/golden/anim/} (the cases with a {@code progress}).
+     *
+     * @param frames the track, at least one frame
+     * @return {@code dest}
+     */
+    public static Matrix4f frameAt(Matrix4f[] frames, float progress, Matrix4f dest) {
+        float f = progress * (frames.length - 1);
+        int i0 = Math.min((int) f, frames.length - 1);
+        int i1 = Math.min(i0 + 1, frames.length - 1);
+        return frames[i0].lerp(frames[i1], f - i0, dest);
     }
 
     /**

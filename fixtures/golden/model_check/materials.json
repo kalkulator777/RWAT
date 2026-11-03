@@ -1,0 +1,389 @@
+{
+  "description": "The material libraries and textures of a model, and what draws (pack.ModelCheck.findings: textures, checkDrawn): mtllib and map_Kd paths relative to the OBJ's folder, missing files, materials without a texture, faces never drawn (HIDE, skip, CARGO_FILL). input: namespace (the declaring file's, for unqualified paths), declaration (the wagon model's JSON), files (ns:path -> text), present (locations that are there, contents unread: textures); any other key with a colon is a file too (what input_file reads of the example pack). A location is valid as Minecraft's ResourceLocation.tryParse takes it (locations.json), its file named as Minecraft names it (:a and a are minecraft:a). expected: the findings in the check's order (pack.ModelCheck.findings), each {severity: error | warning, finding}: code (ModelFinding.Code.key, as the editor names it: missing-texture), subject and index null, params (the names and numbers its line is made of, in the line's order), text (the line).",
+  "frame": "none",
+  "tolerance": 0,
+  "cases": [
+    {
+      "id": "a-sound-model",
+      "note": "every file there, the animation reads, the livery swaps a texture: nothing to say",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj", "animations": {"door1": "car/door1.anim"}, "liveries": {"red": "red"}},
+        "files": {
+          "t:car/car.obj": "mtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1/1 2/1 3/1 4/1\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": []
+    },
+    {
+      "id": "material-named-with-spaces",
+      "note": "Blender writes \"Dark Wood\" whole in both files: it finds its texture",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj"},
+        "files": {
+          "t:car/car.obj": "mtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl Dark Wood\nf 1/1 2/1 3/1 4/1\n",
+          "t:car/car.mtl": "newmtl Dark Wood\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": []
+    },
+    {
+      "id": "material-of-another-name",
+      "note": "\"Dark Oak\" is another material than \"Dark Wood\": no texture, nothing draws",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj"},
+        "files": {
+          "t:car/car.obj": "mtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl Dark Oak\nf 1/1 2/1 3/1 4/1\n",
+          "t:car/car.mtl": "newmtl Dark Wood\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "draws-nothing",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj"},
+            "text": "model t:car/car.obj draws nothing: no face has a textured material"
+          }
+        }
+      ]
+    },
+    {
+      "id": "faces-but-no-library",
+      "note": "faces with a material and no mtllib: nothing draws",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj"},
+        "files": {
+          "t:car/car.obj": "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\nusemtl paint\nf 1 2 3\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "draws-nothing",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj"},
+            "text": "model t:car/car.obj draws nothing: no face has a textured material"
+          }
+        }
+      ]
+    },
+    {
+      "id": "missing-texture",
+      "note": "the material's texture isn't there: an error, and the material still counts as textured",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj"},
+        "files": {
+          "t:car/car.obj": "mtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1/1 2/1 3/1 4/1\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "missing-texture",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj", "texture": "t:tex/body.png", "material": "body"},
+            "text": "model t:car/car.obj: texture t:tex/body.png of material body not found"
+          }
+        }
+      ]
+    },
+    {
+      "id": "missing-library",
+      "note": "the MTL isn't there: an error, and then nothing draws",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj"},
+        "files": {
+          "t:car/car.obj": "mtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1/1 2/1 3/1 4/1\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "missing-library",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj", "library": "t:car/car.mtl"},
+            "text": "model t:car/car.obj: material library t:car/car.mtl not found"
+          }
+        },
+        {
+          "severity": "error",
+          "finding": {
+            "code": "draws-nothing",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj"},
+            "text": "model t:car/car.obj draws nothing: no face has a textured material"
+          }
+        }
+      ]
+    },
+    {
+      "id": "library-climbs-out",
+      "note": "an mtllib above the namespace's root names nothing",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj"},
+        "files": {
+          "t:car/car.obj": "mtllib ../../car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1/1 2/1 3/1 4/1\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "bad-library-path",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj", "library": "../../car.mtl"},
+            "text": "model t:car/car.obj: material library path '../../car.mtl' is invalid"
+          }
+        },
+        {
+          "severity": "error",
+          "finding": {
+            "code": "draws-nothing",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj"},
+            "text": "model t:car/car.obj draws nothing: no face has a textured material"
+          }
+        }
+      ]
+    },
+    {
+      "id": "library-path-not-a-resource-location",
+      "note": "an mtllib with a capital: as written in the line",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj"},
+        "files": {
+          "t:car/car.obj": "mtllib Car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1/1 2/1 3/1 4/1\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": "",
+          "t:car/Car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n"
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "bad-library-path",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj", "library": "Car.mtl"},
+            "text": "model t:car/car.obj: material library path 'Car.mtl' is invalid"
+          }
+        },
+        {
+          "severity": "error",
+          "finding": {
+            "code": "draws-nothing",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj"},
+            "text": "model t:car/car.obj draws nothing: no face has a textured material"
+          }
+        }
+      ]
+    },
+    {
+      "id": "texture-path-not-a-resource-location",
+      "note": "a map_Kd with a capital: the material has no texture, so nothing draws",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj"},
+        "files": {
+          "t:car/car.obj": "mtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1/1 2/1 3/1 4/1\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/Body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "bad-texture-path",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj", "material": "body", "texture": "../tex/Body.png"},
+            "text": "model t:car/car.obj: material body has an invalid texture path '../tex/Body.png'"
+          }
+        },
+        {
+          "severity": "error",
+          "finding": {
+            "code": "draws-nothing",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj"},
+            "text": "model t:car/car.obj draws nothing: no face has a textured material"
+          }
+        }
+      ]
+    },
+    {
+      "id": "texture-path-relative-to-the-obj",
+      "note": "an MTL in a folder of its own: its maps are relative to the OBJ's folder, not the MTL's",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj"},
+        "files": {
+          "t:car/car.obj": "mtllib mtl/car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1/1 2/1 3/1 4/1\n",
+          "t:car/door1.anim": "",
+          "t:car/mtl/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n"
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": []
+    },
+    {
+      "id": "first-library-wins",
+      "note": "two libraries give the material a texture: the first's counts, its missing texture is an error",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj", "liveries": {"red": "red"}},
+        "files": {
+          "t:car/car.obj": "mtllib a.mtl\nmtllib b.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1/1 2/1 3/1 4/1\n",
+          "t:car/door1.anim": "",
+          "t:car/a.mtl": "newmtl body\nmap_Kd ../tex/gone.png\n",
+          "t:car/b.mtl": "newmtl body\nmap_Kd ../tex/body.png\n"
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "missing-texture",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj", "texture": "t:tex/gone.png", "material": "body"},
+            "text": "model t:car/car.obj: texture t:tex/gone.png of material body not found"
+          }
+        },
+        {
+          "severity": "warning",
+          "finding": {
+            "code": "livery-replaces-nothing",
+            "subject": null,
+            "index": null,
+            "params": {"livery": "red", "folder": "red"},
+            "text": "livery 'red' replaces no texture (folder red next to the model)"
+          }
+        }
+      ]
+    },
+    {
+      "id": "untextured-faces-warn",
+      "note": "drawn faces without a texture are named; HIDE and skipped objects don't count",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj", "skip": ["WIPER_"]},
+        "files": {
+          "t:car/car.obj": "mtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1 2 3\no GLASS\nusemtl glass\nf 1 2 3\no HIDE_ME\nusemtl helper\nf 1 2 3\no WIPER_1\nusemtl wiper\nf 1 2 3\no LENS\nusemtl lens\nf 1 2 3\no GLASS.001\nusemtl glass\nf 1 2 3\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "warning",
+          "finding": {
+            "code": "untextured-faces",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj", "materials": "glass, lens"},
+            "text": "model t:car/car.obj: faces with no texture (map_Kd) aren't drawn, material(s) glass, lens"
+          }
+        }
+      ]
+    },
+    {
+      "id": "hide-widget-untextured-warns",
+      "note": "the engine draws a HIDE widget; a plain HIDE part and a CARGO_FILL one are not drawn",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj"},
+        "files": {
+          "t:car/car.obj": "mtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1 2 3\no WIDGET_4_HIDE_LAMP\nusemtl glow\nf 1 2 3\no CARGO_FILL_20\nusemtl cargo\nf 1 2 3\no PLAIN_HIDE\nusemtl helper\nf 1 2 3\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "warning",
+          "finding": {
+            "code": "untextured-faces",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj", "materials": "glow"},
+            "text": "model t:car/car.obj: faces with no texture (map_Kd) aren't drawn, material(s) glow"
+          }
+        }
+      ]
+    },
+    {
+      "id": "faces-before-any-usemtl",
+      "note": "faces with no material are named (none)",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj"},
+        "files": {
+          "t:car/car.obj": "mtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\nf 1 2 3\no BODY\nusemtl body\nf 1/1 2/1 3/1 4/1\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "warning",
+          "finding": {
+            "code": "untextured-faces",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj", "materials": "(none)"},
+            "text": "model t:car/car.obj: faces with no texture (map_Kd) aren't drawn, material(s) (none)"
+          }
+        }
+      ]
+    }
+  ]
+}

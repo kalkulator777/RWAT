@@ -32,6 +32,7 @@ import com.muzhik17.trainsmod.physics.TrainPhysics;
 import com.muzhik17.trainsmod.rail.RailNetwork;
 import com.muzhik17.trainsmod.stock.ConsistComposition;
 import com.muzhik17.trainsmod.stock.WagonType;
+import com.muzhik17.trainsmod.stock.WagonTypes;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
@@ -65,7 +66,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *
  * <p>Each tick, for every ticking consist: advance {@code s += v}, push the
  * resulting pose into the consist's wagon entities (re-attached by UUID), and
- * broadcast a state snapshot to clients tracking the wagon.
+ * broadcast a state snapshot to clients tracking the wagon. A tick after the
+ * packs were reloaded first hands every consist its wagons' new types
+ * ({@link #retypeAll}, D1).
  *
  * <p><b>Coupling (SPEC §6.12):</b> before that, consists on one track whose
  * facing ends run into each other merge into one ({@link Coupling} decides,
@@ -86,6 +89,13 @@ public final class ConsistManager extends SavedData {
     private final Set<Integer> consistsWithRiders = new HashSet<>();
     /** Who holds which chunks loaded (SPEC §2.1, 2026-10-12); not saved — leases are re-earned after a restart. */
     private final ConsistChunks chunks = new ConsistChunks();
+    /**
+     * The {@link WagonTypes#generation} the consists' types are from: a
+     * consist made or loaded takes the types of the registry as it is, and
+     * a reload since is caught up with at the start of the next tick
+     * ({@link #retypeAll}, D1).
+     */
+    private int typesGeneration = WagonTypes.generation();
 
     public static ConsistManager get(ServerLevel level) {
         return level.getDataStorage().computeIfAbsent(
@@ -103,17 +113,28 @@ public final class ConsistManager extends SavedData {
      * Create a consist and spawn its wagon entities posed on {@code path}
      * (the resolved {@code pathSpec}) with the head at {@code headS}. The
      * caller keeps the whole train on the path.
+     *
+     * @return the consist, or null if a wagon couldn't join the level (another
+     *         mod refused it) — then nothing of the train is left behind
      */
     public Consist spawn(ServerLevel level, TrackPathSpec pathSpec, TrackPath path,
             ConsistComposition composition, double headS) {
         Consist consist = create(pathSpec, composition, headS);
+        List<WagonEntity> joined = new ArrayList<>(composition.wagonCount());
         for (int i = 0; i < composition.wagonCount(); i++) {
             WagonEntity wagon = new WagonEntity(RailsWheelsAndTrains.WAGON_ENTITY.get(), level);
             wagon.setConsistId(consist.id());
             wagon.setWagonIndex(i);
             WagonPose pose = ConsistKinematics.wagonPose(path, headS, i, composition);
             wagon.moveTo(pose.body().x, pose.body().y, pose.body().z, pose.yaw(), pose.pitch());
-            level.addFreshEntity(wagon);
+            if (!level.addFreshEntity(wagon)) {
+                // a train with a wagon missing would carry a ghost: none at all
+                // (unlisted first, so the wagons already in go as plain removals)
+                remove(consist.id());
+                joined.forEach(Entity::discard);
+                return null;
+            }
+            joined.add(wagon);
             consist.wagonIds().add(wagon.getUUID());
         }
         // new stock is delivered parked: it holds on a grade until released
@@ -166,6 +187,9 @@ public final class ConsistManager extends SavedData {
         PhysicsTuning tuning = ServerConfig.tuning();
         ChunkLease.Policy chunkPolicy = ServerConfig.chunkLoading();
         long now = level.getGameTime();
+        if (typesGeneration != WagonTypes.generation()) {
+            retypeAll(level, network);
+        }
         boolean dirty = coupleTouching(level, network, tuning);
         // "last rider left" clears go out after every consist's rider list of
         // this tick: a rider whose wagon just changed consists (coupling,
@@ -179,13 +203,18 @@ public final class ConsistManager extends SavedData {
                 dirty = true; // re-anchored onto a re-walked route (SPEC §2.2 v1)
             }
             if (path == null) {
-                continue; // nothing of the route survived — frozen (SPEC §2.1)
+                path = placeStranded(level, network, consist);
+                if (path == null) {
+                    continue; // stranded somewhere not known yet: none of its wagons has loaded
+                }
+                dirty = true;
             }
             Driver driver = driverOf(level, consist);
             // chunk loading (SPEC §2.1, 2026-10-12): driven or on the move, the
             // consist holds its chunks and runs; otherwise it runs only where
             // the world ticks under it, else it stands frozen (still synced
             // below to the players who see its loaded wagons)
+            boolean wasFrozen = chunks.frozen(consist.id());
             boolean running = chunks.runs(level, consist, path, driver != null, chunkPolicy, now);
             if (running) {
                 // input only counts while a cab has a driver; the handles
@@ -254,8 +283,7 @@ public final class ConsistManager extends SavedData {
                     // (SPEC v1.5-а part 2: the case the entity-move clamp can't
                     // catch, because here it's the wagon that moved)
                     shoveOutsiders(level, wagon);
-                    wagon.walkingRiderLocals().forEach((id, local) ->
-                            riders.add(new RiderLocal(id, wagon.getId(), local.x, local.y, local.z)));
+                    riders.addAll(wagon.walkingRiders());
                 }
             }
 
@@ -268,11 +296,12 @@ public final class ConsistManager extends SavedData {
                 // the client drops them by gameTime (handleSnapshot). A train
                 // standing frozen (SPEC §2.1, 2026-10-12) — seen from beyond the
                 // simulation distance — only needs keeping alive on the clients
-                // (STALE_DROP_TICKS): a snapshot every FROZEN_SNAPSHOT_TICKS.
-                if (running || consist.speed() != 0.0
-                        || (now + consist.id()) % FROZEN_SNAPSHOT_TICKS == 0) {
-                    ConsistSnapshotPayload snapshot =
-                            ConsistSnapshotPayload.of(consist, level.getGameTime(), entityIds);
+                // (STALE_DROP_TICKS): a snapshot the tick it froze, then every
+                // FROZEN_SNAPSHOT_TICKS, at rest whatever speed it froze with —
+                // it doesn't move, and the clients extrapolate a snapshot's speed
+                if (running || !wasFrozen || (now + consist.id()) % FROZEN_SNAPSHOT_TICKS == 0) {
+                    ConsistSnapshotPayload snapshot = ConsistSnapshotPayload.of(consist,
+                            running ? consist.speed() : 0.0, level.getGameTime(), entityIds);
                     for (WagonEntity wagon : wagons) {
                         PacketDistributor.sendToPlayersTrackingEntity(wagon, snapshot);
                     }
@@ -306,6 +335,64 @@ public final class ConsistManager extends SavedData {
         if (dirty) {
             setDirty();
         }
+    }
+
+    /**
+     * Place a consist stranded before its curves were known (decision D2:
+     * its saved route was already gone) by the first of its wagons that is
+     * loaded, where that wagon stands ({@link Consist#strandAlong}).
+     *
+     * @return its path now, or null if it isn't such a consist or none of its wagons is loaded
+     */
+    private static TrackPath placeStranded(ServerLevel level, RailNetwork network, Consist consist) {
+        if (!(consist.pathSpec() instanceof TrackPathSpec.Stranded)) {
+            return null;
+        }
+        List<UUID> ids = consist.wagonIds();
+        for (int i = 0; i < ids.size() && i < consist.composition().wagonCount(); i++) {
+            if (level.getEntity(ids.get(i)) instanceof WagonEntity wagon) {
+                Vector3d axis = PoseMath.localToWorld(new Vector3d(), wagon.getYRot(), wagon.getXRot(),
+                        new Vector3d(0.0, 0.0, 1.0));
+                consist.strandAlong(i, new Vector3d(wagon.getX(), wagon.getY(), wagon.getZ()), axis);
+                return consist.resolvePath(network.graph(), network.revision());
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The packs were reloaded (D1, {@code /reload}): every consist takes its
+     * wagons' types as the registry has them now, by the ids they carry
+     * ({@link WagonTypes#rebind}: all wagons of a train from the one load; a
+     * type gone becomes the placeholder with its id, as when a save loads).
+     * Where the geometry changed the train keeps its middle and stays on its
+     * track ({@link Consist#retype}), and each loaded wagon puts right what
+     * hung on the old type — its open doors by id, the chairs, the riders'
+     * feet ({@link WagonEntity#retyped}). Before the coupling pass, so no
+     * train touches another with the old lengths. A wagon not loaded keeps
+     * nothing that needs it: its doors are saved by id, nobody rides it.
+     */
+    private void retypeAll(ServerLevel level, RailNetwork network) {
+        // the generation first: a load landing while we rebind is caught next tick
+        typesGeneration = WagonTypes.generation();
+        for (Consist consist : consists.values()) {
+            ConsistComposition before = consist.composition();
+            ConsistComposition after = WagonTypes.rebind(before);
+            if (after == before) {
+                continue;
+            }
+            consist.retype(after, consist.resolvePath(network.graph(), network.revision()));
+            List<UUID> ids = consist.wagonIds();
+            for (int i = 0; i < ids.size() && i < after.wagonCount(); i++) {
+                if (level.getEntity(ids.get(i)) instanceof WagonEntity wagon) {
+                    // its place in the train, as the tick re-asserts it, so it reads its own new type
+                    wagon.setConsistId(consist.id());
+                    wagon.setWagonIndex(i);
+                    wagon.retyped(before.slot(i).type());
+                }
+            }
+        }
+        setDirty();
     }
 
     // --- coupling (SPEC §6.12) ---
@@ -584,12 +671,13 @@ public final class ConsistManager extends SavedData {
         if (cut < 1 || cut >= count || consist.wagonIds().size() != count) {
             return null;
         }
+        // resolved first: a re-walk renumbers s (SPEC §2.2), and the plan is cut at s
+        RailNetwork network = RailNetwork.get(level);
+        TrackPath path = consist.resolvePath(network.graph(), network.revision());
         Coupling.Split plan = Coupling.split(consist.composition(), consist.s(), cut);
         Driver driver = driverOf(level, consist);
         boolean driverInRear = driver != null
                 && consist.wagonIds().indexOf(driver.cab().getUUID()) >= cut;
-        RailNetwork network = RailNetwork.get(level);
-        TrackPath path = consist.resolvePath(network.graph(), network.revision());
         Vector3d coupler = path == null ? null
                 : path.samplePosition(Coupling.couplerS(consist.composition(), consist.s(), cut - 1));
 
@@ -623,8 +711,9 @@ public final class ConsistManager extends SavedData {
 
     /**
      * A player used the crowbar on the coupler at the front ({@code front}) or
-     * rear end of {@code wagon} (SPEC §6.12): uncouple there if the coupler
-     * is within reach, with actionbar feedback.
+     * rear end of {@code wagon} (SPEC §6.12): uncouple there if they may —
+     * the crowbar in hand, the coupler within reach, the right to build where
+     * it is ({@link TouchRules.Action#UNCOUPLE}) — with actionbar feedback.
      *
      * @return true if the consist was split
      */
@@ -651,8 +740,10 @@ public final class ConsistManager extends SavedData {
                 wagon.getYRot(), wagon.getXRot(), new Vector3d(at.x, at.y + 1.0, at.z));
         Vector3d eye = wagon.localEye(player);
         double reach = player.blockInteractionRange() + COUPLER_REACH_SLACK;
-        if (ClickReach.distanceSq(eye.x, eye.y, eye.z, wagon.clickSweep(player), c.x, c.y, c.z, c.x, c.y, c.z)
-                > reach * reach) {
+        boolean inReach = ClickReach.distanceSq(eye.x, eye.y, eye.z, wagon.clickSweep(player),
+                c.x, c.y, c.z, c.x, c.y, c.z) <= reach * reach;
+        if (!WagonTouch.allows(player, wagon, TouchRules.Action.UNCOUPLE, WagonTouch.facts(player, wagon)
+                .inReach(inReach).mayBuildHere(level.mayInteract(player, BlockPos.containing(at.x, at.y, at.z))))) {
             return false;
         }
         Consist rear = split(level, consist, cut);
@@ -665,10 +756,13 @@ public final class ConsistManager extends SavedData {
     }
 
     /**
-     * A player turned a wagon's handbrake wheel with the crowbar (SPEC §5.3):
-     * set it if released, release it if set — if the wagon is within reach.
-     * Under a profile whose handbrakes set themselves the wheel isn't the
-     * player's: they are told so, nothing turns.
+     * A player turned a wagon's handbrake (SPEC §5.3): set it if released,
+     * release it if set. By its wheel (or the key for it) only from aboard
+     * the car — with the driver's key, a car with a cab — and by the crowbar
+     * within reach of the car's body ({@link WagonEntity#withinReach}, as the
+     * client drew it) — never from across the yard ({@link
+     * TouchRules.Action#HANDBRAKE}). Under a profile whose handbrakes set
+     * themselves the wheel isn't the player's: they are told so, nothing turns.
      *
      * @return true if the handbrake moved
      */
@@ -678,11 +772,9 @@ public final class ConsistManager extends SavedData {
         if (index < 0 || index >= consist.composition().wagonCount()) {
             return false;
         }
-        double reach = player.blockInteractionRange()
-                + consist.composition().slot(index).type().length() * 0.5 + 1.0;
-        Vector3d eye = wagon.localEye(player); // the car as the player's client drew it (SPEC §9.3)
-        if (ClickReach.distanceSq(eye.x, eye.y, eye.z, wagon.clickSweep(player), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
-                > reach * reach) {
+        TouchRules.Facts facts = WagonTouch.facts(player, wagon);
+        if (!WagonTouch.allows(player, wagon, TouchRules.Action.HANDBRAKE,
+                facts.inReach(facts.crowbar() && wagon.withinReach(player)))) {
             return false;
         }
         if (ServerConfig.tuning().autoHandbrake()) {
@@ -718,14 +810,14 @@ public final class ConsistManager extends SavedData {
      * protection), the wagon takes it as the player's attack: a few blows
      * wear it down in survival, one breaks it in creative
      * ({@link WagonEntity#hurt}). A rider can't strike: aboard, the world is
-     * out of reach (SPEC v1.5-б).
+     * out of reach (SPEC v1.5-б; {@link TouchRules.Action#STRIKE}).
      *
      * @return true if the blow landed
      */
     public boolean strikeBogie(ServerLevel level, ServerPlayer player, WagonEntity wagon, boolean front) {
-        if (player.isSpectator() || !player.isAlive() || player.getVehicle() instanceof WagonEntity
-                || !player.mayBuild()) {
-            return false;
+        TouchRules.Facts facts = WagonTouch.facts(player, wagon);
+        if (!TouchRules.allows(TouchRules.Action.STRIKE, facts.inReach(true))) {
+            return false; // no pose to work out for a spectator or a rider
         }
         Consist consist = byId(wagon.getConsistId());
         int index = consist == null ? -1 : consist.wagonIds().indexOf(wagon.getUUID());
@@ -739,15 +831,14 @@ public final class ConsistManager extends SavedData {
         }
         WagonPose pose = ConsistKinematics.wagonPose(path, consist.s(), index, consist.composition());
         Vector3d bogie = (front ? pose.front() : pose.rear()).position();
-        if (!level.mayInteract(player, BlockPos.containing(bogie.x, bogie.y, bogie.z))) {
-            return false; // spawn protection
-        }
         Vec3 eye = player.getEyePosition();
         Vec3 look = player.getLookAngle();
         double slack = BOGIE_REACH_SLACK + Math.abs(consist.speed()) * VIEW_LAG_TICKS;
-        if (!BogieReach.reaches(new Vector3d(eye.x, eye.y, eye.z), new Vector3d(look.x, look.y, look.z),
-                bogie, player.entityInteractionRange(), slack)) {
-            return false;
+        boolean inReach = BogieReach.reaches(new Vector3d(eye.x, eye.y, eye.z), new Vector3d(look.x, look.y, look.z),
+                bogie, player.entityInteractionRange(), slack);
+        if (!WagonTouch.allows(player, wagon, TouchRules.Action.STRIKE, facts.inReach(inReach)
+                .mayBuildHere(level.mayInteract(player, BlockPos.containing(bogie.x, bogie.y, bogie.z))))) {
+            return false; // spawn protection too
         }
         wagon.strikeBy(player);
         return true;
@@ -762,7 +853,9 @@ public final class ConsistManager extends SavedData {
      * it is, one consist or two, with its handles and handbrakes — and the
      * one-wagon consist left over goes with the entity. In survival its
      * rolling stock item drops, with its type and livery, ready to be put
-     * back on the rails ({@code doEntityDrops} permitting).
+     * back on the rails ({@code doEntityDrops} permitting). A wagon removed
+     * past the manager — {@code /kill}, the void — leaves its train the same
+     * way, without the item ({@link WagonEntity#remove}).
      *
      * @return false if its train can't be cut (its wagon list out of step with the composition): nothing breaks
      */
@@ -797,8 +890,6 @@ public final class ConsistManager extends SavedData {
         return true;
     }
 
-    /** Inflate the wagon AABB by the longest stock half-length when looking for entities to shove. */
-    private static final double SHOVE_REACH = 14.0;
     /** Cap a player's per-tick shove so a deep overlap ejects over a few ticks, not a launch. */
     private static final double SHOVE_PUSH_SPEED = 0.5;
 
@@ -817,7 +908,8 @@ public final class ConsistManager extends SavedData {
         if (hull == null) {
             return;
         }
-        AABB search = wagon.getBoundingBox().inflate(SHOVE_REACH);
+        // the wagon's box is its centre: reach the longest car's ends, and a step past them
+        AABB search = wagon.getBoundingBox().inflate(WagonTypes.longest() / 2.0 + 1.0);
         List<Entity> nearby = level.getEntities(wagon, search,
                 e -> e instanceof LivingEntity && !e.isSpectator() && !e.isPassenger());
         if (nearby.isEmpty()) {
@@ -986,6 +1078,8 @@ public final class ConsistManager extends SavedData {
         for (Tag entry : tag.getList("Consists", Tag.TAG_COMPOUND)) {
             Consist consist = Consist.load((CompoundTag) entry);
             manager.consists.put(consist.id(), consist);
+            // never below a loaded id: a counter behind would give a new train an old one's id
+            manager.nextId = Math.max(manager.nextId, consist.id() + 1);
         }
         return manager;
     }

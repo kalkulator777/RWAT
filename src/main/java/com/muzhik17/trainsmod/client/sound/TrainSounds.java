@@ -20,15 +20,18 @@ import com.muzhik17.trainsmod.client.render.model.StockModels;
 import com.muzhik17.trainsmod.consist.Consist;
 import com.muzhik17.trainsmod.consist.Handles;
 import com.muzhik17.trainsmod.consist.WagonEntity;
+import com.muzhik17.trainsmod.convention.ObjectRole;
 import com.muzhik17.trainsmod.kinematics.PoseMath;
 import com.muzhik17.trainsmod.kinematics.WagonPose;
 import com.muzhik17.trainsmod.stock.ConsistComposition;
 import com.muzhik17.trainsmod.stock.WagonType;
+import com.muzhik17.trainsmod.stock.WagonTypes;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
@@ -39,6 +42,7 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
 import net.neoforged.neoforge.client.event.sound.PlaySoundSourceEvent;
 import net.neoforged.neoforge.client.event.sound.PlayStreamingSourceEvent;
+import net.neoforged.neoforge.client.event.sound.SoundEngineLoadEvent;
 
 /**
  * Trains you can hear (SPEC §10), worked out on each client from what it
@@ -51,16 +55,31 @@ import net.neoforged.neoforge.client.event.sound.PlayStreamingSourceEvent;
  * body jolts ({@link ClientRide#takeJoints});</li>
  * <li><b>engine</b> ({@code idle}) — runs while the train is manned or moving,
  * its pitch rising with the throttle; a lead-in and tail if declared (the
- * DR1's engine starts and stops);</li>
+ * DR1's engine starts and stops) — the lead-in only when the engine starts
+ * here and now, not when a running one comes into hearing;</li>
  * <li><b>doors</b> — each door's sound as it opens or closes (an iron door
- * if the pack gives none);</li>
+ * if the pack gives none); not for a door a pack reload only moved in the
+ * type's list ({@link DoorChanges});</li>
  * <li><b>cab controls</b> — the notch of the throttle, brake and reverser in
  * the cab that drives;</li>
- * <li><b>horn and whistle</b> — from that cab, for as long as the driver holds the key.</li>
+ * <li><b>horn and whistle</b> — from that cab, for as long as the driver holds
+ * the key, at the pitch and volume their declaration gives (the full end of
+ * its range, {@link SoundLevels}).</li>
  * </ul>
- * Loops are kept for the nearest wagons only ({@link #MAX_WHEELS},
+ *
+ * <p><b>Volume</b> is each sound's level (the declaration's range, or the
+ * defaults below) times the {@code trainVolume} setting, 0 to 2. The sound
+ * engine multiplies that by the category slider and limits the product to what
+ * the file plays at full, so above 1 the setting lifts the quiet sounds up to
+ * that ceiling and leaves the loud ones as they are — the game has no gain
+ * beyond the file. The hearing distances below are the same at any setting
+ * ({@link SoundLevels}).
+ *
+ * <p>Loops are kept for the nearest wagons only ({@link #MAX_WHEELS},
  * {@link #MAX_ENGINES}): the sound engine has a few hundred channels for the
- * whole game.
+ * whole game. When it restarts (the sound device changed) or train sounds
+ * can't be heard (a slider at 0), everything is dropped and picked up again
+ * from what the trains are doing.
  */
 @EventBusSubscriber(modid = RailsWheelsAndTrains.MODID, value = Dist.CLIENT)
 public final class TrainSounds {
@@ -114,18 +133,20 @@ public final class TrainSounds {
     private static final class WagonAudio {
         String typeId;
         SoundSet sounds = SoundSet.NONE;
-        LoopPlayer wheels;
-        LoopPlayer engine;
+        LoopPlayer<TrainSound> wheels;
+        LoopPlayer<TrainSound> engine;
+        /** The engine ran last tick; null before the first — one found running was started before we came. */
+        Boolean alive;
         float throttle;
-        int doorMask = -1;
+        final DoorChanges doors = new DoorChanges();
     }
 
     private static final class ConsistAudio {
         Handles handles;
-        LoopPlayer horn;
-        LoopPlayer bell;
+        LoopPlayer<TrainSound> horn;
+        LoopPlayer<TrainSound> bell;
         String cabType;
-        final Map<String, TrainSound> engaged = new HashMap<>();
+        final Map<ObjectRole.Kind, TrainSound> engaged = new HashMap<>();
     }
 
     private static final Map<Integer, WagonAudio> WAGONS = new HashMap<>();
@@ -150,7 +171,7 @@ public final class TrainSounds {
     static void onClientTick(ClientTickEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
         ClientLevel level = mc.level;
-        if (level == null) {
+        if (level == null || muted(mc)) {
             clearAll();
             return;
         }
@@ -252,10 +273,9 @@ public final class TrainSounds {
         audio.typeId = typeId;
         audio.sounds = StockModels.sounds(typeId);
         SoundSet.Loop wheels = audio.sounds.wheels() != null ? audio.sounds.wheels() : FALLBACK_WHEELS;
-        audio.wheels = new LoopPlayer(wheels, WHEELS_DISTANCE, false);
+        audio.wheels = new LoopPlayer<>(wheels, new GameSpeaker(WHEELS_DISTANCE), false);
         audio.engine = audio.sounds.idle() != null
-                ? new LoopPlayer(audio.sounds.idle(), ENGINE_DISTANCE, false) : null;
-        audio.doorMask = -1;
+                ? new LoopPlayer<>(audio.sounds.idle(), new GameSpeaker(ENGINE_DISTANCE), false) : null;
     }
 
     private static void wheels(WagonAudio audio, WagonEntity wagon, boolean on, double kmh,
@@ -263,29 +283,36 @@ public final class TrainSounds {
         SoundSet.Loop loop = audio.wheels.loop();
         float f = (float) Math.min(kmh / WHEELS_FULL_KMH, 1.2);
         float fade = (float) Math.min(kmh / WHEELS_FADE_KMH, 1.0);
-        float[] pitch = loop.pitch() != null ? loop.pitch() : WHEELS_PITCH;
-        float[] level = loop.volume() != null ? loop.volume() : WHEELS_VOLUME;
-        audio.wheels.update(on, ticks, wagon.getX(), wagon.getY() + 0.5, wagon.getZ(),
-                (float) (lerp(level, Math.min(f, 1.0F)) * fade * volume), lerp(pitch, f));
+        float level = SoundLevels.at(loop.volume(), WHEELS_VOLUME, Math.min(f, 1.0F));
+        audio.wheels.update(on, false, ticks, wagon.getX(), wagon.getY() + 0.5, wagon.getZ(),
+                (float) (level * fade * volume), SoundLevels.at(loop.pitch(), WHEELS_PITCH, f));
     }
 
+    /**
+     * The engine's loop. Its lead-in plays only when the engine starts this
+     * tick: one already running — come into hearing or the budget, found on
+     * joining the world or after the sound engine restarted — resumes
+     * straight into its loop, at its throttle.
+     */
     private static void engine(WagonAudio audio, WagonEntity wagon, boolean on, Handles handles,
             boolean alive, double volume) {
+        boolean seen = audio.alive != null;
+        boolean started = alive && seen && !audio.alive;
+        audio.alive = alive;
         if (audio.engine == null) {
             return;
         }
         float target = alive ? handles.throttle() / (float) Consist.NOTCHES : 0.0F;
         float rate = target > audio.throttle ? ENGINE_UP : ENGINE_DOWN;
-        audio.throttle += Math.clamp(target - audio.throttle, -rate, rate);
+        audio.throttle = seen ? audio.throttle + Math.clamp(target - audio.throttle, -rate, rate) : target;
         SoundSet.Loop loop = audio.engine.loop();
-        float[] pitch = loop.pitch() != null ? loop.pitch() : ENGINE_PITCH;
-        float[] level = loop.volume() != null ? loop.volume() : ENGINE_VOLUME;
         if (!on && audio.engine.on() && alive) {
             audio.engine.kill(); // out of hearing / over budget: no shutdown sound
             return;
         }
-        audio.engine.update(on, ticks, wagon.getX(), wagon.getY() + 2.0, wagon.getZ(),
-                (float) (lerp(level, audio.throttle) * volume), lerp(pitch, audio.throttle));
+        audio.engine.update(on, !started, ticks, wagon.getX(), wagon.getY() + 2.0, wagon.getZ(),
+                (float) (SoundLevels.at(loop.volume(), ENGINE_VOLUME, audio.throttle) * volume),
+                SoundLevels.at(loop.pitch(), ENGINE_PITCH, audio.throttle));
     }
 
     /** Each bogie that crossed a rail joint this tick knocks, where it is. */
@@ -313,12 +340,12 @@ public final class TrainSounds {
     /**
      * A door that opened or closed since the last tick sounds at its doorway
      * — if that is in hearing (the far door of a long coach may be, while its
-     * centre is not).
+     * centre is not). The state first seen is no event, nor is the mask
+     * re-indexed under a reloaded type ({@link DoorChanges}).
      */
     private static void doors(WagonAudio audio, WagonEntity wagon, Vec3 ear, double volume) {
         int mask = wagon.doorMask();
-        int changed = audio.doorMask < 0 ? 0 : mask ^ audio.doorMask;
-        audio.doorMask = mask; // the state first seen is no event
+        int changed = audio.doors.update(wagon.typeNow(), WagonTypes.generation(), mask);
         if (changed == 0) {
             return;
         }
@@ -353,8 +380,10 @@ public final class TrainSounds {
         if (typeId != null && !typeId.equals(audio.cabType)) {
             silence(audio);
             audio.cabType = typeId;
-            audio.horn = sounds.horn() != null ? new LoopPlayer(sounds.horn(), HORN_DISTANCE, true) : null;
-            audio.bell = sounds.bell() != null ? new LoopPlayer(sounds.bell(), BELL_DISTANCE, true) : null;
+            audio.horn = sounds.horn() != null
+                    ? new LoopPlayer<>(sounds.horn(), new GameSpeaker(HORN_DISTANCE), true) : null;
+            audio.bell = sounds.bell() != null
+                    ? new LoopPlayer<>(sounds.bell(), new GameSpeaker(BELL_DISTANCE), true) : null;
         }
 
         // the driver's desk (the chair driven from), or the middle of the cab wagon
@@ -369,22 +398,25 @@ public final class TrainSounds {
         Handles before = audio.handles;
         audio.handles = handles;
         if (before != null && ear.distanceToSqr(desk.x, desk.y, desk.z) < CONTROL_DISTANCE * CONTROL_DISTANCE) {
-            control(audio, sounds, "THROTTLE_", null, before.throttle() != handles.throttle(), desk, volume);
-            control(audio, sounds, "TRAIN_BRAKE_", null, before.trainBrake() != handles.trainBrake(),
+            control(audio, sounds, ObjectRole.Kind.THROTTLE, before.throttle() != handles.throttle(), desk,
+                    volume);
+            control(audio, sounds, ObjectRole.Kind.TRAIN_BRAKE, before.trainBrake() != handles.trainBrake(),
                     desk, volume);
-            control(audio, sounds, "INDEPENDENT_BRAKE_", "IND_BRAKE_",
-                    before.indBrake() != handles.indBrake(), desk, volume);
-            control(audio, sounds, "REVERSER_", null, before.reverser() != handles.reverser(), desk, volume);
+            control(audio, sounds, ObjectRole.Kind.INDEPENDENT_BRAKE, before.indBrake() != handles.indBrake(),
+                    desk, volume);
+            control(audio, sounds, ObjectRole.Kind.REVERSER, before.reverser() != handles.reverser(), desk,
+                    volume);
         }
 
         int signals = ClientConsists.signals(consistId);
-        if (audio.horn != null) {
-            audio.horn.update((signals & Consist.HORN) != 0, ticks, roof.x, roof.y, roof.z,
-                    (float) volume, 1.0F);
-        }
-        if (audio.bell != null) {
-            audio.bell.update((signals & Consist.BELL) != 0, ticks, roof.x, roof.y, roof.z,
-                    (float) volume, 1.0F);
+        signal(audio.horn, (signals & Consist.HORN) != 0, roof, volume);
+        signal(audio.bell, (signals & Consist.BELL) != 0, roof, volume);
+    }
+
+    /** The horn or whistle, held or not: at its declared pitch and volume ({@link LoopPlayer#updateSignal}). */
+    private static void signal(LoopPlayer<TrainSound> signal, boolean held, Vector3d at, double volume) {
+        if (signal != null) {
+            signal.updateSignal(held, ticks, at.x, at.y, at.z, volume);
         }
     }
 
@@ -393,18 +425,12 @@ public final class TrainSounds {
      * {@code engage} unless that is still sounding from the last move (the
      * brake valve's long hiss doesn't restart on every notch).
      */
-    private static void control(ConsistAudio audio, SoundSet sounds, String kind, String alias,
-            boolean moved, Vector3d at, double volume) {
+    private static void control(ConsistAudio audio, SoundSet sounds, ObjectRole.Kind kind, boolean moved,
+            Vector3d at, double volume) {
         if (!moved) {
             return;
         }
-        SoundSet.Control control = null;
-        for (Map.Entry<String, SoundSet.Control> entry : sounds.controls().entrySet()) {
-            if (entry.getKey().startsWith(kind) || (alias != null && entry.getKey().startsWith(alias))) {
-                control = entry.getValue();
-                break;
-            }
-        }
+        SoundSet.Control control = sounds.control(kind);
         if (control == null) {
             return;
         }
@@ -422,19 +448,70 @@ public final class TrainSounds {
     }
 
     private static TrainSound oneShot(String ref, int distance, Vector3d at, float volume, float pitch) {
-        TrainSound sound = TrainSound.of(ref, false, distance);
-        if (sound != null) {
-            sound.moveTo(at.x, at.y, at.z);
-            sound.set(volume, pitch);
-            play(sound);
-        }
-        return sound;
+        return new GameSpeaker(distance).play(ref, false, at.x, at.y, at.z, volume, pitch);
     }
 
     /** Hand a sound to the sound engine (counted for {@link #describe}). */
     static void play(TrainSound sound) {
         asked++;
         Minecraft.getInstance().getSoundManager().play(sound);
+    }
+
+    /** The game's sound engine, for sounds heard up to {@code distance} blocks: what the loops play through. */
+    private record GameSpeaker(int distance) implements LoopPlayer.Speaker<TrainSound> {
+        @Override
+        public TrainSound play(String ref, boolean looping, double x, double y, double z, float volume,
+                float pitch) {
+            TrainSound sound = TrainSound.of(ref, looping, distance);
+            if (sound != null) {
+                place(sound, x, y, z, volume, pitch);
+                TrainSounds.play(sound);
+            }
+            return sound;
+        }
+
+        @Override
+        public void place(TrainSound sound, double x, double y, double z, float volume, float pitch) {
+            sound.moveTo(x, y, z);
+            sound.set(volume, pitch);
+        }
+
+        @Override
+        public boolean active(TrainSound sound) {
+            return Minecraft.getInstance().getSoundManager().isActive(sound);
+        }
+
+        @Override
+        public void end(TrainSound sound) {
+            sound.end();
+        }
+
+        @Override
+        public int ticks(String ref) {
+            return SoundInfo.ticks(ref);
+        }
+    }
+
+    /**
+     * True while train sounds can't be heard: the master or their own slider
+     * ({@link TrainSound#SOURCE}) at 0, or {@code trainVolume} 0. Nothing is
+     * played or kept then: under a master at 0 the sound engine starts no
+     * sound, and one under its slider at 0 it stops — yet goes on calling it
+     * active, so the loop would never know to start again.
+     */
+    private static boolean muted(Minecraft mc) {
+        return mc.options.getSoundSourceVolume(SoundSource.MASTER) <= 0.0F
+                || mc.options.getSoundSourceVolume(TrainSound.SOURCE) <= 0.0F
+                || ClientConfig.trainVolume() <= 0.0;
+    }
+
+    /**
+     * The sound engine started over (mod bus): the sound device changed or
+     * was lost, the options changed it, a resource reload. Every sound it was
+     * playing is gone, ours too — so is what we knew of them.
+     */
+    public static void onSoundEngineLoad(SoundEngineLoadEvent event) {
+        clearAll();
     }
 
     /** The engine started a sound — its file loaded (sound thread). */
@@ -450,10 +527,6 @@ public final class TrainSounds {
         if (event.getSound() instanceof TrainSound) {
             STARTED.incrementAndGet();
         }
-    }
-
-    private static float lerp(float[] range, float t) {
-        return range[0] + (range[1] - range[0]) * t;
     }
 
     private static void silence(WagonAudio audio) {
@@ -523,7 +596,7 @@ public final class TrainSounds {
                 })));
     }
 
-    /** Drop everything (logout, resource reload). */
+    /** Drop everything (logout, resource reload, the sound engine restarted). */
     public static void clearAll() {
         WAGONS.values().forEach(TrainSounds::silence);
         CONSISTS.values().forEach(TrainSounds::silence);

@@ -1,0 +1,11 @@
+{
+  "length": 10.0,
+  "bogies": [2.75, -2.75],
+  "mass_t": 22.0,
+  "max_speed_kmh": 90,
+  "brakes": {
+    "system": "freight",
+    "train_kn": 14.0
+  },
+  "aliases": ["rwat_example:open_wagon"]
+}

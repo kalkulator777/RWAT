@@ -3,6 +3,7 @@ package com.muzhik17.trainsmod.path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,6 +21,8 @@ public final class RailGraph {
 
     /** Clicking this close to an existing node reuses it instead of creating one. */
     public static final double NODE_SNAP_RADIUS = 1.5;
+    /** The shortest segment, blocks: the chord between its nodes, after the ends snapped. */
+    public static final double MIN_SEGMENT_LENGTH = 2.0;
     /** Route walking safety cap (cycles, runaway branches). */
     public static final int MAX_ROUTE_SEGMENTS = 256;
     /**
@@ -30,6 +33,15 @@ public final class RailGraph {
      * by routing (v1 switching, SPEC §2.2) and rendering (end overhangs).
      */
     public static final double CONTINUATION_DOT = 0.5;
+    /**
+     * Farthest a stored node may lie from the origin on any axis, blocks:
+     * Minecraft's own limit of the world. A node beyond it is damaged data —
+     * and a segment to it would make the bed and the renderer walk an
+     * absurd distance.
+     */
+    public static final double MAX_COORDINATE = 3.0e7;
+    /** A stored segment whose nodes are closer than this has no chord, so no tangents. */
+    private static final double DEGENERATE_CHORD = 1.0e-6;
 
     private final Map<Integer, RailNode> nodes = new LinkedHashMap<>();
     private final Map<Integer, RailSegment> segments = new LinkedHashMap<>();
@@ -70,12 +82,201 @@ public final class RailGraph {
         nextNodeId = Math.max(nextNodeId, node.id() + 1);
     }
 
+    /**
+     * Put a segment in; both its nodes must already be. For data that is known
+     * good (a copy of a graph, the server's sync); stored data goes through
+     * {@link #restoreSegment}, which checks it first.
+     */
     public void putSegment(RailSegment segment) {
         segments.put(segment.id(), segment);
         nextSegmentId = Math.max(nextSegmentId, segment.id() + 1);
         nextGroupId = Math.max(nextGroupId, segment.group() + 1);
         node(segment.nodeA()).segments().add(segment.id());
         node(segment.nodeB()).segments().add(segment.id());
+    }
+
+    // --- restoring a saved graph: damaged records are skipped, not fatal ---
+
+    /**
+     * Put a node read from a save in the graph, or say why it can't be: its
+     * id is not a positive number or is taken, its position is no point of
+     * the world ({@link #MAX_COORDINATE}), its tangent is not a finite,
+     * non-zero vector (a zero tangent would normalise to NaN and take every
+     * curve through the node with it). A skipped node's id is still counted
+     * as used, so new track never gets it.
+     *
+     * @return null if the node is in; else what is wrong with it, in English, for the log
+     */
+    public String restoreNode(int id, Vector3d position, Vector3d direction) {
+        String problem = nodeProblem(id, position, direction);
+        if (problem != null) {
+            if (id >= 1) {
+                nextNodeId = Math.max(nextNodeId, id + 1);
+            }
+            return problem;
+        }
+        putNode(new RailNode(id, position, direction));
+        return null;
+    }
+
+    private String nodeProblem(int id, Vector3d position, Vector3d direction) {
+        if (id < 1) {
+            return "it has no valid id (" + id + ")";
+        }
+        if (nodes.containsKey(id)) {
+            return "another node already has its id";
+        }
+        if (!inWorld(position)) {
+            return "its position " + show(position) + " is no point of the world";
+        }
+        if (!usableAxis(direction)) {
+            return "its tangent " + show(direction) + " is not a finite, non-zero vector";
+        }
+        return null;
+    }
+
+    /**
+     * Put a segment read from a save in the graph, or say why it can't be:
+     * its id is not a positive number or is taken; an end node is missing
+     * (the case {@link #putSegment} answers with a NullPointerException);
+     * both ends are on one node; an end's sign is not +1 or −1; a tangent
+     * override is not a finite, non-zero vector; its nodes coincide; or the
+     * curve through them has no finite length ({@link ArcLengthTable}). Nodes
+     * are restored first ({@link #restoreNode}). A skipped segment's id is
+     * still counted as used: a train that was on it must not find new track
+     * under its old route.
+     *
+     * @return null if the segment is in; else what is wrong with it, in English, for the log
+     */
+    public String restoreSegment(RailSegment segment) {
+        String problem = segmentProblem(segment);
+        if (problem != null) {
+            if (segment.id() >= 1) {
+                nextSegmentId = Math.max(nextSegmentId, segment.id() + 1);
+            }
+            return problem;
+        }
+        putSegment(segment);
+        return null;
+    }
+
+    private String segmentProblem(RailSegment segment) {
+        if (segment.id() < 1) {
+            return "it has no valid id (" + segment.id() + ")";
+        }
+        if (segments.containsKey(segment.id())) {
+            return "another segment already has its id";
+        }
+        RailNode a = node(segment.nodeA());
+        if (a == null) {
+            return "its node A (" + segment.nodeA() + ") is missing";
+        }
+        RailNode b = node(segment.nodeB());
+        if (b == null) {
+            return "its node B (" + segment.nodeB() + ") is missing";
+        }
+        if (a == b) {
+            return "both its ends are on node " + a.id();
+        }
+        if (Math.abs(segment.signA()) != 1 || Math.abs(segment.signB()) != 1) {
+            return "its end signs (" + segment.signA() + ", " + segment.signB() + ") are not +1 or -1";
+        }
+        if (segment.dirA() != null && !usableAxis(segment.dirA())) {
+            return "its tangent at A " + show(segment.dirA()) + " is not a finite, non-zero vector";
+        }
+        if (segment.dirB() != null && !usableAxis(segment.dirB())) {
+            return "its tangent at B " + show(segment.dirB()) + " is not a finite, non-zero vector";
+        }
+        if (a.position().distance(b.position()) < DEGENERATE_CHORD) {
+            return "its nodes " + a.id() + " and " + b.id() + " lie in one spot";
+        }
+        try {
+            ArcLengthTable.of(hermite(segment));
+        } catch (IllegalArgumentException e) {
+            return e.getMessage();
+        }
+        return null;
+    }
+
+    /**
+     * Restore a node's switch selection read from a save, or say why not: the
+     * node is not in the graph (its segments were skipped, or it never was).
+     *
+     * @return null if restored; else the reason
+     */
+    public String restoreSwitchSelection(int nodeId, int selection) {
+        if (node(nodeId) == null) {
+            return "node " + nodeId + " is not in the graph";
+        }
+        setSwitchSelection(nodeId, selection);
+        return null;
+    }
+
+    /**
+     * Remove the nodes no segment is left on — those whose segments were
+     * skipped by {@link #restoreSegment}; a healthy graph has none
+     * ({@link #removeSegment} takes a node with its last segment). Such a
+     * node would only be something for new track to snap onto.
+     *
+     * @return the ids of the nodes removed
+     */
+    public List<Integer> dropOrphanNodes() {
+        List<Integer> dropped = new ArrayList<>();
+        for (Iterator<RailNode> it = nodes.values().iterator(); it.hasNext(); ) {
+            RailNode node = it.next();
+            if (node.segments().isEmpty()) {
+                it.remove();
+                switchSelections.remove(node.id());
+                dropped.add(node.id());
+            }
+        }
+        return dropped;
+    }
+
+    private static boolean inWorld(Vector3d p) {
+        return Math.abs(p.x) <= MAX_COORDINATE && Math.abs(p.y) <= MAX_COORDINATE
+                && Math.abs(p.z) <= MAX_COORDINATE; // false for NaN too
+    }
+
+    /** A direction that normalises to a finite unit vector: finite, and not (nearly) zero. */
+    private static boolean usableAxis(Vector3d v) {
+        double length = v.length();
+        return Double.isFinite(length) && length > 1.0e-9;
+    }
+
+    private static String show(Vector3d v) {
+        return "(" + v.x + ", " + v.y + ", " + v.z + ")";
+    }
+
+    // --- id counters (persisted with the graph) ---
+
+    /** The id the next new node gets. */
+    public int nextNodeId() {
+        return nextNodeId;
+    }
+
+    /** The id the next new segment gets. */
+    public int nextSegmentId() {
+        return nextSegmentId;
+    }
+
+    /** The id the next new structure group gets. */
+    public int nextGroupId() {
+        return nextGroupId;
+    }
+
+    /**
+     * Restore the id counters saved with the graph, once its nodes and
+     * segments are back. A counter only ever moves up — never below what the
+     * loaded ids need — so the ids of removed nodes, segments and groups are
+     * not handed out again after a restart: a consist still holding a removed
+     * segment's id must not find new, unrelated track under it. Zeros (a save
+     * from before the counters were kept) change nothing.
+     */
+    public void restoreNextIds(int node, int segment, int group) {
+        nextNodeId = Math.max(nextNodeId, node);
+        nextSegmentId = Math.max(nextSegmentId, segment);
+        nextGroupId = Math.max(nextGroupId, group);
     }
 
     // --- switch state (SPEC §2.2 v1) ---
@@ -97,6 +298,46 @@ public final class RailGraph {
     /** All non-zero switch selections (persistence / sync). */
     public Map<Integer, Integer> switchSelections() {
         return switchSelections;
+    }
+
+    /**
+     * Throw switches: each node listed advances its selection by one, as
+     * many times as it is listed (SPEC §2.2 v1: cycle through the diverging
+     * legs; two stands of one node rising in one tick throw it twice).
+     * Nodes not in the graph are passed over.
+     *
+     * @return each node thrown, once, in the order first listed, with the
+     *         selection it has now — what the clients are told
+     */
+    public Map<Integer, Integer> throwSwitches(List<Integer> nodeIds) {
+        Map<Integer, Integer> thrown = new LinkedHashMap<>();
+        for (int nodeId : nodeIds) {
+            if (node(nodeId) != null) {
+                setSwitchSelection(nodeId, switchSelection(nodeId) + 1);
+                thrown.put(nodeId, switchSelection(nodeId));
+            }
+        }
+        return thrown;
+    }
+
+    /**
+     * Set switch selections as another copy of the graph has them — the
+     * client's copy, from the switches thrown on the server
+     * ({@link #throwSwitches}). Selections of nodes not in this graph are
+     * passed over.
+     *
+     * @return whether any selection changed
+     */
+    public boolean setSwitchSelections(Map<Integer, Integer> selections) {
+        boolean changed = false;
+        for (Map.Entry<Integer, Integer> entry : selections.entrySet()) {
+            int nodeId = entry.getKey();
+            if (node(nodeId) != null && switchSelection(nodeId) != entry.getValue()) {
+                setSwitchSelection(nodeId, entry.getValue());
+                changed = true;
+            }
+        }
+        return changed;
     }
 
     // --- structure groups (SPEC §2.2): segments built by one click demolish together ---
@@ -140,6 +381,22 @@ public final class RailGraph {
     // --- editing ---
 
     /**
+     * Why {@link #createSegment} refuses a segment: what the ends snapped to
+     * leaves no track to build.
+     */
+    public enum Refusal {
+        /** Both ends snap to one node: a loop with no chord (NaN tangents). */
+        SAME_NODE,
+        /** The nodes the ends snap to are closer together than {@link #MIN_SEGMENT_LENGTH}. */
+        TOO_SHORT,
+        /**
+         * A segment between the same two nodes with the same axes at both ends
+         * is already there: the new one would lie on it (a phantom switch).
+         */
+        DUPLICATE
+    }
+
+    /**
      * Create a segment between two marker points (SPEC §2.2 UX): each end
      * snaps to an existing node within {@link #NODE_SNAP_RADIUS} (reusing its
      * shared tangent → smooth continuation), otherwise a new node is created
@@ -148,7 +405,7 @@ public final class RailGraph {
      *
      * @param dirA tangent axis at {@code a} (e.g. the marker's look direction)
      * @param dirB tangent axis at {@code b}
-     * @return the created segment
+     * @return the created segment, or null if refused ({@link #refusal})
      */
     public RailSegment createSegment(Vector3d a, Vector3d dirA, Vector3d b, Vector3d dirB) {
         return createSegment(a, dirA, false, b, dirB, false);
@@ -158,18 +415,26 @@ public final class RailGraph {
      * Like {@link #createSegment(Vector3d, Vector3d, Vector3d, Vector3d)}, but
      * {@code forceA}/{@code forceB} store the given axis on the segment end
      * itself ({@link RailSegment#dirA()}) even when the end snaps to an
-     * existing node with a different axis. Used by diamond crossings: the
-     * centre node carries the first path's axis, the second path's segments
-     * carry their own.
+     * existing node with a different axis. Used by X-crossings: the centre
+     * node carries the first path's axis, the second path's segments carry
+     * their own.
+     *
+     * <p>Both ends snap among the nodes that exist before the call, so the
+     * far end never snaps to a node the near end has just created. Nothing is
+     * created — null is returned — when the segment is refused
+     * ({@link #refusal}).
      */
     public RailSegment createSegment(Vector3d a, Vector3d dirA, boolean forceA,
             Vector3d b, Vector3d dirB, boolean forceB) {
         RailNode nodeA = nodeNear(a);
+        RailNode nodeB = nodeNear(b);
+        if (refusal(nodeA, a, dirA, forceA, nodeB, b, dirB, forceB) != null) {
+            return null;
+        }
         if (nodeA == null) {
             nodeA = new RailNode(nextNodeId++, a, new Vector3d(dirA));
             nodes.put(nodeA.id(), nodeA);
         }
-        RailNode nodeB = nodeNear(b);
         if (nodeB == null) {
             nodeB = new RailNode(nextNodeId++, b, new Vector3d(dirB));
             nodes.put(nodeB.id(), nodeB);
@@ -185,6 +450,60 @@ public final class RailGraph {
         nodeA.segments().add(segment.id());
         nodeB.segments().add(segment.id());
         return segment;
+    }
+
+    /**
+     * Why {@link #createSegment(Vector3d, Vector3d, boolean, Vector3d, Vector3d, boolean)}
+     * would refuse this segment now, or null if it would build it. The ends
+     * snap first, as there; then the segment is refused if both land on one
+     * node, if the nodes are closer than {@link #MIN_SEGMENT_LENGTH} (the
+     * markers may be far enough apart while the nodes they snap to are not),
+     * or if a segment already joins the same two nodes with the same axes at
+     * both ends. Another segment between the same two nodes is not refused
+     * when an end's axis differs (a {@code force}d axis): the curve is
+     * another one. With the axes the same it is not — each end's sign turns
+     * toward the chord, so the curve is exactly the existing one.
+     */
+    public Refusal refusal(Vector3d a, Vector3d dirA, boolean forceA,
+            Vector3d b, Vector3d dirB, boolean forceB) {
+        return refusal(nodeNear(a), a, dirA, forceA, nodeNear(b), b, dirB, forceB);
+    }
+
+    private Refusal refusal(RailNode nodeA, Vector3d a, Vector3d dirA, boolean forceA,
+            RailNode nodeB, Vector3d b, Vector3d dirB, boolean forceB) {
+        if (nodeA != null && nodeA == nodeB) {
+            return Refusal.SAME_NODE;
+        }
+        Vector3d pa = nodeA != null ? nodeA.position() : a;
+        Vector3d pb = nodeB != null ? nodeB.position() : b;
+        if (pa.distance(pb) < MIN_SEGMENT_LENGTH) {
+            return Refusal.TOO_SHORT;
+        }
+        if (nodeA == null || nodeB == null) {
+            return null; // a new node: nothing can join it yet
+        }
+        Vector3d axisA = forceA ? new Vector3d(dirA).normalize() : nodeA.direction();
+        Vector3d axisB = forceB ? new Vector3d(dirB).normalize() : nodeB.direction();
+        for (int id : nodeA.segments()) {
+            RailSegment other = segment(id);
+            if (other.otherNode(nodeA.id()) == nodeB.id()
+                    && sameAxis(axisAt(other, nodeA.id()), axisA)
+                    && sameAxis(axisAt(other, nodeB.id()), axisB)) {
+                return Refusal.DUPLICATE;
+            }
+        }
+        return null;
+    }
+
+    /** The tangent axis a segment uses at its end on {@code nodeId}: its own override, else the node's. */
+    private Vector3d axisAt(RailSegment segment, int nodeId) {
+        Vector3d override = segment.nodeA() == nodeId ? segment.dirA() : segment.dirB();
+        return override != null ? new Vector3d(override) : node(nodeId).direction();
+    }
+
+    /** Whether two unit axes are the same up to sign. */
+    private static boolean sameAxis(Vector3d u, Vector3d v) {
+        return Math.abs(u.dot(v)) > 1.0 - 1.0e-6;
     }
 
     /**

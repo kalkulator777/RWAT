@@ -1,0 +1,175 @@
+{
+  "description": "A JSON value -> the text a pack's file is written as (tools/ir2rwat.py dump, the reference): two-space indents, an array of scalars on one line, every other array and every object an item a line, numbers as Python writes them, strings with only what JSON must escape. input.json: the value as JSON text (so that 100.0 and 100 stay apart), or input.value read from a file of the example pack (a port reads that file itself, its numbers as written); expected: the text, its last line end included.",
+  "frame": "none",
+  "tolerance": 0,
+  "cases": [
+    {
+      "id": "dump-0-an-empty-object",
+      "note": "an empty object",
+      "input": {"json": "{}"},
+      "expected": "{}\n"
+    },
+    {
+      "id": "dump-1-an-empty-array",
+      "note": "an empty array",
+      "input": {"json": "[]"},
+      "expected": "[]\n"
+    },
+    {
+      "id": "dump-2-a-number-alone",
+      "note": "a number alone",
+      "input": {"json": "5"},
+      "expected": "5\n"
+    },
+    {
+      "id": "dump-3-a-string-alone",
+      "note": "a string alone",
+      "input": {"json": "\"text\""},
+      "expected": "\"text\"\n"
+    },
+    {
+      "id": "dump-4-null",
+      "note": "null",
+      "input": {"json": "null"},
+      "expected": "null\n"
+    },
+    {
+      "id": "dump-5-true",
+      "note": "true",
+      "input": {"json": "true"},
+      "expected": "true\n"
+    },
+    {
+      "id": "dump-6-an-array-of-scalars-on-one-line",
+      "note": "an array of scalars on one line",
+      "input": {"json": "{\"a\": 1, \"b\": [1, 2, 3]}"},
+      "expected": "{\n  \"a\": 1,\n  \"b\": [1, 2, 3]\n}\n"
+    },
+    {
+      "id": "dump-7-an-array-of-objects-an-item-a-line",
+      "note": "an array of objects: an item a line",
+      "input": {"json": "{\"zones\": [{\"min\": [1, 2, 3], \"max\": [4, 5, 6]}]}"},
+      "expected": "{\n  \"zones\": [\n    {\n      \"min\": [1, 2, 3],\n      \"max\": [4, 5, 6]\n    }\n  ]\n}\n"
+    },
+    {
+      "id": "dump-8-an-array-with-an-object-in-it-an-item-a-line",
+      "note": "an array with an object in it: an item a line",
+      "input": {"json": "[1, {\"a\": 1}, \"x\"]"},
+      "expected": "[\n  1,\n  {\n    \"a\": 1\n  },\n  \"x\"\n]\n"
+    },
+    {
+      "id": "dump-9-an-array-of-arrays-an-item-a-line",
+      "note": "an array of arrays: an item a line",
+      "input": {"json": "[[1, 2], [3, 4]]"},
+      "expected": "[\n  [1, 2],\n  [3, 4]\n]\n"
+    },
+    {
+      "id": "dump-10-empty-objects-and-arrays",
+      "note": "empty objects and arrays",
+      "input": {"json": "{\"a\": {}, \"b\": [], \"c\": {\"d\": []}}"},
+      "expected": "{\n  \"a\": {},\n  \"b\": [],\n  \"c\": {\n    \"d\": []\n  }\n}\n"
+    },
+    {
+      "id": "dump-11-keys-in-their-order",
+      "note": "keys in their order",
+      "input": {"json": "{\"b\": 1, \"a\": 2}"},
+      "expected": "{\n  \"b\": 1,\n  \"a\": 2\n}\n"
+    },
+    {
+      "id": "dump-12-1-0-stays-1-0-1e2-is-100-0-1-is-1",
+      "note": "1.0 stays 1.0, 1e2 is 100.0, 1 is 1",
+      "input": {"json": "[1.0, 100.0, 1e2, 1E2, 1]"},
+      "expected": "[1.0, 100.0, 100.0, 100.0, 1]\n"
+    },
+    {
+      "id": "dump-13-floats-as-python-writes-them-1e-16-1e-05-javascrip",
+      "note": "floats as Python writes them: 1e+16, 1e-05 (JavaScript: 10000000000000000, 0.00001)",
+      "input": {"json": "[1e16, 1e-5, 1e-7, 1.5e300, 0.0001, 123456789.0]"},
+      "expected": "[1e+16, 1e-05, 1e-07, 1.5e+300, 0.0001, 123456789.0]\n"
+    },
+    {
+      "id": "dump-14-minus-zero-0-is-0-0-0-stays-shortest-decimals",
+      "note": "minus zero: -0 is 0, -0.0 stays; shortest decimals",
+      "input": {"json": "[-0, -0.0, 0.1, 0.30000000000000004, 5e-324, 1.7976931348623157e308]"},
+      "expected": "[0, -0.0, 0.1, 0.30000000000000004, 5e-324, 1.7976931348623157e+308]\n"
+    },
+    {
+      "id": "dump-15-integers-past-2-53-exactly-as-written",
+      "note": "integers past 2^53, exactly as written",
+      "input": {"json": "[123456789012345678, -9007199254740993]"},
+      "expected": "[123456789012345678, -9007199254740993]\n"
+    },
+    {
+      "id": "dump-16-trailing-zeros-dropped",
+      "note": "trailing zeros dropped",
+      "input": {"json": "[1.10, 2.50]"},
+      "expected": "[1.1, 2.5]\n"
+    },
+    {
+      "id": "dump-17-cyrillic-and-a-character-past-the-bmp-written-as-t",
+      "note": "Cyrillic and a character past the BMP written as they are",
+      "input": {"json": "{\"name\": \"Тележка\", \"emoji\": \"\\ud83d\\ude82\"}"},
+      "expected": "{\n  \"name\": \"Тележка\",\n  \"emoji\": \"🚂\"\n}\n"
+    },
+    {
+      "id": "dump-18-escapes-quote-backslash-controls-slash-del-and-u-2",
+      "note": "escapes: quote, backslash, controls; slash, DEL and U+2028 as they are",
+      "input": {"json": "[\"a\\\"b\", \"a\\\\b\", \"a/b\", \"\\u0001\\n\\t\\r\\b\\f\", \"\\u007f\", \"\\u2028\"]"},
+      "expected": "[\"a\\\"b\", \"a\\\\b\", \"a/b\", \"\\u0001\\n\\t\\r\\b\\f\", \"\", \" \"]\n"
+    },
+    {
+      "id": "dump-19-keys-with-a-blank-empty-accented",
+      "note": "keys with a blank, empty, accented",
+      "input": {"json": "{\"a b\": 1, \"\": 2, \"\\u00e9\": 3}"},
+      "expected": "{\n  \"a b\": 1,\n  \"\": 2,\n  \"é\": 3\n}\n"
+    },
+    {
+      "id": "dump-20-booleans-and-null-in-an-array",
+      "note": "booleans and null in an array",
+      "input": {"json": "{\"a\": [true, false, null]}"},
+      "expected": "{\n  \"a\": [true, false, null]\n}\n"
+    },
+    {
+      "id": "dump-21-nesting-two-spaces-a-level",
+      "note": "nesting: two spaces a level",
+      "input": {"json": "{\"x\": {\"y\": {\"z\": {\"w\": [1]}}}}"},
+      "expected": "{\n  \"x\": {\n    \"y\": {\n      \"z\": {\n        \"w\": [1]\n      }\n    }\n  }\n}\n"
+    },
+    {
+      "id": "dump-22-a-string-and-an-array-an-item-a-line",
+      "note": "a string and an array: an item a line",
+      "input": {"json": "[\"a\", [1]]"},
+      "expected": "[\n  \"a\",\n  [1]\n]\n"
+    },
+    {
+      "id": "dump-23-a-box-as-the-pack-writes-one",
+      "note": "a box as the pack writes one",
+      "input": {"json": "{\"min\": [-9.25, 1.15, 1.45], \"max\": [-8.25, 3.3, 1.51]}"},
+      "expected": "{\n  \"min\": [-9.25, 1.15, 1.45],\n  \"max\": [-8.25, 3.3, 1.51]\n}\n"
+    },
+    {
+      "id": "example-coach-type",
+      "note": "the example pack's coach-type: dump writes it as it is",
+      "input_file": {"value": "run/rwat_packs/RwatExamplePack/data/rwat_example/wagon_types/coach.json"},
+      "expected": "{\n  \"length\": 20.0,\n  \"bogies\": [7.0, -7.0],\n  \"mass_t\": 42.0,\n  \"max_speed_kmh\": 120,\n  \"resistance\": {\n    \"c\": 1.1\n  },\n  \"brakes\": {\n    \"system\": \"ep\",\n    \"parking_kn\": 18.0\n  },\n  \"interior\": [\n    {\n      \"min\": [-9.6, 1.15, -1.4],\n      \"max\": [-7.9, 3.6, 1.4]\n    },\n    {\n      \"min\": [-7.8, 1.3, -0.55],\n      \"max\": [7.8, 3.6, 0.55]\n    },\n    {\n      \"min\": [-1.2, 1.3, -1.4],\n      \"max\": [1.2, 3.6, 1.4]\n    },\n    {\n      \"min\": [7.9, 1.15, -1.4],\n      \"max\": [9.6, 3.6, 1.4]\n    }\n  ],\n  \"doors\": [\n    {\n      \"id\": \"door_fl\",\n      \"min\": [-9.25, 1.15, 1.45],\n      \"max\": [-8.25, 3.3, 1.51],\n      \"group\": \"DoorsL\"\n    },\n    {\n      \"id\": \"door_fr\",\n      \"min\": [-9.25, 1.15, -1.51],\n      \"max\": [-8.25, 3.3, -1.45],\n      \"group\": \"DoorsR\"\n    },\n    {\n      \"id\": \"door_rl\",\n      \"min\": [8.25, 1.15, 1.45],\n      \"max\": [9.25, 3.3, 1.51],\n      \"group\": \"DoorsL\"\n    },\n    {\n      \"id\": \"door_rr\",\n      \"min\": [8.25, 1.15, -1.51],\n      \"max\": [9.25, 3.3, -1.45],\n      \"group\": \"DoorsR\"\n    },\n    {\n      \"id\": \"gangway_front\",\n      \"min\": [-9.68, 1.15, -0.45],\n      \"max\": [-9.62, 3.25, 0.45],\n      \"connecting\": true\n    },\n    {\n      \"id\": \"gangway_rear\",\n      \"min\": [9.62, 1.15, -0.45],\n      \"max\": [9.68, 3.25, 0.45],\n      \"connecting\": true\n    },\n    {\n      \"id\": \"salon_door\",\n      \"min\": [-7.88, 1.3, -0.45],\n      \"max\": [-7.82, 3.3, 0.45],\n      \"inner\": true\n    },\n    {\n      \"id\": \"salon_arch\",\n      \"min\": [7.82, 1.3, -0.45],\n      \"max\": [7.88, 3.3, 0.45],\n      \"inner\": true,\n      \"fixed\": true\n    }\n  ],\n  \"couplers\": {\n    \"front\": -0.05,\n    \"rear\": -0.05\n  }\n}\n"
+    },
+    {
+      "id": "example-shunter-type",
+      "note": "the example pack's shunter-type: dump writes it as it is",
+      "input_file": {"value": "run/rwat_packs/RwatExamplePack/data/rwat_example/wagon_types/shunter.json"},
+      "expected": "{\n  \"length\": 14.0,\n  \"bogies\": [4.0, -4.0],\n  \"mass_t\": 68.0,\n  \"max_speed_kmh\": 60,\n  \"resistance\": {\n    \"a\": 780.0,\n    \"b\": 18.0,\n    \"c\": 1.6,\n    \"c_front\": 7.0\n  },\n  \"traction\": {\n    \"power_kw\": 750.0,\n    \"max_tractive_effort_kn\": 210.0,\n    \"adhesion\": 1.15,\n    \"ramp_s\": 6.0\n  },\n  \"brakes\": {\n    \"system\": \"passenger\",\n    \"train_kn\": 68.0,\n    \"independent_kn\": 52.0,\n    \"parking_kn\": 30.0,\n    \"apply_s\": 5.0,\n    \"release_s\": 9.0\n  },\n  \"cab\": {\n    \"seats\": [\n      {\n        \"at\": [1.65, 2.1, -0.8],\n        \"yaw\": 0\n      },\n      {\n        \"at\": [2.95, 2.1, 0.8],\n        \"yaw\": 180\n      }\n    ]\n  },\n  \"interior\": [\n    {\n      \"min\": [1.25, 1.6, -1.42],\n      \"max\": [3.35, 3.9, 1.42]\n    },\n    {\n      \"min\": [3.35, 1.6, -1.42],\n      \"max\": [3.92, 3.9, 0.0]\n    }\n  ],\n  \"doors\": [\n    {\n      \"id\": \"steps_left\",\n      \"min\": [2.0, 1.6, 1.42],\n      \"max\": [2.6, 3.6, 1.5],\n      \"fixed\": true\n    },\n    {\n      \"id\": \"steps_right\",\n      \"min\": [2.0, 1.6, -1.5],\n      \"max\": [2.6, 3.6, -1.42],\n      \"fixed\": true\n    }\n  ],\n  \"couplers\": {\n    \"front\": 0.05,\n    \"rear\": 0.05\n  }\n}\n"
+    },
+    {
+      "id": "example-coach-model",
+      "note": "the example pack's coach-model: dump writes it as it is",
+      "input_file": {"value": "run/rwat_packs/RwatExamplePack/assets/rwat_example/wagon_models/coach.json"},
+      "expected": "{\n  \"obj\": \"stock/coach/coach.obj\",\n  \"skip\": [\"GUIDE_\"],\n  \"animations\": {\n    \"salon_door\": \"stock/coach/salon_door.anim\"\n  },\n  \"liveries\": {\n    \"blue\": \"l_blue\"\n  },\n  \"sounds\": {\n    \"wheels\": {\n      \"main\": \"minecraft:entity.minecart.riding\",\n      \"pitch\": [0.8, 1.2],\n      \"volume\": [0.2, 0.7]\n    },\n    \"clack\": \"minecraft:block.chain.step\",\n    \"doors\": {\n      \"door_fl\": \"minecraft:block.piston.contract\",\n      \"door_fr\": \"minecraft:block.piston.contract\",\n      \"door_rl\": \"minecraft:block.piston.contract\",\n      \"door_rr\": \"minecraft:block.piston.contract\",\n      \"gangway_front\": \"minecraft:block.iron_door.open\",\n      \"gangway_rear\": \"minecraft:block.iron_door.open\",\n      \"salon_door\": \"minecraft:block.wooden_door.open\"\n    }\n  },\n  \"sway\": 0.8\n}\n"
+    },
+    {
+      "id": "example-lang-ru",
+      "note": "the example pack's lang-ru: dump writes it as it is",
+      "input_file": {"value": "run/rwat_packs/RwatExamplePack/assets/rwat_example/lang/ru_ru.json"},
+      "expected": "{\n  \"light.rwat_example.coach.IL\": \"Свет в вагоне\",\n  \"light.rwat_example.shunter.DeskL\": \"Подсветка пульта\",\n  \"light.rwat_example.shunter.FHL\": \"Прожектор передний\",\n  \"light.rwat_example.shunter.IL\": \"Свет в кабине\",\n  \"light.rwat_example.shunter.REL\": \"Хвостовые сигналы\",\n  \"light.rwat_example.shunter.RHL\": \"Прожектор задний\",\n  \"rail.rwat_example.wooden_track\": \"Путь на деревянных шпалах (пример)\",\n  \"wagon.rwat_example.coach\": \"Пассажирский вагон (пример)\",\n  \"wagon.rwat_example.gondola\": \"Двухосный полувагон (пример)\",\n  \"wagon.rwat_example.shunter\": \"Маневровый тепловоз (пример)\"\n}\n"
+    }
+  ]
+}

@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kalkulator777.github.io/RWAT/schema/pack_mcmeta_rwat.schema.json",
+  "title": "pack.mcmeta of an RWAT pack",
+  "description": "pack.mcmeta at the pack's root: Minecraft's own pack section plus the rwat block. A folder or zip without a readable pack.mcmeta is skipped. Keys other than pack and rwat belong to Minecraft or other mods and are left alone.",
+  "x-description-ru": "pack.mcmeta в корне пака: секция pack самого Minecraft плюс блок rwat. Папка или zip без читаемого pack.mcmeta пропускается. Остальные ключи принадлежат Minecraft или другим модам, их не трогают.",
+  "x-file": "pack.mcmeta",
+  "x-code": ["pack/RwatPacks.java", "pack/RwatPackMeta.java"],
+  "$comment": "Open: keys other than pack and rwat (filter, overlays, features, language, other mods' sections) belong to Minecraft and other mods.",
+  "type": "object",
+  "properties": {
+    "pack": {
+      "$comment": "Open: Minecraft's own section, checked by Minecraft; only the keys an RWAT pack needs are described.",
+      "type": "object",
+      "description": "Minecraft's pack section. An RWAT pack is a resource pack and a data pack at once.",
+      "x-description-ru": "Секция pack самого Minecraft. Пак RWAT одновременно ресурс-пак и датапак.",
+      "properties": {
+        "pack_format": {
+          "type": "integer",
+          "description": "Minecraft's pack format: 34 for 1.21.1 resource packs.",
+          "x-description-ru": "Формат пака Minecraft: 34 для ресурс-паков 1.21.1."
+        },
+        "supported_formats": {
+          "description": "Formats the pack also works with: [34, 48] covers 1.21.1 resource (34) and data (48) packs.",
+          "x-description-ru": "С какими ещё форматами пак работает: [34, 48] покрывает ресурс-паки (34) и датапаки (48) 1.21.1."
+        },
+        "description": {
+          "description": "The pack's description in the pack list: a string or a text component.",
+          "x-description-ru": "Описание пака в списке паков: строка или текстовый компонент."
+        }
+      },
+      "required": ["pack_format", "description"]
+    },
+    "rwat": {"$ref": "#/$defs/rwat"}
+  },
+  "required": ["pack", "rwat"],
+  "$defs": {
+    "rwat": {
+      "type": "object",
+      "x-keys": "pack/RwatPackMeta.java#KEYS",
+      "description": "RWAT's block: the pack format version the pack is written in and who made it. A pack without the block, or without format, loads as format 1 with a warning; a block that is not an object keeps the pack out. A descriptive field of the wrong type or an unknown key is a warning and ignored. /rwat packs lists the block and its problems.",
+      "x-description-ru": "Блок RWAT: версия формата, в которой написан пак, и кто его сделал. Пак без блока или без format грузится как формат 1 с предупреждением; блок не-объект не даёт паку подключиться. Описательное поле не того типа или незнакомый ключ — предупреждение, значение не берётся. /rwat packs показывает блок и его проблемы.",
+      "properties": {
+        "format": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The RWAT pack format version the pack is written in; this document describes format 1. A later format either reads older packs as they are or migrates them by this number. A pack of a format newer than the mod reads, or a format that is not a whole number of 1 or more, is not loaded (an error).",
+          "x-description-ru": "Версия формата паков RWAT, в которой написан пак; этот справочник описывает формат 1. Следующие форматы либо читают старые паки как есть, либо переводят их по этому номеру. Пак формата новее, чем читает мод, или с format не целым числом от 1 не подключается (ошибка)."
+        },
+        "name": {
+          "type": "string",
+          "description": "The pack's display name.",
+          "x-description-ru": "Название пака."
+        },
+        "version": {
+          "type": "string",
+          "description": "The pack's own version, e.g. 1.2.0.",
+          "x-description-ru": "Собственная версия пака, например 1.2.0."
+        },
+        "authors": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Who made the pack.",
+          "x-description-ru": "Авторы пака."
+        },
+        "license": {
+          "type": "string",
+          "description": "The pack's license: an SPDX id (CC0-1.0, CC-BY-4.0, …) or a short text.",
+          "x-description-ru": "Лицензия пака: идентификатор SPDX (CC0-1.0, CC-BY-4.0, …) или короткий текст."
+        },
+        "description": {
+          "type": "string",
+          "description": "What the pack contains, in a sentence or two.",
+          "x-description-ru": "Что в паке, в одном-двух предложениях."
+        }
+      },
+      "required": ["format"],
+      "additionalProperties": false
+    }
+  },
+  "examples": [
+    {
+      "pack": {"pack_format": 34, "supported_formats": [34, 48], "description": "My trains"},
+      "rwat": {"format": 1}
+    },
+    {
+      "pack": {"pack_format": 34, "supported_formats": [34, 48], "description": "My trains"},
+      "rwat": {
+        "format": 1,
+        "name": "My trains",
+        "version": "1.0.0",
+        "authors": ["Me"],
+        "license": "CC0-1.0",
+        "description": "A coach and a shunter."
+      }
+    }
+  ]
+}

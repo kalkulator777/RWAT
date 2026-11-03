@@ -15,8 +15,8 @@ import org.joml.Vector3d;
  * authoritative step (same pure {@code RiderWalk} math, on the same look
  * relative to the car — {@code WalkInputPayload}), so the two agree; should
  * they drift apart all the same (a door shut a tick earlier on one side, an
- * input dropped), the server's feet win once the rider stands still
- * ({@link #takeServerFeet}).
+ * input dropped), the server's feet win, compared with the prediction after
+ * the walk input they are after ({@link #takeServerFeet}, {@link ClientWalkLog}).
  *
  * <p>Feet are kept <b>with the wagon whose frame they are in</b>
  * ({@link #on}): a gangway carries a rider into the next car (SPEC §9.5),
@@ -32,6 +32,13 @@ public final class ClientWalk {
 
     /** Local feet and the entity id of the wagon whose frame they are in (−1: not known). */
     public record Feet(int wagonId, Vector3d local) {
+    }
+
+    /**
+     * The local player's feet as the server synced them: on which wagon, and
+     * after which of their walk inputs ({@code ack}, {@code RiderLocal#ack}).
+     */
+    public record ServerFeet(int wagonId, Vector3d local, int ack) {
     }
 
     private static final Map<Integer, Feet> LOCAL = new ConcurrentHashMap<>();
@@ -55,11 +62,12 @@ public final class ClientWalk {
     private static volatile Vector3d placedLocal;
 
     /**
-     * The local player's feet as the server last synced them, and on which
-     * wagon — not used to place them (that's the prediction), only to catch
-     * the prediction drifting off ({@link #takeServerFeet}); null if none new.
+     * The local player's feet as the server last synced them, on which wagon
+     * and after which input — not used to place them (that's the
+     * prediction), only to catch the prediction drifting off ({@link
+     * #takeServerFeet}); null if none new.
      */
-    private static volatile Feet serverOwn;
+    private static volatile ServerFeet serverOwn;
 
     private ClientWalk() {
     }
@@ -112,12 +120,13 @@ public final class ClientWalk {
 
     /**
      * Store a remote rider's synced local feet on wagon {@code wagonId},
-     * skipping the locally-predicted player. Returns true if it was stored
-     * (i.e. a genuine remote rider).
+     * skipping the locally-predicted player: theirs are kept aside with the
+     * number of their walk input they are after ({@code ack}). Returns true
+     * if it was stored (i.e. a genuine remote rider).
      */
-    public static boolean putRemote(int passengerId, int wagonId, Vector3d local) {
+    public static boolean putRemote(int passengerId, int wagonId, Vector3d local, int ack) {
         if (passengerId == localOwnedId) {
-            serverOwn = new Feet(wagonId, new Vector3d(local));
+            serverOwn = new ServerFeet(wagonId, new Vector3d(local), ack);
             return false;
         }
         put(passengerId, wagonId, local);
@@ -153,11 +162,12 @@ public final class ClientWalk {
     }
 
     /**
-     * The local player's feet the server synced since the last call, and the
-     * wagon they're on there, or null if no new ones came; taken once.
+     * The local player's feet the server synced since the last call, the
+     * wagon they're on there and the input they are after, or null if no new
+     * ones came; taken once.
      */
-    public static Feet takeServerFeet() {
-        Feet feet = serverOwn;
+    public static ServerFeet takeServerFeet() {
+        ServerFeet feet = serverOwn;
         serverOwn = null;
         return feet;
     }

@@ -1,0 +1,199 @@
+{
+  "$comment": "The RWAT pack as a whole, as data: which files a pack has and which schema each follows, the coordinate frames, the lang keys, the extension keywords the schemas use. Not a JSON Schema itself. Read by tools/gen_pack_docs.py, tools/validate_pack.py and the pack editor.",
+  "format": 1,
+  "title": "RWAT pack layout",
+  "description": "An RWAT pack is an ordinary Minecraft pack — one folder or zip that is a resource pack and a data pack at once — dropped into <game>/rwat_packs/. The mod reads three kinds of declaration from it (wagon types, wagon models, rail styles), the files they name (OBJ, MTL, PNG, .anim, .ogg) and its lang files.",
+  "x-description-ru": "Пак RWAT — обычный пак Minecraft: одна папка или zip, одновременно ресурс-пак и датапак, в папке <игра>/rwat_packs/. Мод читает из него три вида деклараций (типы вагонов, модели вагонов, стили рельсов), файлы, на которые они ссылаются (OBJ, MTL, PNG, .anim, .ogg), и lang-файлы.",
+  "loading": [
+    {"en": "Packs live in <game>/rwat_packs/, plus the folders listed in the -Drwat.packDirs system property.", "ru": "Паки лежат в <игра>/rwat_packs/, плюс папки из системного свойства -Drwat.packDirs."},
+    {"en": "Every RWAT pack is required and always on, above vanilla and the mods; worlds pick its data half up by themselves.", "ru": "Каждый пак RWAT обязательный и всегда включён, выше ванили и модов; миры сами подхватывают его датапак."},
+    {"en": "A file in a higher pack replaces the same file of a lower one as a whole; nothing is merged. Packs share textures only through explicit namespace:path references.", "ru": "Файл верхнего пака целиком заменяет такой же файл нижнего, слияния нет. Общие текстуры между паками — только через явные ссылки namespace:path."},
+    {"en": "A type and its model are paired by the same id; nothing else links them.", "ru": "Тип и модель связаны только совпадением id."},
+    {"en": "A malformed declaration is skipped with an error in the log; the rest of the pack loads.", "ru": "Битая декларация пропускается с ошибкой в логе; остальной пак грузится."},
+    {"en": "F3+T reloads models, rail styles and sounds; /reload reloads wagon types and the track bed rules.", "ru": "F3+T перечитывает модели, стили рельсов и звуки; /reload — типы вагонов и правила полотна."},
+    {"en": "The server sends the clients only the wagon types; models, rail styles and sounds must be in the client's own packs.", "ru": "Сервер отправляет клиентам только типы вагонов; модели, стили рельсов и звуки должны быть в паках самого клиента."}
+  ],
+  "files": [
+    {
+      "path": "pack.mcmeta",
+      "side": "both",
+      "required": true,
+      "schema": "pack_mcmeta_rwat.schema.json",
+      "en": "Pack metadata: Minecraft's pack section and the rwat block.",
+      "ru": "Метаданные пака: секция pack Minecraft и блок rwat."
+    },
+    {
+      "path": "data/<namespace>/wagon_types/<id>.json",
+      "side": "server",
+      "id": "<namespace>:<id>",
+      "schema": "wagon_type.schema.json",
+      "en": "Wagon type: geometry, physics, floor, doors, cab. Synced to the clients.",
+      "ru": "Тип вагона: геометрия, физика, пол, двери, кабина. Синхронизируется клиентам."
+    },
+    {
+      "path": "assets/<namespace>/wagon_models/<id>.json",
+      "side": "client",
+      "id": "<namespace>:<id>",
+      "schema": "wagon_model.schema.json",
+      "en": "Wagon model of the type with the same id: OBJ, animations, liveries, sounds.",
+      "ru": "Модель типа с тем же id: OBJ, анимации, ливреи, звуки."
+    },
+    {
+      "path": "assets/<namespace>/rail_models/<id>.json",
+      "side": "both",
+      "id": "<namespace>:<id>",
+      "schema": "rail_model.schema.json",
+      "en": "Rail style: the track tile. The client draws it, the server lays the bed from it.",
+      "ru": "Стиль рельсов: тайл пути. Клиент рисует, сервер по нему кладёт полотно."
+    },
+    {
+      "path": "assets/<namespace>/lang/<lang>.json",
+      "side": "client",
+      "en": "Names: the lang keys below, Minecraft's usual lang file.",
+      "ru": "Названия: lang-ключи ниже, обычный lang-файл Minecraft."
+    },
+    {
+      "path": "assets/<namespace>/<any path>.obj, .mtl, .png, .anim, .ogg",
+      "side": "client",
+      "en": "Assets the declarations name, anywhere under assets/<namespace>/. Paths in lower case (Minecraft resource locations).",
+      "ru": "Ассеты, на которые ссылаются декларации, где угодно внутри assets/<namespace>/. Пути — строчными (ресурсы Minecraft)."
+    }
+  ],
+  "tooling_files": [
+    {
+      "path": "packs/<name>.json",
+      "schema": "recipe.schema.json",
+      "en": "IR → RWAT conversion recipe (tools/ir2rwat.py). Not part of a pack.",
+      "ru": "Рецепт конвертации IR → RWAT (tools/ir2rwat.py). Не входит в пак."
+    },
+    {
+      "path": "packs/<name>/<id>.json",
+      "schema": "recipe_override.schema.json",
+      "en": "Per-type conversion override in the recipe's overrides_dir. Not part of a pack.",
+      "ru": "Оверрайд конвертации на тип в папке overrides_dir рецепта. Не входит в пак."
+    }
+  ],
+  "frames": [
+    {
+      "id": "obj",
+      "name": "OBJ frame",
+      "x-name-ru": "Кадр OBJ",
+      "axes": {"x": "along the car, front towards −X", "y": "up", "z": "across, +Z = left side looking forward"},
+      "x-axes-ru": {"x": "вдоль вагона, перёд — к −X", "y": "вверх", "z": "поперёк, +Z — левый борт по ходу"},
+      "origin": "the model's origin: the car's centre on the track axis; the wheel tread's bottom (the rail head) at y = −0.03, the axles at y = 0.5",
+      "x-origin-ru": "начало координат модели: центр вагона на оси пути; низ круга катания колеса (головка рельса) на y = −0.03, оси колёсных пар на y = 0.5",
+      "unit": "block",
+      "en": "The frame of the model as Blender exports it (IR convention, 1 unit = 1 block). From format 1 every markup coordinate of a wagon type — floor zones, doors, chairs — and of the converter's floor options is written in this frame, so the numbers read off in Blender go into the JSON unchanged (R6). The loader converts the markup into the engine's own frame; the converter, floorgen and the generated MVP pack work in this one.",
+      "ru": "Кадр модели, как её экспортирует Blender (конвенция IR, 1 единица = 1 блок). С формата 1 все координаты разметки типа — зоны пола, двери, кресла — и параметров пола конвертера пишутся в этом кадре: числа, снятые в Blender, идут в JSON без пересчёта (R6). Загрузчик сам переводит разметку во внутренний кадр движка; конвертер, floorgen и сгенерированный пак MVP работают в этом."
+    },
+    {
+      "id": "legacy",
+      "name": "Legacy RWAT model frame",
+      "x-name-ru": "Старый кадр модели RWAT",
+      "axes": {"x": "across, +X = left side looking forward", "y": "up", "z": "along the car, +Z forward"},
+      "x-axes-ru": {"x": "поперёк, +X — левый борт по ходу", "y": "вверх", "z": "вдоль вагона, +Z — вперёд"},
+      "origin": "the car's centre; y = 0 is the track spline, the rail head at y = 0.40625",
+      "x-origin-ru": "центр вагона; y = 0 — сплайн пути, головка рельса на y = 0.40625",
+      "unit": "block",
+      "en": "The engine's internal frame, the one it computes and renders in; every wagon type before format 1 was written in it. Packs no longer write it, and the engine reads every type's markup in the OBJ frame, a pack without rwat.format too: a file from before format 1 is translated by the formulas below, or its zones, doors and chairs land turned a quarter round.",
+      "ru": "Внутренний кадр движка — в нём он считает и рисует; в нём написаны все типы до формата 1. Паки в нём больше не пишут, и разметку любого типа движок читает в кадре OBJ, у пака без rwat.format тоже: файл, написанный до формата 1, переводят по формулам ниже, иначе его зоны, двери и кресла встанут повёрнутыми на четверть оборота."
+    },
+    {
+      "id": "rail_tile",
+      "name": "Rail tile frame",
+      "x-name-ru": "Кадр тайла рельсов",
+      "axes": {"x": "along the track", "y": "up", "z": "across: the gauge, rails at z = ±0.8125"},
+      "x-axes-ru": {"x": "вдоль пути", "y": "вверх", "z": "поперёк: колея, рельсы на z = ±0.8125"},
+      "origin": "the tile's centre on the track axis; the rail head at y = 0.40625",
+      "x-origin-ru": "центр тайла на оси пути; головка рельса на y = 0.40625",
+      "unit": "block",
+      "en": "The OBJ of a rail style: the tile is centred on x = 0 and repeats every tile_length.",
+      "ru": "OBJ стиля рельсов: тайл центрирован на x = 0 и повторяется через tile_length."
+    }
+  ],
+  "frame_conversion": {
+    "y_lift": 0.43625,
+    "y_lift_formula": "0.40625 (rail head over the track spline) + 0.03 (tread bottom under the OBJ origin)",
+    "x-y_lift_formula-ru": "0.40625 (головка рельса над сплайном пути) + 0.03 (низ круга катания под началом OBJ)",
+    "obj_to_legacy": {"x": "z_obj", "y": "y_obj + 0.43625", "z": "−x_obj"},
+    "legacy_to_obj": {"x": "−z", "y": "y − 0.43625", "z": "x"},
+    "boxes": "A box's min and max swap on the negated axis: min.x_obj = −max.z, max.x_obj = −min.z.",
+    "x-boxes-ru": "У коробки min и max меняются местами по оси со сменой знака: min.x_obj = −max.z, max.x_obj = −min.z.",
+    "angles": "A chair's yaw is the same in both frames: 0 = forward, +90 = towards the right side.",
+    "x-angles-ru": "Поворот кресла yaw одинаков в обоих кадрах: 0 — вперёд, +90 — к правому борту.",
+    "along_track": "Offsets along the car — bogies (type and model), couplers, length — are '+ = forward' distances in every frame (in the OBJ, + forward is −X).",
+    "x-along_track-ru": "Смещения вдоль вагона — bogies (типа и модели), couplers, length — это расстояния «+ — вперёд» в любом кадре (в OBJ «+ вперёд» — это −X).",
+    "example": {"legacy": {"min": [0.344, 1.811, -10.844], "max": [1.031, 4.061, -10.781]}, "obj": {"min": [10.781, 1.375, 0.344], "max": [10.844, 3.625, 1.031]}}
+  },
+  "lang_keys": [
+    {
+      "key": "wagon.<namespace>.<id>",
+      "en": "The wagon type's name: stock picker, item, /rwat. Fallback: the type id.",
+      "ru": "Название типа вагона: выбор состава, предмет, /rwat. Без ключа — id типа.",
+      "code": ["consist/RollingStockItem.java:234"]
+    },
+    {
+      "key": "rail.<namespace>.<id>",
+      "en": "The rail style's name in the rail item's style picker. Fallback: the style id.",
+      "ru": "Название стиля рельсов в выборе стиля предмета «рельсы». Без ключа — id стиля.",
+      "code": ["rail/RailItem.java:588"]
+    },
+    {
+      "key": "light.<namespace>.<id>.<group>",
+      "en": "A light group's name on type <namespace>:<id> (group as the OBJ names it, case matters): the driver's light menu and the caption of a cab control of that group. Looked up in order: this key, the mod's light.railswheelsandtrains.<group>, a _LABEL_ (the menu takes any control's of the group, the caption its own control's), and last the group code in the menu or the control kind's generic name in the caption.",
+      "ru": "Название группы света у типа <namespace>:<id> (группа как в OBJ, регистр важен): меню света машиниста и подпись органа этой группы под прицелом. Ищется по порядку: этот ключ, ключ мода light.railswheelsandtrains.<группа>, _LABEL_ (меню берёт его у любого органа группы, подпись — у своего органа), последним — код группы в меню и общее название вида органа в подписи.",
+      "code": ["client/LightNames.java:24", "client/gui/DriverPanelScreen.java:757", "client/ClientCabInteract.java:397"]
+    }
+  ],
+  "mod_light_groups": {
+    "en": "Light groups the mod names itself (light.railswheelsandtrains.<group>).",
+    "ru": "Группы света, которые мод называет сам (light.railswheelsandtrains.<группа>).",
+    "groups": ["IL", "FHL", "RHL", "FBL", "RBL", "BBL", "FEL", "REL", "NL", "BgL", "BHL"],
+    "code": ["src/main/resources/assets/railswheelsandtrains/lang/en_us.json"]
+  },
+  "not_translated": {
+    "en": "Not translatable: livery ids, _LABEL_ captions, rail style names the converter writes (en_us only).",
+    "ru": "Не переводятся: id ливрей, подписи _LABEL_, названия стилей рельсов от конвертера (только en_us)."
+  },
+  "keywords": [
+    {"keyword": "description", "en": "English description.", "ru": "Описание по-английски."},
+    {"keyword": "x-description-ru", "en": "The same description in Russian.", "ru": "То же описание по-русски."},
+    {"keyword": "default", "en": "The value the engine takes when the key is absent, when it is a constant.", "ru": "Значение, которое движок берёт без ключа, если это константа."},
+    {"keyword": "x-engine-default", "en": "The engine's value when the key is absent and it is figured from other fields (a formula). x-engine-default-ru is its Russian wording where it needs words.", "ru": "Значение движка без ключа, когда оно считается из других полей (формула). x-engine-default-ru — русская формулировка, где нужны слова."},
+    {"keyword": "x-engine-default-ru", "en": "The Russian wording of x-engine-default, for the reference where a formula needs words; the English one is used when it is absent.", "ru": "Русская формулировка x-engine-default для справочника там, где формуле нужны слова; без неё берётся английская."},
+    {"keyword": "x-unit", "en": "The unit of a number (see units).", "ru": "Единица числа (см. units)."},
+    {"keyword": "x-frame", "en": "The coordinate frame of a point or box (see frames).", "ru": "Кадр координат точки или коробки (см. frames)."},
+    {"keyword": "x-status", "en": "How far the engine follows the field: reserved or pending-engine (see statuses); x-status-note / x-status-note-ru say what exactly.", "ru": "Насколько движок следует полю: reserved или pending-engine (см. statuses); x-status-note / x-status-note-ru говорят, что именно."},
+    {"keyword": "x-status-note", "en": "What exactly the engine does not follow in a field marked x-status, in English; x-status-note-ru is the same in Russian.", "ru": "Что именно движок не выполняет в поле с x-status, по-английски; x-status-note-ru — то же по-русски."},
+    {"keyword": "deprecated", "en": "An old form the engine still reads; write the new one.", "ru": "Старая форма, которую движок ещё читает; пишите новую."},
+    {"keyword": "x-file", "en": "Where the file a schema describes lives in a pack.", "ru": "Где в паке лежит файл, который описывает схема."},
+    {"keyword": "x-code", "en": "The code that reads the file, relative to src/main/java/com/muzhik17/trainsmod/ or tools/.", "ru": "Код, который читает файл, — от src/main/java/com/muzhik17/trainsmod/ или tools/."},
+    {"keyword": "x-keys", "en": "The constant of the code that lists an object's keys, <file>#<NAME> (the file as in x-code): any other key is warned about. The test SchemaKeysTest and validate_pack.py --self-check hold the object's properties equal to it; every closed object of a pack file has one.", "ru": "Константа кода, в которой перечислены ключи объекта, <файл>#<ИМЯ> (файл — как в x-code): о любом другом ключе предупреждают. Тест SchemaKeysTest и validate_pack.py --self-check держат свойства объекта равными ей; она есть у каждого закрытого объекта файлов пака."}
+  ],
+  "statuses": [
+    {"status": "reserved", "label-ru": "Зарезервировано", "en": "parsed but not modelled: setting it changes nothing in game, and the loader warns when it is set.", "ru": "разбирается, но не моделируется: в игре ничего не меняет, загрузчик предупреждает, если поле задано."},
+    {"status": "pending-engine", "label-ru": "Движок пока", "en": "format 1 says so and the engine catches up in a coming wave of the roadmap; until then it behaves as the note says.", "ru": "так говорит формат 1, а движок догоняет в ближайшей волне карты; до тех пор он ведёт себя, как сказано в примечании."}
+  ],
+  "units": [
+    {"unit": "block", "en": "block (= 1 m)", "ru": "блок (= 1 м)"},
+    {"unit": "t", "en": "tonne", "ru": "т"},
+    {"unit": "km/h", "en": "km/h", "ru": "км/ч"},
+    {"unit": "kW", "en": "kW", "ru": "кВт"},
+    {"unit": "kN", "en": "kN", "ru": "кН"},
+    {"unit": "N", "en": "N", "ru": "Н"},
+    {"unit": "N·s/m", "en": "N·s/m", "ru": "Н·с/м"},
+    {"unit": "N·s²/m²", "en": "N·s²/m²", "ru": "Н·с²/м²"},
+    {"unit": "s", "en": "second", "ru": "с"},
+    {"unit": "deg", "en": "degree", "ru": "°"},
+    {"unit": "multiplier", "en": "multiplier", "ru": "×"}
+  ],
+  "schemas": [
+    "pack_mcmeta_rwat.schema.json",
+    "wagon_type.schema.json",
+    "wagon_model.schema.json",
+    "rail_model.schema.json",
+    "recipe.schema.json",
+    "recipe_override.schema.json",
+    "common.schema.json"
+  ]
+}

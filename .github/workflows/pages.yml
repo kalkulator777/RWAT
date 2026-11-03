@@ -1,0 +1,89 @@
+# Publishes the pack editor to GitHub Pages (docs/proposals/editor.md §5.4):
+# https://kalkulator777.github.io/RWAT/ — the editor, and the pack schema at
+# https://kalkulator777.github.io/RWAT/schema/*.json, where the schemas' $id point.
+# The site's build copies schema/ into it byte for byte (editor/vite.config.ts).
+#
+# Only from main: on a push to main that changes what the site is built from, or by
+# hand (Actions → Pages → Run workflow) with main chosen. Builds of other branches
+# are CI's artifact `editor-site` (ci.yml, job editor), not the site.
+#
+# A separate workflow so that the check of every push does not hold the rights to
+# publish (pages: write, id-token: write); those are the deploy job's alone.
+#
+# Pages have to be switched on once in the repository's settings (Settings → Pages →
+# Source: GitHub Actions); until then configure-pages fails the run.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'editor/**'
+      - 'schema/**'
+      - 'tools/ir2rwat.py'
+      - 'tools/floorgen.py'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One publication at a time; one that has started is never cancelled halfway.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the site
+    # A run started by hand from another branch does nothing.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: editor
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: editor/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build the site with the schema
+        run: npm run build
+
+      - name: Check the schema is in the site
+        run: |
+          for f in ../schema/*.json; do
+            cmp "$f" "dist/schema/$(basename "$f")"
+          done
+
+      - name: Set up Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: editor/dist
+
+  deploy:
+    name: Publish to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

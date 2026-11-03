@@ -80,7 +80,7 @@ class FloorUnionTest {
     @Test
     void fromTheVestibule_downTheSlantedAisle_aLittleAskew() {
         // the platzkart's front vestibule and the slanted aisle's steps behind
-        // it (amendorf.json); walking back (−Z) a hair to +X, as from the
+        // it (amendorf.json, here in model space); walking back (−Z) a hair to +X, as from the
         // gangway: the step off the vestibule eases onto the aisle — before
         // the slack it stopped at the vestibule's edge, z 11.2 (play-test)
         WagonType.Interior floor = new WagonType.Interior(List.of(
@@ -140,6 +140,7 @@ class FloorUnionTest {
                 zone(-1.0, 0.0, 1.0, 5.0), zone(1.2, 0.0, 1.6, 5.0)));
         List<String> problems = FloorCheck.problems(type(alone, List.of()));
         assertEquals(1, problems.size(), problems.toString());
-        assertTrue(problems.get(0).startsWith("zone 1 holds no place"), problems.get(0));
+        // its size as the pack has it, x along the car by z across
+        assertTrue(problems.get(0).startsWith("zone 1 holds no place a player fits (5.00 x 0.40)"), problems.get(0));
     }
 }

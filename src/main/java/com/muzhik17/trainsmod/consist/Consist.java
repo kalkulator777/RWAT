@@ -6,11 +6,14 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+import org.joml.Vector3d;
+
 import com.muzhik17.trainsmod.network.TrackPathSpec;
 import com.muzhik17.trainsmod.path.HermiteSegmentPath;
 import com.muzhik17.trainsmod.path.RailGraph;
 import com.muzhik17.trainsmod.path.RailSegment;
 import com.muzhik17.trainsmod.path.RoutePath;
+import com.muzhik17.trainsmod.path.StrandedTrack;
 import com.muzhik17.trainsmod.physics.AutoHandbrake;
 import com.muzhik17.trainsmod.physics.ControlResponse;
 import com.muzhik17.trainsmod.physics.PhysicsTuning;
@@ -36,9 +39,11 @@ import net.minecraft.nbt.Tag;
  * <p>The path is described by a {@link TrackPathSpec} — either a route
  * through the rail graph (Layer 1) or the v0 debug straight line — and is
  * materialized lazily against the graph; on graph edits ({@code revision}
- * change) it is rebuilt, and if the route no longer exists the consist
- * freezes. The wagon list always has length 1 in v0 but is a list from day
- * one (SPEC principle #6).
+ * change) it is rebuilt, and if none of the rails under the train survived
+ * the consist is <i>stranded</i> where it stands (decision D2, 2026-10-21):
+ * on the curves under it, kept apart from the graph, it stands still for
+ * good — seen and broken up by blows at its bogies as before. The wagon list
+ * always has length 1 in v0 but is a list from day one (SPEC principle #6).
  *
  * <p><b>Coupling (SPEC §6.12):</b> consists that run into each other on one
  * track merge, and a consist can be cut at a coupler; both {@link #rebase}
@@ -52,6 +57,10 @@ import net.minecraft.nbt.Tag;
  * forward is where the <i>active cab</i> looks. {@link #cabFacing} records
  * which way along the path that cab faces (a cab in a flipped slot looks
  * towards −s), so the traction direction is {@code reverser × cabFacing}.
+ *
+ * <p><b>Types:</b> the composition holds its wagons' types as the registry
+ * had them when the consist was made or loaded; when the packs are reloaded
+ * the manager hands it the types as they are now ({@link #retype}, D1).
  */
 public final class Consist {
 
@@ -173,21 +182,36 @@ public final class Consist {
      * built track joins the route, demolishing track merely shortens it, a
      * switch the train has cleared routes it by its current position, and a
      * route round a cycle never runs out. The legs under the train never
-     * change while it stands on them. Null only if nothing of the old route
-     * survived (the consist stays frozen until it is removed).
+     * change while it stands on them. If none of them survived, the consist
+     * is stranded on the curves it stood on ({@link #strand}).
+     * Null only for a consist stranded before those curves were known — a
+     * saved route already gone when first materialized — until
+     * {@link #strandAlong} places it.
      */
     public TrackPath resolvePath(RailGraph graph, int revision) {
         if (cachedRevision != revision) {
+            if (pathSpec instanceof TrackPathSpec.Stranded && cachedPath != null) {
+                cachedRevision = revision; // its curves don't depend on the graph
+                return cachedPath;
+            }
             if (pathSpec instanceof TrackPathSpec.Route route
                     && cachedPath instanceof RoutePath oldPath) {
                 RailGraph.Span span = spanUnderTrain(route, oldPath);
                 if (survives(graph, span)) {
                     rewalk(graph, route, oldPath, span);
                 } else {
-                    reanchor(graph, route, oldPath);
+                    reanchor(graph, route, oldPath, span);
                 }
             }
             materialize(graph, revision);
+            if (cachedPath == null && pathSpec instanceof TrackPathSpec.Route) {
+                // gone before it was ever materialized here (a save from before
+                // stranding, or the rails' data lost): no curves to cut — and
+                // never again looked up in the graph, where its ids may come
+                // back as other track
+                pathSpec = TrackPathSpec.Stranded.UNPLACED;
+                keptLegs = null;
+            }
         }
         if (pathSpec instanceof TrackPathSpec.Route route && cachedPath instanceof RoutePath path) {
             RailGraph.Span span = spanUnderTrain(route, path);
@@ -254,14 +278,17 @@ public final class Consist {
     }
 
     /**
-     * A leg under the train was demolished: anchor to the leg of the old
-     * route nearest the head that survived (the head's own if it did), re-walk
-     * the route around it and remap {@code s}. A head whose segment is gone
-     * snaps onto the end of the anchor facing it — the train stands at the new
-     * track end instead of freezing. If nothing survived, leave the spec as
-     * is — {@code resolve} then returns null and the consist freezes.
+     * A leg under the train was demolished: anchor to the leg the train stood
+     * on ({@code span}) nearest the head that survived (the head's own if it
+     * did), re-walk the route around it and remap {@code s}. A head whose
+     * segment is gone snaps onto the end of the anchor facing it — the train
+     * stands at the new track end instead of freezing. If none of the legs
+     * under it survived, the consist is stranded where it stands on the old
+     * route's curves ({@link #strand}) — it doesn't jump to what is left of
+     * the route farther off (decision D2, 2026-10-21).
      */
-    private void reanchor(RailGraph graph, TrackPathSpec.Route route, RoutePath oldPath) {
+    private void reanchor(RailGraph graph, TrackPathSpec.Route route, RoutePath oldPath,
+            RailGraph.Span span) {
         double headS = oldPath.loop() ? wrapIntoLoop(oldPath)
                 : Math.clamp(s, 0.0, oldPath.length());
         int headLeg = oldPath.partIndexAt(headS);
@@ -269,11 +296,12 @@ public final class Consist {
         double frac = legLen > 1.0e-9 ? (headS - oldPath.partStartS(headLeg)) / legLen : 0.0;
 
         List<RailGraph.RouteLeg> oldLegs = route.legs();
-        // nearest surviving leg, searching outward from the head's leg
+        // nearest surviving leg under the train, searching outward from the head's leg
         int anchor = -1;
         for (int off = 0; off < oldLegs.size() && anchor < 0; off++) {
             for (int candidate : new int[] {headLeg - off, headLeg + off}) {
                 if (candidate >= 0 && candidate < oldLegs.size()
+                        && span.legs().contains(oldLegs.get(candidate))
                         && graph.segment(oldLegs.get(candidate).segmentId()) != null) {
                     anchor = candidate;
                     break;
@@ -281,7 +309,8 @@ public final class Consist {
             }
         }
         if (anchor < 0) {
-            return; // the whole route is gone — frozen
+            strand(oldPath); // nothing under the train is left
+            return;
         }
         if (anchor != headLeg) {
             // head segment demolished: snap to the surviving leg's end facing it
@@ -306,6 +335,49 @@ public final class Consist {
     private double wrapIntoLoop(RoutePath oldPath) {
         double wrapped = s % oldPath.length();
         return wrapped < 0.0 ? wrapped + oldPath.length() : wrapped;
+    }
+
+    /**
+     * None of the rails under the train survived (decision D2, 2026-10-21):
+     * the consist stays where it stands, on the old route's curves under it
+     * (as far as the kept legs reach) cut out and kept apart from the graph
+     * ({@link StrandedTrack}). It stands still from now on — no physics, no
+     * coupling — and new track built there, whatever its ids, never takes it;
+     * players break it up by blows at its bogies.
+     */
+    private void strand(RoutePath oldPath) {
+        double margin = KEEP_MARGIN + Math.abs(v) * KEEP_TICKS;
+        standOn(StrandedTrack.cut(oldPath, Coupling.rearEndS(composition, s) - margin,
+                Coupling.frontEndS(composition, s) + margin));
+    }
+
+    /**
+     * Place a consist stranded before its curves were known
+     * ({@link TrackPathSpec.Stranded#UNPLACED}) by wagon {@code index} as it
+     * stands: its bogies' midpoint at {@code body}, its axis (towards +s)
+     * {@code axis}. The train is laid out on a straight piece through that
+     * wagon — exact for it, and for the rest on straight track; on a curve
+     * the others line up with it. No-op unless unplaced.
+     */
+    public void strandAlong(int index, Vector3d body, Vector3d axis) {
+        if (!(pathSpec instanceof TrackPathSpec.Stranded stranded) || stranded.placed()) {
+            return;
+        }
+        double atS = (composition.frontBogieS(s, index) + composition.rearBogieS(s, index)) * 0.5;
+        standOn(StrandedTrack.line(body, axis, atS, Coupling.rearEndS(composition, s) - KEEP_MARGIN,
+                Coupling.frontEndS(composition, s) + KEEP_MARGIN));
+        cachedPath = null;
+        cachedRevision = -1;
+    }
+
+    /** Stand on a cut for good: renumber {@code s} onto it, at rest. */
+    private void standOn(StrandedTrack.Cut cut) {
+        pathSpec = TrackPathSpec.Stranded.of(cut.track());
+        keptLegs = null;
+        v = 0.0;
+        // same train, new numbering: clients shift their buffered s instead of sliding
+        shiftFrame(-cut.startS());
+        s -= cut.startS();
     }
 
     public double s() {
@@ -358,6 +430,27 @@ public final class Consist {
     /** New make-up on the same route and head (the front part of a split). */
     void setComposition(ConsistComposition composition) {
         this.composition = composition;
+    }
+
+    /**
+     * The packs were reloaded (D1, {@code /reload}): {@code next} is this
+     * make-up with every wagon's type as it is now ({@code WagonTypes.rebind}).
+     * The middle of the train stays where it stood ({@link
+     * ConsistComposition#headKeepingMiddle}) and the whole train is held on
+     * an open {@code path} as it is when running; {@code s} is renumbered
+     * with a frame shift, so the clients lay the new wagons out where the
+     * train stands instead of sliding it across the change. Speed and
+     * handles stay. {@code path} null — a consist not placed yet — is taken
+     * as it comes.
+     */
+    void retype(ConsistComposition next, TrackPath path) {
+        double head = next.headKeepingMiddle(composition, s);
+        if (path != null && !path.loop()) {
+            head = next.headOnPath(head, path.length());
+        }
+        composition = next;
+        shiftFrame(head - s);
+        s = head;
     }
 
     /**
@@ -578,7 +671,8 @@ public final class Consist {
      * speed (the handles stay where the driver left them;
      * {@link #endImpactKmh} tells how hard). On a closed loop there are no
      * ends: {@code s} grows (or shrinks) freely and the path wraps it during
-     * sampling, so the consist circulates.
+     * sampling, so the consist circulates. A stranded consist ({@link #strand})
+     * takes the handles but doesn't move.
      *
      * @return true if state changed (needs saving)
      */
@@ -602,9 +696,11 @@ public final class Consist {
         indBrakeEffort = ControlResponse.approach(indBrakeEffort, indBrakeNotch / (double) NOTCHES,
                 response.independentApplyS(), response.independentReleaseS());
 
-        v = TrainPhysics.step(path, s, v, composition,
-                new TrainPhysics.Controls(pull, throttleEffort, brakeEffort, indBrakeEffort),
-                handbrakeMask(), tuning);
+        // a stranded train (decision D2) has no rails under it: it stands where it stood
+        v = pathSpec instanceof TrackPathSpec.Stranded ? 0.0
+                : TrainPhysics.step(path, s, v, composition,
+                        new TrainPhysics.Controls(pull, throttleEffort, brakeEffort, indBrakeEffort),
+                        handbrakeMask(), tuning);
 
         endImpactKmh = 0.0;
         if (v != 0.0) {
@@ -807,9 +903,11 @@ public final class Consist {
     /**
      * Composition from NBT. An id no pack declares (a removed pack) becomes the
      * placeholder carrying that same id (SPEC §6.5), so the next save writes it
-     * back unchanged and the consist recovers when the pack returns. A save
-     * from before compositions gets one placeholder per saved wagon — the
-     * wagon count must keep matching the saved wagon entities.
+     * back unchanged and the consist recovers when the pack returns — or
+     * sooner: a {@code /reload} that brings the type back retypes the running
+     * consist ({@link #retype}). A save from before compositions gets one
+     * placeholder per saved wagon — the wagon count must keep matching the
+     * saved wagon entities.
      */
     private static ConsistComposition loadComposition(CompoundTag tag) {
         ListTag slots = tag.getList("Composition", Tag.TAG_COMPOUND);

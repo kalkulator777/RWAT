@@ -11,7 +11,9 @@ import net.minecraft.resources.ResourceLocation;
  * Client→server request to open or close a wagon door (SPEC v1.5, doors): the
  * client picked the door leaf under the crosshair on right-click and names the
  * wagon (network entity id) and the door's index in the type's door list. The
- * server re-checks reach before toggling — the client only says which door.
+ * server re-checks the player may before toggling — in the game, within
+ * reach of the leaf, the driver's key for a door into a cab ({@code
+ * TouchRules}) — the client only says which door.
  */
 public record DoorTogglePayload(int wagonId, int door) implements CustomPacketPayload {
 

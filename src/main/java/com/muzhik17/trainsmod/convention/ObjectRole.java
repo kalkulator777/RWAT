@@ -25,7 +25,8 @@ import java.util.regex.Pattern;
  *       {@code _OFFSET_<f>} shifts its value; {@code _RANGE_<min>_<max>} maps a
  *       gauge's reading; {@code TL_<amount>_<axis>} slides it;</li>
  *   <li>{@code <KIND>_<n>_ROT[_<degrees>]} is the control's <b>pivot</b>: a
- *       flat marker whose centre is the hinge and whose normal the axis;</li>
+ *       marker whose bounding-box centre is the hinge and whose long direction
+ *       the axis ({@link PivotAxis});</li>
  *   <li>lights: {@code _LCG_<name>} lights with control group {@code name}
  *       ({@code LINVERT} inverts), {@code FULLBRIGHT} glows when lit,
  *       {@code HEADLIGHT_<n>} is a lamp with a flare, {@code _0X<RRGGBB>} its
@@ -36,6 +37,12 @@ import java.util.regex.Pattern;
  *
  * <p>A Blender copy suffix ({@code .001}) at the end of a name is dropped
  * first: {@code DOOR_3_INTERIOR_LCG_IL.001} lights with {@code IL}.
+ *
+ * <p>Ported: {@code editor/src/ports/objectRole.ts} ({@code objectName}:
+ * {@code obj.ts}), {@code tools/ir2rwat.py} ({@code LIGHT_GROUP},
+ * {@code DOOR_KEY}, {@code HEADLIGHT}), {@code tools/floorgen.py}
+ * ({@code object_name_of}); golden: {@code fixtures/golden/object_role/},
+ * {@code obj/}.
  *
  * @param control      the control this object belongs to, or null
  * @param pivotDegrees if this object is its control's pivot marker: the swing
@@ -101,7 +108,7 @@ public record ObjectRole(Control control, float pivotDegrees, String lightGroup,
      * One control, as its objects' names declare it.
      *
      * @param key    {@code <KIND>_<n>} as written, e.g. {@code THROTTLE_1} — the
-     *               identity shared by all of the control's objects
+     *               identity of the control's objects; {@code id} is its number, held at int range
      * @param group  the control group it sets/reads: {@code _CG_<name>}, else {@code key}
      * @param global {@code GLOBAL}: setting it sets the group on the whole train
      * @param slideX source-space slide at full travel ({@code TL_<f>_X}), blocks; same for Y/Z
@@ -142,6 +149,34 @@ public record ObjectRole(Control control, float pivotDegrees, String lightGroup,
     /** True if this object lights up with a control group (or always, if it has none). */
     public boolean lit() {
         return fullbright || headlight;
+    }
+
+    /** The object faces belong to before any {@code o}/{@code g} line, or after one that names nothing. */
+    public static final String DEFAULT_OBJECT = "default";
+
+    /**
+     * The name an OBJ {@code o} or {@code g} line gives the object the faces
+     * after it belong to: the whole rest of the line after the keyword,
+     * trimmed, the blanks inside kept ({@code o Door Leaf} is {@code Door Leaf});
+     * {@link #DEFAULT_OBJECT} if it names nothing; null if the line is no
+     * {@code o}/{@code g} line. Blanks are the characters up to U+0020, as
+     * {@link String#trim} and Blender's reader take them, so a tab parts the
+     * keyword from the name as well. That is how Blender's importer reads an
+     * object's name, and Immersive Railroading's (UniversalModCore) OBJ
+     * parser: the rest of the line. Blender's exporter writes a blank in an
+     * object's name as {@code _}, so its files have none; the first-word
+     * reading the loader once had cut a hand-written {@code o Door Leaf} to
+     * {@code Door}, while the converter's port of the rule
+     * ({@code tools/floorgen.py}, {@code object_name_of}) took the whole line.
+     */
+    public static String objectName(String line) {
+        String text = line.trim();
+        if (text.isEmpty() || (text.charAt(0) != 'o' && text.charAt(0) != 'g')
+                || (text.length() > 1 && text.charAt(1) > ' ')) {
+            return null;
+        }
+        String name = text.substring(1).trim();
+        return name.isEmpty() ? DEFAULT_OBJECT : name;
     }
 
     /** Read one object name. */
@@ -241,7 +276,7 @@ public record ObjectRole(Control control, float pivotDegrees, String lightGroup,
             while (tl.find()) {
                 slide[tl.group(2).charAt(0) - 'X'] = parseFloat(tl.group(1), 0.0F);
             }
-            return new Control(kind, Integer.parseInt(m.group(2)), key,
+            return new Control(kind, number(m.group(2)), key,
                     cg.find() ? cg.group(1) : key,
                     label.find() ? label.group(1).replace('^', ' ') : null,
                     hasToken(name, "TOGGLE"), hasToken(name, "PRESS"), hasToken(name, "INVERT"),
@@ -275,6 +310,23 @@ public record ObjectRole(Control control, float pivotDegrees, String lightGroup,
             return Float.parseFloat(text);
         } catch (NumberFormatException e) {
             return fallback;
+        }
+    }
+
+    /**
+     * The number of a control from the digits of its name. Digits too many for
+     * an int ({@code THROTTLE_12345678901}) are still a control — the name says
+     * so, and so does the converter's port of the rule, whose numbers don't
+     * overflow — and the number is held at {@link Integer#MAX_VALUE}. It only
+     * numbers the control: what tells one control from another is its
+     * {@code key}, which keeps the digits as written. Throwing here took the
+     * whole model down at load, for one object's name.
+     */
+    private static int number(String digits) {
+        try {
+            return Integer.parseInt(digits);
+        } catch (NumberFormatException e) {
+            return Integer.MAX_VALUE; // the pattern allows only digits: the value is too big
         }
     }
 }

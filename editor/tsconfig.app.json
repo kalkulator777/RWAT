@@ -1,0 +1,11 @@
+{
+  "$comment": "The site as the browser runs it: no Node types, so browser code cannot lean on process, Buffer or node:fs. Tests and Node-only helpers (*.node.ts, such as the node-fs pack source) are checked by tsconfig.test.json.",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["vite/client", "vite-plugin-pwa/client"],
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo"
+  },
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/**/*.node.ts"]
+}

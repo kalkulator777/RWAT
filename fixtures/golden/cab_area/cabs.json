@@ -1,0 +1,408 @@
+{
+  "description": "A type as the pack writes it (format 1, OBJ frame; only interior, doors and cab matter here) -> its driver's cabs (kinematics.CabArea.of after stock.WagonTypeParser.parse): cabs (how many), cab_of_chair (per cab.seats chair, -1 none), cab_of_piece (per piece of the floor with every door between zones shut, floor_region's pieces in Z order: CabArea.cabAt at its centre, -1 none; [] without a floor), cab_doors (the doors that want the driver's key, as open-door bits), passenger_side_doors [the model's +X side, its -X side] (CabArea.passengerSideDoors), and the answers to the questions, asked in the model frame: cab_at [[x, z]], nearest_chair [[cab, x, z]], cab_door [index], facing [[flipped, chair or -1 for none]], left_side [[flipped, facing]].",
+  "frame": "model",
+  "tolerance": 0,
+  "cases": [
+    {
+      "id": "example-shunter",
+      "note": "the example pack's shunter: one cab of two zones, both chairs in it, fixed steps never want the key",
+      "input": {
+        "cab_at": [[0, -2.3], [-0.8, -3.6], [0.5, -3.6], [0, 0]],
+        "nearest_chair": [[0, -0.8, -1.65], [0, 0.8, -2.95], [0, 0, 0], [1, 0, -2]],
+        "cab_door": [0, 1, 2],
+        "facing": [[false, 0], [true, 0], [false, 1], [true, 1]]
+      },
+      "input_file": {"type": "run/rwat_packs/RwatExamplePack/data/rwat_example/wagon_types/shunter.json"},
+      "expected": {
+        "cabs": 1,
+        "cab_of_chair": [0, 0],
+        "cab_of_piece": [0, 0, 0, 0, 0],
+        "cab_doors": 0,
+        "passenger_side_doors": [0, 0],
+        "cab_at": [0, 0, -1, -1],
+        "nearest_chair": [0, 1, 0, -1],
+        "cab_door": [false, false, false],
+        "facing": [1, -1, -1, 1],
+        "left_side": []
+      }
+    },
+    {
+      "id": "example-coach",
+      "note": "the example pack's coach: no cab, so no part of it is one; its side doors are the passengers'",
+      "input": {"cab_at": [[0, 0], [0, 8.75]], "cab_door": [0, 6]},
+      "input_file": {"type": "run/rwat_packs/RwatExamplePack/data/rwat_example/wagon_types/coach.json"},
+      "expected": {
+        "cabs": 0,
+        "cab_of_chair": [],
+        "cab_of_piece": [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
+        "cab_doors": 0,
+        "passenger_side_doors": [5, 10],
+        "cab_at": [-1, -1],
+        "nearest_chair": [],
+        "cab_door": [false, false],
+        "facing": [],
+        "left_side": []
+      }
+    },
+    {
+      "id": "example-gondola",
+      "note": "the example pack's gondola: no floor, no cab",
+      "input": {"cab_at": [[0, 0]], "left_side": [[false, 1], [false, -1], [true, 1], [true, -1]]},
+      "input_file": {"type": "run/rwat_packs/RwatExamplePack/data/rwat_example/wagon_types/gondola.json"},
+      "expected": {
+        "cabs": 0,
+        "cab_of_chair": [],
+        "cab_of_piece": [],
+        "cab_doors": 0,
+        "passenger_side_doors": [0, 0],
+        "cab_at": [-1],
+        "nearest_chair": [],
+        "cab_door": [],
+        "facing": [],
+        "left_side": [1, -1, -1, 1]
+      }
+    },
+    {
+      "id": "two-cabs-and-an-engine-room",
+      "note": "a double-ended locomotive: two cabs parted from the engine room by inner doors; the assistant's chair joins the driver's cab, the rear chair makes the second",
+      "input": {
+        "type": {
+          "length": 17.5,
+          "bogies": [5.5, -5.5],
+          "mass_t": 116,
+          "cab": {
+            "seats": [{"at": [-7.6, 2.2, 0.5]}, {"at": [-7.6, 2.2, -0.9]}, {"at": [7.6, 2.2, -0.5], "yaw": 180}]
+          },
+          "interior": [
+            {"min": [-8.0, 1.4, -1.4], "max": [-6.0, 3.9, 1.4]},
+            {"min": [-5.9, 1.4, -0.6], "max": [5.9, 3.9, 0.6]},
+            {"min": [6.0, 1.4, -1.4], "max": [8.0, 3.9, 1.4]}
+          ],
+          "doors": [
+            {"id": "cab_front_l", "min": [-7.5, 1.4, 1.4], "max": [-6.7, 3.4, 1.46]},
+            {"id": "cab_front_r", "min": [-7.5, 1.4, -1.46], "max": [-6.7, 3.4, -1.4]},
+            {"id": "room_front", "min": [-6.0, 1.4, -0.4], "max": [-5.9, 3.4, 0.4], "inner": true},
+            {"id": "room_rear", "min": [5.9, 1.4, -0.4], "max": [6.0, 3.4, 0.4], "inner": true},
+            {"id": "cab_rear_l", "min": [6.7, 1.4, 1.4], "max": [7.5, 3.4, 1.46]},
+            {"id": "cab_rear_r", "min": [6.7, 1.4, -1.46], "max": [7.5, 3.4, -1.4]},
+            {"id": "room_side", "min": [-2.0, 1.4, 0.6], "max": [-1.0, 3.4, 0.66]}
+          ]
+        },
+        "cab_at": [[0, 7.0], [0, 0], [0, -7.0], [0, 5.95], [1.2, 7.0], [3, 0]],
+        "nearest_chair": [[0, 0.5, 7.6], [0, -1.0, 7.6], [1, 0, -7], [1, 0, 7], [-1, 0, 0], [2, 0, 0]],
+        "cab_door": [0, 1, 2, 3, 4, 5, 6, -1, 32],
+        "facing": [[false, 0], [true, 0], [false, 2], [true, 2], [false, -1], [true, -1]],
+        "left_side": [[false, 1], [true, -1]]
+      },
+      "expected": {
+        "cabs": 2,
+        "cab_of_chair": [0, 0, 1],
+        "cab_of_piece": [1, 1, 1, -1, -1, -1, 0, 0, 0],
+        "cab_doors": 63,
+        "passenger_side_doors": [0, 0],
+        "cab_at": [0, -1, 1, -1, -1, -1],
+        "nearest_chair": [0, 1, 2, 2, -1, -1],
+        "cab_door": [true, true, true, true, true, true, false, false, false],
+        "facing": [1, -1, -1, 1, 1, -1],
+        "left_side": [1, 1]
+      }
+    },
+    {
+      "id": "an-assistants-chair-by-the-back-wall",
+      "note": "the assistant's chair stands in the wall nearer the vestibule behind the cab than the cab, but the cab found already is within sitting reach: it is that cab's",
+      "input": {
+        "type": {
+          "length": 20,
+          "bogies": [6.5, -6.5],
+          "mass_t": 60,
+          "cab": {"seats": [{"at": [-8.5, 2.2, 0.6]}, {"at": [-6.85, 2.2, -0.9]}]},
+          "interior": [
+            {"min": [-9.0, 1.4, -1.3], "max": [-7.0, 3.9, 1.3]},
+            {"min": [-6.8, 1.4, -1.3], "max": [-5.8, 3.9, 1.3]}
+          ],
+          "doors": [
+            {"id": "partition", "min": [-7.0, 1.4, -0.4], "max": [-6.8, 3.4, 0.4], "inner": true},
+            {"id": "vestibule_l", "min": [-6.6, 1.4, 1.3], "max": [-6.0, 3.4, 1.36], "group": "DrL"}
+          ]
+        },
+        "cab_at": [[0, 8.0], [0, 6.3]],
+        "nearest_chair": [[0, 0, 8], [0, -1, 6.85]],
+        "cab_door": [0, 1]
+      },
+      "expected": {
+        "cabs": 1,
+        "cab_of_chair": [0, 0],
+        "cab_of_piece": [-1, -1, -1, 0, 0, 0],
+        "cab_doors": 1,
+        "passenger_side_doors": [2, 0],
+        "cab_at": [0, -1],
+        "nearest_chair": [0, 1],
+        "cab_door": [true, false],
+        "facing": [],
+        "left_side": []
+      }
+    },
+    {
+      "id": "chairs-at-both-ends-of-one-floor",
+      "note": "chairs far apart on one floor without a door between: one cab, the whole floor",
+      "input": {
+        "type": {
+          "length": 22,
+          "bogies": [7, -7],
+          "mass_t": 80,
+          "cab": {"seats": [{"at": [-9.5, 2.2, 0]}, {"at": [9.5, 2.2, 0], "yaw": 180}]},
+          "interior": [{"min": [-10.0, 1.4, -1.3], "max": [10.0, 3.9, 1.3]}],
+          "doors": [
+            {"id": "side_l", "min": [-0.5, 1.4, 1.3], "max": [0.5, 3.4, 1.36], "group": "DoorsL"},
+            {"id": "side_r", "min": [-0.5, 1.4, -1.36], "max": [0.5, 3.4, -1.3], "group": "DoorsR"}
+          ]
+        },
+        "cab_at": [[0, 0], [0, 9.5], [0, -9.5]],
+        "nearest_chair": [[0, 0, 5], [0, 0, -5], [0, 0, 0]],
+        "facing": [[false, 1], [true, 1]]
+      },
+      "expected": {
+        "cabs": 1,
+        "cab_of_chair": [0, 0],
+        "cab_of_piece": [0, 0, 0],
+        "cab_doors": 3,
+        "passenger_side_doors": [0, 0],
+        "cab_at": [0, 0, 0],
+        "nearest_chair": [0, 1, 0],
+        "cab_door": [],
+        "facing": [-1, 1],
+        "left_side": []
+      }
+    },
+    {
+      "id": "a-cab-door-group",
+      "note": "a head car: the partition door and the cab's side door lead into the cab, a vestibule door of their group ('cabd', case aside) opens with them and wants the key too; a fixed opening of the group never does; only grouped side doors are the passengers'",
+      "input": {
+        "type": {
+          "length": 20,
+          "bogies": [7, -7],
+          "mass_t": 50,
+          "cab": {"seats": [{"at": [-9.5, 2.2, 0.5]}]},
+          "interior": [
+            {"min": [-10.0, 1.4, -1.4], "max": [-8.2, 3.9, 1.4]},
+            {"min": [-8.0, 1.4, -1.4], "max": [-6.5, 3.9, 1.4]},
+            {"min": [-6.3, 1.4, -1.0], "max": [9.0, 3.9, 1.0]}
+          ],
+          "doors": [
+            {
+              "id": "cab_partition",
+              "min": [-8.2, 1.4, -0.4],
+              "max": [-8.0, 3.4, 0.4],
+              "inner": true,
+              "group": "CabD"
+            },
+            {"id": "cab_side_l", "min": [-9.5, 1.4, 1.4], "max": [-8.7, 3.4, 1.46], "group": "CabD"},
+            {"id": "vestibule_l", "min": [-7.6, 1.4, 1.4], "max": [-6.8, 3.4, 1.46], "group": "cabd"},
+            {"id": "vestibule_r", "min": [-7.6, 1.4, -1.46], "max": [-6.8, 3.4, -1.4], "group": "DrR"},
+            {"id": "saloon_door", "min": [-6.5, 1.4, -0.4], "max": [-6.3, 3.4, 0.4], "inner": true},
+            {"id": "saloon_l", "min": [0.0, 1.4, 1.0], "max": [0.8, 3.4, 1.06]},
+            {
+              "id": "cab_r_opening",
+              "min": [-9.5, 1.4, -1.46],
+              "max": [-8.7, 3.4, -1.4],
+              "fixed": true,
+              "group": "CabD"
+            }
+          ]
+        },
+        "cab_at": [[0, 9.0], [0, 7.2], [0, 0]],
+        "cab_door": [0, 1, 2, 3, 4, 5, 6]
+      },
+      "expected": {
+        "cabs": 1,
+        "cab_of_chair": [0],
+        "cab_of_piece": [-1, -1, -1, -1, -1, -1, 0, 0, 0],
+        "cab_doors": 7,
+        "passenger_side_doors": [0, 8],
+        "cab_at": [0, -1, -1],
+        "nearest_chair": [],
+        "cab_door": [true, true, true, false, false, false, false],
+        "facing": [],
+        "left_side": []
+      }
+    },
+    {
+      "id": "a-fixed-archway-between-zones-that-dont-touch",
+      "note": "an always-open archway between the cab and a walkway that don't touch: the cab ends at it, and a doorway without a leaf never wants the key",
+      "input": {
+        "type": {
+          "length": 16,
+          "bogies": [5, -5],
+          "mass_t": 90,
+          "cab": {"seats": [{"at": [-6.5, 2.2, 0.5]}]},
+          "interior": [
+            {"min": [-7.5, 1.4, -1.4], "max": [-5.5, 3.9, 1.4]},
+            {"min": [-5.4, 1.4, 0.7], "max": [7.5, 3.9, 1.4]}
+          ],
+          "doors": [
+            {"id": "arch", "min": [-5.5, 1.4, 0.75], "max": [-5.4, 3.4, 1.35], "inner": true, "fixed": true},
+            {"id": "walkway_steps", "min": [6.5, 1.4, 1.4], "max": [7.3, 3.4, 1.46]}
+          ]
+        },
+        "cab_at": [[0, 6.5], [1.05, 0]],
+        "cab_door": [0, 1]
+      },
+      "expected": {
+        "cabs": 1,
+        "cab_of_chair": [0],
+        "cab_of_piece": [-1, -1, -1, 0, 0, 0],
+        "cab_doors": 0,
+        "passenger_side_doors": [0, 0],
+        "cab_at": [0, -1],
+        "nearest_chair": [],
+        "cab_door": [false, false],
+        "facing": [],
+        "left_side": []
+      }
+    },
+    {
+      "id": "a-walkway-touching-the-cab",
+      "note": "a walkway zone that touches the cab joins it: its steps lead into the cab",
+      "input": {
+        "type": {
+          "length": 16,
+          "bogies": [5, -5],
+          "mass_t": 90,
+          "cab": {"seats": [{"at": [-6.5, 2.2, 0.5]}]},
+          "interior": [
+            {"min": [-7.5, 1.4, -1.4], "max": [-5.5, 3.9, 1.4]},
+            {"min": [-5.5, 1.4, 0.7], "max": [7.5, 3.9, 1.4]}
+          ],
+          "doors": [{"id": "walkway_steps", "min": [6.5, 1.4, 1.4], "max": [7.3, 3.4, 1.46]}]
+        },
+        "cab_at": [[0, 6.5], [1.05, 0], [1.05, -7.2]],
+        "cab_door": [0]
+      },
+      "expected": {
+        "cabs": 1,
+        "cab_of_chair": [0],
+        "cab_of_piece": [0, 0, 0, 0, 0, 0, 0],
+        "cab_doors": 1,
+        "passenger_side_doors": [0, 0],
+        "cab_at": [0, 0, 0],
+        "nearest_chair": [],
+        "cab_door": [true],
+        "facing": [],
+        "left_side": []
+      }
+    },
+    {
+      "id": "a-shut-door-between-touching-zones",
+      "note": "zones that touch in the doorway of an inner door: shut, it is wall, so the cab ends at it, and the door leads into the cab",
+      "input": {
+        "type": {
+          "length": 16,
+          "bogies": [5, -5],
+          "mass_t": 90,
+          "cab": {"seats": [{"at": [-6.5, 2.2, 0.5]}]},
+          "interior": [
+            {"min": [-7.5, 1.4, -1.4], "max": [-5.5, 3.9, 1.4]},
+            {"min": [-5.5, 1.4, -1.4], "max": [7.5, 3.9, 1.4]}
+          ],
+          "doors": [
+            {"id": "cab_door", "min": [-5.55, 1.4, -1.4], "max": [-5.45, 3.4, 1.4], "inner": true},
+            {"id": "room_l", "min": [0, 1.4, 1.4], "max": [0.8, 3.4, 1.46]}
+          ]
+        },
+        "cab_at": [[0, 6.5], [0, 0], [0, 5.5]],
+        "cab_door": [0, 1]
+      },
+      "expected": {
+        "cabs": 1,
+        "cab_of_chair": [0],
+        "cab_of_piece": [-1, -1, -1, -1, -1, 0, 0, 0, 0, 0],
+        "cab_doors": 1,
+        "passenger_side_doors": [0, 0],
+        "cab_at": [0, -1, -1],
+        "nearest_chair": [],
+        "cab_door": [true, false],
+        "facing": [],
+        "left_side": []
+      }
+    },
+    {
+      "id": "a-floor-nobody-fits-on",
+      "note": "chairs over a floor narrower than a player: there is no cab, no chair is in one",
+      "input": {
+        "type": {
+          "length": 16,
+          "bogies": [5, -5],
+          "mass_t": 90,
+          "cab": {"seats": [{"at": [-6.5, 2.2, 0]}, {"at": [6.5, 2.2, 0], "yaw": 180}]},
+          "interior": [{"min": [-7.5, 1.4, -0.25], "max": [7.5, 3.9, 0.25]}],
+          "doors": [{"id": "end", "min": [-7.55, 1.4, -0.2], "max": [-7.5, 3.4, 0.2], "connecting": true}]
+        },
+        "cab_at": [[0, 0]],
+        "nearest_chair": [[0, 0, 6.5], [-1, 0, 6.5]],
+        "cab_door": [0]
+      },
+      "expected": {
+        "cabs": 0,
+        "cab_of_chair": [-1, -1],
+        "cab_of_piece": [],
+        "cab_doors": 0,
+        "passenger_side_doors": [0, 0],
+        "cab_at": [-1],
+        "nearest_chair": [-1, -1],
+        "cab_door": [false],
+        "facing": [],
+        "left_side": []
+      }
+    },
+    {
+      "id": "a-cab-without-chairs",
+      "note": "a cab section without chairs: no walkable cab",
+      "input": {
+        "type": {
+          "length": 16,
+          "bogies": [5, -5],
+          "mass_t": 90,
+          "cab": {},
+          "interior": [{"min": [-7.5, 1.4, -1.4], "max": [7.5, 3.9, 1.4]}],
+          "doors": [{"id": "side_l", "min": [-0.5, 1.4, 1.4], "max": [0.5, 3.4, 1.46], "group": "DoorsL"}]
+        },
+        "cab_at": [[0, 0]],
+        "cab_door": [0]
+      },
+      "expected": {
+        "cabs": 0,
+        "cab_of_chair": [],
+        "cab_of_piece": [-1, -1, -1],
+        "cab_doors": 0,
+        "passenger_side_doors": [1, 0],
+        "cab_at": [-1],
+        "nearest_chair": [],
+        "cab_door": [false],
+        "facing": [],
+        "left_side": []
+      }
+    },
+    {
+      "id": "chairs-without-a-floor",
+      "note": "chairs on a type with no interior: no walkable cab, the chairs are in none",
+      "input": {
+        "type": {"length": 16, "bogies": [5, -5], "mass_t": 90, "cab": {"seats": [{"at": [-6.5, 2.2, 0]}]}},
+        "cab_at": [[0, 6.5]],
+        "nearest_chair": [[0, 0, 6.5]],
+        "facing": [[false, 0]]
+      },
+      "expected": {
+        "cabs": 0,
+        "cab_of_chair": [-1],
+        "cab_of_piece": [],
+        "cab_doors": 0,
+        "passenger_side_doors": [0, 0],
+        "cab_at": [-1],
+        "nearest_chair": [-1],
+        "cab_door": [],
+        "facing": [1],
+        "left_side": []
+      }
+    }
+  ]
+}

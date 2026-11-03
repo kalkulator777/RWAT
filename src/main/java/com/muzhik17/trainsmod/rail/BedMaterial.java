@@ -13,6 +13,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.material.MapColor;
+import net.minecraft.world.level.material.PushReaction;
 
 /**
  * What the track bed under a segment is made of (SPEC §2.2): the material
@@ -84,12 +85,18 @@ public enum BedMaterial {
         return new ItemStack(look == null ? Items.BARRIER : look.asItem());
     }
 
-    /** The bed block's properties: sound and map colour of the look-alike, one hardness for all. */
+    /**
+     * The bed block's properties: sound and map colour of the look-alike, one
+     * hardness for all. No piston moves it, as none moves obsidian: the bed
+     * lies where the graph's rails are, and a block pushed off them would be
+     * bed no track wants, leaving a hole under the rails.
+     */
     public BlockBehaviour.Properties properties() {
         BlockBehaviour.Properties properties = BlockBehaviour.Properties.of()
                 .strength(STRENGTH)
                 .sound(sound)
-                .noOcclusion();
+                .noOcclusion()
+                .pushReaction(PushReaction.BLOCK);
         if (look == null) {
             return properties.mapColor(MapColor.NONE).noTerrainParticles();
         }

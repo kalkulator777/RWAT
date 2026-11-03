@@ -1,6 +1,7 @@
 package com.muzhik17.trainsmod.network;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
+import com.muzhik17.trainsmod.convention.GroupName;
 
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -12,8 +13,11 @@ import net.minecraft.resources.ResourceLocation;
  * the mouse ({@link Scope#SWITCH}, {@link Scope#GLOBAL_SWITCH}: on wagon
  * {@code targetId}), or a light group switched from the driver's menu
  * ({@link Scope#PANEL}: on every wagon of consist {@code targetId}). The
- * server checks the sender may operate it: aboard (or within reach of) that
- * wagon / driving that train.
+ * server checks the sender may operate it ({@code TouchRules}): aboard (or
+ * within reach of) that wagon / driving that train; the driver's key, if the
+ * server wants it, for a switch of a car with a cab and for a {@code GLOBAL}
+ * one of a train with a cab anywhere in it. A {@code value} that is NaN or
+ * infinite drops the packet ({@link PacketNumbers}); the rest is held to 0..1.
  */
 public record ControlGroupPayload(int targetId, Scope scope, String group, float value)
         implements CustomPacketPayload {
@@ -28,8 +32,11 @@ public record ControlGroupPayload(int targetId, Scope scope, String group, float
         PANEL
     }
 
-    /** Longest group name accepted (the model's {@code CG_<name>} token). */
-    public static final int MAX_NAME = 32;
+    /**
+     * Longest group name accepted (the model's {@code CG_<name>} token): a
+     * longer one fails the codec — the model loader drops it ({@link GroupName}).
+     */
+    public static final int MAX_NAME = GroupName.MAX_LENGTH;
 
     public static final CustomPacketPayload.Type<ControlGroupPayload> TYPE =
             new CustomPacketPayload.Type<>(

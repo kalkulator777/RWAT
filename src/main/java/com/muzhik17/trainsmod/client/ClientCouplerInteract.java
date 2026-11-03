@@ -5,7 +5,9 @@ import java.util.List;
 import org.joml.Vector3d;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
+import com.muzhik17.trainsmod.consist.TouchRules;
 import com.muzhik17.trainsmod.consist.WagonEntity;
+import com.muzhik17.trainsmod.consist.WagonTouch;
 import com.muzhik17.trainsmod.kinematics.HullCollision;
 import com.muzhik17.trainsmod.network.HandbrakePayload;
 import com.muzhik17.trainsmod.network.UncouplePayload;
@@ -47,6 +49,11 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * ({@link ClientWagonRay}); a click takes the last frame's pick. Runs before the door pick: with the crowbar
  * in hand a coupler beats a door next to it, and a miss falls through to the
  * doors and the item (which hints what it is for).
+ *
+ * <p>What the server would refuse isn't sent ({@link TouchRules}, as the
+ * server decides): a spectator picks nothing, and a coupler isn't cut where
+ * the player may not build (adventure mode) — the click is still the
+ * coupler's, it just does nothing.
  */
 @EventBusSubscriber(modid = RailsWheelsAndTrains.MODID, value = Dist.CLIENT)
 public final class ClientCouplerInteract {
@@ -71,10 +78,18 @@ public final class ClientCouplerInteract {
     private ClientCouplerInteract() {
     }
 
-    /** Pick for this frame, against the cars as drawn ({@link ClientWagonRay}) — with the crowbar only. */
+    /**
+     * Pick for this frame, against the cars as drawn ({@link ClientWagonRay})
+     * — with the crowbar only, and not for a spectator.
+     */
     static void frame(Minecraft mc, LocalPlayer player, ClientWagonRay.Look look) {
-        framePick = player.getMainHandItem().is(RailsWheelsAndTrains.CROWBAR.get())
+        framePick = player.getMainHandItem().is(RailsWheelsAndTrains.CROWBAR.get()) && WagonTouch.present(player)
                 ? pick(mc, player, look) : null;
+    }
+
+    /** True from an uncouple or handbrake click till the use button is released ({@link ClientWagonRay#onUseHeld}). */
+    static boolean holdsUse() {
+        return !armed;
     }
 
     @SubscribeEvent(priority = EventPriority.HIGH)
@@ -93,9 +108,12 @@ public final class ClientCouplerInteract {
             return; // no coupler under the crosshair: doors / the item's hint
         }
         event.setCanceled(true); // the click belongs to the coupler / the handbrake
-        event.setSwingHand(armed);
-        if (armed) {
-            armed = false;
+        armed = false; // a new click: the repeats of a held one never get here
+        // a pick is within reach; what the server would refuse isn't sent
+        boolean may = TouchRules.allows(pick.handbrake() ? TouchRules.Action.HANDBRAKE : TouchRules.Action.UNCOUPLE,
+                WagonTouch.facts(player, pick.wagon()).inReach(true));
+        event.setSwingHand(may);
+        if (may) {
             PacketDistributor.sendToServer(pick.handbrake()
                     ? new HandbrakePayload(pick.wagon().getId())
                     : new UncouplePayload(pick.wagon().getId(), pick.front()));
@@ -107,6 +125,11 @@ public final class ClientCouplerInteract {
         if (!Minecraft.getInstance().options.keyUse.isDown()) {
             armed = true;
         }
+    }
+
+    /** Drop the pick (logout, another level): its wagon went with the level. */
+    public static void clear() {
+        framePick = null;
     }
 
     /**

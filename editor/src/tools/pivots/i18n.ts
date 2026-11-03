@@ -1,0 +1,56 @@
+import { defineStrings } from '../../i18n/define';
+
+export default defineStrings({
+  ru: {
+    'tools.pivots.title': 'Шарниры',
+    'tools.pivots.hint': 'Только показ: маркер шарнира органа, ось со знаком, дуга хода на ROT, сдвиг TL, конечное положение призраком',
+    'tools.pivots.howto':
+      'Только показ: здесь ничего не правится. Выберите орган в списке или кликом по нему в виде — видно его шарнир (точка), ось (стрелка), дугу хода от положения 0 до 1, сдвиг TL и конечное положение призраком.',
+    'tools.pivots.reading': 'Модель читается…',
+    'tools.pivots.controls': '{count, plural, =0 {Органов нет} one {# орган} few {# органа} many {# органов} other {# органа}}',
+    'tools.pivots.none': 'В модели нет органов управления (<KIND>_<n>).',
+    'tools.pivots.turns': 'поворот {degrees}°',
+    'tools.pivots.slides': 'сдвиг TL',
+    'tools.pivots.still': 'не движется',
+    'tools.pivots.pivot': 'Шарнир',
+    'tools.pivots.noPivot': 'нет маркера …_ROT…',
+    'tools.pivots.axis': 'Ось',
+    'tools.pivots.degrees': 'ROT, °',
+    'tools.pivots.slide': 'TL',
+    'tools.pivots.travel': 'Ход',
+    'tools.pivots.travel.values': 'значение от {from} до {to}',
+    'tools.pivots.sign':
+      'Кадр OBJ. Поворот на положительный угол — против часовой стрелки, если смотреть с конца стрелки оси (правило правой руки). Ось не туда — в Blender: маркер и порядок его вершин.',
+    'tools.pivots.select': 'Выделить объекты органа',
+    'tools.pivots.legend': 'Легенда наложений шарниров',
+    'tools.pivots.legend.pivot': 'шарнир (точка) и ось (стрелка)',
+    'tools.pivots.legend.travel': 'дуга хода и сдвиг TL',
+    'tools.pivots.legend.ghost': 'конечное положение (призрак)',
+  },
+  en: {
+    'tools.pivots.title': 'Hinges',
+    'tools.pivots.hint': 'Shows only: a control’s hinge marker, its signed axis, the arc of its ROT travel, its TL slide, its end as a ghost',
+    'tools.pivots.howto':
+      'Shows only: nothing is edited here. Choose a control in the list or by a click on it in the view: its hinge (a point), axis (an arrow), the arc of its travel from position 0 to 1, its TL slide and its end as a ghost show.',
+    'tools.pivots.reading': 'The model is being read…',
+    'tools.pivots.controls': '{count, plural, =0 {No controls} one {# control} other {# controls}}',
+    'tools.pivots.none': 'The model has no cab controls (<KIND>_<n>).',
+    'tools.pivots.turns': 'turns {degrees}°',
+    'tools.pivots.slides': 'TL slide',
+    'tools.pivots.still': 'does not move',
+    'tools.pivots.pivot': 'Hinge',
+    'tools.pivots.noPivot': 'no …_ROT… marker',
+    'tools.pivots.axis': 'Axis',
+    'tools.pivots.degrees': 'ROT, °',
+    'tools.pivots.slide': 'TL',
+    'tools.pivots.travel': 'Travel',
+    'tools.pivots.travel.values': 'value from {from} to {to}',
+    'tools.pivots.sign':
+      'OBJ frame. A positive angle turns anticlockwise looking from the axis arrow’s head (the right-hand rule). An axis the wrong way round is mended in Blender: the marker and its vertices’ order.',
+    'tools.pivots.select': 'Select the control’s objects',
+    'tools.pivots.legend': 'Legend of the hinges’ overlays',
+    'tools.pivots.legend.pivot': 'hinge (a point) and axis (an arrow)',
+    'tools.pivots.legend.travel': 'arc of travel and TL slide',
+    'tools.pivots.legend.ghost': 'end of travel (a ghost)',
+  },
+});

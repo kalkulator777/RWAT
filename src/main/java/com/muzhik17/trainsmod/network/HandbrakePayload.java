@@ -10,8 +10,9 @@ import net.minecraft.resources.ResourceLocation;
 /**
  * Client→server request to set or release a wagon's handbrake (SPEC §5.3):
  * the crowbar on the wagon's body, or the handbrake wheel in its cab — the
- * client picked the wagon (network entity id). The server re-checks the reach
- * before turning the wheel.
+ * client picked the wagon (network entity id). The server turns it only for a
+ * rider of that car by its wheel, or by the crowbar within reach of the car's
+ * body ({@code TouchRules}).
  */
 public record HandbrakePayload(int wagonId) implements CustomPacketPayload {
 

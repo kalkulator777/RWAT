@@ -1,0 +1,378 @@
+package com.muzhik17.trainsmod.pack;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Set;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+
+/** The {@code "rwat"} block of {@code pack.mcmeta}, format v1 (roadmap R5, phase 1 item 4). */
+class RwatPackMetaTest {
+
+    private static final String PACK = "\"pack\": { \"pack_format\": 34, \"description\": \"x\" }";
+    private static final String ID = "rwat/Example";
+
+    private static RwatPackMeta.Result parse(String rwat) {
+        return RwatPackMeta.parse("{ " + PACK + ", \"rwat\": " + rwat + " }", ID);
+    }
+
+    private static PackProblem only(RwatPackMeta.Result result) {
+        assertEquals(1, result.problems().size(), result.problems().toString());
+        return result.problems().get(0);
+    }
+
+    /** Every field of v1, as the schema describes it: no problem at all. */
+    @Test
+    void readsTheFullBlock() {
+        RwatPackMeta.Result result = parse("""
+                { "format": 1, "name": "Example Pack", "version": "1.2.0",
+                  "authors": ["Ann", "Bob"], "license": "CC0-1.0", "description": "Two cars" }""");
+
+        assertTrue(result.accepted());
+        assertEquals(List.of(), result.problems());
+        assertEquals(new RwatPackMeta(1, "Example Pack", "1.2.0", List.of("Ann", "Bob"), "CC0-1.0", "Two cars"),
+                result.meta());
+    }
+
+    /** Only the format is needed; the rest stays unset. */
+    @Test
+    void readsAFormatOnlyBlock() {
+        RwatPackMeta.Result result = parse("{ \"format\": 1 }");
+
+        assertTrue(result.accepted());
+        assertEquals(List.of(), result.problems());
+        assertEquals(new RwatPackMeta(1, null, null, List.of(), null, null), result.meta());
+    }
+
+    /** A pack from before the block: loaded as format 1, with a warning. */
+    @Test
+    void noBlockIsFormatOneWithAWarning() {
+        RwatPackMeta.Result result = RwatPackMeta.parse("{ " + PACK + " }", ID);
+
+        assertTrue(result.accepted());
+        assertEquals(1, result.meta().format());
+        PackProblem problem = only(result);
+        assertFalse(problem.isError());
+        assertTrue(problem.message().contains("assuming format 1"), problem.message());
+    }
+
+    /** The block's problems name the pack and its pack.mcmeta, as every loader's do, for the pack report. */
+    @Test
+    void problemsNameThePackAndItsMcmeta(@TempDir Path temp) {
+        PackProblem warning = only(parse("{ \"format\": 1, \"autors\": [\"Ann\"] }"));
+        assertEquals(new PackProblem(PackProblem.Severity.WARNING, ID, "pack.mcmeta", warning.message()), warning);
+
+        PackProblem refused = only(parse("{ \"format\": 2 }"));
+        assertEquals(ID, refused.pack());
+        assertEquals("pack.mcmeta", refused.file());
+
+        PackProblem missing = only(RwatPackMeta.read(temp, ID));
+        assertTrue(missing.isError());
+        assertEquals(ID, missing.pack());
+        assertEquals("pack.mcmeta", missing.file());
+    }
+
+    @Test
+    void blockWithoutFormatIsFormatOneWithAWarning() {
+        RwatPackMeta.Result result = parse("{ \"name\": \"Old Pack\" }");
+
+        assertTrue(result.accepted());
+        assertEquals(1, result.meta().format());
+        assertEquals("Old Pack", result.meta().name());
+        PackProblem problem = only(result);
+        assertFalse(problem.isError());
+        assertTrue(problem.message().contains("assuming format 1"), problem.message());
+    }
+
+    /** A pack made for a newer RWAT is not loaded: this one can't know what its keys mean. */
+    @Test
+    void newerFormatIsRefused() {
+        RwatPackMeta.Result result = parse("{ \"format\": 2, \"name\": \"Future Pack\" }");
+
+        assertFalse(result.accepted());
+        PackProblem problem = only(result);
+        assertTrue(problem.isError());
+        assertTrue(problem.message().contains("format 2"), problem.message());
+        assertTrue(problem.message().contains("up to " + RwatPackMeta.SUPPORTED_FORMAT), problem.message());
+    }
+
+    /**
+     * A pack that is not loaded is still named in the listing: the
+     * descriptive fields are read whatever the format says, and the format
+     * itself when it is a number.
+     */
+    @Test
+    void aPackLeftOutForItsFormatIsStillDescribed() {
+        RwatPackMeta.Result result = parse("""
+                { "format": 2, "name": "Future Pack", "version": "3.0", "authors": ["Ann"],
+                  "license": "CC0-1.0", "description": "Needs a newer RWAT" }""");
+
+        assertFalse(result.accepted());
+        assertEquals(new RwatPackMeta(2, "Future Pack", "3.0", List.of("Ann"), "CC0-1.0", "Needs a newer RWAT"),
+                result.meta());
+        PackProblem problem = only(result);
+        assertTrue(problem.isError());
+        assertEquals(ID, problem.pack());
+
+        // the scan's record of the pack says which pack it is
+        PackInfo info = new PackInfo("Future.zip", Path.of("Future.zip"), result.meta(), result.problems(), false);
+        assertEquals("Future Pack 3.0", info.label());
+        assertEquals("Future Pack", info.displayName());
+    }
+
+    /**
+     * Whatever is wrong with the format, the name and version are read; the
+     * format is kept only when it is a number this RWAT can hold. A refused
+     * pack's other fields are not scolded about: the one error is the news.
+     */
+    @Test
+    void aBrokenFormatStillLeavesTheNameAndVersion() {
+        for (String format : List.of("\"1\"", "true", "null", "[1]", "1.5", "0", "-1", "1e30")) {
+            RwatPackMeta.Result result = parse("{ \"format\": " + format
+                    + ", \"name\": \"Odd Pack\", \"version\": \"7\" }");
+
+            assertFalse(result.accepted(), format);
+            assertEquals("Odd Pack", result.meta().name(), format);
+            assertEquals("7", result.meta().version(), format);
+            assertEquals(RwatPackMeta.UNKNOWN_FORMAT, result.meta().format(), format);
+            assertTrue(only(result).isError(), format);
+        }
+        // a format past any int is not a number to show; one that fits is
+        assertEquals(3, parse("{ \"format\": 3, \"name\": \"N\" }").meta().format());
+
+        // keys and values this RWAT may not know the meaning of, in a format it doesn't read: no warnings
+        RwatPackMeta.Result future = parse("""
+                { "format": 2, "name": "Future", "version": 5, "livery_sets": [], "authors": 7 }""");
+        assertFalse(future.accepted());
+        assertEquals("Future", future.meta().name());
+        assertNull(future.meta().version(), "a version that is no string reads as not given");
+        only(future);
+    }
+
+    /** With no block to read there is nothing to describe the pack by. */
+    @Test
+    void anUnreadableBlockLeavesNoDescription() {
+        for (String block : List.of("1", "\"mvp\"", "null", "[]")) {
+            assertNull(parse(block).meta(), block);
+        }
+        assertNull(RwatPackMeta.parse("{ \"pack\": ", ID).meta());
+        assertNull(RwatPackMeta.parse("[]", ID).meta());
+    }
+
+    /** Accepted or not, a pack read from disk carries its description: a zip with a newer format is named. */
+    @Test
+    void aZipLeftOutForItsFormatIsNamedWhenReadFromDisk(@TempDir Path temp) throws IOException {
+        Path zip = temp.resolve("Future.zip");
+        try (ZipOutputStream out = new ZipOutputStream(Files.newOutputStream(zip))) {
+            out.putNextEntry(new ZipEntry("pack.mcmeta"));
+            out.write(("{ " + PACK + ", \"rwat\": { \"format\": 9, \"name\": \"From Zip\", \"version\": \"1\" } }")
+                    .getBytes(StandardCharsets.UTF_8));
+            out.closeEntry();
+        }
+
+        RwatPackMeta.Result result = RwatPackMeta.read(zip, ID);
+        assertFalse(result.accepted());
+        assertEquals("From Zip", result.meta().name());
+        assertEquals(9, result.meta().format());
+    }
+
+    /** A number past any int is still "newer", not a crash. */
+    @Test
+    void hugeFormatIsRefusedAsNewer() {
+        RwatPackMeta.Result result = parse("{ \"format\": 1e30 }");
+
+        assertFalse(result.accepted());
+        assertTrue(only(result).message().contains("newer"), only(result).message());
+    }
+
+    /** Not a number — a string of digits included — is an error, and the pack is not loaded. */
+    @Test
+    void formatThatIsNotANumberIsRefused() {
+        for (String format : List.of("\"1\"", "true", "null", "[1]", "{ \"v\": 1 }")) {
+            RwatPackMeta.Result result = parse("{ \"format\": " + format + " }");
+
+            assertFalse(result.accepted(), format);
+            PackProblem problem = only(result);
+            assertTrue(problem.isError(), format);
+            assertTrue(problem.message().contains("must be a number"), problem.message());
+        }
+    }
+
+    @Test
+    void formatThatIsNotAWholePositiveNumberIsRefused() {
+        for (String format : List.of("1.5", "0", "-1")) {
+            RwatPackMeta.Result result = parse("{ \"format\": " + format + " }");
+
+            assertFalse(result.accepted(), format);
+            assertTrue(only(result).message().contains("whole number of 1 or more"), only(result).message());
+        }
+    }
+
+    /** {@code 1.0} is the number one. */
+    @Test
+    void formatOnePointZeroIsOne() {
+        RwatPackMeta.Result result = parse("{ \"format\": 1.0 }");
+
+        assertTrue(result.accepted());
+        assertEquals(1, result.meta().format());
+    }
+
+    @Test
+    void blockThatIsNotAnObjectIsRefused() {
+        for (String block : List.of("1", "\"mvp\"", "null", "[]")) {
+            RwatPackMeta.Result result = parse(block);
+
+            assertFalse(result.accepted(), block);
+            assertTrue(only(result).message().contains("must be an object"), only(result).message());
+        }
+    }
+
+    /** Descriptive fields of the wrong type are warnings: the pack loads, the value is dropped. */
+    @Test
+    void wrongTypedFieldsAreIgnoredWithWarnings() {
+        RwatPackMeta.Result result = parse("""
+                { "format": 1, "name": 5, "version": 1.2, "license": ["MIT"], "description": {},
+                  "authors": { "main": "Ann" } }""");
+
+        assertTrue(result.accepted());
+        assertEquals(new RwatPackMeta(1, null, null, List.of(), null, null), result.meta());
+        assertEquals(5, result.problems().size(), result.problems().toString());
+        assertTrue(result.problems().stream().noneMatch(PackProblem::isError));
+        assertTrue(result.problems().get(0).message().contains("\"rwat.name\" must be a string"),
+                result.problems().get(0).message());
+    }
+
+    /** A lone author written as a string is taken, with a warning; non-strings in the list are skipped. */
+    @Test
+    void authorsAreReadLeniently() {
+        RwatPackMeta.Result lone = parse("{ \"format\": 1, \"authors\": \"Ann\" }");
+        assertEquals(List.of("Ann"), lone.meta().authors());
+        assertFalse(only(lone).isError());
+
+        RwatPackMeta.Result mixed = parse("{ \"format\": 1, \"authors\": [\"Ann\", 7, \" \", \"Bob\"] }");
+        assertEquals(List.of("Ann", "Bob"), mixed.meta().authors());
+        assertTrue(only(mixed).message().contains("strings only"), only(mixed).message());
+    }
+
+    /** Blank and null text is the same as not given, and no problem. */
+    @Test
+    void blankFieldsAreUnset() {
+        RwatPackMeta.Result result = parse("{ \"format\": 1, \"name\": \"  \", \"version\": null, \"authors\": null }");
+
+        assertEquals(List.of(), result.problems());
+        assertEquals(new RwatPackMeta(1, null, null, List.of(), null, null), result.meta());
+    }
+
+    /** A key format v1 doesn't have is a warning naming the known ones (a typo shows). */
+    @Test
+    void unknownKeysAreWarnings() {
+        RwatPackMeta.Result result = parse("{ \"format\": 1, \"autors\": [\"Ann\"] }");
+
+        assertTrue(result.accepted());
+        PackProblem problem = only(result);
+        assertFalse(problem.isError());
+        assertTrue(problem.message().contains("\"rwat.autors\""), problem.message());
+        assertTrue(problem.message().contains("authors"), problem.message());
+    }
+
+    /** The block the converter wrote before format v1 (namespace, converted_from): loaded, with warnings only. */
+    @Test
+    void readsTheConvertersOldBlock() {
+        RwatPackMeta.Result result = parse("""
+                { "name": "Matoi Vanilla Pack", "namespace": "mvp",
+                  "converted_from": ["MVP-IR-1.8-mc1.12.2-by-FrozeRain.zip"],
+                  "license": "CC BY-NC-ND 4.0" }""");
+
+        assertTrue(result.accepted());
+        assertEquals("Matoi Vanilla Pack", result.meta().name());
+        assertEquals("CC BY-NC-ND 4.0", result.meta().license());
+        assertEquals(3, result.problems().size(), result.problems().toString());
+        assertTrue(result.problems().stream().noneMatch(PackProblem::isError));
+    }
+
+    @Test
+    void brokenMcmetaIsRefused() {
+        assertFalse(RwatPackMeta.parse("{ \"pack\": ", ID).accepted());
+        assertFalse(RwatPackMeta.parse("[]", ID).accepted());
+        assertFalse(RwatPackMeta.parse("", ID).accepted());
+    }
+
+    /** A UTF-8 byte order mark before the JSON doesn't matter. */
+    @Test
+    void byteOrderMarkIsSkipped() {
+        RwatPackMeta.Result result = RwatPackMeta.parse("﻿{ " + PACK + ", \"rwat\": { \"format\": 1 } }", ID);
+
+        assertTrue(result.accepted());
+        assertEquals(List.of(), result.problems());
+    }
+
+    /** The same pack.mcmeta reads the same from a folder and a zip; a pack without one is refused. */
+    @Test
+    void readsFromAFolderAndAZip(@TempDir Path temp) throws IOException {
+        String mcmeta = "{ " + PACK + ", \"rwat\": { \"format\": 1, \"name\": \"Zipped\", \"version\": \"3\" } }";
+        Path folder = Files.createDirectories(temp.resolve("Pack"));
+        Files.writeString(folder.resolve("pack.mcmeta"), mcmeta);
+        Path zip = temp.resolve("Pack.zip");
+        try (ZipOutputStream out = new ZipOutputStream(Files.newOutputStream(zip))) {
+            out.putNextEntry(new ZipEntry("pack.mcmeta"));
+            out.write(mcmeta.getBytes(StandardCharsets.UTF_8));
+            out.closeEntry();
+        }
+
+        RwatPackMeta.Result fromFolder = RwatPackMeta.read(folder, ID);
+        RwatPackMeta.Result fromZip = RwatPackMeta.read(zip, ID);
+        assertTrue(fromFolder.accepted());
+        assertEquals("Zipped", fromFolder.meta().name());
+        assertEquals(fromFolder, fromZip);
+
+        Path empty = Files.createDirectories(temp.resolve("Empty"));
+        assertFalse(RwatPackMeta.read(empty, ID).accepted());
+        Path emptyZip = temp.resolve("Empty.zip");
+        try (OutputStream out = new ZipOutputStream(Files.newOutputStream(emptyZip))) {
+            out.flush();
+        }
+        assertFalse(RwatPackMeta.read(emptyZip, ID).accepted());
+        assertFalse(RwatPackMeta.read(temp.resolve("absent.zip"), ID).accepted());
+    }
+
+    /** The generated MVP pack, when present: its block is format 1 as the converter writes it, read without a word. */
+    @Test
+    void readsTheGeneratedMvpPack() {
+        Path mvp = Path.of("run/rwat_packs/MatoiVanillaPack");
+        assumeTrue(Files.isDirectory(mvp), "the generated MVP pack is not here");
+
+        RwatPackMeta.Result result = RwatPackMeta.read(mvp, ID);
+        assertTrue(result.accepted(), result.problems().toString());
+        assertEquals(List.of(), result.problems());
+        assertEquals(1, result.meta().format());
+        assertEquals("Matoi Vanilla Pack", result.meta().name());
+    }
+
+    /** The schema of the block (R4) names the keys the reader knows, no more, no fewer, and requires the format. */
+    @Test
+    void schemaHasTheKeysTheReaderKnows() throws IOException {
+        JsonObject schema = JsonParser.parseString(Files.readString(Path.of("schema/pack_mcmeta_rwat.schema.json")))
+                .getAsJsonObject();
+        JsonObject block = schema.getAsJsonObject("$defs").getAsJsonObject("rwat");
+
+        assertTrue(schema.getAsJsonObject("properties").has(RwatPackMeta.BLOCK));
+        assertEquals(Set.copyOf(RwatPackMeta.KEYS), block.getAsJsonObject("properties").keySet());
+        assertEquals("[\"format\"]", block.get("required").toString());
+    }
+}

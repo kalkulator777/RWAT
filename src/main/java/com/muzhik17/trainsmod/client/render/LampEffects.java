@@ -30,8 +30,8 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
  *   <li><b>Flare</b> — spots facing the camera at the lens: a bright core,
  *       and a wide halo that grows the more you look into the lamp (gone from
  *       behind it), as IR's {@code LightFlare} does.</li>
- *   <li><b>Beam</b> — a soft cone of haze {@link #BEAM_LENGTH} blocks ahead,
- *       drawn as camera-facing spots strung along the axis, each as wide as
+ *   <li><b>Beam</b> — a soft cone of haze {@link HeadlightBeam#LENGTH} blocks
+ *       ahead, drawn as camera-facing spots strung along the axis, each as wide as
  *       the cone there and spaced by a fraction of that width. Spots add up
  *       like light scattered along a sight line through the cone: brightest
  *       on the axis, soft at the edges, and right from any side — from the
@@ -41,7 +41,12 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
  *   <li><b>Light on the track</b> — a long soft spot lying just above the
  *       railheads ahead of the lamp, so the line ahead shows lit up.</li>
  * </ul>
- * All of it shows in the dark and washes out in daylight or under lamps.
+ * All of it shows in the dark and washes out in daylight or under lamps. A
+ * lamp shines as its lens glows ({@code convention.ModelParts#lit}): with no
+ * light group always, else while its group is on — with {@code LINVERT}
+ * while it is off. The sizes are {@link HeadlightBeam}'s;
+ * a car out of view whose light may be in it is still passed to the renderer,
+ * which then queues only the light ({@link WagonRenderer#shouldRender}).
  *
  * <p><b>When it is drawn:</b> wagons are entities, but the glow is queued
  * during the entity pass and drawn later, with the camera-relative positions
@@ -64,22 +69,13 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 @EventBusSubscriber(modid = RailsWheelsAndTrains.MODID, value = Dist.CLIENT)
 public final class LampEffects {
 
-    static final float BEAM_LENGTH = 16.0F;
-    /** The cone's radius at its far end, blocks. */
-    private static final float BEAM_END_RADIUS = 2.4F;
+    // the light's sizes — beam, spots, light on the track, flare — are HeadlightBeam's:
+    // the wagon renderer's culling and the LambDynamicLights light take them from there too
+
     /** Spot spacing along the beam, as a fraction of the cone radius there (smaller = smoother). */
     private static final float BEAM_STEP = 0.45F;
     /** Each beam spot's alpha at the lens (spots overlap ~2/{@link #BEAM_STEP} deep). */
     private static final float BEAM_ALPHA = 0.11F;
-    /** A spot's rim over the cone radius: its falloff leaves ~half of it lit. */
-    private static final float SPOT_SPREAD = 1.7F;
-    /** Light on the track: from this far ahead of the lamp … */
-    private static final float POOL_NEAR = 1.0F;
-    /** … to this far, and this wide each side of the lamp. */
-    private static final float POOL_FAR = 22.0F;
-    private static final float POOL_HALF_WIDTH = 2.6F;
-    /** Height of the track light in the model frame: just above the railheads (0.406). */
-    private static final float POOL_Y = 0.45F;
     private static final float POOL_ALPHA = 0.5F;
 
     /** Segments round a spot. */
@@ -110,7 +106,7 @@ public final class LampEffects {
      *
      * @param body        model space → camera-relative world (the body's pose, turned if flipped)
      * @param camera      the camera's orientation (spots face it)
-     * @param litMask     the model's lit light groups
+     * @param litMask     the model's lit light groups (a lamp shines by {@link StockModel.Headlight#lit})
      * @param packedLight the wagon's light (bright surroundings drown the beam)
      * @param dayLight    0 at night … 1 at noon
      */
@@ -128,7 +124,7 @@ public final class LampEffects {
         Vector3f dir = new Vector3f();
         Vector3f bodyUp = body.transformDirection(new Vector3f(0.0F, 1.0F, 0.0F)).normalize();
         for (StockModel.Headlight lamp : model.headlights()) {
-            if (!StockModel.tagLit(StockModel.tag(lamp.group(), false, false, false), litMask)) {
+            if (!lamp.lit(litMask)) {
                 continue;
             }
             body.transformPosition(lamp.x(), lamp.y(), lamp.z(), centre);
@@ -136,7 +132,7 @@ public final class LampEffects {
             float r = (lamp.rgb() >> 16 & 255) / 255.0F;
             float g = (lamp.rgb() >> 8 & 255) / 255.0F;
             float b = (lamp.rgb() & 255) / 255.0F;
-            float radius = Math.max(lamp.radius(), 0.1F);
+            float radius = Math.max(lamp.radius(), HeadlightBeam.MIN_RADIUS);
             // the camera is at the origin of camera-relative space
             float distance = centre.length();
             float facing = distance < 1.0e-3F ? 1.0F : -centre.dot(dir) / distance;
@@ -147,11 +143,13 @@ public final class LampEffects {
             if (facing > 0.0F) {
                 float glow = 0.35F + 0.65F * darkness;
                 // pulled toward the camera so the lamp's own housing doesn't clip the spots
-                Vector3f lens = new Vector3f(centre).mul(1.0F - Math.min(0.5F, distance * 0.3F)
-                        / Math.max(distance, 1.0e-3F));
-                spot(lens, right, up, radius * 1.6F, r, g, b, 0.9F * glow * (float) Math.sqrt(facing));
+                Vector3f lens = new Vector3f(centre).mul(1.0F
+                        - Math.min(HeadlightBeam.FLARE_PULL, distance * 0.3F) / Math.max(distance, 1.0e-3F));
+                spot(lens, right, up, radius * HeadlightBeam.FLARE_CORE, r, g, b,
+                        0.9F * glow * (float) Math.sqrt(facing));
                 float halo = facing * facing;
-                spot(lens, right, up, radius * (3.0F + 10.0F * halo), r, g, b, 0.4F * glow * halo);
+                spot(lens, right, up, radius * (HeadlightBeam.FLARE_HALO + HeadlightBeam.FLARE_HALO_GROWTH * halo),
+                        r, g, b, 0.4F * glow * halo);
             }
         }
     }
@@ -161,11 +159,11 @@ public final class LampEffects {
             Vector3f up, float r, float g, float b, float darkness) {
         Vector3f p = new Vector3f();
         float s = startRadius * 1.5F;
-        while (s < BEAM_LENGTH) {
-            float t = s / BEAM_LENGTH;
-            float coneRadius = startRadius + (BEAM_END_RADIUS - startRadius) * t;
+        while (s < HeadlightBeam.LENGTH) {
+            float t = s / HeadlightBeam.LENGTH;
+            float coneRadius = startRadius + (HeadlightBeam.END_RADIUS - startRadius) * t;
             p.set(dir).mul(s).add(start);
-            float rim = coneRadius * SPOT_SPREAD;
+            float rim = coneRadius * HeadlightBeam.SPOT_SPREAD;
             float alpha = BEAM_ALPHA * darkness
                     * (float) Math.pow(startRadius / coneRadius, 0.7) // spreading thins it
                     * (1.0F - t) * (1.0F - t);                      // and it fades out ahead
@@ -190,10 +188,10 @@ public final class LampEffects {
      */
     private static void track(StockModel.Headlight lamp, Matrix4f body, Vector3f bodyUp,
             float r, float g, float b, float darkness) {
-        float half = (POOL_FAR - POOL_NEAR) * 0.5F;
-        Vector3f middle = body.transformPosition(lamp.x(), POOL_Y,
-                lamp.z() + lamp.dirZ() * (POOL_NEAR + half), new Vector3f());
-        Vector3f across = body.transformDirection(POOL_HALF_WIDTH, 0.0F, 0.0F, new Vector3f());
+        float half = (HeadlightBeam.POOL_FAR - HeadlightBeam.POOL_NEAR) * 0.5F;
+        Vector3f middle = body.transformPosition(lamp.x(), HeadlightBeam.POOL_Y,
+                lamp.z() + lamp.dirZ() * (HeadlightBeam.POOL_NEAR + half), new Vector3f());
+        Vector3f across = body.transformDirection(HeadlightBeam.POOL_HALF_WIDTH, 0.0F, 0.0F, new Vector3f());
         Vector3f along = body.transformDirection(0.0F, 0.0F, half, new Vector3f());
         float distance = middle.length();
         float grazing = distance < 1.0e-3F ? 1.0F : Math.abs(middle.dot(bodyUp)) / distance;

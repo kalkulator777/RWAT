@@ -28,7 +28,8 @@ import com.google.gson.JsonParser;
 /**
  * The MVP recipe's doors and light names against the models, without the IR
  * packs (SPEC §8, §9.5, §9.6) — from the geometry digests and the per-type
- * override files, like {@link RecipeFloorTest}:
+ * override files, like {@link RecipeFloorTest} (both in the OBJ frame, the
+ * digest's object boxes too):
  * <ul>
  *   <li>a door leaf the model moves by name ({@code DOOR_<n>} with
  *       {@code ROT_}/{@code TL_}) must lie in one of the type's door boxes
@@ -86,6 +87,32 @@ class RecipeDoorsAndLightsTest {
         assertEquals(0, type.doorsWorkedBy("IL"));
     }
 
+    /**
+     * A door opened by a click or the driver's panel takes its group's doors along — those
+     * with a leaf: a fixed doorway in the group takes no bit, so an animation named after it
+     * never plays.
+     */
+    @Test
+    void doorsOpenedWith_theGroupsDoorsWithALeaf() {
+        WagonType.Door left = new WagonType.Door("DrL", 1.677, 1.471, 8.156, 1.756, 3.915, 9.431,
+                false, false, false, "DrL");
+        WagonType.Door steps = new WagonType.Door("steps", 1.6, 1.0, 5.0, 1.7, 3.0, 6.0,
+                false, true, false, "drl");
+        WagonType.Door left3 = new WagonType.Door("DrL_3", 1.677, 1.471, -9.425, 1.756, 3.915, -8.15,
+                false, false, false, "DRL");
+        WagonType.Door alone = new WagonType.Door("Trap1", -0.4, 1.9, 11.4, 0.4, 3.9, 11.5, false, false, true);
+        WagonType type = new WagonType("mvp:test", 21.0, new double[]{1.0, -1.0}, 40.0, 100.0,
+                WagonType.Resistance.NONE, null, null, WagonType.Brakes.NONE, null,
+                List.of(left, steps, left3, alone));
+        assertEquals(0b0101, type.doorsOpenedWith(0)); // the group, case aside, without its fixed doorway
+        assertEquals(0b0101, type.doorsOpenedWith(2));
+        assertEquals(0, type.doorsOpenedWith(1));      // a fixed doorway opens nothing, itself neither
+        assertEquals(0b1000, type.doorsOpenedWith(3)); // a door on its own
+        assertEquals(0, type.doorsOpenedWith(-1));
+        assertEquals(0, type.doorsOpenedWith(4));
+        assertEquals(0b1101, type.leafDoors());
+    }
+
     /** ER2's head-car switches {@code CG_DrL_GLOBAL}/{@code CG_DrR_GLOBAL}, DR1's {@code DL}/{@code DR}: both doorways of a side, in every car. */
     @Test
     void cabDoorSwitches_workBothDoorwaysOfTheirSide() throws IOException {
@@ -124,7 +151,8 @@ class RecipeDoorsAndLightsTest {
                 if (c == null) {
                     continue;
                 }
-                int door = type.doorHolding(c[0], c[1], c[2]);
+                double[] model = ObjFrame.point(c[0], c[1], c[2]); // the digest is in the OBJ frame
+                int door = type.doorHolding(model[0], model[1], model[2]);
                 if (!moves.equals("anim") && door < 0) {
                     problems.add(String.format(Locale.ROOT,
                             "%s (%s) lies in no door's box, centre (%.2f, %.2f, %.2f): it is drawn shut",
@@ -183,7 +211,10 @@ class RecipeDoorsAndLightsTest {
         return false;
     }
 
-    /** The centre of every object of {@code DOOR_<n>} together (the leaf the engine builds), or null. */
+    /**
+     * The centre of every object of {@code DOOR_<n>} together (the leaf the
+     * engine builds), in the digest's OBJ frame, or null.
+     */
     private static double[] leafCentre(JsonObject objects, String key) {
         double[] box = {Double.MAX_VALUE, Double.MAX_VALUE, Double.MAX_VALUE,
                 -Double.MAX_VALUE, -Double.MAX_VALUE, -Double.MAX_VALUE};

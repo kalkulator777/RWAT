@@ -1,28 +1,34 @@
 package com.muzhik17.trainsmod.data;
 
-import java.util.HashMap;
+import java.io.IOException;
+import java.io.Reader;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
-import com.muzhik17.trainsmod.kinematics.FloorCheck;
 import com.muzhik17.trainsmod.network.WagonTypesPayload;
-import com.muzhik17.trainsmod.stock.WagonTypeParser;
+import com.muzhik17.trainsmod.pack.PackOrigin;
+import com.muzhik17.trainsmod.pack.PackProblem;
+import com.muzhik17.trainsmod.pack.PackReport;
+import com.muzhik17.trainsmod.pack.PackReportView;
+import com.muzhik17.trainsmod.pack.WagonTypeLoader;
 import com.muzhik17.trainsmod.stock.WagonType;
 import com.muzhik17.trainsmod.stock.WagonTypes;
 
+import net.minecraft.resources.FileToIdConverter;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
-import net.minecraft.server.packs.resources.SimpleJsonResourceReloadListener;
+import net.minecraft.server.packs.resources.SimplePreparableReloadListener;
+import net.minecraft.util.GsonHelper;
 import net.minecraft.util.profiling.ProfilerFiller;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.AddReloadListenerEvent;
 import net.neoforged.neoforge.event.OnDatapackSyncEvent;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
@@ -35,58 +41,59 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * on join and after {@code /reload} ({@link OnDatapackSyncEvent} fires for
  * exactly those two cases).
  *
- * <p>A malformed file is logged and skipped — one broken declaration must not
- * take down the rest of the pack, and unknown ids degrade to the placeholder
- * at the points of use anyway. An alias that collides with a real type id or
- * with another type's alias is dropped (logged): ids must stay unambiguous.
+ * <p>The files are read off thread and handed to {@link WagonTypeLoader}: a
+ * file loads whole or not at all — a malformed one (bad JSON, a bad field,
+ * impossible geometry, a broken alias list) is skipped, one broken
+ * declaration must not take down the rest of the pack, and unknown ids
+ * degrade to the placeholder at the points of use anyway. Aliases are
+ * resolved in type id order; one claimed twice goes to the lower id, and an
+ * alias that is a real type id is dropped. Every problem goes to the log
+ * and to {@link PackReport#SERVER} ({@code /rwat packs}), replacing the
+ * previous load's.
  */
 @EventBusSubscriber(modid = RailsWheelsAndTrains.MODID)
-public final class WagonTypeReloadListener extends SimpleJsonResourceReloadListener {
+public final class WagonTypeReloadListener extends SimplePreparableReloadListener<WagonTypeLoader.Result> {
 
-    private static final Gson GSON = new Gson();
+    private static final FileToIdConverter FILES = FileToIdConverter.json("wagon_types");
 
-    public WagonTypeReloadListener() {
-        super(GSON, "wagon_types");
+    @Override
+    protected WagonTypeLoader.Result prepare(ResourceManager resources, ProfilerFiller profiler) {
+        List<WagonTypeLoader.Declaration> declarations = new ArrayList<>();
+        List<PackProblem> unreadable = new ArrayList<>();
+        for (Map.Entry<ResourceLocation, Resource> file : FILES.listMatchingResources(resources).entrySet()) {
+            ResourceLocation id = FILES.fileToId(file.getKey());
+            PackOrigin origin = new PackOrigin(file.getValue().sourcePackId(),
+                    PackOrigin.file("data", file.getKey().getNamespace(), file.getKey().getPath()));
+            try (Reader reader = file.getValue().openAsReader()) {
+                declarations.add(new WagonTypeLoader.Declaration(id.toString(), origin, GsonHelper.parse(reader)));
+            } catch (IOException | RuntimeException e) {
+                unreadable.add(origin.error("wagon type " + id + " not loaded: not valid JSON ("
+                        + PackReportView.reason(e) + ")"));
+            }
+        }
+        WagonTypeLoader.Result loaded = WagonTypeLoader.load(declarations);
+        unreadable.addAll(loaded.problems());
+        return new WagonTypeLoader.Result(loaded.types(), loaded.aliases(), unreadable, loaded.loaded());
     }
 
     @Override
-    protected void apply(Map<ResourceLocation, JsonElement> files,
-            ResourceManager resourceManager, ProfilerFiller profiler) {
-        Map<String, WagonType> types = new HashMap<>();
-        Map<String, List<String>> declaredAliases = new HashMap<>();
-        for (Map.Entry<ResourceLocation, JsonElement> entry : files.entrySet()) {
-            String id = entry.getKey().toString();
-            try {
-                JsonObject json = entry.getValue().getAsJsonObject();
-                WagonType type = WagonTypeParser.parse(id, json);
-                types.put(id, type);
-                declaredAliases.put(id, WagonTypeParser.aliases(json));
-                // a floor nobody can walk is a pack bug, not a crash: say so (SPEC §9.6)
-                for (String problem : FloorCheck.problems(type)) {
-                    RailsWheelsAndTrains.LOGGER.warn("Wagon type {}: {}", id, problem);
-                }
-            } catch (RuntimeException exception) {
-                RailsWheelsAndTrains.LOGGER.error("Skipping bad wagon type {}: {}",
-                        id, exception.getMessage());
-            }
-        }
-        Map<String, String> aliases = new HashMap<>();
-        declaredAliases.forEach((id, oldIds) -> {
-            for (String oldId : oldIds) {
-                if (types.containsKey(oldId) || aliases.putIfAbsent(oldId, id) != null) {
-                    RailsWheelsAndTrains.LOGGER.error(
-                            "Wagon type {}: alias {} is already taken, ignoring it", id, oldId);
-                }
-            }
-        });
-        WagonTypes.load(types, aliases);
+    protected void apply(WagonTypeLoader.Result loaded, ResourceManager resources, ProfilerFiller profiler) {
+        PackReportView.log(loaded.problems());
+        WagonTypes.load(loaded.types(), loaded.aliases());
+        PackReport.SERVER.replace(PackReport.Source.WAGON_TYPES, loaded.loaded(), loaded.problems());
         RailsWheelsAndTrains.LOGGER.info("Loaded {} wagon type(s) ({} alias(es)) from packs",
-                types.size(), aliases.size());
+                loaded.types().size(), loaded.aliases().size());
     }
 
     @SubscribeEvent
     static void onAddReloadListeners(AddReloadListenerEvent event) {
         event.addListener(new WagonTypeReloadListener());
+    }
+
+    /** Single player back at the title screen: the next server's sync is not this load coming back. */
+    @SubscribeEvent
+    static void onServerStopped(ServerStoppedEvent event) {
+        WagonTypes.serverStopped();
     }
 
     /** Push the freshly loaded layer to the joining player (or everyone on /reload). */

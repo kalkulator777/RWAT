@@ -14,7 +14,8 @@ import net.minecraft.resources.ResourceLocation;
  * coupler towards wagon {@code index − 1}, else towards {@code index + 1}.
  * Naming the wagon, not a consist index, stays valid if the consist was
  * renumbered by a coupling in flight. The server re-checks the player holds
- * the crowbar and is within reach of that coupler before cutting.
+ * the crowbar, is within reach of that coupler and may build there before
+ * cutting ({@code TouchRules}).
  */
 public record UncouplePayload(int wagonId, boolean front) implements CustomPacketPayload {
 

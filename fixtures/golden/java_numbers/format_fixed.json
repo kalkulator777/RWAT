@@ -1,0 +1,205 @@
+{
+  "description": "String.format(Locale.ROOT, \"%.<digits>f\", value) — the numbers in FloorCheck's texts: half up from the shortest decimal of the double, a sign kept on minus zero. input.value (a number or \"NaN\", \"Infinity\", \"-Infinity\"), input.digits; expected: the text.",
+  "frame": "none",
+  "tolerance": 0,
+  "cases": [
+    {
+      "id": "format-0-half-up-from-the-shortest-decimal-1-01-tofixed-gives-1-00",
+      "note": "half up from the shortest decimal: 1.01 (toFixed gives 1.00)",
+      "input": {"value": 1.005, "digits": 2},
+      "expected": "1.01"
+    },
+    {
+      "id": "format-1-the-same-below-zero",
+      "note": "the same below zero",
+      "input": {"value": -1.005, "digits": 2},
+      "expected": "-1.01"
+    },
+    {
+      "id": "format-2-2-68-tofixed-gives-2-67",
+      "note": "2.68 (toFixed gives 2.67)",
+      "input": {"value": 2.675, "digits": 2},
+      "expected": "2.68"
+    },
+    {
+      "id": "format-3-8-35-tofixed-gives-8-34",
+      "note": "8.35 (toFixed gives 8.34)",
+      "input": {"value": 8.345, "digits": 2},
+      "expected": "8.35"
+    },
+    {
+      "id": "format-4-an-exact-half",
+      "note": "an exact half",
+      "input": {"value": 0.125, "digits": 2},
+      "expected": "0.13"
+    },
+    {
+      "id": "format-5-another-exact-half",
+      "note": "another exact half",
+      "input": {"value": 0.375, "digits": 2},
+      "expected": "0.38"
+    },
+    {
+      "id": "format-6-0-4-tofixed-gives-0-3",
+      "note": "0.4 (toFixed gives 0.3)",
+      "input": {"value": 0.35, "digits": 1},
+      "expected": "0.4"
+    },
+    {
+      "id": "format-7-0-2-tofixed-gives-0-1",
+      "note": "0.2 (toFixed gives 0.1)",
+      "input": {"value": 0.15, "digits": 1},
+      "expected": "0.2"
+    },
+    {
+      "id": "format-8-an-exact-half",
+      "note": "an exact half",
+      "input": {"value": 0.25, "digits": 1},
+      "expected": "0.3"
+    },
+    {
+      "id": "format-9-0-5",
+      "note": "0.5",
+      "input": {"value": 0.45, "digits": 1},
+      "expected": "0.5"
+    },
+    {
+      "id": "format-10-1-5",
+      "note": "1.5",
+      "input": {"value": 1.45, "digits": 1},
+      "expected": "1.5"
+    },
+    {
+      "id": "format-11-a-plain-tenth",
+      "note": "a plain tenth",
+      "input": {"value": 0.6, "digits": 1},
+      "expected": "0.6"
+    },
+    {
+      "id": "format-12-zero",
+      "note": "zero",
+      "input": {"value": 0.0, "digits": 2},
+      "expected": "0.00"
+    },
+    {
+      "id": "format-13-minus-zero-keeps-its-sign-0-00",
+      "note": "minus zero keeps its sign: -0.00",
+      "input": {"value": -0.0, "digits": 2},
+      "expected": "-0.00"
+    },
+    {
+      "id": "format-14-a-little-below-zero-0-00",
+      "note": "a little below zero: -0.00",
+      "input": {"value": -0.001, "digits": 2},
+      "expected": "-0.00"
+    },
+    {
+      "id": "format-15-half-a-hundredth-below-zero-0-01",
+      "note": "half a hundredth below zero: -0.01",
+      "input": {"value": -0.005, "digits": 2},
+      "expected": "-0.01"
+    },
+    {
+      "id": "format-16-no-decimals-half-up",
+      "note": "no decimals: half up",
+      "input": {"value": 0.5, "digits": 0},
+      "expected": "1"
+    },
+    {
+      "id": "format-17-no-decimals",
+      "note": "no decimals",
+      "input": {"value": 1.5, "digits": 0},
+      "expected": "2"
+    },
+    {
+      "id": "format-18-no-decimals-half-up-not-to-even",
+      "note": "no decimals: half up, not to even",
+      "input": {"value": 2.5, "digits": 0},
+      "expected": "3"
+    },
+    {
+      "id": "format-19-a-carry-into-the-units",
+      "note": "a carry into the units",
+      "input": {"value": 9.995, "digits": 2},
+      "expected": "10.00"
+    },
+    {
+      "id": "format-20-a-carry",
+      "note": "a carry",
+      "input": {"value": 9.9951, "digits": 2},
+      "expected": "10.00"
+    },
+    {
+      "id": "format-21-a-sums-float-noise",
+      "note": "a sum's float noise",
+      "input": {"value": 2.1999999999999997, "digits": 2},
+      "expected": "2.20"
+    },
+    {
+      "id": "format-22-a-third",
+      "note": "a third",
+      "input": {"value": 0.6666666666666666, "digits": 2},
+      "expected": "0.67"
+    },
+    {
+      "id": "format-23-an-integer",
+      "note": "an integer",
+      "input": {"value": 100, "digits": 2},
+      "expected": "100.00"
+    },
+    {
+      "id": "format-24-a-large-number-in-full",
+      "note": "a large number in full",
+      "input": {"value": 1e+20, "digits": 2},
+      "expected": "100000000000000000000.00"
+    },
+    {
+      "id": "format-25-past-tofixeds-reach-still-in-full",
+      "note": "past toFixed's reach: still in full",
+      "input": {"value": 1e+21, "digits": 1},
+      "expected": "1000000000000000000000.0"
+    },
+    {
+      "id": "format-26-a-small-number",
+      "note": "a small number",
+      "input": {"value": 1e-10, "digits": 2},
+      "expected": "0.00"
+    },
+    {
+      "id": "format-27-the-smallest-double",
+      "note": "the smallest double",
+      "input": {"value": 5e-324, "digits": 2},
+      "expected": "0.00"
+    },
+    {
+      "id": "format-28-many-digits",
+      "note": "many digits",
+      "input": {"value": 123456.789, "digits": 2},
+      "expected": "123456.79"
+    },
+    {
+      "id": "format-29-three-decimals",
+      "note": "three decimals",
+      "input": {"value": 1e-06, "digits": 3},
+      "expected": "0.000"
+    },
+    {
+      "id": "format-30-nan-prints-nan",
+      "note": "NaN prints NaN",
+      "input": {"value": "NaN", "digits": 2},
+      "expected": "NaN"
+    },
+    {
+      "id": "format-31-infinity-prints-infinity",
+      "note": "Infinity prints Infinity",
+      "input": {"value": "Infinity", "digits": 1},
+      "expected": "Infinity"
+    },
+    {
+      "id": "format-32-minus-infinity",
+      "note": "minus Infinity",
+      "input": {"value": "-Infinity", "digits": 2},
+      "expected": "-Infinity"
+    }
+  ]
+}

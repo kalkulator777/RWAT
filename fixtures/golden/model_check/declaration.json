@@ -1,0 +1,598 @@
+{
+  "description": "What a model's names and declaration add (pack.ModelCheck.findings: checkDrawn's hinge markers, checkGroups, checkAnimations, checkLiveries): untextured hinge markers, control groups too long to send, .anim files, liveries. The animations and the liveries are checked in the file's order (WagonModelDecl keeps it); no key of the cases is an array index (\"2\"), which a JavaScript object would put first. input: namespace (the declaring file's, for unqualified paths), declaration (the wagon model's JSON), files (ns:path -> text), present (locations that are there, contents unread: textures); any other key with a colon is a file too (what input_file reads of the example pack). A location is valid as Minecraft's ResourceLocation.tryParse takes it (locations.json), its file named as Minecraft names it (:a and a are minecraft:a). expected: the findings in the check's order (pack.ModelCheck.findings), each {severity: error | warning, finding}: code (ModelFinding.Code.key, as the editor names it: missing-texture), subject and index null, params (the names and numbers its line is made of, in the line's order), text (the line).",
+  "frame": "none",
+  "tolerance": 0,
+  "cases": [
+    {
+      "id": "untextured-hinge-markers-dont-warn",
+      "note": "a control's and a door leaf's ROT marker give the hinge untextured: no warning",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj"},
+        "files": {
+          "t:car/car.obj": "mtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1 2 3\no THROTTLE_1_ROT_30\nusemtl marker\nf 1 2 3\no THROTTLE_1_LEVER\nusemtl body\nf 1 2 3\no DOOR_2_ROT_-90\nusemtl marker\nf 1 2 3\no DOOR_2_LEAF\nusemtl body\nf 1 2 3\no WIDGET_3_ROT.001\nusemtl marker\nf 1 2 3\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": []
+    },
+    {
+      "id": "rot-on-no-control-warns",
+      "note": "ROT on a name that is no control's key is no marker",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj"},
+        "files": {
+          "t:car/car.obj": "mtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1 2 3\no THROTTLE_1_ROT_30\nusemtl marker\nf 1 2 3\no THROTTLE_1_LEVER\nusemtl body\nf 1 2 3\no DOOR_2_ROT_-90\nusemtl marker\nf 1 2 3\no DOOR_2_LEAF\nusemtl body\nf 1 2 3\no WIDGET_3_ROT.001\nusemtl marker\nf 1 2 3\no BODY_ROT_90\nusemtl marker\nf 1 2 3\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "warning",
+          "finding": {
+            "code": "untextured-faces",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj", "materials": "marker"},
+            "text": "model t:car/car.obj: faces with no texture (map_Kd) aren't drawn, material(s) marker"
+          }
+        }
+      ]
+    },
+    {
+      "id": "a-controls-other-part-warns",
+      "note": "a control's part that is not its marker is drawn: untextured, it warns",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj"},
+        "files": {
+          "t:car/car.obj": "mtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1 2 3\no THROTTLE_1_ROT_30\nusemtl marker\nf 1 2 3\no THROTTLE_1_LEVER\nusemtl body\nf 1 2 3\no DOOR_2_ROT_-90\nusemtl marker\nf 1 2 3\no DOOR_2_LEAF\nusemtl body\nf 1 2 3\no WIDGET_3_ROT.001\nusemtl marker\nf 1 2 3\no THROTTLE_1_KNOB\nusemtl knob\nf 1 2 3\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "warning",
+          "finding": {
+            "code": "untextured-faces",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj", "materials": "knob"},
+            "text": "model t:car/car.obj: faces with no texture (map_Kd) aren't drawn, material(s) knob"
+          }
+        }
+      ]
+    },
+    {
+      "id": "control-group-too-long",
+      "note": "a switch or light group longer than 32 is dropped: named once, however many objects carry it; a lever's group never travels",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj"},
+        "files": {
+          "t:car/car.obj": "mtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1/1 2/1 3/1 4/1\no WIDGET_1_CG_ThisSwitchNameIsFarTooLongToEverBeSentXY_TOGGLE\nusemtl body\nf 1/1 2/1 3/1 4/1\no WIDGET_1_CG_ThisSwitchNameIsFarTooLongToEverBeSentXY_ROT_90\nusemtl body\nf 1/1 2/1 3/1 4/1\no LAMP_LCG_ThisSwitchNameIsFarTooLongToEverBeSentXY_FULLBRIGHT\nusemtl body\nf 1/1 2/1 3/1 4/1\no THROTTLE_1_CG_ThisSwitchNameIsFarTooLongToEverBeSentXY\nusemtl body\nf 1/1 2/1 3/1 4/1\no LAMP_LCG_IL_FULLBRIGHT\nusemtl body\nf 1/1 2/1 3/1 4/1\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "warning",
+          "finding": {
+            "code": "group-too-long",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj", "group": "ThisSwitchNameIsFarTooLongToEverBeSentXY", "limit": 32},
+            "text": "model t:car/car.obj: control group 'ThisSwitchNameIsFarTooLongToEverBeSentXY' is longer than 32 characters and is dropped: its switches can't be worked, its lights stay off (an LINVERT one on)"
+          }
+        }
+      ]
+    },
+    {
+      "id": "two-control-groups-too-long",
+      "note": "each name once, in the order the parts come",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj"},
+        "files": {
+          "t:car/car.obj": "mtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1/1 2/1 3/1 4/1\no WIDGET_1_CG_ThisSwitchNameIsFarTooLongToEverBeSentXY_TOGGLE\nusemtl body\nf 1/1 2/1 3/1 4/1\no WIDGET_1_CG_ThisSwitchNameIsFarTooLongToEverBeSentXY_ROT_90\nusemtl body\nf 1/1 2/1 3/1 4/1\no LAMP_LCG_ThisSwitchNameIsFarTooLongToEverBeSentXY_FULLBRIGHT\nusemtl body\nf 1/1 2/1 3/1 4/1\no THROTTLE_1_CG_ThisSwitchNameIsFarTooLongToEverBeSentXY\nusemtl body\nf 1/1 2/1 3/1 4/1\no LAMP_LCG_IL_FULLBRIGHT\nusemtl body\nf 1/1 2/1 3/1 4/1\no LAMP_LCG_AnotherGroupNameThatIsMuchTooLongToSend\nusemtl body\nf 1/1 2/1 3/1 4/1\no WIDGET_2_CG_ThisSwitchNameIsFarTooLongToEverBeSentXY_TOGGLE\nusemtl body\nf 1/1 2/1 3/1 4/1\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "warning",
+          "finding": {
+            "code": "group-too-long",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj", "group": "ThisSwitchNameIsFarTooLongToEverBeSentXY", "limit": 32},
+            "text": "model t:car/car.obj: control group 'ThisSwitchNameIsFarTooLongToEverBeSentXY' is longer than 32 characters and is dropped: its switches can't be worked, its lights stay off (an LINVERT one on)"
+          }
+        },
+        {
+          "severity": "warning",
+          "finding": {
+            "code": "group-too-long",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj", "group": "AnotherGroupNameThatIsMuchTooLongToSend", "limit": 32},
+            "text": "model t:car/car.obj: control group 'AnotherGroupNameThatIsMuchTooLongToSend' is longer than 32 characters and is dropped: its switches can't be worked, its lights stay off (an LINVERT one on)"
+          }
+        }
+      ]
+    },
+    {
+      "id": "missing-animation-and-a-livery-that-swaps-nothing",
+      "note": "the .anim isn't there; the livery's folder has no texture of the model's names",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj", "animations": {"door2": "car/door2.anim"}, "liveries": {"blue": "blue"}},
+        "files": {
+          "t:car/car.obj": "mtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1/1 2/1 3/1 4/1\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "missing-animation",
+            "subject": null,
+            "index": null,
+            "params": {"door": "door2", "path": "t:car/door2.anim"},
+            "text": "animation 'door2': file t:car/door2.anim not found"
+          }
+        },
+        {
+          "severity": "warning",
+          "finding": {
+            "code": "livery-replaces-nothing",
+            "subject": null,
+            "index": null,
+            "params": {"livery": "blue", "folder": "blue"},
+            "text": "livery 'blue' replaces no texture (folder blue next to the model)"
+          }
+        }
+      ]
+    },
+    {
+      "id": "animation-path-not-a-resource-location",
+      "note": "an .anim path with a capital",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj", "animations": {"door1": "car/Door1.anim"}},
+        "files": {
+          "t:car/car.obj": "mtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1/1 2/1 3/1 4/1\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "bad-animation-path",
+            "subject": null,
+            "index": null,
+            "params": {"door": "door1", "path": "t:car/Door1.anim"},
+            "text": "animation 'door1': path 't:car/Door1.anim' is not a valid resource location"
+          }
+        }
+      ]
+    },
+    {
+      "id": "animation-key-in-lower-case",
+      "note": "the engine keys an animation by its door id in lower case",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj", "animations": {"Door1": "car/gone.anim"}},
+        "files": {
+          "t:car/car.obj": "mtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1/1 2/1 3/1 4/1\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "missing-animation",
+            "subject": null,
+            "index": null,
+            "params": {"door": "door1", "path": "t:car/gone.anim"},
+            "text": "animation 'door1': file t:car/gone.anim not found"
+          }
+        }
+      ]
+    },
+    {
+      "id": "animation-qualified-path",
+      "note": "an .anim path with its namespace is taken as it is",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj", "animations": {"door1": "other:car/door1.anim"}},
+        "files": {
+          "t:car/car.obj": "mtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1/1 2/1 3/1 4/1\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "missing-animation",
+            "subject": null,
+            "index": null,
+            "params": {"door": "door1", "path": "other:car/door1.anim"},
+            "text": "animation 'door1': file other:car/door1.anim not found"
+          }
+        }
+      ]
+    },
+    {
+      "id": "animation-frame-of-three-values",
+      "note": "a frame of other than 16 values: the reader's IOException",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj", "animations": {"door1": "car/door1.anim"}},
+        "files": {
+          "t:car/car.obj": "mtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1/1 2/1 3/1 4/1\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": "O DOOR_1_LEAF\nM 1,2,3\n"
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "unreadable-animation",
+            "subject": null,
+            "index": null,
+            "params": {
+              "door": "door1",
+              "path": "t:car/door1.anim",
+              "error": "java.io.IOException: anim frame with 3 values, expected 16"
+            },
+            "text": "animation 'door1': t:car/door1.anim can't be read: java.io.IOException: anim frame with 3 values, expected 16"
+          }
+        }
+      ]
+    },
+    {
+      "id": "animation-value-not-a-number",
+      "note": "a value Float.parseFloat refuses, trimmed",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj", "animations": {"door1": "car/door1.anim"}},
+        "files": {
+          "t:car/car.obj": "mtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1/1 2/1 3/1 4/1\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": "O DOOR_1_LEAF\nM 1,0,0,0,0, x ,0,0,0,0,1,0,0,0,0,1\n"
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "unreadable-animation",
+            "subject": null,
+            "index": null,
+            "params": {
+              "door": "door1",
+              "path": "t:car/door1.anim",
+              "error": "java.lang.NumberFormatException: For input string: \"x\""
+            },
+            "text": "animation 'door1': t:car/door1.anim can't be read: java.lang.NumberFormatException: For input string: \"x\""
+          }
+        }
+      ]
+    },
+    {
+      "id": "animation-empty-value",
+      "note": "an empty value between two commas: Float.parseFloat's empty String",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj", "animations": {"door1": "car/door1.anim"}},
+        "files": {
+          "t:car/car.obj": "mtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1/1 2/1 3/1 4/1\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": "O DOOR_1_LEAF\nM 1,0,0,0,0,,0,0,0,0,1,0,0,0,0,1\n"
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "unreadable-animation",
+            "subject": null,
+            "index": null,
+            "params": {
+              "door": "door1",
+              "path": "t:car/door1.anim",
+              "error": "java.lang.NumberFormatException: empty String"
+            },
+            "text": "animation 'door1': t:car/door1.anim can't be read: java.lang.NumberFormatException: empty String"
+          }
+        }
+      ]
+    },
+    {
+      "id": "animation-that-reads",
+      "note": "a frame of 16 values with a trailing comma reads (Java's split drops the empty end)",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj", "animations": {"door1": "car/door1.anim"}},
+        "files": {
+          "t:car/car.obj": "mtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1/1 2/1 3/1 4/1\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": "O DOOR_1_LEAF\nM 1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1,\n"
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": []
+    },
+    {
+      "id": "livery-folder-climbs-out",
+      "note": "a livery folder above the namespace's root swaps nothing",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj", "liveries": {"x": "../../.."}},
+        "files": {
+          "t:car/car.obj": "mtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1/1 2/1 3/1 4/1\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "warning",
+          "finding": {
+            "code": "livery-replaces-nothing",
+            "subject": null,
+            "index": null,
+            "params": {"livery": "x", "folder": "../../.."},
+            "text": "livery 'x' replaces no texture (folder ../../.. next to the model)"
+          }
+        }
+      ]
+    },
+    {
+      "id": "livery-of-a-shared-texture",
+      "note": "a livery swaps a texture by its file name in the livery's folder next to the OBJ, wherever the texture lies",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj", "liveries": {"red": "red"}},
+        "files": {
+          "t:car/car.obj": "mtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1/1 2/1 3/1 4/1\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": []
+    },
+    {
+      "id": "animations-in-the-files-order",
+      "note": "several animations each find something, in the order the file writes them, not sorted",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj", "animations": {"zeta": "car/zeta.anim", "Alpha": "Car/Alpha.anim", "mid": "car/bad.anim", "door1": "car/door1.anim", "beta": "car/beta.anim"}},
+        "files": {
+          "t:car/car.obj": "mtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1/1 2/1 3/1 4/1\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": "",
+          "t:car/bad.anim": "O DOOR_1_LEAF\nM 1,2,3\n"
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "missing-animation",
+            "subject": null,
+            "index": null,
+            "params": {"door": "zeta", "path": "t:car/zeta.anim"},
+            "text": "animation 'zeta': file t:car/zeta.anim not found"
+          }
+        },
+        {
+          "severity": "error",
+          "finding": {
+            "code": "bad-animation-path",
+            "subject": null,
+            "index": null,
+            "params": {"door": "alpha", "path": "t:Car/Alpha.anim"},
+            "text": "animation 'alpha': path 't:Car/Alpha.anim' is not a valid resource location"
+          }
+        },
+        {
+          "severity": "error",
+          "finding": {
+            "code": "unreadable-animation",
+            "subject": null,
+            "index": null,
+            "params": {
+              "door": "mid",
+              "path": "t:car/bad.anim",
+              "error": "java.io.IOException: anim frame with 3 values, expected 16"
+            },
+            "text": "animation 'mid': t:car/bad.anim can't be read: java.io.IOException: anim frame with 3 values, expected 16"
+          }
+        },
+        {
+          "severity": "error",
+          "finding": {
+            "code": "missing-animation",
+            "subject": null,
+            "index": null,
+            "params": {"door": "beta", "path": "t:car/beta.anim"},
+            "text": "animation 'beta': file t:car/beta.anim not found"
+          }
+        }
+      ]
+    },
+    {
+      "id": "liveries-in-the-files-order",
+      "note": "several liveries swap nothing, each said in the order the file writes them; the one that swaps says nothing",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj", "liveries": {"zz_blue": "blue", "aa_green": "green", "red": "red", "mm_black": "../../black"}},
+        "files": {
+          "t:car/car.obj": "mtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1/1 2/1 3/1 4/1\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": "",
+          "t:car/bad.anim": "O DOOR_1_LEAF\nM 1,2,3\n"
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "warning",
+          "finding": {
+            "code": "livery-replaces-nothing",
+            "subject": null,
+            "index": null,
+            "params": {"livery": "zz_blue", "folder": "blue"},
+            "text": "livery 'zz_blue' replaces no texture (folder blue next to the model)"
+          }
+        },
+        {
+          "severity": "warning",
+          "finding": {
+            "code": "livery-replaces-nothing",
+            "subject": null,
+            "index": null,
+            "params": {"livery": "aa_green", "folder": "green"},
+            "text": "livery 'aa_green' replaces no texture (folder green next to the model)"
+          }
+        },
+        {
+          "severity": "warning",
+          "finding": {
+            "code": "livery-replaces-nothing",
+            "subject": null,
+            "index": null,
+            "params": {"livery": "mm_black", "folder": "../../black"},
+            "text": "livery 'mm_black' replaces no texture (folder ../../black next to the model)"
+          }
+        }
+      ]
+    },
+    {
+      "id": "animations-then-liveries-in-the-files-order",
+      "note": "the animations come before the liveries, each in the file's order, whichever the file writes first",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj", "liveries": {"night": "night", "day": "day"}, "animations": {"rear": "car/rear.anim", "front": "car/front.anim"}},
+        "files": {
+          "t:car/car.obj": "mtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1/1 2/1 3/1 4/1\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": "",
+          "t:car/bad.anim": "O DOOR_1_LEAF\nM 1,2,3\n"
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "missing-animation",
+            "subject": null,
+            "index": null,
+            "params": {"door": "rear", "path": "t:car/rear.anim"},
+            "text": "animation 'rear': file t:car/rear.anim not found"
+          }
+        },
+        {
+          "severity": "error",
+          "finding": {
+            "code": "missing-animation",
+            "subject": null,
+            "index": null,
+            "params": {"door": "front", "path": "t:car/front.anim"},
+            "text": "animation 'front': file t:car/front.anim not found"
+          }
+        },
+        {
+          "severity": "warning",
+          "finding": {
+            "code": "livery-replaces-nothing",
+            "subject": null,
+            "index": null,
+            "params": {"livery": "night", "folder": "night"},
+            "text": "livery 'night' replaces no texture (folder night next to the model)"
+          }
+        },
+        {
+          "severity": "warning",
+          "finding": {
+            "code": "livery-replaces-nothing",
+            "subject": null,
+            "index": null,
+            "params": {"livery": "day", "folder": "day"},
+            "text": "livery 'day' replaces no texture (folder day next to the model)"
+          }
+        }
+      ]
+    },
+    {
+      "id": "an-animation-key-written-twice",
+      "note": "Door2 and door2 are one key to the engine (lower case): the later file, at the earlier key's place",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj", "animations": {"Door2": "car/first.anim", "aft": "car/aft.anim", "door2": "car/second.anim"}},
+        "files": {
+          "t:car/car.obj": "mtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1/1 2/1 3/1 4/1\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": "",
+          "t:car/bad.anim": "O DOOR_1_LEAF\nM 1,2,3\n"
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "missing-animation",
+            "subject": null,
+            "index": null,
+            "params": {"door": "door2", "path": "t:car/second.anim"},
+            "text": "animation 'door2': file t:car/second.anim not found"
+          }
+        },
+        {
+          "severity": "error",
+          "finding": {
+            "code": "missing-animation",
+            "subject": null,
+            "index": null,
+            "params": {"door": "aft", "path": "t:car/aft.anim"},
+            "text": "animation 'aft': file t:car/aft.anim not found"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -4,9 +4,18 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
@@ -34,15 +43,25 @@ import net.neoforged.neoforge.event.AddPackFindersEvent;
  *
  * <p>Extra folders can be listed in the {@code rwat.packDirs} system property
  * (path-separator separated); the dev runs whose game dir isn't {@code run/}
- * (client2, server) point it at the shared {@code run/rwat_packs}.
+ * (client2, server) point it at the shared {@code run/rwat_packs}. An entry
+ * that is no path on this system is skipped with a warning in the log and in
+ * the pack report ({@link PackDirs}), and the other folders are still searched.
+ *
+ * <p>Each pack's {@code "rwat"} block in {@code pack.mcmeta} is read first
+ * ({@link RwatPackMeta}): a pack of a format newer than this RWAT reads, or
+ * with a broken format, is not loaded. What each scan found — every pack, its
+ * block, its problems, whether it loads — is kept for {@code /rwat packs}
+ * ({@link #infos()}); the problems go to the pack report with every loader's
+ * ({@link PackReport.Source#PACKS}: the data-pack scan to the server's, the
+ * resource-pack scan to the client's) and to the log, once each time they
+ * change. {@link #manifest} hashes the loaded packs for the check of a
+ * client's packs against the server's ({@link PackManifest}); the listing
+ * shows the hashes worked out so far ({@link #knownHash}).
  */
 public final class RwatPacks {
 
     /** Folder name under the game directory. */
     public static final String FOLDER = "rwat_packs";
-
-    /** Extra pack folders, {@link File#pathSeparator}-separated. */
-    private static final String EXTRA_DIRS_PROPERTY = "rwat.packDirs";
 
     /** Shown next to the pack in the pack screens; adds itself to worlds automatically. */
     private static final PackSource SOURCE = PackSource.create(
@@ -57,6 +76,25 @@ public final class RwatPacks {
     /** Symlinks inside packs are not followed (a pack is a plain folder or a zip). */
     private static final DirectoryValidator NO_SYMLINKS = new DirectoryValidator(path -> false);
 
+    /** The last scan of each pack type: the resource packs on a client, the data packs on a server. */
+    private static final Map<PackType, List<PackInfo>> SCANS = new ConcurrentHashMap<>();
+
+    /** The problems last logged per pack, so a rescan (F3+T, /reload, the other pack type) doesn't repeat them. */
+    private static final Map<Path, List<PackProblem>> LOGGED = new ConcurrentHashMap<>();
+
+    /** The same for the entries of {@code rwat.packDirs} that were left out. */
+    private static final AtomicReference<List<PackProblem>> LOGGED_DIRS = new AtomicReference<>(List.of());
+
+    /** Pack hashes, kept by size and time of change. */
+    private static final PackHashCache HASHES = new PackHashCache();
+
+    /** Hashing reads whole packs (MVP: ~170 MB): one background thread, never a game thread. */
+    private static final ExecutorService HASHING = Executors.newSingleThreadExecutor(task -> {
+        Thread thread = new Thread(task, "RWAT pack hashing");
+        thread.setDaemon(true);
+        return thread;
+    });
+
     private RwatPacks() {
     }
 
@@ -65,17 +103,113 @@ public final class RwatPacks {
         event.addRepositorySource(new Source(event.getPackType()));
     }
 
+    /**
+     * The RWAT packs the last scan found, loaded or not, in load order: the
+     * data-pack scan where there was one (what the server loads — what
+     * {@code /rwat packs} shows), else the resource-pack scan (a client that
+     * hasn't opened a world). Empty before the first scan.
+     */
+    public static List<PackInfo> infos() {
+        List<PackInfo> data = SCANS.get(PackType.SERVER_DATA);
+        return data != null ? data : infos(PackType.CLIENT_RESOURCES);
+    }
+
+    /** The RWAT packs the last scan of that pack type found, loaded or not. */
+    public static List<PackInfo> infos(PackType type) {
+        return SCANS.getOrDefault(type, List.of());
+    }
+
+    /**
+     * The loaded packs of the last scan of that pack type with their content
+     * hashes, worked out on a background thread (a pack unchanged since its
+     * last hash isn't read again). A pack that can't be read is left out,
+     * with an error in the log; at most {@link PackManifest#MAX_PACKS}.
+     */
+    public static CompletableFuture<List<PackManifest.Entry>> manifest(PackType type) {
+        List<PackInfo> loaded = infos(type).stream().filter(PackInfo::loaded).toList();
+        return CompletableFuture.supplyAsync(() -> {
+            List<PackManifest.Entry> entries = new ArrayList<>();
+            for (PackInfo info : loaded) {
+                if (entries.size() == PackManifest.MAX_PACKS) {
+                    RailsWheelsAndTrains.LOGGER.warn("More than {} RWAT packs: only the first {} are checked "
+                            + "against the other side's", PackManifest.MAX_PACKS, PackManifest.MAX_PACKS);
+                    break;
+                }
+                try {
+                    long start = System.nanoTime();
+                    int read = HASHES.computed();
+                    String hash = HASHES.hash(info.path());
+                    RailsWheelsAndTrains.LOGGER.debug("RWAT pack {}: hash {} ({} in {} ms)", info.fileName(), hash,
+                            HASHES.computed() != read ? "read" : "unchanged, from the cache",
+                            (System.nanoTime() - start) / 1_000_000L);
+                    entries.add(info.manifestEntry(hash));
+                } catch (IOException | RuntimeException e) {
+                    RailsWheelsAndTrains.LOGGER.error("RWAT pack {} ({}): can't hash it for the pack check: {}",
+                            info.fileName(), info.path(), e.toString());
+                }
+            }
+            return List.copyOf(entries);
+        }, HASHING);
+    }
+
+    /**
+     * The pack's hash as {@link #manifest} last worked it out, or {@code null}
+     * if it hasn't yet; never reads the pack nor waits for one being read, so
+     * a command may ask on a game thread.
+     */
+    public static String knownHash(PackInfo info) {
+        return HASHES.known(info.path());
+    }
+
+    /** The report a scan of that pack type goes to: data packs are the server's, resource packs the client's. */
+    public static PackReport report(PackType type) {
+        return type == PackType.SERVER_DATA ? PackReport.SERVER : PackReport.CLIENT;
+    }
+
+    /** The extra folders the property lists and the entries of it that are no path ({@link PackDirs}). */
+    private static PackDirs.Parsed extraDirs() {
+        return PackDirs.parse(System.getProperty(PackDirs.PROPERTY, ""), File.pathSeparator);
+    }
+
     /** Every folder packs are read from: the game dir's one first, then the extras. */
-    static Set<Path> folders() {
+    private static Set<Path> folders(PackDirs.Parsed extra) {
         Set<Path> folders = new LinkedHashSet<>();
         folders.add(FMLPaths.GAMEDIR.get().resolve(FOLDER).toAbsolutePath().normalize());
-        String extra = System.getProperty(EXTRA_DIRS_PROPERTY, "");
-        for (String entry : extra.split(File.pathSeparator)) {
-            if (!entry.isBlank()) {
-                folders.add(Path.of(entry.trim()).toAbsolutePath().normalize());
+        folders.addAll(extra.folders());
+        return folders;
+    }
+
+    /**
+     * Logs the entries of {@code rwat.packDirs} that were left out, unless
+     * they are what was logged last time (a rescan, the other pack type's).
+     */
+    private static void logDirs(List<PackProblem> problems) {
+        if (problems.equals(LOGGED_DIRS.getAndSet(problems))) {
+            return;
+        }
+        for (PackProblem problem : problems) {
+            RailsWheelsAndTrains.LOGGER.warn("{} entry '{}': {}", PackDirs.PROPERTY, problem.file(),
+                    problem.message());
+        }
+    }
+
+    /**
+     * Logs a pack's problems — warnings as warnings, errors as errors with the
+     * pack's path and that it isn't loaded — unless they are what was logged
+     * for it last time.
+     */
+    private static void log(String name, Path path, List<PackProblem> problems) {
+        if (problems.equals(LOGGED.put(path, problems))) {
+            return;
+        }
+        for (PackProblem problem : problems) {
+            if (problem.isError()) {
+                RailsWheelsAndTrains.LOGGER.error("RWAT pack {} ({}): {}; the pack is not loaded",
+                        name, path, problem.message());
+            } else {
+                RailsWheelsAndTrains.LOGGER.warn("RWAT pack {}: {}", name, problem.message());
             }
         }
-        return folders;
     }
 
     /** Scans the pack folders anew on every repository reload (pack screen open, /reload). */
@@ -83,31 +217,50 @@ public final class RwatPacks {
 
         @Override
         public void loadPacks(Consumer<Pack> onLoad) {
-            Set<String> seen = new LinkedHashSet<>();
-            for (Path folder : folders()) {
+            Map<String, Path> seen = new HashMap<>();
+            List<PackInfo> infos = new ArrayList<>();
+            PackDirs.Parsed extra = extraDirs();
+            logDirs(extra.problems());
+            for (Path folder : folders(extra)) {
                 try {
                     Files.createDirectories(folder);
                     FolderRepositorySource.discoverPacks(folder, NO_SYMLINKS, (path, resources) -> {
                         String name = path.getFileName().toString();
-                        if (!seen.add(name)) {
-                            RailsWheelsAndTrains.LOGGER.warn(
-                                    "RWAT pack {} found twice, keeping the first one", path);
+                        String id = PackInfo.idOf(name);
+                        Path first = seen.putIfAbsent(name, path);
+                        if (first != null) {
+                            List<PackProblem> problems = List.of(PackProblem.error(id, path.toString(),
+                                    "a pack of the same name was found first, in " + first));
+                            log(name, path, problems);
+                            infos.add(new PackInfo(name, path, null, problems, false));
                             return;
                         }
-                        PackLocationInfo info = new PackLocationInfo(
-                                "rwat/" + name, Component.literal(name), SOURCE, Optional.empty());
-                        Pack pack = Pack.readMetaAndCreate(info, resources, type, SELECTION);
+                        RwatPackMeta.Result meta = RwatPackMeta.read(path, id);
+                        List<PackProblem> problems = new ArrayList<>(meta.problems());
+                        Pack pack = null;
+                        if (meta.accepted()) {
+                            PackLocationInfo info = new PackLocationInfo(
+                                    id, Component.literal(name), SOURCE, Optional.empty());
+                            pack = Pack.readMetaAndCreate(info, resources, type, SELECTION);
+                            if (pack == null) {
+                                problems.add(PackProblem.error(id, RwatPackMeta.MCMETA,
+                                        "Minecraft can't read its \"pack\" section"));
+                            }
+                        }
+                        log(name, path, problems);
+                        infos.add(new PackInfo(name, path, meta.meta(), problems, pack != null));
                         if (pack != null) {
                             onLoad.accept(pack);
-                        } else {
-                            RailsWheelsAndTrains.LOGGER.warn(
-                                    "Skipping RWAT pack {}: no readable pack.mcmeta", path);
                         }
                     });
                 } catch (IOException e) {
                     RailsWheelsAndTrains.LOGGER.warn("Failed to list RWAT packs in {}", folder, e);
                 }
             }
+            SCANS.put(type, List.copyOf(infos));
+            List<PackProblem> problems = new ArrayList<>(extra.problems());
+            problems.addAll(PackInfo.problems(infos));
+            report(type).replace(PackReport.Source.PACKS, Map.of(), problems);
         }
     }
 }

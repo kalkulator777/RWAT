@@ -13,6 +13,8 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.junit.jupiter.api.Test;
 
+import com.muzhik17.trainsmod.stock.ObjFrame;
+
 /**
  * The IR {@code .anim} reader and its change into render-model space (SPEC
  * v1.5, doors), checked against the real platzkart door asset (a test
@@ -22,7 +24,7 @@ import org.junit.jupiter.api.Test;
 class IrAnimTest {
 
     /** IrStockModel's lift: railhead 0.40625 + tread offset 0.03. */
-    private static final float Y_LIFT = 0.43625F;
+    private static final float Y_LIFT = (float) ObjFrame.Y_LIFT;
     private static final String LEAF = "DOOR_1_TOGGLE_EXTERNAL_CG_Door1_mvp_amendorf";
 
     private static Map<String, List<float[]>> door1() throws IOException {
