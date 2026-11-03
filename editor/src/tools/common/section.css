@@ -1,6 +1,8 @@
 /*
- * The floor tool's section of the inspector (src/tools/floor/FloorInspector.tsx). Colours
- * are the shell's (app/styles.css); the legend's swatches are the view's overlay styles.
+ * A markup tool's section of the inspector (src/tools/ToolBar.tsx `ToolSection`, and the
+ * sections of the zones and doors tools): its notes, rows, lists of shapes, boxes of numbers
+ * and switches, findings and legend. Colours are the shell's (app/styles.css); the legend's
+ * swatches are the view's overlay styles.
  */
 
 .tool-section {
@@ -9,39 +11,39 @@
   border-bottom: 1px solid var(--border);
 }
 
-.floor-tool {
+.tool-body {
   display: flex;
   flex-direction: column;
   gap: 10px;
   margin-top: 6px;
 }
 
-.floor-note {
+.tool-note {
   margin: 0;
   font-size: 12px;
   color: var(--text-muted);
 }
 
-.floor-warning {
+.tool-warning {
   color: var(--text);
   font-weight: 600;
 }
 
-.floor-row {
+.tool-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
 }
 
-.floor-label,
-.floor-heading {
+.tool-label,
+.tool-heading {
   font-weight: 600;
   font-size: 13px;
   margin: 0;
 }
 
-.floor-zone-list {
+.tool-list {
   list-style: none;
   margin: 4px 0;
   padding: 0;
@@ -50,13 +52,13 @@
   gap: 2px;
 }
 
-.floor-zone {
+.tool-item {
   display: flex;
   align-items: stretch;
   gap: 4px;
 }
 
-.floor-zone-name {
+.tool-item-name {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -72,41 +74,41 @@
   cursor: pointer;
 }
 
-.floor-zone-name[aria-pressed='true'] {
+.tool-item-name[aria-pressed='true'] {
   border-color: var(--accent);
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
-.floor-zone-name:focus-visible,
-.floor-icon:focus-visible,
-.floor-finding:focus-visible {
+.tool-item-name:focus-visible,
+.tool-icon:focus-visible,
+.tool-finding:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 
-.floor-zone-index {
+.tool-item-index {
   font-weight: 600;
 }
 
-.floor-zone-summary {
+.tool-item-summary {
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--text-muted);
 }
 
-.floor-zone-flag {
+.tool-item-flag {
   font-size: 11px;
   padding: 0 4px;
   border-radius: 3px;
   border: 1px solid currentColor;
 }
 
-.floor-zone-actions {
+.tool-item-actions {
   display: flex;
   gap: 2px;
 }
 
-.floor-icon {
+.tool-icon {
   min-width: 26px;
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -115,27 +117,25 @@
   cursor: pointer;
 }
 
-.floor-icon:disabled,
-.floor-finding:disabled {
+.tool-icon:disabled,
+.tool-finding:disabled {
   cursor: default;
   opacity: 0.5;
 }
 
-.floor-numbers,
-.floor-snap {
+.tool-box {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 4px 8px 8px;
   margin: 0;
 }
 
-.floor-numbers legend,
-.floor-snap legend {
+.tool-box legend {
   font-weight: 600;
   padding: 0 4px;
 }
 
-.floor-grid {
+.tool-grid {
   display: grid;
   grid-template-columns: auto repeat(3, minmax(0, 1fr));
   gap: 4px;
@@ -143,25 +143,23 @@
   margin-bottom: 4px;
 }
 
-.floor-axis,
-.floor-corner {
+.tool-axis {
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--text-muted);
   text-align: center;
 }
 
-.floor-grid .field-input-wrap {
+.tool-grid .field-input-wrap {
   min-width: 0;
 }
 
-.floor-grid .field-input {
+.tool-grid .field-input {
   width: 100%;
   box-sizing: border-box;
 }
 
-.floor-pick,
-.floor-add {
+.tool-button {
   align-self: flex-start;
   margin-top: 4px;
   padding: 3px 10px;
@@ -172,12 +170,12 @@
   cursor: pointer;
 }
 
-.floor-pick[aria-pressed='true'] {
+.tool-button[aria-pressed='true'] {
   background: var(--accent);
   color: var(--accent-text);
 }
 
-.floor-finding-list {
+.tool-finding-list {
   list-style: none;
   margin: 4px 0;
   padding: 0;
@@ -186,7 +184,7 @@
   gap: 2px;
 }
 
-.floor-finding {
+.tool-finding {
   width: 100%;
   text-align: left;
   padding: 3px 6px;
@@ -198,13 +196,13 @@
   cursor: pointer;
 }
 
-.floor-check {
+.tool-check {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.floor-legend {
+.tool-legend {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -213,13 +211,13 @@
   font-size: 12px;
 }
 
-.floor-legend li {
+.tool-legend li {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.floor-swatch {
+.tool-swatch {
   width: 14px;
   height: 10px;
   border-radius: 2px;

@@ -12,7 +12,7 @@
 
 import { batch, effect, signal, type ReadonlySignal, type Signal } from '@preact/signals';
 import type { Command, Link, PickHit } from '../../core/contracts';
-import { ALL_SNAPPING, type Snapping } from '../floor/snap';
+import { ALL_SNAPPING, type Snapping } from '../common/snap';
 import { zonesOf } from '../floor/zones';
 import type { ToolContext, ToolSession, ToolSubject } from '../registry';
 import { DOORS_LAYERS, doorsPicture, type DoorsPicture } from './analysis';
@@ -24,11 +24,11 @@ import {
   freshDoorId,
   moveDoorTo,
   removeDoor,
+  renameDoor,
   selectedDoors,
   selectedObjects,
   setDoorFlag,
   setDoorGroup,
-  setDoorId,
   setDoorNumber,
   type DoorBox,
   type DoorFlag,
@@ -59,7 +59,7 @@ export interface DoorsTool {
   /** Moves door `index` to place `to` in the list. */
   reorder(index: number, to: number): void;
   setNumber(index: number, corner: 'min' | 'max', axis: 0 | 1 | 2, value: number): void;
-  /** Sets door `index`'s id; false for an empty one, which is refused. */
+  /** Sets door `index`'s id, the model's keys of its animation and sounds with it, in one command; false for an empty one, which is refused. */
   setId(index: number, id: string): boolean;
   setFlag(index: number, flag: DoorFlag, on: boolean): void;
   setGroup(index: number, group: string): void;
@@ -152,7 +152,7 @@ export function startDoors(context: ToolContext): Pick<ToolSession, 'dispose'> &
     setId(index, id) {
       if (id === '') return false;
       const now = subject();
-      return dispatch(setDoorId(now.typeFile, now.typeJson, index, id));
+      return dispatch(renameDoor(now.typeFile, now.typeJson, now.modelFile, now.modelJson, index, id));
     },
     setFlag(index, flag, on) {
       const now = subject();
@@ -177,12 +177,13 @@ export function startDoors(context: ToolContext): Pick<ToolSession, 'dispose'> &
 
   // a double click on an object of the model: its door if it moves with one, else a door made of it
   const stopPicking = context.view.onPick((hit: PickHit) => {
-    if (!hit.double || hit.object === undefined) return;
+    if (!hit.double || hit.object === undefined) return false;
     const model = subject().model;
-    if (model === null || !selectedObjects(context.selection.peek(), model.id).includes(hit.object)) return;
+    if (model === null || !selectedObjects(context.selection.peek(), model.id).includes(hit.object)) return false;
     const mover = picture.peek()?.movers.find((m) => m.door >= 0 && m.objects.includes(hit.object as string));
-    if (mover !== undefined) select(mover.door);
-    else tool.fromObjects([hit.object]);
+    if (mover === undefined) return tool.fromObjects([hit.object]);
+    select(mover.door);
+    return true;
   });
 
   const dragger = new DoorsDragger({ subject, selected, select, dispatch, snapping: () => snapping.peek() });

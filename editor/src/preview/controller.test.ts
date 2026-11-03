@@ -20,7 +20,8 @@ import { EXAMPLE_PACK } from '../testing/repo.node';
 import { PreviewController, type PreviewSubject, type Ticker } from './controller';
 import { DOOR_ANIM_TICKS, TICK_MS } from './doors';
 import { HEADLIGHT_STYLE, LAMP_STYLE, LIGHTS_LAYER } from './scene';
-import { assetPath, cornersOf, exampleSubject, objText, recordingView, type RecordingView } from './testing.node';
+import { parseWagonType } from '../ports/wagonType';
+import { assetPath, cornersOf, exampleSubject, objText, packText, recordingView, type RecordingView } from './testing.node';
 
 /** A frame written row by row as the view takes it, column by column: its transpose (ports/controlPose `rowMajor` transposes any 4×4). */
 function transposed(rows: ArrayLike<number>): number[] {
@@ -363,7 +364,8 @@ describe('the livery', () => {
     preview.setDoor(SALON_DOOR, 1);
     expect(view.textures.size).toBe(0);
     expect(view.transforms.has('SALON_DOOR_KNOB')).toBe(true);
-    preview.load(subjects.coach);
+    // the model read anew (an edit of its files): another model, though of the same files
+    preview.load({ ...subjects.coach, model: { ...subjects.coach.model } });
     answer({});
     await Promise.resolve();
     expect(view.textures.size).toBe(0);
@@ -436,6 +438,38 @@ describe('the preview as a whole', () => {
     expect(state.groups.size).toBe(0);
     expect(state.livery).toBeNull();
     expect(state.inputs.get('HANDBRAKE_1')).toBe(0);
+  });
+
+  it('keeps its state when the model comes again with its type edited: each door by its id, the controls, groups and livery', () => {
+    const ticker = handTicker();
+    const { preview, view } = setUp('coach', ticker);
+    preview.setDoor(0, 1); // door_fl open
+    preview.toggleDoor(2); // door_rl opening
+    preview.tick();
+    preview.setGroup('IL', 1);
+    preview.setLivery('blue');
+    const swinging = preview.state.value!.doors[2];
+    const leaf = list(view.transforms.get('DOOR_1_TL_0.95_X'));
+    // door_fl moved to the end of the list, a door added before the rest: the indices change, the ids stay
+    const json = JSON.parse(packText('data/rwat_example/wagon_types/coach.json')) as { doors: { id: string }[] };
+    json.doors.push(json.doors.shift()!);
+    json.doors.unshift({ ...json.doors[0]!, id: 'added' });
+    view.clearCalls();
+    preview.load({ ...subjects.coach, type: parseWagonType('rwat_example:coach', json) });
+    const state = preview.state.value!;
+    expect(state.doors).toEqual([0, 0, swinging, 0, 0, 0, 0, 0, 1]);
+    expect(state.heading[2]).toBe(1);
+    expect(ticker.running).toBe(1);
+    expect(state.groups.get('IL')).toBe(1);
+    expect(state.livery).toBe('blue');
+    // the view is not shown the model anew, nor told again what stands where it stood
+    expect(view.shown).toHaveLength(1);
+    expect(list(view.transforms.get('DOOR_1_TL_0.95_X'))).toEqual(leaf);
+    expect(view.calls.filter((call) => call.object === 'DOOR_1_TL_0.95_X')).toEqual([]);
+    // another model starts over
+    preview.load(subjects.shunter);
+    expect(preview.state.value!.doors).toEqual([0, 0]);
+    expect(ticker.running).toBe(0);
   });
 
   it('tells a new view everything, and nothing when there is no model or no view', () => {

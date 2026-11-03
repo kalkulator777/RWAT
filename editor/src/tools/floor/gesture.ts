@@ -11,9 +11,9 @@
  * the top too, while a zone waits for its height.
  */
 
-import type { Command } from '../../core/contracts';
-import type { ViewDragger, ViewPointer } from '../../view3d/state';
-import { clean, SNAP_PX, snapShift, snapValue, vertexLines, zoneEdges, type SnapLines, type Snapping } from './snap';
+import type { Command, ViewDragger, ViewPointer } from '../../core/contracts';
+import { nearEnd, planPoint } from '../common/plane';
+import { clean, SNAP_PX, snapShift, snapValue, vertexLines, zoneEdges, type SnapLines, type Snapping } from '../common/snap';
 import { addZone, setZone, zoneOver, zonesOf, type PlanRect, type ZoneBox } from './zones';
 import type { ToolSubject } from '../registry';
 
@@ -42,21 +42,6 @@ export type Grab =
   | { readonly kind: 'move'; readonly index: number }
   /** An edge (one axis) or a corner (both): which end of x and of z moves. */
   | { readonly kind: 'stretch'; readonly index: number; readonly x: 'min' | 'max' | null; readonly z: 'min' | 'max' | null };
-
-/** Where a ray meets the level y = `height`, as a point of the plan; null for a ray along the level. */
-export function planPoint(at: ViewPointer, height: number): [number, number] | null {
-  const dy = at.direction[1];
-  if (Math.abs(dy) < 1e-6) return null;
-  const t = (height - at.origin[1]) / dy;
-  return [at.origin[0] + t * at.direction[0], at.origin[2] + t * at.direction[2]];
-}
-
-function nearEnd(value: number, min: number, max: number, tolerance: number): 'min' | 'max' | null {
-  const toMin = Math.abs(value - min);
-  const toMax = Math.abs(value - max);
-  if (Math.min(toMin, toMax) > tolerance) return null;
-  return toMin <= toMax ? 'min' : 'max';
-}
 
 /** What a press at (x, z) grabs of one zone: an edge or a corner within `tolerance`, its inside, or nothing. */
 function grabOf(zone: ZoneBox, index: number, x: number, z: number, tolerance: number): Grab | null {

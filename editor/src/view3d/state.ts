@@ -12,14 +12,12 @@
  * the overlays stay: the frame is the wagon's, set with its model; the layers belong to
  * the tools, which clear them themselves.
  *
- * Beyond `ViewApi`, a markup tool may take the presses of the left button
- * ({@link ViewDragger}, `setDragger`): it draws and drags its shapes where the camera
- * would otherwise turn or pan.
+ * A markup tool may take the presses of the left button (`ViewApi.setDragger`, core/contracts
+ * `ViewDragger`): it draws and drags its shapes where the camera would otherwise turn or pan.
  */
 
 import { batch, signal } from '@preact/signals';
-import type { DisplayMode, LoadedModel, OverlayShape, PickHit, Vec3, ViewApi, WagonFrame } from '../core/contracts';
-import type { CameraView } from './cameras';
+import type { CameraView, DisplayMode, LoadedModel, OverlayShape, PickHit, Vec3, ViewApi, ViewDragger, WagonFrame } from '../core/contracts';
 
 /** What the drawing does with a change the state cannot give it as a signal: one object's, one texture's or one layer's. */
 export interface ViewSink {
@@ -34,44 +32,6 @@ export interface ViewSink {
 export interface Hover {
   object: string;
   point: Vec3;
-}
-
-/** Where the pointer is, as a tool that takes the view's presses reads it (./viewport.ts, {@link ViewDragger}). */
-export interface ViewPointer {
-  /** The ray from the eye through the pointer, OBJ frame. */
-  readonly origin: Vec3;
-  /** The ray's direction, of length 1. */
-  readonly direction: Vec3;
-  /** How many blocks one CSS pixel spans at the camera's target: a tolerance in pixels made one in blocks. */
-  readonly pixel: number;
-  /** The camera's view: a tool may take the presses of some views only (the floor's, from the top). */
-  readonly view: CameraView;
-  readonly shift: boolean;
-  /** Ctrl, or ⌘ on a Mac. */
-  readonly ctrl: boolean;
-  readonly alt: boolean;
-}
-
-/**
- * A tool that takes presses of the left button in the view instead of the camera: the
- * markup tools draw, move and stretch their shapes by dragging (docs/proposals/editor.md
- * §3.9). The view asks it at every press of the left button; a press it takes moves no
- * camera and, unless {@link click} gives it back, picks nothing. One at a time
- * ({@link ViewState.setDragger}).
- */
-export interface ViewDragger {
-  /** The left button went down: true takes the press — its drag, and its click unless {@link click} gives it back. */
-  press(at: ViewPointer): boolean;
-  /** The pointer moved, the button held, once it is past the click's slop. */
-  drag(at: ViewPointer): void;
-  /** The button went up after a drag. */
-  release(at: ViewPointer): void;
-  /** The button went up where it went down: true if the tool took the click, false for the view's own (pick and select). */
-  click(at: ViewPointer): boolean;
-  /** The press ended without a release (the pointer was cancelled or lost). */
-  cancel(): void;
-  /** The pointer moves with no button held (null: it left the view): the CSS cursor to show, null for the view's own. */
-  hover?(at: ViewPointer | null): string | null;
 }
 
 /** The layer switch of the ghosts: the roles the engine drops. */
@@ -111,7 +71,7 @@ export class ViewState implements ViewApi {
   readonly overlays = new Map<string, readonly OverlayShape[]>();
 
   private sink: ViewSink | null = null;
-  private readonly listeners = new Set<(hit: PickHit) => void>();
+  private readonly listeners = new Set<(hit: PickHit) => boolean | void>();
   private draggerOf: ViewDragger | null = null;
 
   show(model: LoadedModel | null): void {
@@ -173,16 +133,18 @@ export class ViewState implements ViewApi {
     this.sink?.overlayChanged(layer);
   }
 
-  onPick(listener: (hit: PickHit) => void): () => void {
+  onPick(listener: (hit: PickHit) => boolean | void): () => void {
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);
     };
   }
 
-  /** Tells every pick listener what a click hit (the drawing calls it). */
-  emitPick(hit: PickHit): void {
-    for (const listener of [...this.listeners]) listener(hit);
+  /** Tells every pick listener what a click hit (the drawing calls it); true when one of them took the click as its own. */
+  emitPick(hit: PickHit): boolean {
+    let taken = false;
+    for (const listener of [...this.listeners]) if (listener(hit) === true) taken = true;
+    return taken;
   }
 
   /** Gives the presses of the left button to a tool, or back to the camera (null). One tool at a time: the last set wins. */

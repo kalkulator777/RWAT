@@ -126,12 +126,21 @@ export function typeFloorProblems(id: string, file: string, type: unknown): Prob
   return problems;
 }
 
+/** A wagon type as the floor check reads it: its id, its file and its value as the pack holds it now. */
+export interface FloorType {
+  readonly id: string;
+  readonly file: string;
+  readonly value: unknown;
+}
+
+/** The types of the pack the floor check reads — each one whose file is JSON — in id order. */
+export function floorTypes(pack: Pack): FloorType[] {
+  return pack.stock().flatMap((entry) =>
+    entry.type === null || pack.jsonError(entry.type) !== null ? [] : [{ id: entry.id, file: entry.type, value: pack.json(entry.type) }],
+  );
+}
+
 /** The floor check's findings of every type of the pack, in id order. */
 export function floorProblems(pack: Pack): Problem[] {
-  const out: Problem[] = [];
-  for (const entry of pack.stock()) {
-    if (entry.type === null || pack.jsonError(entry.type) !== null) continue;
-    out.push(...typeFloorProblems(entry.id, entry.type, pack.json(entry.type)));
-  }
-  return out;
+  return floorTypes(pack).flatMap((type) => typeFloorProblems(type.id, type.file, type.value));
 }

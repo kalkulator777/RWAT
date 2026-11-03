@@ -21,7 +21,7 @@ import type { FloorFinding, Link, OverlayShape, Vec3 } from '../../core/contract
 import { MAX_SEAT_HEIGHT, MIN_SEAT_HEIGHT } from '../../ports/floorCheck';
 import { SEAT_REACH } from '../../ports/riderWalk';
 import { Seat, type WagonType } from '../../ports/wagonType';
-import { CAB_STYLES } from '../floor/analysis';
+import { cabStyle } from '../common/styles';
 import { floorFindingsOf } from './chairs';
 import { facing, placeLink, PLACE_KINDS, samePlace, type Place, type PlaceFacts, type PlaceKind, type PlaceRef } from './places';
 
@@ -71,7 +71,7 @@ export interface SeatsPicture extends PlaceAnalysis {
 /** The style of a place's disc: its cab's shade, or the plain chair's without a cab. */
 export function discStyle(facts: PlaceFacts | null): string {
   const cab = facts?.cab ?? -1;
-  return cab >= 0 ? (CAB_STYLES[cab % CAB_STYLES.length] as string) : 'seat';
+  return cab >= 0 ? cabStyle(cab) : 'seat';
 }
 
 /** True if a yaw drives backward: more than 90° off forward (`WagonType.Seat.facesBack`). */

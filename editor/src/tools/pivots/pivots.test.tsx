@@ -128,7 +128,7 @@ describe('the hinges tool turned on', () => {
     fireEvent.click(q('[data-action="pivots-select"]') as HTMLElement);
     expect(b.selection.value.map((l) => (l.kind === 'object' ? l.name : ''))).toEqual(['TRAIN_BRAKE_1_ROT_90', 'TRAIN_BRAKE_1_HANDLE', 'TRAIN_BRAKE_1_KNOB']);
 
-    await act(() => b.view.emitPick({ object: 'WIDGET_1_TOGGLE_CG_FHL_OFFSET_-0.5', point: [1.05, 2.55, 0.65], shift: false, ctrl: false, alt: false, double: false }));
+    await act(() => void b.view.emitPick({ object: 'WIDGET_1_TOGGLE_CG_FHL_OFFSET_-0.5', point: [1.05, 2.55, 0.65], shift: false, ctrl: false, alt: false, double: false }));
     expect(tool.chosen.value).toBe(index('WIDGET_1'));
     expect(q('[data-fact="travel"]')?.textContent).toBe('value from -0.5 to 0.5 (OFFSET -0.5)');
     // pressed again in the list: none chosen

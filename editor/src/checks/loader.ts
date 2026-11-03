@@ -21,20 +21,24 @@
 import type { Link, Problem } from '../core/contracts';
 import { isJsonObject } from '../core/json';
 import { classify, MCMETA, modelPath, SUPPORTED_FORMAT, typePath, type Pack } from '../core/pack';
+import { isResourcePath } from '../core/paths';
+import { splitLocation } from '../model/resources';
 import { geometryFaults, type GeometryFault } from '../ports/wagonType';
 
-/** A path Minecraft takes as a resource location: `assets|data/<namespace>/<path>`, lower case (`ResourceLocation`). */
-const RESOURCE_PATH = /^(?:assets|data)\/[a-z0-9_.-]+\/[a-z0-9_./-]+$/;
-
-/** True for a file under `assets/` or `data/` whose path Minecraft refuses as a resource location. */
+/** True for a file under `assets/` or `data/` whose path Minecraft refuses as a resource location (core/paths `isResourcePath`). */
 export function isBadResourcePath(path: string): boolean {
-  return /^(?:assets|data)\//.test(path) && !RESOURCE_PATH.test(path);
+  return /^(?:assets|data)\//.test(path) && !isResourcePath(path);
 }
 
-/** `ns:path` or `path` (the declaring namespace's) → the pack file it names under `assets/`. */
+/**
+ * `ns:path` or `path` (the declaring namespace's) → the pack file it names under `assets/`;
+ * a qualified one split as Minecraft splits it (model/resources `splitLocation`: `:a` is
+ * `minecraft:a`).
+ */
 export function resourceFile(ref: string, namespace: string): string {
-  const colon = ref.indexOf(':');
-  return colon < 0 ? `assets/${namespace}/${ref}` : `assets/${ref.slice(0, colon)}/${ref.slice(colon + 1)}`;
+  if (!ref.includes(':')) return `assets/${namespace}/${ref}`;
+  const location = splitLocation(ref);
+  return `assets/${location.namespace}/${location.path}`;
 }
 
 function field(file: string, at: string): Link[] {

@@ -7,7 +7,8 @@ import { PLAYER_HALF_WIDTH } from '../../ports/riderWalk';
 import { loadWagonType, type WagonType } from '../../ports/wagonType';
 import { OVERLAY_STYLES } from '../../view3d/overlays';
 import { openExamplePack } from '../testing.node';
-import { CAB_STYLES, FLOOR_LAYERS, floorAt, floorPicture, hatch, openMaskOf, planFromModel } from './analysis';
+import { CAB_STYLES } from '../common/styles';
+import { FLOOR_LAYERS, floorAt, floorPicture, hatch, openMaskOf, planFromModel } from './analysis';
 import { zoneLink, zoneOver } from './zones';
 
 const { pack } = await openExamplePack();

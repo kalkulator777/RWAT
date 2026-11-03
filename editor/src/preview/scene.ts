@@ -16,7 +16,7 @@ import { controlValue, controlVisible } from '../ports/controlPose';
 import { litMask, shines } from '../ports/lights';
 import { drawn, type Coupler, type Headlight, type Lamp, type Light, type ModelControl, type Place } from '../ports/modelParts';
 import { headShownAt, type Control } from '../ports/objectRole';
-import type { WagonType } from '../ports/wagonType';
+import { equalsIgnoreCase, type WagonType } from '../ports/wagonType';
 import { animatedDoor, doorCount, leafDoor, progressOf } from './doors';
 import { controlInput, controlPosition } from './inputs';
 import { animMatrix, movingMatrix, objDirection, objPoint } from './pose';
@@ -141,6 +141,35 @@ export function initialState(r: Rig): PreviewState {
     groups: new Map(),
     coupled: { front: false, rear: false },
     livery: null,
+  };
+}
+
+/**
+ * The state of the same model once its type is edited (`after`, the rig of the type as it
+ * is now; `before`, the one `state` was of): each door of the type keeps where it stood and
+ * where it was heading by its id, as the engine keeps which doors stand open (case aside,
+ * the first of an id); a door new to the type, or renamed, stands shut. The controls, the
+ * groups, the couplers and the livery are the model's and stay as they are.
+ */
+export function retypedState(state: PreviewState, before: Rig, after: Rig): PreviewState {
+  const fresh = initialState(after);
+  const old = before.type?.doors ?? [];
+  const was = (i: number): number => {
+    const id = after.type?.doors[i]?.id;
+    return id === undefined ? -1 : old.findIndex((door) => equalsIgnoreCase(door.id, id));
+  };
+  const inputs = new Map(fresh.inputs);
+  for (const key of inputs.keys()) {
+    const value = state.inputs.get(key);
+    if (value !== undefined) inputs.set(key, value);
+  }
+  return {
+    doors: fresh.doors.map((shut, i) => state.doors[was(i)] ?? shut),
+    heading: fresh.heading.map((still, i) => state.heading[was(i)] ?? still),
+    inputs,
+    groups: state.groups,
+    coupled: state.coupled,
+    livery: state.livery,
   };
 }
 

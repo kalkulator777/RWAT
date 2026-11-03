@@ -154,6 +154,16 @@ describe('minimal edits, case by case', () => {
     expect(set('{"a": 1,}', ['b'], 2)).toBe('{"a": 1, "b": 2}');
   });
 
+  it('adds a member where the new value has it: before the first member after it the text has', () => {
+    expect(edited('{\n  "a": 1,\n  "c": 3\n}\n', { a: 1, b: 2, c: 3 })).toBe('{\n  "a": 1,\n  "b": 2,\n  "c": 3\n}\n');
+    expect(edited('{\n  "c": 3\n}', { a: { x: 1 }, b: 2, c: 3 })).toBe('{\n  "a": {\n    "x": 1\n  },\n  "b": 2,\n  "c": 3\n}');
+    expect(edited('{"a": 1, "c": 3}', { a: 1, b: [1, 2], c: 3 })).toBe('{"a": 1, "b": [1, 2], "c": 3}');
+    // after the members the text has, at the end as before
+    expect(edited('{"a": 1, "c": 3}', { a: 1, c: 3, d: 4 })).toBe('{"a": 1, "c": 3, "d": 4}');
+    // the members the text has stay where they are, whatever the value's order: one added goes before the first after it
+    expect(edited('{\n  "a": 1,\n  "b": 2,\n  "c": 3\n}', { d: 4, c: 3, a: 1 })).toBe('{\n  "a": 1,\n  "d": 4,\n  "c": 3\n}');
+  });
+
   it('removes members with their line, or their own text on one line', () => {
     expect(remove('{\n  "a": 1,\n  "b": 2,\n  "c": 3\n}', ['b'])).toBe('{\n  "a": 1,\n  "c": 3\n}');
     expect(remove('{\n  "a": 1, // about a\n  "b": 2 // about b\n}', ['b'])).toBe('{\n  "a": 1 // about a\n}');

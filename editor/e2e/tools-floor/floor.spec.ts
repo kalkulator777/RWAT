@@ -2,9 +2,9 @@
  * The floor tool in the built site (docs/proposals/editor.md §2.3, §3.9, M4): turned on in
  * the view's bar it looks at the coach from the top and draws its floor; a zone drawn with
  * the mouse beside the corridor, too short for a player, brings the floor check's
- * `ZONE_TOO_NARROW` up — in the tool's own indicator and its warning colour, until the
- * checks tab lists the floor's findings (A4.4) —; stretched by its edge it holds a place and
- * the finding goes; undone, it comes back. Screenshots of each step go to the test's output.
+ * `ZONE_TOO_NARROW` up — in the tool's list of findings, in the words the checks tab has, and
+ * in its warning colour —; stretched by its edge it holds a place and the finding goes;
+ * undone, it comes back. Screenshots of each step go to the test's output.
  *
  * The model comes as it comes to a user (e2e/examplePack.ts); where a point of the OBJ
  * frame is on the page the test hook says (src/view3d/testHook.ts).

@@ -2,7 +2,7 @@
  * The floor tool while it is on (docs/proposals/editor.md §2.3, §3.9): the view goes to the
  * top, the tool takes its presses (./gesture.ts), draws its layers (./analysis.ts) again
  * after every edit, and, asked to, takes a zone's floor height from the next click on the
- * model (./height.ts). Its state — the doors' state the floor is drawn with, what edges
+ * model (./height.ts) — a click it takes as its own: the zone stays selected. Its state — the doors' state the floor is drawn with, what edges
  * snap to, the zone waiting for its height — lives here, read by the inspector's section
  * (./FloorInspector.tsx).
  *
@@ -17,7 +17,7 @@ import type { ToolContext, ToolSession, ToolSubject } from '../registry';
 import { FLOOR_LAYERS, floorPicture, type DoorState, type FloorPicture } from './analysis';
 import { FloorDragger } from './gesture';
 import { floorUnder, vertexYNear } from './height';
-import { ALL_SNAPPING, type Snapping } from './snap';
+import { ALL_SNAPPING, type Snapping } from '../common/snap';
 import { addZone, moveZoneTo, removeZone, selectedZones, setZoneHeight, setZoneNumber, zoneLink, zoneOver, zonesOf, type ZoneBox } from './zones';
 
 /**
@@ -41,7 +41,7 @@ export interface FloorTool {
   /** The selected zone (the last of the selection's), or null. */
   selected(): number | null;
   select(index: number | null, toggle?: boolean): void;
-  /** Selects what a finding points at (zones, a door, a chair). */
+  /** Selects what a finding points at (zones, a door, a chair) and turns on the tool that edits it: a door's finding, the doors tool. */
   show(links: readonly Link[]): void;
   dispatch(command: Command): boolean;
   /** Adds a zone (from the keyboard): a block's square in the middle of the selected zone (or the first), on its floor; with no zone, at the car's middle. */
@@ -114,7 +114,9 @@ export function startFloor(context: ToolContext, options: { settleMs?: number; s
     selected,
     select,
     show(links) {
-      if (links.length > 0) context.selection.value = [...links];
+      if (links.length === 0) return;
+      context.selection.value = [...links];
+      context.reveal(links);
     },
     dispatch,
     add() {
@@ -171,15 +173,16 @@ export function startFloor(context: ToolContext, options: { settleMs?: number; s
     else timer = setTimeout(draw, settle);
   });
 
-  // a zone's height from a click on the model
+  // a zone's height from a click on the model: the click is the tool's, the zone stays selected
   const stopPicking = context.view.onPick((hit: PickHit) => {
     const index = pickingHeight.peek();
-    if (index === null || hit.object === undefined || hit.point === undefined) return;
+    if (index === null || hit.object === undefined || hit.point === undefined) return false;
     const model = subject().model;
     const y = model === null ? null : vertexYNear(model, hit.object, hit.point);
     pickingHeight.value = null;
     if (y !== null) tool.setHeight(index, y);
     select(index);
+    return true;
   });
 
   const dragger = new FloorDragger({

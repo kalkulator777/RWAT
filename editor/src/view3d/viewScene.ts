@@ -23,7 +23,7 @@ import {
   Vector2,
   Vector3,
 } from 'three';
-import type { Link, OverlayShape, PickHit, Vec3 } from '../core/contracts';
+import type { Link, OverlayShape, PickHit, Vec3, ViewPointer } from '../core/contracts';
 import { FOV, frameOrtho, framePerspective, pixelsPerBlock, placeOrtho, placePerspective, VIEW_PRESETS, type CameraView } from './cameras';
 import { GUIDE_LAYERS, Guides } from './guides';
 import { ModelScene, type ModelLook, type ObjectHit } from './modelScene';
@@ -31,7 +31,7 @@ import { add, ordered, pickShape } from './overlayGeometry';
 import { disposeLayer, layerObject } from './overlays';
 import { VIEW_BACKGROUND } from './roleColors';
 import { isSelected, objectLink, selectedObjects, selectionAfterClick } from './selection';
-import { GHOSTS_LAYER, type Hover, type ViewPointer, type ViewState } from './state';
+import { GHOSTS_LAYER, type Hover, type ViewState } from './state';
 
 /** The light, as a share of what shows a colour as it is (π in three.js's units): even light for the roles and textures… */
 export const LIGHT_DAY = { ambient: 0.62, sun: 0.42 } as const;
@@ -319,7 +319,7 @@ export class ViewScene {
   }
 
   /**
-   * A point of the drawing as a tool that takes the presses reads it (state `ViewPointer`):
+   * A point of the drawing as a tool that takes the presses reads it (core/contracts `ViewPointer`):
    * the ray through it, the blocks one CSS pixel spans at the target for a drawing
    * `heightPx` CSS pixels tall, the view, the keys.
    */
@@ -364,12 +364,13 @@ export class ViewScene {
 
   /**
    * A click at a point of the drawing: tells the pick listeners what it hit and how it was
-   * clicked, then selects it (Shift: adds it, or takes it out); a click on nothing keeps the
-   * selection. Returns the hit.
+   * clicked, then selects it (Shift: adds it, or takes it out) — unless a listener took the
+   * click as its own (a tool that placed something there selects that); a click on nothing
+   * keeps the selection. Returns the hit.
    */
   clickAt(x: number, y: number, keys: ClickKeys = {}): ViewHit {
     const hit = this.hitAt(x, y);
-    this.state.emitPick(pickOf(hit, keys, false));
+    if (this.state.emitPick(pickOf(hit, keys, false))) return hit;
     const model = this.modelScene?.model.id ?? null;
     const link = hit.object !== undefined && model !== null ? objectLink(model, hit.object.object) : (hit.link ?? null);
     const next = selectionAfterClick(this.selection.peek(), link, keys.shift === true);

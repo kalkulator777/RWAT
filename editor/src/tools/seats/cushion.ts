@@ -13,13 +13,11 @@
  */
 
 import type { LoadedModel, Vec3 } from '../../core/contracts';
-import { clean, floatDecimal, free } from '../floor/snap';
+import { LEVEL } from '../common/faces';
+import { clean, floatDecimal, free } from '../common/snap';
 
 /** A level face no wider than this across, blocks, is a cushion: a click on it takes its middle. */
 export const CUSHION_SIZE = 1.2;
-
-/** A face this close to level (the y of its unit normal, up or down) is level. */
-const LEVEL = 0.95;
 
 /** Corners closer than this, blocks, are one corner; faces whose heights differ by less are at one height. */
 const SAME = 1.0e-4;

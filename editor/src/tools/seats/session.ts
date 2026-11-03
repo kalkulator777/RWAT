@@ -6,8 +6,8 @@
  * clicked. Its state — what a moved place snaps to — lives here, read by the inspector's
  * section (./SeatsInspector.tsx).
  *
- * A click on the model selects the object it hit right after telling the tool (the view's
- * own selection): the chair placed is selected again once that is done.
+ * A click that places a chair is the tool's (`ViewApi.onPick`): the view selects nothing
+ * by it, and the chair placed stays selected.
  *
  * The places drawn are worked out once a file's value (the pack never changes one in
  * place): a selection only draws them again. Worked out, they cost the floor check and the
@@ -19,7 +19,7 @@
 import { batch, effect, signal, type ReadonlySignal, type Signal } from '@preact/signals';
 import type { Command, Link, PickHit, Vec3 } from '../../core/contracts';
 import type { WagonType } from '../../ports/wagonType';
-import { free } from '../floor/snap';
+import { free } from '../common/snap';
 import { zonesOf } from '../floor/zones';
 import type { ToolContext, ToolSession, ToolSubject } from '../registry';
 import { analysePlaces, SEAT_LAYERS, seatsPicture, type PlaceAnalysis, type PlaceView, type SeatsPicture } from './analysis';
@@ -48,7 +48,7 @@ export interface SeatsTool {
   /** The place selected last, or null. */
   selected(): PlaceRef | null;
   select(ref: PlaceRef | null, toggle?: boolean): void;
-  /** Selects what a finding points at (its chair, or the field of the cab). */
+  /** Selects what a finding points at (its chair, or the field of the cab), the tool that edits it on (`ToolContext.reveal`). */
   show(links: readonly Link[]): void;
   dispatch(command: Command): boolean;
   /** Places a place of `kind` where a click at `point` on `object` puts one (`exact`: the point itself); false when nothing was placed. */
@@ -83,7 +83,6 @@ export function startSeats(context: ToolContext, options: { settleMs?: number; s
   const subject = (): ToolSubject => context.subject.peek() as ToolSubject;
   const snapping = signal<SeatSnapping>(ALL_SEAT_SNAPPING);
   const picture = signal<SeatsPicture | null>(null);
-  let disposed = false;
 
   const chosen = (): PlaceRef[] => {
     const now = context.subject.peek();
@@ -129,20 +128,16 @@ export function startSeats(context: ToolContext, options: { settleMs?: number; s
     selected,
     select,
     show(links) {
-      if (links.length > 0) context.selection.value = [...links];
+      if (links.length === 0) return;
+      context.selection.value = [...links];
+      context.reveal(links);
     },
     dispatch,
     placeOn(object, point, exact = false, kind = kinds[0]) {
       const model = subject().model;
       if (model === null || kind === undefined) return false;
       const at: Vec3 = exact ? [free(point[0]), free(point[1]), free(point[2])] : placeAt(model, object, point);
-      const ref = addPlace(kind, { at, yaw: 0 }, 'tools.seats.cmd.place');
-      if (ref === null) return false;
-      // the view selects the object clicked right after telling the tool: select the chair again then
-      queueMicrotask(() => {
-        if (!disposed) select(ref);
-      });
-      return true;
+      return addPlace(kind, { at, yaw: 0 }, 'tools.seats.cmd.place') !== null;
     },
     add(kind = kinds[0]) {
       if (kind !== undefined) addPlace(kind, newPlace(subject()));
@@ -213,10 +208,10 @@ export function startSeats(context: ToolContext, options: { settleMs?: number; s
     else timer = setTimeout(draw, settle);
   });
 
-  // a chair where a click lands on the model
+  // a chair where a click lands on the model: the click is the tool's once a chair is placed
   const stopPicking = context.view.onPick((hit: PickHit) => {
-    if (hit.double || hit.shift || hit.ctrl || hit.object === undefined || hit.point === undefined) return;
-    tool.placeOn(hit.object, hit.point, hit.alt);
+    if (hit.double || hit.shift || hit.ctrl || hit.object === undefined || hit.point === undefined) return false;
+    return tool.placeOn(hit.object, hit.point, hit.alt);
   });
 
   const dragger = new SeatDragger({
@@ -233,7 +228,6 @@ export function startSeats(context: ToolContext, options: { settleMs?: number; s
   return {
     tool,
     dispose() {
-      disposed = true;
       stopDrawing();
       stopPicking();
       clearTimeout(timer);

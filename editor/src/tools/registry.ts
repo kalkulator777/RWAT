@@ -21,8 +21,9 @@
  * 3D view into journal commands (§3.4): it reads the type's JSON and writes nothing but
  * through {@link ToolContext.dispatch}. Everything it does by mouse it also does by keyboard
  * in its section of the inspector ({@link ToolSession.Inspector}, §6.3). It draws through
- * the view's overlay layers and takes the view's presses and picks ({@link ToolView}); when
- * it is turned off it takes all of that back ({@link ToolSession.dispose}).
+ * the view's overlay layers, turns its camera and takes its presses and picks (core/contracts
+ * `ViewApi`: `overlay`, `setCamera`, `setDragger`, `onPick`); when it is turned off it takes
+ * all of that back ({@link ToolSession.dispose}).
  *
  * Every spatial field of the wagon type's schema (`x-frame`) has a tool that edits it
  * ({@link ToolDef.fields}, {@link framedFields}): the forms show such a field as a summary
@@ -30,7 +31,8 @@
  * A tool that only shows (the lights, the hinges) edits no field.
  *
  * One tool is on at a time ({@link ToolHost}): the view's bar switches them, a finding
- * clicked in the checks turns on the tool of what it points at ({@link ToolHost.reveal}),
+ * clicked in the checks or in a tool's own list turns on the tool of what it points at
+ * ({@link ToolHost.reveal}, {@link ToolContext.reveal}),
  * the inspector shows the section of the one that is on (./ToolBar.tsx), the shell wires
  * the host to its state (app/start.ts).
  */
@@ -41,18 +43,6 @@ import type { Command, Link, LoadedModel, ViewApi } from '../core/contracts';
 import type { Pack } from '../core/pack';
 import type { FieldDescriptor } from '../core/schema';
 import { loadWagonType, type WagonType } from '../ports/wagonType';
-import type { CameraView } from '../view3d/cameras';
-import type { ViewDragger, ViewPointer } from '../view3d/state';
-
-export type { ViewDragger, ViewPointer };
-
-/** The 3D view as a tool drives it: `ViewApi` (overlays, picks) and, beyond it, the camera and the left button's presses. */
-export interface ToolView extends ViewApi {
-  /** Switches the camera to a view (the floor tool works from the top). */
-  setCamera(camera: CameraView): void;
-  /** Takes the presses of the left button from the camera (null: gives them back); one tool at a time. */
-  setDragger(dragger: ViewDragger | null): void;
-}
 
 /** What a tool works on: the open wagon, a type paired with a model, as the pack holds it now. */
 export interface ToolSubject {
@@ -64,6 +54,8 @@ export interface ToolSubject {
   readonly modelFile: string;
   /** The type's JSON as it stands; shared with the pack: never change it in place. */
   readonly typeJson: unknown;
+  /** The model declaration's JSON as it stands (what names the doors' animations and sounds); shared with the pack: never change it in place. */
+  readonly modelJson: unknown;
   /** The type as the engine reads it (ports/wagonType, model frame); null when it does not load. */
   readonly type: WagonType | null;
   /** The model as the 3D view shows it (OBJ frame); null while it is being read. */
@@ -84,7 +76,13 @@ export interface ToolContext {
   dispatch(command: Command): boolean;
   /** The editor's one selection: zones, doors and chairs are `{kind, type: subject.wagon, index}` links. */
   readonly selection: Signal<readonly Link[]>;
-  readonly view: ToolView;
+  /**
+   * Turns on the tool that edits what `links` point at ({@link ToolHost.reveal}), as a
+   * finding clicked in the checks does: a door's or a chair's finding in a tool's own list
+   * hands over to the doors' or the chairs' tool. Call it after the selection took the links.
+   */
+  reveal(links: readonly Link[]): void;
+  readonly view: ViewApi;
   /**
    * The doors the preview shows open, as the engine's open-door bits (bit i: door i of the
    * type, open or opening); null while there is no preview of this wagon.
@@ -268,7 +266,7 @@ export interface ToolWiring {
   readonly openModel: ReadonlySignal<LoadedModel | null>;
   readonly selection: Signal<readonly Link[]>;
   dispatch(command: Command): boolean;
-  readonly view: ToolView;
+  readonly view: ViewApi;
   /** The preview's open-door bits (see {@link ToolContext.previewDoors}). */
   readonly previewDoors: ReadonlySignal<number | null>;
 }
@@ -290,6 +288,7 @@ export function subjectOf(open: Pack | null, wagon: string | null, model: Loaded
     typeFile: entry.type,
     modelFile: entry.model,
     typeJson,
+    modelJson: open.json(entry.model),
     type,
     model: model?.id === wagon ? model : null,
     readOnly: open.readOnly,
@@ -342,7 +341,7 @@ export class ToolHost {
 
   /**
    * Turns on the tool that edits what `links` point at — a finding the user clicked in the
-   * checks: the tool of the place of a field link into the open wagon's type
+   * checks or in a tool's list: the tool of the place of a field link into the open wagon's type
    * ({@link toolAround}: `/doors/3` → the doors tool, `/cab/seats/0` → the chairs'). Call it
    * after the selection took the links, so that their wagon is the open one; links into no
    * tool's place change nothing.
@@ -397,6 +396,7 @@ export class ToolHost {
       subject: own,
       dispatch: (command) => wiring.dispatch(command),
       selection: wiring.selection,
+      reveal: (links) => this.reveal(links),
       view: wiring.view,
       previewDoors: wiring.previewDoors,
     });

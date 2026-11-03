@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { checkPack } from '../../checks/pack';
 import { exampleModel } from '../../model/testing.node';
 import { openExamplePack } from '../testing.node';
 import {
@@ -11,6 +12,7 @@ import {
   idTaken,
   moveDoorTo,
   removeDoor,
+  renameDoor,
   selectedDoors,
   selectedObjects,
   setDoorBox,
@@ -21,6 +23,7 @@ import {
 } from './doors';
 
 const FILE = 'data/rwat_example/wagon_types/coach.json';
+const MODEL = 'assets/rwat_example/wagon_models/coach.json';
 const COACH = 'rwat_example:coach';
 const BOX = { minX: 0, minY: 1, minZ: 1.4, maxX: 1, maxY: 3, maxZ: 1.46 };
 
@@ -113,6 +116,50 @@ describe('the commands of the doors', () => {
     expect(setDoorId(FILE, json(), 0, 'door_fl').ops).toEqual([]);
     journal.dispatch(setDoorId(FILE, json(), 0, 'front_left'));
     expect(json().doors?.[0]?.id).toBe('front_left');
+  });
+
+  it('rename a door with its animation and sounds: one command over the type and the model, undone in one step to the files as they were', async () => {
+    const { pack, journal, json } = await coach();
+    const model = () => pack.json(MODEL) as { animations: Record<string, string>; sounds: { doors: Record<string, string> } };
+    const texts = async () => [await pack.text(FILE), await pack.text(MODEL)];
+    const before = await texts();
+    const command = renameDoor(FILE, json(), MODEL, model(), 6, 'salon');
+    expect(command.ops).toEqual([
+      { op: 'set', file: FILE, at: '/doors/6/id', value: 'salon' },
+      { op: 'remove', file: MODEL, at: '/animations/salon_door' },
+      { op: 'set', file: MODEL, at: '/animations/salon', value: 'stock/coach/salon_door.anim' },
+      { op: 'remove', file: MODEL, at: '/sounds/doors/salon_door' },
+      { op: 'set', file: MODEL, at: '/sounds/doors/salon', value: 'minecraft:block.wooden_door.open' },
+    ]);
+    journal.dispatch(command);
+    expect(journal.state().done).toHaveLength(1);
+    expect(json().doors?.[6]?.id).toBe('salon');
+    expect(model().animations).toEqual({ salon: 'stock/coach/salon_door.anim' });
+    expect(model().sounds.doors).toHaveProperty('salon');
+    expect(model().sounds.doors).not.toHaveProperty('salon_door');
+    // the loader finds no key that names no door (ExamplePackLoadTest's "a door moved by nothing" is not made)
+    expect(checkPack(pack, null).map((p) => p.code)).not.toContain('loader.door-key');
+    journal.undo();
+    expect(await texts()).toEqual(before);
+  });
+
+  it('rename a door leaving the model’s keys that still name a door, or that the new id has already', async () => {
+    const { json } = await coach();
+    const model = { animations: { salon_door: 'a.anim', SALON: 'b.anim' }, sounds: { doors: { DOOR_FL: 'x' } } };
+    // the new id is a key already: that map stays
+    expect(renameDoor(FILE, json(), MODEL, model, 6, 'salon').ops.filter((op) => op.file === MODEL)).toEqual([]);
+    // the old id case aside: only the type's id changes
+    expect(renameDoor(FILE, json(), MODEL, model, 0, 'Door_FL').ops).toEqual([{ op: 'set', file: FILE, at: '/doors/0/id', value: 'Door_FL' }]);
+    // a key of another case is renamed all the same; no model, the type's id alone
+    expect(renameDoor(FILE, json(), MODEL, model, 0, 'front_left').ops.slice(1)).toEqual([
+      { op: 'remove', file: MODEL, at: '/sounds/doors/DOOR_FL' },
+      { op: 'set', file: MODEL, at: '/sounds/doors/front_left', value: 'x' },
+    ]);
+    expect(renameDoor(FILE, json(), null, model, 0, 'front_left').ops).toHaveLength(1);
+    // another door keeps the old id: its keys stay
+    const twin = { ...(json() as object), doors: [...(json().doors ?? []), { id: 'door_fl', min: [0, 1, 1.4], max: [1, 3, 1.46] }] };
+    expect(renameDoor(FILE, twin, MODEL, model, 0, 'front_left').ops).toHaveLength(1);
+    expect(renameDoor(FILE, json(), MODEL, model, 0, '').ops).toEqual([]);
   });
 
   it('write a flag only while it is on, and a group only while it has a name', async () => {

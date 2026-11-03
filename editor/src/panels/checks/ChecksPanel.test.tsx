@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/preact';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { openSource } from '../../app/session';
-import { failure, journal, pack, revision, schema, schemaError, selection } from '../../app/store';
+import { failure, findings, journal, pack, revision, schema, schemaError, selection } from '../../app/store';
 import { MemorySource, readTree } from '../../core/pack/testing.node';
 import { setLang } from '../../i18n';
 import { EXAMPLE_PACK } from '../../testing/repo.node';
@@ -58,6 +58,9 @@ describe('the checks tab', () => {
       return found as HTMLElement;
     });
     expect(finding.getAttribute('data-source')).toBe('floor');
+    // one of the pack's findings, which the tree and the inspector count too: listed once
+    expect(screen.getByTestId('checks').querySelectorAll('[data-code="floor.door-not-at-floor-end"]')).toHaveLength(1);
+    expect(findings.value.filter((p) => p.code === 'floor.door-not-at-floor-end').map((p) => p.at[0])).toEqual([{ kind: 'field', file: COACH, at: '/doors/0' }]);
     expect(finding.querySelector('.finding-text')?.textContent).toBe(
       'дверь 0 «door_fl» не там, где кончается пол: через неё не выйти (перед ней, в её пролёте, должен помещаться игрок, а пол — кончаться не дальше 0.4 от её внутренней грани)',
     );

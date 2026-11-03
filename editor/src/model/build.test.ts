@@ -15,6 +15,7 @@ import { drawn, PLACES, type Role } from '../ports/modelParts';
 import { EXAMPLE_PACK, GOLDEN_DIR } from '../testing/repo.node';
 import { createModelApi } from './api';
 import { roleId } from './build';
+import { resourceFile } from './resources';
 import { sourceFiles, type ModelFiles } from './files';
 import type { LoadedModel } from '../core/contracts';
 import type { ModelReader, ModelRequest } from './types';
@@ -273,6 +274,9 @@ describe('a small model', () => {
       [{ declaration: { obj: 'stock/m.obj', bogies: [] } }, 'model.bad-declaration', "assets/t/wagon_models/m.json: 'bogies' must list at least one pivot offset"],
       [{ declaration: { obj: 'stock/M.obj' } }, 'model.bad-path', "model path 't:stock/M.obj' is not a valid resource location"],
       [{ declaration: { obj: 'stock/none.obj' } }, 'model.missing', 'model file t:stock/none.obj not found'],
+      // Minecraft takes a location with an empty path, which no file has (golden model_check/locations obj-with-an-empty-path)
+      [{ declaration: { obj: 't:' } }, 'model.missing', 'model file t: not found'],
+      [{ declaration: { obj: 't:stock/m.obj:1' } }, 'model.bad-path', "model path 't:stock/m.obj:1' is not a valid resource location"],
       [
         { obj: 'v 0 0 0\nf 1 2 3\n' },
         'model.bad-face-index',
@@ -285,6 +289,19 @@ describe('a small model', () => {
       expect(model.problems, code).toEqual([expect.objectContaining({ severity: 'error', source: 'model', code, text })]);
       expect(model).toMatchObject({ parts: [], objects: [], textures: {}, engine: null, materials: {}, skip: [], animated: {} });
     }
+  });
+
+  it('reads an OBJ in an empty namespace from minecraft’s, as Minecraft takes `:a` (golden model_check/locations)', async () => {
+    const obj = ['mtllib m.mtl', 'v 0 0 0', 'v 1 0 0', 'v 1 1 0', 'vt 0 0', 'o BODY', 'usemtl paint', 'f 1/1 2/1 3/1', ''].join('\n');
+    const files = { 'assets/minecraft/stock/m.obj': obj, 'assets/minecraft/stock/m.mtl': 'newmtl paint\nmap_Kd paint.png\n', 'assets/minecraft/stock/paint.png': 'png' };
+    const model = await loadSmall({ declaration: { obj: ':stock/m.obj' }, files });
+    expect(model.problems).toEqual([]);
+    expect(model.obj).toBe('assets/minecraft/stock/m.obj');
+    expect(model.materials).toEqual({ paint: 'assets/minecraft/stock/paint.png' });
+    expect(resourceFile(':a/b.obj')).toBe('assets/minecraft/a/b.obj');
+    expect(resourceFile('a/b.obj')).toBe('assets/minecraft/a/b.obj');
+    expect(resourceFile('t:')).toBeNull();
+    expect(resourceFile('T:a.obj')).toBeNull();
   });
 
   it('is one finding when the pack fails to read the OBJ', async () => {
