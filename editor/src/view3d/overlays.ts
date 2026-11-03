@@ -91,6 +91,13 @@ export const OVERLAY_STYLES: Readonly<Record<string, OverlayStyle>> = Object.fre
   'doors.face': { color: '#c2255c', fill: 0.15, dashed: false },
   /** A leaf or an animated piece the model moves with a door, at its centre (tools/doors). */
   'doors.leaf': { color: '#0ca678', fill: 0.6, dashed: false },
+  /** The arrow of a driver's chair that drives forward, and of one that drives backward (tools/seats). */
+  'seats.forward': { color: '#099268', fill: 0, dashed: false },
+  'seats.back': { color: '#e64980', fill: 0, dashed: false },
+  /** A headlight's cone or a cabin lamp of the light group chosen (tools/lights). */
+  'lights.chosen': { color: '#f03e3e', fill: 0.3, dashed: false },
+  /** A control at the end of its travel (tools/pivots). */
+  'pivots.ghost': { color: '#d6336c', fill: 0.08, dashed: true },
 });
 
 /** The style a name stands for; `default` for one the table lacks. */

@@ -1,0 +1,223 @@
+/*
+ * The chairs tool's section of the inspector (src/tools/seats/SeatsInspector.tsx). Colours
+ * are the shell's (app/styles.css); the swatches are the view's overlay styles.
+ */
+
+.seats-tool {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.seats-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.seats-warning {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.seats-heading {
+  font-weight: 600;
+  font-size: 13px;
+  margin: 0;
+}
+
+.seats-count {
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.seats-list,
+.seats-finding-list,
+.seats-legend {
+  list-style: none;
+  margin: 4px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.seats-item {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.seats-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  align-items: baseline;
+  text-align: left;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.seats-name[aria-pressed='true'] {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.seats-name:focus-visible,
+.seats-icon:focus-visible,
+.seats-button:focus-visible,
+.seats-finding:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.seats-index {
+  font-weight: 600;
+}
+
+.seats-summary {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.seats-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 0 4px;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+}
+
+.seats-flag-warning {
+  font-weight: 600;
+}
+
+.seats-actions,
+.seats-turns {
+  display: flex;
+  gap: 2px;
+}
+
+.seats-icon {
+  min-width: 26px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.seats-icon:disabled,
+.seats-button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.seats-button {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.seats-button[aria-pressed='true'] {
+  border-color: var(--accent);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.seats-numbers,
+.seats-snap {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px 8px;
+  margin: 6px 0 0;
+}
+
+.seats-numbers legend,
+.seats-snap legend {
+  font-weight: 600;
+  padding: 0 4px;
+}
+
+.seats-grid {
+  display: grid;
+  grid-template-columns: auto repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.seats-axis-label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.seats-grid .field-input-wrap {
+  min-width: 0;
+}
+
+.seats-grid .field-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.seats-turns {
+  grid-column: span 2;
+}
+
+.seats-turns .seats-button {
+  margin-top: 0;
+  padding: 2px 6px;
+  font-size: 12px;
+}
+
+.seats-finding {
+  width: 100%;
+  text-align: left;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.seats-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.seats-legend {
+  font-size: 12px;
+}
+
+.seats-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.seats-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 10px;
+  border-radius: 2px;
+  flex: none;
+}

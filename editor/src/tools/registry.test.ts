@@ -10,14 +10,14 @@ const schema = createSchema(readSchemaFiles());
 
 /**
  * The spatial fields of the wagon type no tool edits yet, each with the tool that is to:
- * the chairs' come with the next wave of M4 (docs/proposals/editor.md §7, A4.3). A tool
- * that lands takes its fields off this list; a new spatial field of the schema with no tool
- * turns the test red. The floor's zones are tools/floor's, the doors tools/doors'.
+ * none now — the floor's zones are tools/floor's, the doors tools/doors', the chairs
+ * tools/seats'. A tool that lands takes its fields off this list; a new spatial field of
+ * the schema with no tool turns the test red.
  */
-const WAITING_IN_WAGON_TYPE: Readonly<Record<string, string>> = {
-  '/cab/seat': 'A4.3 tools/seats (the old form of one chair)',
-  '/cab/seats/*/at': 'A4.3 tools/seats',
-};
+const WAITING_IN_WAGON_TYPE: Readonly<Record<string, string>> = {};
+
+/** The tools that only show and edit no field (docs/proposals/editor.md §3.9). */
+const SHOW_ONLY = ['lights', 'pivots'];
 
 /**
  * The spatial fields of a conversion override (2b): the type's markup as the override
@@ -118,7 +118,11 @@ describe('the registration of tools', () => {
 
   it('registers the tools of the editor without a problem', () => {
     expect(() => tools.map((t) => t.id)).not.toThrow();
-    for (const t of tools) expect(t.fields.length).toBeGreaterThan(0);
+    for (const t of tools) expect(t.fields.length > 0, t.id).toBe(!SHOW_ONLY.includes(t.id));
+  });
+
+  it('takes a tool that edits no field: it only shows', () => {
+    expect(() => collectTools({ './a/index.ts': { default: tool('lights', []) } })).not.toThrow();
   });
 });
 

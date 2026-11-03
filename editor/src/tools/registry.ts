@@ -27,6 +27,7 @@
  * Every spatial field of the wagon type's schema (`x-frame`) has a tool that edits it
  * ({@link ToolDef.fields}, {@link framedFields}): the forms show such a field as a summary
  * and the tool edits it (registry.test.ts holds the list of fields still waiting for theirs).
+ * A tool that only shows (the lights, the hinges) edits no field.
  *
  * One tool is on at a time ({@link ToolHost}): the view's bar switches them, a finding
  * clicked in the checks turns on the tool of what it points at ({@link ToolHost.reveal}),
@@ -115,7 +116,8 @@ export interface ToolDef {
   /**
    * The places in the wagon type's JSON the tool edits, as JSON pointers where `*` stands
    * for any element of a list: `/interior`, `/interior/*`, `/doors/*`. A place covers
-   * everything inside it. Each spatial (`x-frame`) field of the schema is covered by one tool.
+   * everything inside it. Each spatial (`x-frame`) field of the schema is covered by one
+   * tool. Empty for a tool that only shows (tools/lights, tools/pivots).
    */
   fields: readonly string[];
   /** Whether the tool can work on the open wagon; any type paired with a model when left out. */
