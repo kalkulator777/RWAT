@@ -8,7 +8,8 @@
  * The order of the list is the door's index: the engine's open-door bits are keyed by it,
  * and the links of the checks and the selection name a door by it. Moving a door in the
  * list is safe: the engine keeps which doors stand open by their ids (since batch A), and the
- * model's `animations` and `sounds.doors` name doors by id too.
+ * model's `animations` and `sounds.doors` name doors by id too — renaming a door renames
+ * their keys with it ({@link renameDoor}).
  *
  * A flag is written only while it is on (`"inner": true`), a group only while it has a
  * name: turned off or emptied, the key goes, as the example pack writes its doors.
@@ -16,7 +17,7 @@
  */
 
 import type { Command, JsonPointer, Link, LoadedModel, Op } from '../../core/contracts';
-import { isJsonObject } from '../../core/json';
+import { childPointer, getAt, isJsonObject } from '../../core/json';
 import { equalsIgnoreCase } from '../../ports/wagonType';
 import { floatDecimal } from '../common/snap';
 import { zoneJson, zoneOf, type ZoneBox } from '../floor/zones';
@@ -170,6 +171,34 @@ export function setDoorId(file: string, typeJson: unknown, index: number, id: st
   if (!isJsonObject(before) || id === '' || before.id === id) return command;
   command.labelParams = { index, id };
   command.ops.push({ op: 'set', file, at: `${DOORS}/${index}/id`, value: id });
+  return command;
+}
+
+/** The maps of a model declaration whose keys name the type's doors, case aside (the loader's `animations` and `sounds.doors`). */
+export const MODEL_DOOR_KEYS: readonly JsonPointer[] = ['/animations', '/sounds/doors'];
+
+/**
+ * Door `index`'s id, and with it the keys of the model's maps that name the door
+ * ({@link MODEL_DOOR_KEYS}: its `.anim` and its sounds, which the engine finds by the id,
+ * case aside): one command over the type's file and the model's — one entry of the journal,
+ * undone in one step. A map's key stays as it is when another door of the type keeps the old
+ * id, when the new id is the old one case aside, or when the map has a key of the new id
+ * already (the loader then says the old key names no door). An empty id is refused (no op).
+ *
+ * @param modelFile the model declaration's pack path; null for none (the type's id alone)
+ * @param modelJson the declaration's JSON as it stands
+ */
+export function renameDoor(typeFile: string, typeJson: unknown, modelFile: string | null, modelJson: unknown, index: number, id: string): Command {
+  const command = setDoorId(typeFile, typeJson, index, id);
+  const old = doorsOf(typeJson)[index]?.id ?? null;
+  if (command.ops.length === 0 || modelFile === null || old === null || equalsIgnoreCase(old, id) || idTaken(typeJson, old, index)) return command;
+  for (const pointer of MODEL_DOOR_KEYS) {
+    const map = getAt(modelJson, pointer);
+    if (!isJsonObject(map) || Object.keys(map).some((key) => equalsIgnoreCase(key, id))) continue;
+    const key = Object.keys(map).find((name) => equalsIgnoreCase(name, old));
+    if (key === undefined) continue;
+    command.ops.push({ op: 'remove', file: modelFile, at: childPointer(pointer, key) }, { op: 'set', file: modelFile, at: childPointer(pointer, id), value: map[key] });
+  }
   return command;
 }
 

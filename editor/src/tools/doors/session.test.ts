@@ -257,6 +257,13 @@ describe('the keyboard’s doors', () => {
     expect(boxes(b)[8]?.maxZ).toBe(1.45);
     expect(tool.setId(8, '')).toBe(false);
     expect(tool.setId(8, 'hatch')).toBe(true);
+    // a door the model's keys name: renamed with them, in one entry of the journal
+    const done = b.journal.state().done.length;
+    expect(tool.setId(6, 'salon')).toBe(true);
+    expect(b.journal.state().done).toHaveLength(done + 1);
+    expect(b.pack.value?.json('assets/rwat_example/wagon_models/coach.json')).toMatchObject({ animations: { salon: 'stock/coach/salon_door.anim' } });
+    b.journal.undo();
+    expect(b.pack.value?.json('assets/rwat_example/wagon_models/coach.json')).toMatchObject({ animations: { salon_door: 'stock/coach/salon_door.anim' } });
     tool.setFlag(8, 'fixed', true);
     tool.setGroup(8, 'Hatches');
     const door = () => (b.pack.value?.json(FILE) as { doors: Record<string, unknown>[] }).doors;

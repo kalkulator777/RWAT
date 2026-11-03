@@ -184,6 +184,7 @@ function DoorEditor(props: { tool: DoorsTool; info: DoorInfo; picture: DoorsPict
         />
       </div>
       {taken && <p class="tool-note tool-warning">{t('tools.doors.id.taken')}</p>}
+      <p class="tool-note">{t('tools.doors.id.note')}</p>
       <fieldset class="tool-box">
         <legend>{t('tools.doors.flags')}</legend>
         {DOOR_FLAGS.map((flag) => (

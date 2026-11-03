@@ -268,7 +268,7 @@ describe('the chairs edited from the keyboard', () => {
   });
 
   it('puts a new chair where nothing else is known at the car’s middle', () => {
-    expect(newPlace({ wagon: 'x:y', typeFile: 'f', modelFile: 'm', typeJson: {}, type: null, model: null, readOnly: false })).toEqual({ at: [0, 1, 0], yaw: 0 });
+    expect(newPlace({ wagon: 'x:y', typeFile: 'f', modelFile: 'm', typeJson: {}, modelJson: {}, type: null, model: null, readOnly: false })).toEqual({ at: [0, 1, 0], yaw: 0 });
   });
 
   it('in a pack the editor only shows: refused, nothing changes', async () => {

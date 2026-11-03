@@ -24,11 +24,11 @@ import {
   freshDoorId,
   moveDoorTo,
   removeDoor,
+  renameDoor,
   selectedDoors,
   selectedObjects,
   setDoorFlag,
   setDoorGroup,
-  setDoorId,
   setDoorNumber,
   type DoorBox,
   type DoorFlag,
@@ -59,7 +59,7 @@ export interface DoorsTool {
   /** Moves door `index` to place `to` in the list. */
   reorder(index: number, to: number): void;
   setNumber(index: number, corner: 'min' | 'max', axis: 0 | 1 | 2, value: number): void;
-  /** Sets door `index`'s id; false for an empty one, which is refused. */
+  /** Sets door `index`'s id, the model's keys of its animation and sounds with it, in one command; false for an empty one, which is refused. */
   setId(index: number, id: string): boolean;
   setFlag(index: number, flag: DoorFlag, on: boolean): void;
   setGroup(index: number, group: string): void;
@@ -152,7 +152,7 @@ export function startDoors(context: ToolContext): Pick<ToolSession, 'dispose'> &
     setId(index, id) {
       if (id === '') return false;
       const now = subject();
-      return dispatch(setDoorId(now.typeFile, now.typeJson, index, id));
+      return dispatch(renameDoor(now.typeFile, now.typeJson, now.modelFile, now.modelJson, index, id));
     },
     setFlag(index, flag, on) {
       const now = subject();

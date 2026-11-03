@@ -54,6 +54,8 @@ export interface ToolSubject {
   readonly modelFile: string;
   /** The type's JSON as it stands; shared with the pack: never change it in place. */
   readonly typeJson: unknown;
+  /** The model declaration's JSON as it stands (what names the doors' animations and sounds); shared with the pack: never change it in place. */
+  readonly modelJson: unknown;
   /** The type as the engine reads it (ports/wagonType, model frame); null when it does not load. */
   readonly type: WagonType | null;
   /** The model as the 3D view shows it (OBJ frame); null while it is being read. */
@@ -286,6 +288,7 @@ export function subjectOf(open: Pack | null, wagon: string | null, model: Loaded
     typeFile: entry.type,
     modelFile: entry.model,
     typeJson,
+    modelJson: open.json(entry.model),
     type,
     model: model?.id === wagon ? model : null,
     readOnly: open.readOnly,
