@@ -9,7 +9,7 @@
 import { describe, expect, it } from 'vitest';
 import conventions from '../../../schema/obj-conventions.json';
 import { REPO_ROOT } from '../testing/repo.node';
-import { mismatch, readGoldenFolder, readGoldenPorts } from '../testing/goldenCompare.node';
+import { mismatch, readGoldenFolder } from '../testing/golden.node';
 import { CONTROL_KINDS, coupled, door, hasToken, headShownAt, parseRole, type Control } from './objectRole';
 
 const FOLDER = `${REPO_ROOT}fixtures/golden/object_role`;
@@ -54,16 +54,15 @@ function read(name: string): Record<string, unknown> {
   };
 }
 
-describe('golden object_role', () => {
-  const files = readGoldenFolder(FOLDER);
+const golden = readGoldenFolder(FOLDER);
 
-  it('names this port in ports.json and has cases', () => {
-    expect(readGoldenPorts(FOLDER)).toMatchObject({ reference: 'java', ports: expect.arrayContaining(['ts']) as unknown });
-    expect(files.length).toBeGreaterThan(0);
-    for (const file of files) expect(file.cases.length, file.name).toBeGreaterThanOrEqual(10);
+describe('golden object_role', () => {
+  it('names this port in ports.json, and the folder follows the golden format', () => {
+    expect(golden.ports).toMatchObject({ reference: 'java', ports: expect.arrayContaining(['ts']) as unknown });
+    expect(golden.problems).toEqual([]);
   });
 
-  for (const file of files) {
+  for (const file of golden.files) {
     describe(file.name, () => {
       for (const c of file.cases) {
         it(c.id, () => {

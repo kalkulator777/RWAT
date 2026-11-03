@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '../testing/repo.node';
-import { mismatch, readGoldenFolder } from '../testing/goldenCases.node';
+import { mismatch, readGoldenFolder } from '../testing/golden.node';
 import { CORNER_FLOATS, DEFAULT_OBJECT, loadModel, ObjError, objectName, QUAD_FLOATS, type ObjPart } from './obj';
 
 const FOLDER = `${REPO_ROOT}fixtures/golden/obj`;

@@ -10,7 +10,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '../testing/repo.node';
-import { mismatch, readGoldenFolder } from '../testing/goldenCases.node';
+import { mismatch, readGoldenFolder } from '../testing/golden.node';
 import { CORNER_FLOATS, loadModel } from './obj';
 import { of, points } from './pivotAxis';
 

@@ -19,7 +19,7 @@ fixtures/golden/
 
 - **Одна папка — одна логика.** Ни один тест не перечисляет файлы руками: раннер папки читает все её `*.json`, кроме `ports.json`. Новый файл в папке не требует правки раннеров.
 - **`ports.json` — кто читает папку.** Эталон пишет ожидаемое, порты сверяются с ним. Мета-тест каждого набора проверяет, что каждую папку, где назван его язык, читает раннер: `GoldenFoldersTest` (Java), `test_golden_folders.py` (Python), в редакторе — свой.
-- **Раннер — файл на логику:** `src/test/java/…/golden/<Logic>Golden.java` (папка `floor_check` → `FloorCheckGolden`, константа `FOLDER`), `tools/tests/test_golden_<папка>.py`, `editor/src/ports/<logic>.test.ts`. Общая часть: `Golden.java`, `tools/tests/golden.py`.
+- **Раннер — файл на логику:** `src/test/java/…/golden/<Logic>Golden.java` (папка `floor_check` → `FloorCheckGolden`, константа `FOLDER`), `tools/tests/test_golden_<папка>.py`, `editor/src/ports/<logic>.test.ts`. Общая часть: `Golden.java`, `tools/tests/golden.py`, `editor/src/testing/golden.node.ts` (чтение папки, проверка по схеме, `mismatch`) — других помощников у раннеров нет.
 
 ## Формат файла
 
@@ -47,8 +47,8 @@ fixtures/golden/
 ## Как сверять
 
 - **Эталон** сверяет `expected` с результатом как JSON, точно: значения посчитал он сам.
-- **Порты** (`tools/tests/golden.py`, `close`):
-  - числа — с допуском файла: порядок операций с плавающей точкой может отличаться;
+- **Порты** (`tools/tests/golden.py`, `close`; в редакторе — `mismatch` из `editor/src/testing/golden.node.ts`, то же правило):
+  - числа — конечные, с допуском файла: порядок операций с плавающей точкой может отличаться; знак нуля не сверяется (эталон пишет его только там, где он виден в тексте);
   - `"NaN"`, `"Infinity"`, `"-Infinity"` совпадают с этими значениями (и с такой же строкой);
   - строки, логические значения и `null` — точно; `null` не совпадает с NaN;
   - объекты — те же ключи в том же порядке, массивы — поэлементно.

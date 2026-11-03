@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '../testing/repo.node';
-import { mismatch, readGoldenFolder } from '../testing/goldenCases.node';
+import { mismatch, readGoldenFolder } from '../testing/golden.node';
 import { MIN_LAMP_SIZE, of } from './lampIslands';
 
 const FOLDER = `${REPO_ROOT}fixtures/golden/lamp_islands`;

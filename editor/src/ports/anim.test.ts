@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '../testing/repo.node';
-import { mismatch, readGoldenFolder } from '../testing/goldenCases.node';
+import { mismatch, readGoldenFolder, toNumber } from '../testing/golden.node';
 import { AnimError, frameAt, framesAt, parse } from './anim';
 
 const FOLDER = `${REPO_ROOT}fixtures/golden/anim`;
@@ -15,11 +15,6 @@ const FOLDER = `${REPO_ROOT}fixtures/golden/anim`;
 interface Input {
   text: string;
   progress?: number | string;
-}
-
-/** A number of a case: a JSON number, or "NaN", "Infinity", "-Infinity". */
-function number(value: number | string): number {
-  return typeof value === 'number' ? value : Number(value);
 }
 
 /** What the port makes of a case's input, as AnimGolden asks it. */
@@ -32,7 +27,7 @@ function compute(input: Input): unknown {
     throw e;
   }
   const out: Record<string, unknown> = { tracks };
-  if (input.progress !== undefined) out.at = framesAt(tracks, number(input.progress));
+  if (input.progress !== undefined) out.at = framesAt(tracks, toNumber(input.progress));
   return out;
 }
 

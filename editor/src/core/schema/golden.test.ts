@@ -8,58 +8,28 @@
  * It sits in core/schema, not in ports/: eslint keeps ports/ from importing core/.
  */
 
-import Ajv2020 from 'ajv/dist/2020';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { REPO_ROOT } from '../../testing/repo.node';
 import { describe, expect, it } from 'vitest';
+import { readGoldenFolder } from '../../testing/golden.node';
+import { REPO_ROOT } from '../../testing/repo.node';
 import { createSchema, suggestion, type SchemaKind } from './index';
 import { readSchemaFiles } from './files.node';
 
-const REPO = REPO_ROOT;
-const FOLDER = `${REPO}fixtures/golden/validate`;
+const FOLDER = `${REPO_ROOT}fixtures/golden/validate`;
 
-interface Case {
-  id: string;
-  note: string;
-  input?: Record<string, unknown>;
-  input_file?: string | Record<string, string>;
-  expected: unknown;
-}
-
-function readJson(path: string): unknown {
-  return JSON.parse(readFileSync(path, 'utf8')) as unknown;
-}
-
-function inputOf(c: Case): Record<string, unknown> {
-  const input = { ...(c.input ?? {}) };
-  if (typeof c.input_file === 'object') {
-    for (const [key, file] of Object.entries(c.input_file)) input[key] = readJson(`${REPO}${file}`);
-  }
-  return input;
-}
-
-const folderExists = existsSync(FOLDER);
-const files = folderExists ? readdirSync(FOLDER).filter((n) => n.endsWith('.json') && n !== 'ports.json').sort() : [];
+const golden = readGoldenFolder(FOLDER);
 const schema = createSchema(readSchemaFiles());
 
-describe.skipIf(!folderExists)('golden validate', () => {
-  it('names this port in ports.json, and every file follows the golden schema', () => {
-    expect(readJson(`${FOLDER}/ports.json`)).toMatchObject({ reference: 'python', ports: expect.arrayContaining(['ts']) as unknown });
-    const goldenSchema = readJson(`${REPO}fixtures/golden/schema.json`) as object;
-    const ajv = new Ajv2020({ strict: false });
-    const valid = ajv.compile(goldenSchema);
-    expect(files.length).toBeGreaterThan(0);
-    for (const name of files) {
-      expect(valid(readJson(`${FOLDER}/${name}`)), `${name}: ${ajv.errorsText(valid.errors)}`).toBe(true);
-    }
+describe('golden validate', () => {
+  it('names this port in ports.json, and the folder follows the golden format', () => {
+    expect(golden.ports).toMatchObject({ reference: 'python', ports: expect.arrayContaining(['ts']) as unknown });
+    expect(golden.problems).toEqual([]);
   });
 
-  for (const name of files) {
-    const file = readJson(`${FOLDER}/${name}`) as { cases: Case[] };
-    describe(name, () => {
+  for (const file of golden.files) {
+    describe(file.name, () => {
       for (const c of file.cases) {
         it(c.id, () => {
-          const input = inputOf(c);
+          const input = c.input as Record<string, unknown>;
           if ('key' in input) {
             expect(suggestion(input.key as string, input.known as string[])).toBe(c.expected);
             return;

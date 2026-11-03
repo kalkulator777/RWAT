@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '../testing/repo.node';
-import { mismatch, readGoldenFolder } from '../testing/goldenCases.node';
+import { mismatch, readGoldenFolder } from '../testing/golden.node';
 import { fileNameOf, folderOf, isJavaWhitespace, javaLines, javaTrim, materialName, parse, resolve } from './mtl';
 
 const FOLDER = `${REPO_ROOT}fixtures/golden/mtl`;

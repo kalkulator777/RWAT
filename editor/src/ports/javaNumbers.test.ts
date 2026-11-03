@@ -9,27 +9,20 @@
 
 import { describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '../testing/repo.node';
-import { mismatch, readGoldenFolder, readGoldenPorts } from '../testing/goldenCompare.node';
+import { mismatch, readGoldenFolder, toNumber } from '../testing/golden.node';
 import { formatFixed, javaDoubleToString, parseJavaFloat, parseJavaInt } from './javaNumbers';
 
 const FOLDER = `${REPO_ROOT}fixtures/golden/java_numbers`;
 
-const SPECIAL: Record<string, number> = { NaN: NaN, Infinity: Infinity, '-Infinity': -Infinity };
-
-function toNumber(value: unknown): number {
-  return typeof value === 'string' ? (SPECIAL[value] as number) : (value as number);
-}
+const golden = readGoldenFolder(FOLDER);
 
 describe('golden java_numbers', () => {
-  const files = readGoldenFolder(FOLDER);
-
-  it('names this port in ports.json and has cases', () => {
-    expect(readGoldenPorts(FOLDER)).toMatchObject({ reference: 'java', ports: expect.arrayContaining(['ts']) as unknown });
-    expect(files.length).toBeGreaterThan(0);
-    for (const file of files) expect(file.cases.length, file.name).toBeGreaterThanOrEqual(10);
+  it('names this port in ports.json, and the folder follows the golden format', () => {
+    expect(golden.ports).toMatchObject({ reference: 'java', ports: expect.arrayContaining(['ts']) as unknown });
+    expect(golden.problems).toEqual([]);
   });
 
-  for (const file of files) {
+  for (const file of golden.files) {
     describe(file.name, () => {
       for (const c of file.cases) {
         it(c.id, () => {

@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '../testing/repo.node';
-import { mismatch, readGoldenFolder, readGoldenPorts } from '../testing/goldenCompare.node';
+import { mismatch, readGoldenFolder } from '../testing/golden.node';
 import { controlTransform, controlValue, controlVisible, rowMajor, type Vec3 } from './controlPose';
 import { parseRole } from './objectRole';
 
@@ -34,16 +34,15 @@ function pose(input: Input): Record<string, unknown> {
   };
 }
 
-describe('golden control_pose', () => {
-  const files = readGoldenFolder(FOLDER);
+const golden = readGoldenFolder(FOLDER);
 
-  it('names this port in ports.json and has cases', () => {
-    expect(readGoldenPorts(FOLDER)).toMatchObject({ reference: 'java', ports: expect.arrayContaining(['ts']) as unknown });
-    expect(files.length).toBeGreaterThan(0);
-    for (const file of files) expect(file.cases.length, file.name).toBeGreaterThanOrEqual(10);
+describe('golden control_pose', () => {
+  it('names this port in ports.json, and the folder follows the golden format', () => {
+    expect(golden.ports).toMatchObject({ reference: 'java', ports: expect.arrayContaining(['ts']) as unknown });
+    expect(golden.problems).toEqual([]);
   });
 
-  for (const file of files) {
+  for (const file of golden.files) {
     describe(file.name, () => {
       for (const c of file.cases) {
         it(c.id, () => {
