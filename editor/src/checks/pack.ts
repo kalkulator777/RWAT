@@ -9,9 +9,9 @@
  * The schema's findings of a file and the floor check's of a type are kept while the
  * file's value is the same object: the pack model never changes a value in place
  * (core/json/value), so after an edit only the edited file is checked again — a big pack
- * stays quick. The first check of a big pack's types is not quick (tens of milliseconds a
- * type of MVP): the panels' findings (./live.ts) check the types one by one first, giving
- * the page back between them, and this reads them from that cache.
+ * stays quick. The first check of a big pack's types takes longer (some 10 ms the heaviest
+ * type of MVP, 50 ms all of them): the panels' findings (./live.ts) check the types one by
+ * one first, giving the page back between them, and this reads them from that cache.
  */
 
 import type { Problem } from '../core/contracts';

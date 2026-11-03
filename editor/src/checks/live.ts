@@ -5,9 +5,10 @@
  * form of a big pack does not check the pack on every keystroke.
  *
  * A pass checks the pack's wagon types with the floor check first, one by one, giving the
- * page back between them once a slice has run {@link SLICE_MS}: the most complex types of
- * MVP take tens of milliseconds each (some 350 ms for all of them), and the main thread is
- * never held longer than one type (§3.11: no task over 100 ms). The floor check keeps what
+ * page back between them once a slice has run {@link SLICE_MS}: the heaviest types of MVP
+ * take some 10 ms each on a quiet machine (some 50 ms all 45 of them; several times that on
+ * a slow one), and the main thread is never held longer than one type (§3.11: no task over
+ * 100 ms). The floor check keeps what
  * it found of a type while the type's value is the same (./floor/problems.ts), so the pack
  * check that ends the pass (./pack.ts, the floor's findings among its own) reads them from
  * there; after an edit only the edited type is checked again, and a pass whose types all
