@@ -31,6 +31,14 @@ const WAITING_FOR_M2 = [
   'wagon_type', // ждёт M2: wagon type parser messages
 ];
 
+/** Folders whose port comes with the 3D stage: ждёт M3 (docs/proposals/editor.md §7, M3). */
+const WAITING_FOR_M3 = [
+  'lights', // ждёт M3: lit parts and lamps
+  'model_parts', // ждёт M3: model parts (modelParts.ts)
+];
+
+const WAITING = [...WAITING_FOR_M2, ...WAITING_FOR_M3];
+
 const RUNNER = /^const FOLDER = .*fixtures\/golden\/([a-z0-9_]+)/m;
 
 function folders(): string[] {
@@ -66,14 +74,14 @@ describe('golden runners of the TypeScript port', () => {
     expect([...withRunner.keys()].sort()).toEqual(expect.arrayContaining(['json_dump', 'validate']));
   });
 
-  it('has a runner for every folder with a ts port, or the folder is listed as waiting for M2', () => {
-    const missing = tsFolders.filter((folder) => !withRunner.has(folder) && !WAITING_FOR_M2.includes(folder));
-    expect(missing, 'a golden folder names the ts port but has no runner and is not in WAITING_FOR_M2').toEqual([]);
+  it('has a runner for every folder with a ts port, or the folder is listed as waiting for M2 or M3', () => {
+    const missing = tsFolders.filter((folder) => !withRunner.has(folder) && !WAITING.includes(folder));
+    expect(missing, 'a golden folder names the ts port but has no runner and is not in WAITING_FOR_M2 or WAITING_FOR_M3').toEqual([]);
   });
 
   it('lists as waiting only folders that name the ts port and have no runner yet', () => {
-    const stale = WAITING_FOR_M2.filter((folder) => !tsFolders.includes(folder) || withRunner.has(folder));
-    expect(stale, 'WAITING_FOR_M2 names a folder that is gone, has no ts port, or already has its runner').toEqual([]);
+    const stale = WAITING.filter((folder) => !tsFolders.includes(folder) || withRunner.has(folder));
+    expect(stale, 'WAITING_FOR_M2/M3 names a folder that is gone, has no ts port, or already has its runner').toEqual([]);
   });
 
   it('has no runner for a folder that does not name the ts port', () => {
