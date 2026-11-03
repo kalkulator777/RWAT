@@ -22,7 +22,6 @@ const WAITING_FOR_M2 = [
   'anim', // ждёт M2: .anim parser and door travel
   'control_pose', // ждёт M2: organ poses
   'door_leaves', // ждёт M2: door leaves
-  'floor_check', // ждёт M2: floor findings
   'java_numbers', // ждёт M2: Java number parsing and printing
   'mtl', // ждёт M2: MTL parser
   'obj', // ждёт M2: OBJ parser
