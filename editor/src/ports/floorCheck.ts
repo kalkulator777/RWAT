@@ -165,24 +165,15 @@ export function findings(type: WagonType): FloorFinding[] {
     if (door.spanMax() - door.spanMin() - 2 * DOOR_SPAN_INSET <= 0.0) out.push(finding('DOOR_TOO_NARROW', d, { id }));
     if (door.connecting && door.axis() !== 2) out.push(finding('GANGWAY_NOT_IN_END_WALL', d, { id }));
     if (door.inner) {
-      const [bMinX, bMinZ, bMaxX, bMaxZ] = bridge(door);
-      const cut = Cut.shut(door, M);
-      let first = -1;
-      const before: number[] = []; // the parts its bridge reaches on each side
-      const behind: number[] = [];
-      parts.forEach((part, p) => {
-        if (!part.touches(bMinX, bMinZ, bMaxX, bMaxZ)) return;
-        if (first < 0) first = p;
-        else union(parent, first, p);
-        // no part reaches into the cut: each ends at or begins past it
-        const end = door.axis() === 0 ? part.maxX : part.maxZ;
-        if (end <= (door.axis() === 0 ? cut.minX : cut.minZ) + 1.0e-6) before.push(p);
-        else behind.push(p);
-      });
-      if (first < 0) out.push(finding('INNER_DOOR_NO_FLOOR', d, { id }));
+      // the parts its bridge reaches, on each side of its leaf: open, it joins them
+      const sides = bridgeSides(door, shut);
+      const reached = [...sides.before, ...sides.behind].sort((a, b) => a - b);
+      for (let i = 1; i < reached.length; i++) union(parent, reached[0] as number, reached[i] as number);
+      if (sides.reach === 'none') out.push(finding('INNER_DOOR_NO_FLOOR', d, { id }));
       if (door.fixed) return; // never shut
+      const cut = Cut.shut(door, M);
       if (pieces.some((piece) => cut.bites(piece))) out.push(finding('INNER_DOOR_FLOOR_THROUGH', d, { id }));
-      const round = before.some((p) => behind.some((q) => find(alone, p) === find(alone, q)));
+      const round = sides.before.some((p) => sides.behind.some((q) => find(alone, p) === find(alone, q)));
       if (round) out.push(finding('INNER_DOOR_FLOOR_ROUND', d, { id }));
     } else {
       const from = walkablePieces(door, shut);
@@ -267,6 +258,43 @@ export function walkablePieces(door: Door, region: FloorRegion): number[] {
     }
   });
   return found;
+}
+
+/** On how many sides of its leaf an inner door's bridge meets the floor (`FloorCheck.BridgeSides.Reach`, by its key). */
+export type BridgeReach = 'both' | 'one' | 'none';
+
+/** The parts of the floor an open inner door's bridge reaches, by the side of its leaf, each in order (`FloorCheck.BridgeSides`). */
+export interface BridgeSides {
+  /** The parts ending at or short of the leaf's cut along the door's axis (towards −X or −Z of the model frame). */
+  readonly before: readonly number[];
+  /** The parts past the cut. */
+  readonly behind: readonly number[];
+  /** Both sides, one (the floor ends at the door, or runs off beside it) or none (no floor near). */
+  readonly reach: BridgeReach;
+}
+
+/**
+ * Where an open inner door's bridge ({@link bridge}) meets the floor with every door
+ * between zones shut (`shut`: `Interior.region(margin, doors, 0)`): each part it touches,
+ * by the side of the leaf it lies on — before the leaf a part that ends at or short of its
+ * cut (`Cut.shut`) along the door's axis, else behind it (`FloorCheck.bridgeSides`). The
+ * check's rule for an inner door on no floor and one whose two sides are one floor
+ * without it; the doors tool shows by it a bridge that meets the floor on one side only.
+ */
+export function bridgeSides(door: Door, shut: FloorRegion): BridgeSides {
+  const [minX, minZ, maxX, maxZ] = bridge(door);
+  const cut = Cut.shut(door, M);
+  const before: number[] = [];
+  const behind: number[] = [];
+  shut.pieces.forEach((part, p) => {
+    if (!part.touches(minX, minZ, maxX, maxZ)) return;
+    // no part reaches into the cut: each ends at or begins past it
+    const end = door.axis() === 0 ? part.maxX : part.maxZ;
+    if (end <= (door.axis() === 0 ? cut.minX : cut.minZ) + 1.0e-6) before.push(p);
+    else behind.push(p);
+  });
+  const reach = before.length > 0 && behind.length > 0 ? 'both' : before.length > 0 || behind.length > 0 ? 'one' : 'none';
+  return { before, behind, reach };
 }
 
 /** Where a rider's centre may be in an open inner door, as the walk bridges it: `[minX, minZ, maxX, maxZ]` (`FloorCheck.bridge`). */

@@ -137,34 +137,19 @@ public final class FloorCheck {
                 out.add(FloorFinding.of(Code.GANGWAY_NOT_IN_END_WALL, d, "id", id));
             }
             if (door.inner()) {
-                double[] b = bridge(door);
-                FloorRegion.Cut cut = FloorRegion.Cut.shut(door, M);
-                int first = -1;
-                List<Integer> before = new ArrayList<>(); // the parts its bridge reaches on each side
-                List<Integer> behind = new ArrayList<>();
-                for (int p = 0; p < parts.size(); p++) {
-                    FloorRegion.Piece part = parts.get(p);
-                    if (part.touches(b[0], b[1], b[2], b[3])) {
-                        if (first < 0) {
-                            first = p;
-                        } else {
-                            union(parent, first, p);
-                        }
-                        // no part reaches into the cut: each ends at or begins past it
-                        double end = door.axis() == 0 ? part.maxX() : part.maxZ();
-                        if (end <= (door.axis() == 0 ? cut.minX() : cut.minZ()) + 1.0e-6) {
-                            before.add(p);
-                        } else {
-                            behind.add(p);
-                        }
-                    }
+                // the parts its bridge reaches, on each side of its leaf: open, it joins them
+                BridgeSides sides = bridgeSides(door, shut);
+                List<Integer> reached = sides.parts();
+                for (int i = 1; i < reached.size(); i++) {
+                    union(parent, reached.get(0), reached.get(i));
                 }
-                if (first < 0) {
+                if (sides.reach() == BridgeSides.Reach.NONE) {
                     out.add(FloorFinding.of(Code.INNER_DOOR_NO_FLOOR, d, "id", id));
                 }
                 if (door.fixed()) {
                     continue; // never shut
                 }
+                FloorRegion.Cut cut = FloorRegion.Cut.shut(door, M);
                 boolean through = false;
                 for (FloorRegion.Piece piece : pieces) {
                     through |= cut.bites(piece);
@@ -173,8 +158,8 @@ public final class FloorCheck {
                     out.add(FloorFinding.of(Code.INNER_DOOR_FLOOR_THROUGH, d, "id", id));
                 }
                 boolean round = false;
-                for (int p : before) {
-                    for (int q : behind) {
+                for (int p : sides.before()) {
+                    for (int q : sides.behind()) {
                         round |= find(alone, p) == find(alone, q);
                     }
                 }
@@ -283,6 +268,84 @@ public final class FloorCheck {
             }
         }
         return found;
+    }
+
+    /**
+     * The parts of the floor an open inner door's bridge reaches ({@link
+     * #bridgeSides}), by the side of its leaf they are on, each in order.
+     *
+     * @param before the parts on the near side: ending at or short of the
+     *               leaf's cut along the door's axis (towards −X or −Z of the
+     *               model frame)
+     * @param behind the parts past the cut
+     */
+    public record BridgeSides(List<Integer> before, List<Integer> behind) {
+
+        /** On how many sides of its leaf a bridge meets the floor. */
+        public enum Reach {
+            BOTH("both"),
+            ONE("one"),
+            NONE("none");
+
+            /** Lower-case name, as the editor and the golden data write it. */
+            public final String key;
+
+            Reach(String key) {
+                this.key = key;
+            }
+        }
+
+        public BridgeSides {
+            before = List.copyOf(before);
+            behind = List.copyOf(behind);
+        }
+
+        /** Every part the bridge reaches, in order. */
+        public List<Integer> parts() {
+            List<Integer> all = new ArrayList<>(before);
+            all.addAll(behind);
+            all.sort(null);
+            return all;
+        }
+
+        /** Both sides, one (the floor ends at the door, or runs off beside it) or none (no floor near). */
+        public Reach reach() {
+            return !before.isEmpty() && !behind.isEmpty() ? Reach.BOTH
+                    : before.isEmpty() && behind.isEmpty() ? Reach.NONE : Reach.ONE;
+        }
+    }
+
+    /**
+     * Where an open inner door's bridge ({@link #bridge}) meets the floor
+     * with every door between zones shut ({@code shut}: {@link
+     * WagonType.Interior#region(double, List, int)} with no door open): each
+     * part it touches, by the side of the leaf it lies on — before the leaf a
+     * part that ends at or short of its cut ({@link FloorRegion.Cut#shut})
+     * along the door's axis, else behind it; no part reaches into the cut, so
+     * each is on one side. The floor check finds by it an inner door on no
+     * floor and one whose two sides are one floor without it; the pack
+     * editor's doors tool shows by it a bridge that meets the floor on one
+     * side only (beside the aisle), which the check does not see when the
+     * rooms behind it have doors of their own.
+     */
+    public static BridgeSides bridgeSides(WagonType.Door door, FloorRegion shut) {
+        double[] b = bridge(door);
+        FloorRegion.Cut cut = FloorRegion.Cut.shut(door, M);
+        List<Integer> before = new ArrayList<>();
+        List<Integer> behind = new ArrayList<>();
+        List<FloorRegion.Piece> parts = shut.pieces();
+        for (int p = 0; p < parts.size(); p++) {
+            FloorRegion.Piece part = parts.get(p);
+            if (part.touches(b[0], b[1], b[2], b[3])) {
+                double end = door.axis() == 0 ? part.maxX() : part.maxZ();
+                if (end <= (door.axis() == 0 ? cut.minX() : cut.minZ()) + 1.0e-6) {
+                    before.add(p);
+                } else {
+                    behind.add(p);
+                }
+            }
+        }
+        return new BridgeSides(before, behind);
     }
 
     /** Where a rider's centre may be in an open inner door, as {@link RiderWalk} bridges it: {minX, minZ, maxX, maxZ}. */

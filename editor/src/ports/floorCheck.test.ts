@@ -4,14 +4,16 @@
  * that writes the expected — a type as the pack writes it (OBJ frame) → what the floor
  * check tells its author, each finding `{code, subject, index, params, text}` with the
  * text word for word; or, for `exits_of`, the pieces of the floor a rider walks out
- * through each hull or gangway door from.
+ * through each hull or gangway door from; or, for `bridges_of`, where each inner door's
+ * bridge meets that floor (`bridgeSides`: the pieces before and behind its leaf, and on
+ * how many sides).
  */
 
 import { describe, expect, it } from 'vitest';
 import type { ProblemParam } from '../core/contracts';
 import { goldenNumber, mismatch, readGoldenFolder } from '../testing/golden.node';
 import { REPO_ROOT } from '../testing/repo.node';
-import { findingText, findings, problems, walkableThrough, walkablePieces } from './floorCheck';
+import { bridgeSides, findingText, findings, problems, walkableThrough, walkablePieces } from './floorCheck';
 import { PLAYER_HALF_WIDTH } from './riderWalk';
 import { type Door, type Interior, parseWagonType } from './wagonType';
 
@@ -41,6 +43,7 @@ describe('golden floor_check', () => {
 interface Input {
   type?: unknown;
   exits_of?: unknown;
+  bridges_of?: unknown;
 }
 
 /** A param as the cases write it: NaN and the infinities by name (a zero keeps its sign). */
@@ -54,6 +57,12 @@ function compute(input: Input): unknown {
     if (type.interior === null) return null;
     const shut = type.interior.region(PLAYER_HALF_WIDTH, type.doors, 0);
     return type.doors.map((door) => (door.inner ? null : walkablePieces(door, shut)));
+  }
+  if (input.bridges_of !== undefined) {
+    const type = parseWagonType('golden:case', input.bridges_of);
+    if (type.interior === null) return null;
+    const shut = type.interior.region(PLAYER_HALF_WIDTH, type.doors, 0);
+    return type.doors.map((door) => (door.inner ? bridgeSides(door, shut) : null));
   }
   const type = parseWagonType('golden:case', input.type);
   return findings(type).map((f) => ({

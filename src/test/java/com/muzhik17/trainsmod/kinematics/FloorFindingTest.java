@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import com.google.gson.JsonParser;
 import com.muzhik17.trainsmod.kinematics.FloorFinding.Code;
 import com.muzhik17.trainsmod.kinematics.FloorFinding.Subject;
+import com.muzhik17.trainsmod.stock.FloorRegion;
 import com.muzhik17.trainsmod.stock.WagonType;
 import com.muzhik17.trainsmod.stock.WagonTypeParser;
 
@@ -179,6 +180,44 @@ class FloorFindingTest {
                 "door 0 'partition' (inner): its two sides are one floor without it — the floor runs round it"
                         + " or through the wall beside it, so shut it is no wall",
                 "id", "partition");
+    }
+
+    /**
+     * Where an inner door's bridge meets the floor, all doors between zones
+     * shut — on both sides of its leaf, one or none — is one rule, which the
+     * findings above are made by and the editor's doors tool shows: a door
+     * between two rooms reaches both, one on the floor's end or beside the
+     * aisle one, one off the floor none.
+     */
+    @Test
+    void anInnerDoorsBridgeMeetsTheFloorOnBothSidesOneOrNone() {
+        WagonType type = type("""
+                "interior": [
+                  {"min": [-5.0, 1.37375, -1.4], "max": [0.0, 3.87375, 1.4]},
+                  {"min": [0.1, 1.37375, -1.4], "max": [5.0, 3.87375, 1.4]}],
+                "doors": [
+                  {"id": "partition", "min": [0.02, 1.37375, -0.45], "max": [0.08, 3.5, 0.45], "inner": true},
+                  {"id": "end", "min": [5.0, 1.37375, -0.45], "max": [5.06, 3.5, 0.45], "inner": true},
+                  {"id": "lost", "min": [-7.03, 1.37375, -0.45], "max": [-6.97, 3.5, 0.45], "inner": true}]""");
+        FloorRegion shut = type.interior().region(RiderWalk.PLAYER_HALF_WIDTH, type.doors(), 0);
+        List<FloorCheck.BridgeSides.Reach> reach = new ArrayList<>();
+        for (WagonType.Door door : type.doors()) {
+            reach.add(FloorCheck.bridgeSides(door, shut).reach());
+        }
+        assertEquals(List.of(FloorCheck.BridgeSides.Reach.BOTH, FloorCheck.BridgeSides.Reach.ONE,
+                FloorCheck.BridgeSides.Reach.NONE), reach);
+        // the partition, an end-wall door: the rear room's parts before its leaf (−Z of the model frame, the OBJ's +x)
+        FloorCheck.BridgeSides partition = FloorCheck.bridgeSides(type.doors().get(0), shut);
+        assertTrue(!partition.before().isEmpty() && !partition.behind().isEmpty(), partition.toString());
+        for (int p : partition.before()) {
+            assertTrue(shut.pieces().get(p).maxZ() <= shut.pieces().get(partition.behind().get(0)).minZ(), partition.toString());
+        }
+        List<Integer> all = new ArrayList<>(partition.before());
+        all.addAll(partition.behind());
+        all.sort(null);
+        assertEquals(all, partition.parts());
+        assertEquals(List.of("both", "one", "none"),
+                List.of(FloorCheck.BridgeSides.Reach.values()).stream().map(r -> r.key).toList());
     }
 
     @Test
