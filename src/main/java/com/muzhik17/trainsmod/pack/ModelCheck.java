@@ -14,6 +14,7 @@ import com.muzhik17.trainsmod.client.render.model.MtlParser;
 import com.muzhik17.trainsmod.client.render.model.ObjLoader;
 import com.muzhik17.trainsmod.client.render.model.WagonModelDecl;
 import com.muzhik17.trainsmod.convention.GroupName;
+import com.muzhik17.trainsmod.convention.ModelParts;
 import com.muzhik17.trainsmod.convention.ObjectRole;
 
 /**
@@ -40,9 +41,6 @@ import com.muzhik17.trainsmod.convention.ObjectRole;
  * with the renderer).
  */
 public final class ModelCheck {
-
-    /** Object-name prefix never drawn, on top of a declaration's {@code skip} (as the model loader). */
-    private static final String CARGO_FILL = "CARGO_FILL";
 
     private ModelCheck() {
     }
@@ -137,9 +135,11 @@ public final class ModelCheck {
     private static void checkDrawn(WagonModelDecl decl, String obj, ObjLoader.Model model,
             Map<String, String> textures, PackOrigin origin, List<PackProblem> problems) {
         boolean anyDrawn = false;
+        List<String> skip = new ArrayList<>(ModelParts.DEFAULT_SKIP_PREFIXES);
+        skip.addAll(decl.skip());
         Set<String> untextured = new LinkedHashSet<>();
         for (ObjLoader.Part part : model.parts()) {
-            if (hidden(decl, part.object())) {
+            if (hidden(skip, part.object())) {
                 continue;
             }
             if (textures.containsKey(part.material())) {
@@ -225,17 +225,9 @@ public final class ModelCheck {
         return ObjectRole.parse(object).pivot() || leaf != null && leaf.pivot();
     }
 
-    /** Never drawn: {@code HIDE} parts, {@code CARGO_FILL} and the declaration's {@code skip} prefixes. */
-    private static boolean hidden(WagonModelDecl decl, String object) {
-        if (object.contains("HIDE") || object.startsWith(CARGO_FILL)) {
-            return true;
-        }
-        for (String prefix : decl.skip()) {
-            if (object.startsWith(prefix)) {
-                return true;
-            }
-        }
-        return false;
+    /** Never drawn, by the model loader's own rule ({@link ModelParts#dropped}): {@code HIDE} (widgets and coupler heads aside), {@code CARGO_FILL} and the declaration's {@code skip}. */
+    private static boolean hidden(List<String> skip, String object) {
+        return ModelParts.dropped(object, skip) != null;
     }
 
     /** {@code relative} resolved against {@code folder} of {@code namespace}; null if it climbs out. */

@@ -170,6 +170,20 @@ class ModelCheckTest {
     }
 
     /**
+     * The engine draws a {@code HIDE} widget (shown by its value), so a face of
+     * it with no texture is named like any other; a plain {@code HIDE} part
+     * and a {@code CARGO_FILL} one are not.
+     */
+    @Test
+    void aHideWidgetIsDrawnByTheEngine_soItsUntexturedFacesWarn() {
+        Pack pack = good().with("t:car/car.obj", "mtllib car.mtl\n" + QUAD
+                + "o BODY\nusemtl body\nf 1 2 3\no WIDGET_4_HIDE_LAMP\nusemtl glow\nf 1 2 3\n"
+                + "o CARGO_FILL_20\nusemtl cargo\nf 1 2 3\no PLAIN_HIDE\nusemtl helper\nf 1 2 3\n");
+        assertEquals(List.of("W model t:car/car.obj: faces with no texture (map_Kd) aren't drawn, material(s) glow"),
+                check("{ \"obj\": \"car/car.obj\" }", pack));
+    }
+
+    /**
      * A hinge marker ({@code <KEY>_ROT…} of a control or a door leaf) is read
      * for its axis whether it has a texture or not, and IR leaves it
      * untextured, drawn by nothing: that is no mistake to warn about. The

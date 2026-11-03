@@ -360,6 +360,26 @@ public final class ModelParts {
     }
 
     /**
+     * Why a part is dropped before anything else, or null if it isn't: {@code HIDE}
+     * in its raw name ({@link Place#HIDDEN}) — but a {@code WIDGET} control
+     * (shown by its value) and a coupler head (shown by coupling) are not
+     * hidden by it — or a skipped name prefix ({@link Place#SKIPPED}).
+     * The one place the rule lives; pack checks ask it too.
+     *
+     * @param skipPrefixes {@link #DEFAULT_SKIP_PREFIXES} and the declaration's {@code skip}
+     */
+    public static Place dropped(String object, List<String> skipPrefixes) {
+        if (object.contains("HIDE")) {
+            ObjectRole.Control control = ObjectRole.parse(object).control();
+            boolean widget = control != null && control.kind() == ObjectRole.Kind.WIDGET;
+            if (!widget && ObjectRole.coupled(object) == null) {
+                return Place.HIDDEN;
+            }
+        }
+        return startsWithAny(object, skipPrefixes) ? Place.SKIPPED : null;
+    }
+
+    /**
      * When a light shines (SPEC §8) — the faces of a glowing part, a cabin
      * lamp, a headlight alike: with no light group ({@code group} −1) always;
      * else while its group is on, or, with {@code LINVERT} ({@code invert}),
@@ -641,16 +661,12 @@ public final class ModelParts {
             ObjectRole role = GroupName.fit(parsed);
             // a hidden switch-driven part (the ChME3 tail lamps) shows by its group, a coupler
             // head by its end's coupling (SPEC §6.12); other HIDE objects stay out
-            boolean widget = role.control() != null && role.control().kind() == ObjectRole.Kind.WIDGET;
+            Place dropped = dropped(object, skipPrefixes);
+            if (dropped != null) {
+                skipped++;
+                return new Pending(dropped, false, null, null, Light.NONE);
+            }
             ObjectRole.Coupled coupled = ObjectRole.coupled(object);
-            if (object.contains("HIDE") && !widget && coupled == null) {
-                skipped++;
-                return new Pending(Place.HIDDEN, false, null, null, Light.NONE);
-            }
-            if (startsWithAny(object, skipPrefixes)) {
-                skipped++;
-                return new Pending(Place.SKIPPED, false, null, null, Light.NONE);
-            }
             BogieBuilder bogie = coupled != null ? null : object.startsWith("BOGEY_FRONT") ? front
                     : object.startsWith("BOGEY_REAR") ? rear : null;
             CouplerBuilder coupler = coupled != null ? couplerBuilders.computeIfAbsent(coupled, CouplerBuilder::new)
