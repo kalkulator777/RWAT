@@ -251,7 +251,7 @@ export class FloorDragger implements ViewDragger {
   }
 
   hover(at: ViewPointer | null): string | null {
-    if (at === null || this.gesture !== null) return null;
+    if (at === null || this.gesture !== null || this.editing.picking()) return null;
     const found = this.grabFor(at);
     return found === null ? null : cursorOf(found.under);
   }

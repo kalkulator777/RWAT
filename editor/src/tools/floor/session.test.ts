@@ -203,6 +203,7 @@ describe('a zone’s floor height', () => {
     tool.pickingHeight.value = 1;
     // while it waits, a click in the view is the view's, to pick: the tool takes no press
     expect(b.view.dragger?.press(top(0, 0))).toBe(false);
+    expect(b.view.dragger?.hover?.(top(0, 0))).toBeNull();
     const floor = coachModel.objects.find((o) => o.name === 'FLOOR') ?? coachModel.objects.find((o) => o.role === 'interior');
     if (floor === undefined) throw new Error('no floor object');
     const point: Vec3 = [(floor.bbox[0][0] + floor.bbox[1][0]) / 2, floor.bbox[1][1], (floor.bbox[0][2] + floor.bbox[1][2]) / 2];
