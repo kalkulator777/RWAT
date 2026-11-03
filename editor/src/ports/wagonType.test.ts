@@ -20,6 +20,7 @@ import {
   aliases,
   equalsIgnoreCase,
   formatNumber,
+  geometryFaults,
   loadWagonType,
   parseWagonType,
 } from './wagonType';
@@ -165,6 +166,22 @@ describe('wagonType', () => {
       '1.23456785E7',
       '1.0E21',
     ]);
+  });
+
+  it('lists every way the geometry makes no wagon in the engine’s order, the first being the parser’s error', () => {
+    const faults = geometryFaults(10, [5, -2, -1.5], { front: 0.5, rear: -5.5 });
+    expect(faults.map((f) => [f.code, f.params])).toEqual([
+      ['bogie-outside', { index: 0, value: 5, half: 5 }],
+      ['bogie-order', { index: 2, value: -1.5, previousIndex: 1, previous: -2 }],
+      ['coupler-outside', { end: 'rear', value: -5.5, half: 5 }],
+    ]);
+    expect(() => parseWagonType('x', { length: 10, bogies: [5, -2, -1.5], mass_t: 1, couplers: { front: 0.5, rear: -5.5 } })).toThrow(
+      new PackJsonError(faults[0]!.text),
+    );
+    expect(geometryFaults(0, [99], { front: 99, rear: 0 })).toEqual([
+      { code: 'length-not-positive', params: { value: 0 }, text: "'length' must be a positive number of blocks, got 0" },
+    ]);
+    expect(geometryFaults(10, [4, -4], { front: 0, rear: 0 })).toEqual([]);
   });
 
   it('says what the loader says of a file that is not an object', () => {

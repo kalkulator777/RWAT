@@ -14,14 +14,14 @@
  * `sounds.controls`, the limits of light and control groups) — they come with the model
  * pipeline (M3–M4); the floor's are `FloorCheck`'s (ports/floorCheck).
  *
- * The geometry rule repeats `WagonTypeParser.checkGeometry`; its numbers are written as
- * the port writes them (ports/wagonType `formatNumber`).
+ * The geometry rule is the engine's, from its port (ports/wagonType `geometryFaults`): the
+ * engine stops at the first fault, the checks show every one.
  */
 
 import type { Link, Problem } from '../core/contracts';
 import { isJsonObject } from '../core/json';
 import { classify, MCMETA, modelPath, SUPPORTED_FORMAT, typePath, type Pack } from '../core/pack';
-import { formatNumber } from '../ports/wagonType';
+import { geometryFaults, type GeometryFault } from '../ports/wagonType';
 
 /** A path Minecraft takes as a resource location: `assets|data/<namespace>/<path>`, lower case (`ResourceLocation`). */
 const RESOURCE_PATH = /^(?:assets|data)\/[a-z0-9_.-]+\/[a-z0-9_./-]+$/;
@@ -49,51 +49,35 @@ function escape(key: string): string {
   return key.replace(/~/g, '~0').replace(/\//g, '~1');
 }
 
-/** The geometry must make a wagon (`WagonTypeParser.checkGeometry`): pivots inside the body and front to back, couplers under half a body. */
+/** Where a geometry fault points in the type's file. */
+const GEOMETRY_POINTER: Record<GeometryFault['code'], (params: GeometryFault['params']) => string> = {
+  'length-not-positive': () => '/length',
+  'bogie-outside': (params) => `/bogies/${params.index}`,
+  'bogie-order': (params) => `/bogies/${params.index}`,
+  'coupler-outside': (params) => `/couplers/${params.end}`,
+};
+
+/**
+ * The geometry must make a wagon: every fault `WagonTypeParser.checkGeometry` would stop
+ * at (ports/wagonType `geometryFaults`), each at its field. Values of the wrong type are
+ * the schema's to say: a length that is no positive number checks nothing, bogies that are
+ * not all numbers and a coupler offset that is no number are left out.
+ */
 function geometry(file: string, type: Record<string, unknown>, out: Problem[]): void {
   const length = type.length;
-  const bogies = numbers(type.bogies);
   if (typeof length !== 'number' || !(length > 0)) return; // the schema says it
-  const half = length / 2;
-  bogies?.forEach((pivot, i) => {
-    if (!(Math.abs(pivot) < half)) {
-      out.push({
-        severity: 'error',
-        source: 'loader',
-        code: 'loader.bogie-outside',
-        params: { index: i, value: pivot, half },
-        text: `'bogies[${i}]' = ${formatNumber(pivot)} is outside the body: a pivot must lie within ±length/2 = ±${formatNumber(half)}`,
-        at: field(file, `/bogies/${i}`),
-      });
-    }
-    const before = bogies[i - 1];
-    if (before !== undefined && !(pivot < before)) {
-      out.push({
-        severity: 'error',
-        source: 'loader',
-        code: 'loader.bogie-order',
-        params: { index: i, value: pivot, previousIndex: i - 1, previous: before },
-        text:
-          `'bogies' must run front to back, each pivot behind the one before: 'bogies[${i}]' = ${formatNumber(pivot)}` +
-          ` is not behind 'bogies[${i - 1}]' = ${formatNumber(before)}`,
-        at: field(file, `/bogies/${i}`),
-      });
-    }
-  });
-  const couplers = type.couplers;
-  if (!isJsonObject(couplers)) return;
-  for (const end of ['front', 'rear'] as const) {
-    const offset = couplers[end];
-    if (typeof offset === 'number' && !(Math.abs(offset) < half)) {
-      out.push({
-        severity: 'error',
-        source: 'loader',
-        code: 'loader.coupler-outside',
-        params: { end, value: offset, half },
-        text: `'couplers.${end}' = ${formatNumber(offset)} must be under length/2 = ${formatNumber(half)} in size`,
-        at: field(file, `/couplers/${end}`),
-      });
-    }
+  const couplers = isJsonObject(type.couplers) ? type.couplers : {};
+  const offset = (value: unknown): number => (typeof value === 'number' ? value : 0.0);
+  const faults = geometryFaults(length, numbers(type.bogies) ?? [], { front: offset(couplers.front), rear: offset(couplers.rear) });
+  for (const fault of faults) {
+    out.push({
+      severity: 'error',
+      source: 'loader',
+      code: `loader.${fault.code}`,
+      params: { ...fault.params },
+      text: fault.text,
+      at: field(file, GEOMETRY_POINTER[fault.code](fault.params)),
+    });
   }
 }
 

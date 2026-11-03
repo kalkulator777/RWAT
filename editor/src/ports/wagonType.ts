@@ -661,35 +661,68 @@ export function loadWagonType(id: string, json: unknown): LoadedType {
   }
 }
 
+/** A way a type's geometry makes no wagon (`WagonTypeParser.checkGeometry`): its code, the values its text is made of, the text. */
+export interface GeometryFault {
+  readonly code: 'length-not-positive' | 'bogie-outside' | 'bogie-order' | 'coupler-outside';
+  /**
+   * `length-not-positive`: `value`; `bogie-outside`: `index`, `value`, `half`;
+   * `bogie-order`: `index`, `value`, `previousIndex`, `previous`; `coupler-outside`:
+   * `end` (`front`, `rear`), `value`, `half`.
+   */
+  readonly params: Readonly<Record<string, number | string>>;
+  /** The engine's message, word for word. */
+  readonly text: string;
+}
+
 /**
- * The geometry must make a wagon (fix list D3): a positive length; bogie pivots strictly
- * front to back and inside the body; each coupler offset under `length/2` in size.
+ * What makes the geometry no wagon (fix list D3), every fault in the order the engine
+ * checks: a length that is not positive (then nothing else, as the engine stops there);
+ * each bogie pivot inside the body and behind the one before; each coupler offset under
+ * `length/2` in size. The engine throws the first ({@link parseWagonType}); the editor's
+ * checks show them all (checks/loader.ts).
  */
-function checkGeometry(length: number, bogieOffsets: readonly number[], couplers: Couplers): void {
-  if (!(length > 0.0)) throw new PackJsonError(`'length' must be a positive number of blocks, got ${formatNumber(length)}`);
+export function geometryFaults(length: number, bogieOffsets: readonly number[], couplers: Couplers): GeometryFault[] {
+  if (!(length > 0.0)) {
+    return [{ code: 'length-not-positive', params: { value: length }, text: `'length' must be a positive number of blocks, got ${formatNumber(length)}` }];
+  }
+  const faults: GeometryFault[] = [];
   const half = length / 2.0;
   bogieOffsets.forEach((bogie, i) => {
     if (!(Math.abs(bogie) < half)) {
-      throw new PackJsonError(
-        `'bogies[${i}]' = ${formatNumber(bogie)} is outside the body: a pivot must lie within ±length/2 = ±${formatNumber(half)}`,
-      );
+      faults.push({
+        code: 'bogie-outside',
+        params: { index: i, value: bogie, half },
+        text: `'bogies[${i}]' = ${formatNumber(bogie)} is outside the body: a pivot must lie within ±length/2 = ±${formatNumber(half)}`,
+      });
     }
     const before = bogieOffsets[i - 1];
     if (before !== undefined && !(bogie < before)) {
-      throw new PackJsonError(
-        `'bogies' must run front to back, each pivot behind the one before: 'bogies[${i}]' = ${formatNumber(bogie)}` +
+      faults.push({
+        code: 'bogie-order',
+        params: { index: i, value: bogie, previousIndex: i - 1, previous: before },
+        text:
+          `'bogies' must run front to back, each pivot behind the one before: 'bogies[${i}]' = ${formatNumber(bogie)}` +
           ` is not behind 'bogies[${i - 1}]' = ${formatNumber(before)}`,
-      );
+      });
     }
   });
-  checkCoupler('front', couplers.front, half);
-  checkCoupler('rear', couplers.rear, half);
+  for (const end of ['front', 'rear'] as const) {
+    const offset = couplers[end];
+    if (!(Math.abs(offset) < half)) {
+      faults.push({
+        code: 'coupler-outside',
+        params: { end, value: offset, half },
+        text: `'couplers.${end}' = ${formatNumber(offset)} must be under length/2 = ${formatNumber(half)} in size`,
+      });
+    }
+  }
+  return faults;
 }
 
-function checkCoupler(end: string, offset: number, half: number): void {
-  if (!(Math.abs(offset) < half)) {
-    throw new PackJsonError(`'couplers.${end}' = ${formatNumber(offset)} must be under length/2 = ${formatNumber(half)} in size`);
-  }
+/** The geometry must make a wagon: the first of {@link geometryFaults} is the engine's error. */
+function checkGeometry(length: number, bogieOffsets: readonly number[], couplers: Couplers): void {
+  const first = geometryFaults(length, bogieOffsets, couplers)[0];
+  if (first !== undefined) throw new PackJsonError(first.text);
 }
 
 /** The section object `key` with its keys checked, or null when absent. */

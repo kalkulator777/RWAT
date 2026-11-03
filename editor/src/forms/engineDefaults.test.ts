@@ -1,7 +1,8 @@
 /**
- * The engine's values the forms figure for empty fields, against cases of
- * fixtures/golden/stock_defaults written out (its runner is the port's, A2.3), and the
- * schema: each figured field says `x-engine-default`.
+ * The engine's values the forms figure for empty fields: ports/stockDefaults applied to a
+ * file as the parser applies it, held to cases of fixtures/golden/stock_defaults written
+ * out (the port itself is held to the whole folder by its runner, ports/stockDefaults.test.ts),
+ * and the schema: each figured field says `x-engine-default`.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -38,8 +39,16 @@ describe("the engine's value of an empty field", () => {
     expect(engineDefault('wagon_type', '/brakes/train_kn', {})).toBeUndefined();
     expect(engineDefault('wagon_type', '/brakes/train_kn', { mass_t: 'x' })).toBeUndefined();
     expect(engineDefault('wagon_type', '/brakes/train_kn', { mass_t: 10, brakes: { system: 'magnetic' } })).toBeUndefined();
+    expect(engineDefault('wagon_type', '/brakes/apply_s', { brakes: { system: 7 } })).toBeUndefined();
     expect(engineDefault('wagon_type', '/length', { mass_t: 10 })).toBeUndefined();
     expect(engineDefault('wagon_model', '/bogies', {})).toBeUndefined();
+  });
+
+  it('figures the brakes that do not depend on the brake system with an unknown one', () => {
+    const type = { mass_t: 10, brakes: { system: 'magnetic' }, cab: {} };
+    expect(engineDefault('wagon_type', '/brakes/independent_kn', type)).toBeCloseTo(7, 9);
+    expect(engineDefault('wagon_type', '/brakes/parking_kn', type)).toBeCloseTo(4, 9);
+    expect(engineDefault('wagon_type', '/brakes/independent_kn', { mass_t: 10 })).toBe(0);
   });
 
   it('is figured only for fields whose schema says x-engine-default', () => {

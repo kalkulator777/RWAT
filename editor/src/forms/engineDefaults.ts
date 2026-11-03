@@ -3,55 +3,37 @@
  * (`x-engine-default` in the schema, editor.md §3.7): an empty `brakes.train_kn` shows
  * the number the engine will take, not only the formula.
  *
- * TEMPORARY. The figures and formulas are `stock/StockDefaults.java`'s, applied as
- * `WagonTypeParser.parse` applies them (the brake system named in the file, a cab when
- * the `cab` section is there). They belong to the port ports/stockDefaults.ts (A2.3,
- * golden `stock_defaults`); when it lands, {@link STOCK} is replaced by it and nothing
- * else here changes. Until then the test of this file checks the figures against cases
- * of the golden file, written out.
+ * The figures are the port's, ports/stockDefaults.ts (`stock/StockDefaults.java`, golden
+ * `stock_defaults`), applied as `WagonTypeParser.parse` applies them: the brake system
+ * named in the file (the default one when it names none), a cab when the `cab` section is
+ * there. Unlike the parser, the form figures what it can from a file that does not load
+ * yet: the brakes that do not depend on the brake system are shown with an unknown one.
  */
 
 import type { JsonPointer } from '../core/contracts';
 import { isJsonObject } from '../core/json';
 import type { SchemaKind } from '../core/schema';
+import { brakes, brakeSystemByName, DEFAULT_BRAKE_SYSTEM, resistance, type Brakes, type BrakeSystem } from '../ports/stockDefaults';
 
-interface BrakeSystem {
-  knPerTonne: number;
-  applyS: number;
-  releaseS: number;
+/** The brake system a type's file names (`brakes.system`), the default one when it names none, null for an unknown name. */
+function brakeSystem(type: Record<string, unknown>): BrakeSystem | null {
+  const section = isJsonObject(type.brakes) ? type.brakes : {};
+  if (section.system === undefined) return DEFAULT_BRAKE_SYSTEM;
+  return typeof section.system === 'string' ? brakeSystemByName(section.system) : null;
 }
 
-/** `StockDefaults` as the forms need it; names as in Java, so the port can stand in for it. */
-const STOCK = {
-  RESISTANCE_A_PER_TONNE: 7.0,
-  RESISTANCE_A_PER_WAGON: 200.0,
-  INDEPENDENT_KN_PER_TONNE: 0.7,
-  PARKING_KN_PER_TONNE: 0.4,
-  DEFAULT_BRAKE_SYSTEM: 'passenger',
-  systems: {
-    passenger: { knPerTonne: 1.0, applyS: 4.0, releaseS: 8.0 },
-    freight: { knPerTonne: 0.6, applyS: 15.0, releaseS: 30.0 },
-    ep: { knPerTonne: 1.1, applyS: 1.5, releaseS: 3.0 },
-  } as Record<string, BrakeSystem>,
-};
-
-/** The brake system a type's file names (`brakes.system`), the default one when it names none, undefined for an unknown name. */
-function brakeSystem(type: Record<string, unknown>): BrakeSystem | undefined {
-  const brakes = isJsonObject(type.brakes) ? type.brakes : {};
-  const name = brakes.system === undefined ? STOCK.DEFAULT_BRAKE_SYSTEM : brakes.system;
-  return typeof name === 'string' && Object.hasOwn(STOCK.systems, name) ? STOCK.systems[name] : undefined;
+/** `StockDefaults.brakes` for the file: its brake system (any, for the brakes that do not depend on it) and its cab. */
+function brakesOf(type: Record<string, unknown>, massT: number): Brakes {
+  return brakes(brakeSystem(type) ?? DEFAULT_BRAKE_SYSTEM, massT, type.cab !== undefined);
 }
 
 type Formula = (type: Record<string, unknown>, massT: number) => number | undefined;
 
 const WAGON_TYPE: Record<JsonPointer, Formula> = {
-  '/resistance/a': (_type, massT) => STOCK.RESISTANCE_A_PER_TONNE * massT + STOCK.RESISTANCE_A_PER_WAGON,
-  '/brakes/train_kn': (type, massT) => {
-    const system = brakeSystem(type);
-    return system && system.knPerTonne * massT;
-  },
-  '/brakes/independent_kn': (type, massT) => (type.cab !== undefined ? STOCK.INDEPENDENT_KN_PER_TONNE * massT : 0.0),
-  '/brakes/parking_kn': (_type, massT) => STOCK.PARKING_KN_PER_TONNE * massT,
+  '/resistance/a': (_type, massT) => resistance(massT).a,
+  '/brakes/train_kn': (type, massT) => (brakeSystem(type) === null ? undefined : brakesOf(type, massT).trainKn),
+  '/brakes/independent_kn': (type, massT) => brakesOf(type, massT).independentKn,
+  '/brakes/parking_kn': (type, massT) => brakesOf(type, massT).parkingKn,
 };
 
 /** Formulas that need no mass. */
