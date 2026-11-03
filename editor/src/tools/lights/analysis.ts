@@ -179,9 +179,15 @@ export function lightsPicture(model: LoadedModel, chosen: GroupChoice): LightsPi
   };
 }
 
-/** The light group an object of the model is lit by, or null for an object of none. */
+/**
+ * The light group an object of the model is about: the group it is lit by, else the one a
+ * control of it switches — a control group's value is the light group's of the same name
+ * (a headlight's switch, the shutter over its lens); null for an object of neither.
+ */
 export function groupOfObject(model: LoadedModel, object: string): number | null {
   const info = model.objects.find((o) => o.name === object);
-  const group = info?.engine.light.group ?? -1;
-  return group >= 0 ? group : null;
+  if (info === undefined) return null;
+  if (info.engine.light.group >= 0) return info.engine.light.group;
+  const switched = info.control === undefined ? -1 : (model.engine?.lightGroups.indexOf(info.control.group) ?? -1);
+  return switched >= 0 ? switched : null;
 }

@@ -7,7 +7,7 @@ import { OVERLAY_STYLES } from '../../view3d/overlays';
 import { ToolHost } from '../registry';
 import { ToolSection } from '../ToolBar';
 import { bench } from '../testing.node';
-import { CHOSEN_STYLE, colourOf, CONE_LENGTH, LIGHT_LAYERS, lightsPicture, NO_GROUP } from './analysis';
+import { CHOSEN_STYLE, colourOf, CONE_LENGTH, groupOfObject, LIGHT_LAYERS, lightsPicture, NO_GROUP } from './analysis';
 import lightsTool, { type LightsSession } from './index';
 
 const shunter = await exampleModel('shunter');
@@ -66,6 +66,16 @@ describe('the lights of the shunter', () => {
     expect(p.groups.map((g) => [g.name, g.lamps.length, g.interior])).toEqual([['IL', 8, true]]);
     expect(lightsPicture({ ...coach, engine: null }, null).groups).toEqual([]);
     expect(colourOf(0xff)).toBe('#0000ff');
+  });
+
+  it('an object clicked is about the group it is lit by, or the one its control switches', () => {
+    expect(groupOfObject(shunter, 'CAB_LAMP_FULLBRIGHT_LCG_IL')).toBe(3);
+    // the shutter over the front lens (`WIDGET_7_CG_FHL_HIDE`) and the cab's switch of the cab lights
+    expect(groupOfObject(shunter, 'WIDGET_7_CG_FHL_HIDE_NOTOUCH')).toBe(0);
+    expect(groupOfObject(shunter, 'WIDGET_3_TOGGLE_CG_IL_OFFSET_-0.5')).toBe(3);
+    expect(groupOfObject(shunter, 'THROTTLE_1_KNOB')).toBeNull();
+    expect(groupOfObject(shunter, 'HOODS')).toBeNull();
+    expect(groupOfObject(shunter, 'NO_SUCH_OBJECT')).toBeNull();
   });
 
   it('lights of no group come last, as a group of their own', () => {
@@ -128,6 +138,9 @@ describe('the lights tool turned on', () => {
     // an object of no group chooses nothing else
     b.view.emitPick({ object: 'HOODS', point: [0, 3.3, 0], shift: false, ctrl: false, alt: false, double: false });
     expect(tool.chosen.value).toBe(0);
+    // the switch of the rear headlight: its control group is the light group RHL
+    b.view.emitPick({ object: 'WIDGET_2_TOGGLE_CG_RHL_OFFSET_-0.5', point: [1.05, 2.55, 0.77], shift: false, ctrl: false, alt: false, double: false });
+    expect(tool.chosen.value).toBe(1);
     stop();
   });
 

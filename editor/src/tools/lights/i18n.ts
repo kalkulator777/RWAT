@@ -4,7 +4,8 @@ export default defineStrings({
   ru: {
     'tools.lights.title': 'Свет',
     'tools.lights.hint': 'Только показ: фары конусом в свою сторону и их цвет, лампы салона, группы света',
-    'tools.lights.howto': 'Только показ: здесь ничего не правится. Выберите группу — её фары и лампы выделятся цветом; клик по объекту в виде выбирает его группу.',
+    'tools.lights.howto':
+      'Только показ: здесь ничего не правится. Выберите группу — её фары и лампы выделятся цветом; клик по объекту в виде выбирает его группу или ту, что он переключает.',
     'tools.lights.reading': 'Модель читается…',
     'tools.lights.unreadable': 'Модель не читается: света нет.',
     'tools.lights.headlights': '{count, plural, =0 {Фар нет} one {# фара} few {# фары} many {# фар} other {# фары}}',
@@ -33,7 +34,8 @@ export default defineStrings({
   en: {
     'tools.lights.title': 'Lights',
     'tools.lights.hint': 'Shows only: headlights as cones the way they shine and their colour, cabin lamps, light groups',
-    'tools.lights.howto': 'Shows only: nothing is edited here. Choose a group: its headlights and lamps take a colour of their own; a click on an object in the view chooses its group.',
+    'tools.lights.howto':
+      'Shows only: nothing is edited here. Choose a group: its headlights and lamps take a colour of their own; a click on an object in the view chooses its group, or the one it switches.',
     'tools.lights.reading': 'The model is being read…',
     'tools.lights.unreadable': 'The model cannot be read: no lights.',
     'tools.lights.headlights': '{count, plural, =0 {No headlights} one {# headlight} other {# headlights}}',

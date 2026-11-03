@@ -2,7 +2,8 @@
  * The lights tool while it is on (docs/proposals/editor.md §3.9): it only shows — draws the
  * open model's headlights and cabin lamps (./analysis.ts) again whenever the model is read
  * anew or another group is chosen, and chooses the group of an object clicked in the view
- * (the view selects the object itself, as ever). The group chosen lives here, read by the
+ * — the group it is lit by or a control of it switches — (the view selects the object
+ * itself, as ever). The group chosen lives here, read by the
  * inspector's section (./LightsInspector.tsx). It edits nothing and takes no presses: the
  * camera keeps them.
  */
