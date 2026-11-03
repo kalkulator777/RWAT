@@ -25,7 +25,6 @@ const WAITING_FOR_M2 = [
   'floor_check', // ждёт M2: floor findings
   'floor_region', // ждёт M2: floor under a point
   'java_numbers', // ждёт M2: Java number parsing and printing
-  'obj', // ждёт M2: OBJ parser
   'obj_frame', // ждёт M2: OBJ frame conversions
   'object_role', // ждёт M2: object name roles
   'pivot_axis', // ждёт M2: hinge axis
