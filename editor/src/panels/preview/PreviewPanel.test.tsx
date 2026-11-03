@@ -135,11 +135,12 @@ describe('the Preview tab', () => {
     render(<PreviewPanel />);
     fireEvent.click(screen.getByRole('button', { name: /^Liveries/ }));
     fireEvent.click(screen.getByRole('radio', { name: 'blue: replaces 2 textures' }));
-    await waitFor(() => expect(view.shown).toHaveLength(2));
     const body = assetPath('stock/coach/coach_body.png');
-    expect((view.shown.at(-1)!.textures[body] as unknown as { path: string }).path).toBe(assetPath('stock/coach/l_blue/coach_body.png'));
+    await waitFor(() => expect(view.textures.has(body)).toBe(true));
+    expect((view.textures.get(body) as unknown as { path: string }).path).toBe(assetPath('stock/coach/l_blue/coach_body.png'));
     fireEvent.click(screen.getByRole('radio', { name: 'Base' }));
-    expect(view.shown.at(-1)).toBe(preview.subject.value!.model);
+    expect(view.textures.get(body)).toBe(preview.subject.value!.model.textures[body]);
+    expect(view.shown).toHaveLength(1);
   });
 
   it('couples the front end: its free head goes, its coupled head comes', () => {

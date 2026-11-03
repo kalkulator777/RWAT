@@ -7,7 +7,6 @@
  */
 
 import type { Vec3 } from '../core/contracts';
-import type { WagonFrame } from './frame';
 import { view, type ViewState } from './state';
 import type { Viewport } from './viewport';
 
@@ -20,8 +19,6 @@ export interface ViewTestHook {
   screenOf(object: string): { x: number; y: number } | null;
   /** Where a point of the OBJ frame is on the page. */
   pointOnPage(point: Vec3): { x: number; y: number };
-  /** Gives the guides a wagon type's frame (null: none). */
-  setFrame(frame: WagonFrame | null): void;
 }
 
 type HookGlobal = { __RWAT_E2E__?: unknown; __rwatView?: ViewTestHook | null };
@@ -47,8 +44,5 @@ export function exposeForTests(viewport: Viewport | null): void {
       return pointOnPage([centre.x, centre.y, centre.z]);
     },
     pointOnPage,
-    setFrame: (frame) => {
-      view.frame.value = frame;
-    },
   };
 }

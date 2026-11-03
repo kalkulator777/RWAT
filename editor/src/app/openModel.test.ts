@@ -15,7 +15,6 @@ import type { ModelWorkerApi } from '../model/types';
 import { PreviewController } from '../preview/controller';
 import { fakeBitmap, recordingView, type RecordingView } from '../preview/testing.node';
 import { EXAMPLE_PACK } from '../testing/repo.node';
-import type { WagonFrame } from '../view3d/frame';
 import { connectModel, stockIdOf, wagonToOpen } from './openModel';
 import { openSource } from './session';
 import { findings, journal, modelLoading, modelProblems, openModel, openWagon, pack, revision, selection } from './store';
@@ -31,7 +30,6 @@ const files = readTree(EXAMPLE_PACK);
 
 interface Rig {
   view: RecordingView;
-  frames: (WagonFrame | null)[];
   preview: PreviewController;
   loader: ModelLoader;
   loads: string[];
@@ -50,13 +48,17 @@ function wire(api: ModelWorkerApi = createModelApi((_bytes, path) => Promise.res
     textures: (paths, reader) => api.textures(paths, reader),
   };
   const view = recordingView();
-  const frames: (WagonFrame | null)[] = [];
   const preview = new PreviewController({ every: () => () => undefined });
   preview.view.value = view;
   const loader = new ModelLoader(counting);
-  const stop = connectModel({ loader, view, setFrame: (frame) => frames.push(frame), preview, delayMs: 0 });
+  const stop = connectModel({ loader, view, preview, delayMs: 0 });
   stops.push(stop, () => preview.dispose());
-  return { view, frames, preview, loader, loads, stop };
+  return { view, preview, loader, loads, stop };
+}
+
+/** How many times the view was given a frame. */
+function framesGiven(rig: Rig): number {
+  return rig.view.calls.filter((call) => call.method === 'setFrame').length;
 }
 
 function reset(): void {
@@ -127,7 +129,7 @@ describe('the open model', () => {
     const coach = rig.view.shown[0]!;
     expect(coach.id).toBe(COACH);
     expect(openModel.value).toBe(coach);
-    expect(rig.frames.at(-1)?.length).toBe(20);
+    expect(rig.view.frame?.length).toBe(20);
     expect(rig.preview.subject.value?.model).toBe(coach);
     expect(rig.preview.subject.value?.type?.id).toBe(COACH);
     // the preview has told the view where the coach's doors and couplers stand
@@ -166,10 +168,10 @@ describe('the open model', () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(rig.view.shown).toHaveLength(1);
 
-    const frames = rig.frames.length;
+    const frames = framesGiven(rig);
     edit({ label: 'edit.field', ops: [{ op: 'set', file: SHUNTER_TYPE, at: '/length', value: 12 }] });
-    await vi.waitFor(() => expect(rig.frames.length).toBe(frames + 1));
-    expect(rig.frames.at(-1)?.length).toBe(12);
+    await vi.waitFor(() => expect(framesGiven(rig)).toBe(frames + 1));
+    expect(rig.view.frame?.length).toBe(12);
     expect(rig.view.shown).toHaveLength(1);
     expect(rig.preview.subject.value?.model).toBe(before);
     expect(rig.preview.subject.value?.type?.length).toBe(12);

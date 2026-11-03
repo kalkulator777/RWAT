@@ -16,7 +16,8 @@ import { EXAMPLE_PACK, GOLDEN_DIR } from '../testing/repo.node';
 import { createModelApi } from './api';
 import { roleId } from './build';
 import { sourceFiles, type ModelFiles } from './files';
-import type { ModelReader, ModelRequest, ParsedModel } from './types';
+import type { LoadedModel } from '../core/contracts';
+import type { ModelReader, ModelRequest } from './types';
 
 /** A bitmap stand-in: Node decodes no images. */
 const fakeDecode = (bytes: Uint8Array, path: string): Promise<ImageBitmap> => Promise.resolve({ path, size: bytes.length } as unknown as ImageBitmap);
@@ -37,7 +38,7 @@ function exampleRequest(name: string): ModelRequest {
   return { id: `rwat_example:${name}`, file, declaration: JSON.parse(readFileSync(`${EXAMPLE_PACK}/${file}`, 'utf8')) as unknown };
 }
 
-async function loadExample(name: string): Promise<ParsedModel> {
+async function loadExample(name: string): Promise<LoadedModel> {
   return api.load(exampleRequest(name), reader(await example));
 }
 
@@ -90,9 +91,9 @@ describe('the example pack through the model worker', () => {
     it(`gives the ${name}'s objects the roles the engine gives them (golden ${caseId})`, async () => {
       const model = await loadExample(name);
       expect(model.problems).toEqual([]);
-      const objects = model.objects.map((o) => ({ name: o.name, place: o.place, front: o.front, owner: o.owner, index: o.index, light: o.light }));
+      const objects = model.objects.map((o) => ({ name: o.name, ...o.engine }));
       expect(objects).toEqual(goldenObjects(caseId));
-      for (const o of model.objects) expect(o.role).toBe(roleId(o.place, o.front));
+      for (const o of model.objects) expect(o.role).toBe(roleId(o.engine.place, o.engine.front));
       const expected = goldenCases.find((c) => c.id === caseId)!.expected;
       expect(model.engine?.lightGroups).toEqual(expected.light_groups);
       expect(model.engine?.controls.map((c) => c.role.key)).toEqual(expected.controls.map((c) => c.key));
@@ -111,7 +112,10 @@ describe('the example pack through the model worker', () => {
     }
     const keys = model.parts.map((part) => `${part.object}/${part.material}`);
     expect(new Set(keys).size).toBe(keys.length);
-    expect(model.parts[0]).toMatchObject({ object: 'BODY_SIDES', material: 'body', texture: 'assets/rwat_example/stock/coach/coach_body.png', role: 'body' });
+    expect(model.parts[0]).toMatchObject({ object: 'BODY_SIDES', material: 'body', texture: 'assets/rwat_example/stock/coach/coach_body.png', role: 'body', drawn: true });
+    // a part is drawn as the engine draws it: the guide floors of `skip` are not
+    expect(model.parts.filter((part) => !part.drawn).map((part) => part.role)).toEqual(expect.arrayContaining(['skip']));
+    for (const part of model.parts) expect(part.drawn, part.object).toBe(!['hidden', 'skip', 'untextured'].includes(part.role));
   });
 
   it('decodes the textures its parts use, by pack path, a texture next to the OBJ and one in a sibling folder', async () => {
@@ -151,16 +155,16 @@ describe('the example pack through the model worker', () => {
 
   it('gives a door leaf object its leaf, merged as the engine builds it', async () => {
     const model = await loadExample('coach');
-    const leaf = model.objects.find((o) => o.place === 'DOOR_LEAF');
-    expect(leaf?.control).toMatchObject({ kind: 'DOOR', key: leaf?.owner });
+    const leaf = model.objects.find((o) => o.engine.place === 'DOOR_LEAF');
+    expect(leaf?.control).toMatchObject({ kind: 'DOOR', key: leaf?.engine.owner });
   });
 
   it('gives a control object the control as the engine merges it, and a lit object its group', async () => {
     const model = await loadExample('shunter');
-    const throttle = model.objects.find((o) => o.place === 'CONTROL' && o.owner === 'THROTTLE_1');
+    const throttle = model.objects.find((o) => o.engine.place === 'CONTROL' && o.engine.owner === 'THROTTLE_1');
     expect(throttle?.control).toMatchObject({ kind: 'THROTTLE', key: 'THROTTLE_1' });
     const cabLamp = model.objects.find((o) => o.name === 'CAB_LAMP_FULLBRIGHT_LCG_IL');
-    expect(cabLamp).toMatchObject({ lightGroup: 'IL', light: { fullbright: true } });
+    expect(cabLamp).toMatchObject({ lightGroup: 'IL', engine: { light: { fullbright: true } } });
     const [min, max] = cabLamp!.bbox;
     for (let axis = 0; axis < 3; axis++) expect(min[axis]).toBeLessThanOrEqual(max[axis]!);
   });
@@ -199,7 +203,7 @@ function smallPack(options: { obj?: string; mtl?: string; declaration?: unknown;
   };
 }
 
-async function loadSmall(options: Parameters<typeof smallPack>[0] = {}): Promise<ParsedModel> {
+async function loadSmall(options: Parameters<typeof smallPack>[0] = {}): Promise<LoadedModel> {
   const { files, request } = smallPack(options);
   return api.load(request, reader(await files));
 }
@@ -215,7 +219,7 @@ describe('a small model', () => {
     expect(Array.from(part.uvs.slice(0, 6))).toEqual([0, 0.25, 1, 0.25, 1, 1]);
     expect(Array.from(part.normals.slice(0, 3))).toEqual([0, 1, 0]);
     expect(model.objects).toEqual([
-      expect.objectContaining({ name: 'BODY', role: 'body', bbox: [[0, 0, 0], [1, 1, 0]], place: 'BODY' }),
+      expect.objectContaining({ name: 'BODY', role: 'body', bbox: [[0, 0, 0], [1, 1, 0]], engine: expect.objectContaining({ place: 'BODY' }) as unknown }),
     ]);
   });
 
@@ -239,7 +243,7 @@ describe('a small model', () => {
     const obj = ['mtllib m.mtl', 'v 0 0 0', 'v 1 0 0', 'v 1 1 0', 'o LEAF', 'usemtl paint', 'f 1 2 3', ''].join('\n');
     const track = `O LEAF\nM ${Array.from({ length: 16 }, (_, i) => (i % 5 === 0 ? 1 : 0)).join(',')}\n`;
     const moved = await loadSmall({ obj, declaration: { obj: 'stock/m.obj', animations: { Door: 'stock/d.anim' } }, files: { 'assets/t/stock/d.anim': track } });
-    expect(moved.objects[0]).toMatchObject({ role: 'anim_object', owner: 'door' });
+    expect(moved.objects[0]).toMatchObject({ role: 'anim_object', engine: { owner: 'door' } });
     expect(Object.keys(moved.animations.door ?? {})).toEqual(['LEAF']);
     const broken = await loadSmall({ obj, declaration: { obj: 'stock/m.obj', animations: { door: 'stock/d.anim' } }, files: { 'assets/t/stock/d.anim': 'O LEAF\nM 1,2\n' } });
     expect(broken.objects[0]?.role).toBe('body');
@@ -251,7 +255,11 @@ describe('a small model', () => {
   it('names the leaf of a hinge marker that nothing draws, and no control for a body door', async () => {
     const obj = ['mtllib m.mtl', 'v 0 0 0', 'v 1 0 0', 'v 1 1 0', 'o DOOR_1_ROT_90', 'usemtl bare', 'f 1 2 3', 'o DOOR_2_EXTERNAL', 'usemtl paint', 'f 1 2 3', ''].join('\n');
     const model = await loadSmall({ obj });
-    expect(model.objects[0]).toMatchObject({ role: 'untextured', owner: 'DOOR_1', index: -1, control: { kind: 'DOOR', key: 'DOOR_1' } });
+    expect(model.objects[0]).toMatchObject({ role: 'untextured', engine: { owner: 'DOOR_1', index: -1 }, control: { kind: 'DOOR', key: 'DOOR_1' } });
+    expect(model.parts.map((part) => [part.object, part.drawn])).toEqual([
+      ['DOOR_1_ROT_90', false],
+      ['DOOR_2_EXTERNAL', true],
+    ]);
     expect(model.objects[1]).toMatchObject({ role: 'body' });
     expect(model.objects[1]?.control).toBeUndefined();
     expect(model.materials).toEqual({ paint: 'assets/t/stock/paint.png' });

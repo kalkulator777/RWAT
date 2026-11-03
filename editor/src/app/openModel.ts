@@ -20,13 +20,13 @@
  */
 
 import { batch, effect, untracked } from '@preact/signals';
-import type { Link, Problem, ViewApi } from '../core/contracts';
+import type { Link, LoadedModel, Problem, ViewApi } from '../core/contracts';
 import type { Pack, StockEntry } from '../core/pack';
 import { packFiles, type ModelFiles } from '../model/files';
-import type { ModelRequest, ParsedModel } from '../model/types';
+import type { ModelRequest } from '../model/types';
 import { loadWagonType } from '../ports/wagonType';
 import type { PreviewSubject } from '../preview/controller';
-import { wagonFrame, type WagonFrame } from '../view3d/frame';
+import { wagonFrame } from '../view3d/frame';
 import { modelLoading, modelProblems, openModel, openWagon, pack, revision, selection } from './store';
 
 /** How long after the last of a run of edits the open model is read again, ms (as long as the checks wait, checks/live.ts). */
@@ -34,7 +34,7 @@ export const RELOAD_DELAY_MS = 150;
 
 /** What of the model loader (model/client `ModelLoader`) the shell uses. */
 export interface ModelSource {
-  load(files: ModelFiles, request: ModelRequest): Promise<ParsedModel>;
+  load(files: ModelFiles, request: ModelRequest): Promise<LoadedModel>;
   textures(files: ModelFiles, paths: readonly string[]): Promise<Record<string, ImageBitmap | null>>;
   /** Forgets every model read (another pack). */
   clear(): void;
@@ -43,9 +43,8 @@ export interface ModelSource {
 /** What the open model is wired to. */
 export interface ModelWiring {
   loader: ModelSource;
+  /** The 3D view: shown the model, given its type's frame for the guides. */
   view: ViewApi;
-  /** Gives the view the open wagon's frame for the guides (null: none). */
-  setFrame(frame: WagonFrame | null): void;
   /** The preview (preview/store `preview`). */
   preview: { load(subject: PreviewSubject | null): void };
   /** How long after an edit the model is read again, ms. */
@@ -104,13 +103,13 @@ export function connectModel(wiring: ModelWiring): () => void {
   /** Grows with every reading asked for: an answer for an older one is dropped. */
   let generation = 0;
   /** The model shown, and the type JSON it was shown with. */
-  let shown: { model: ParsedModel; typeKey: string } | null = null;
+  let shown: { model: LoadedModel; typeKey: string } | null = null;
 
   const closeModel = (): void => {
     if (shown !== null) {
       shown = null;
       view.show(null);
-      wiring.setFrame(null);
+      view.setFrame(null);
       preview.load(null);
     }
     batch(() => {
@@ -120,11 +119,11 @@ export function connectModel(wiring: ModelWiring): () => void {
     });
   };
 
-  const show = (model: ParsedModel, entry: StockEntry, typeJson: unknown, typeKey: string, files: ModelFiles): void => {
+  const show = (model: LoadedModel, entry: StockEntry, typeJson: unknown, typeKey: string, files: ModelFiles): void => {
     const type = entry.type === null ? null : loadWagonType(entry.id, typeJson).type;
     if (shown === null || shown.model !== model || shown.typeKey !== typeKey) {
       if (shown?.model !== model) view.show(model);
-      wiring.setFrame(type === null ? null : wagonFrame(type));
+      view.setFrame(type === null ? null : wagonFrame(type));
       preview.load({ model, type, textures: (paths) => loader.textures(files, paths) });
       shown = { model, typeKey };
     }

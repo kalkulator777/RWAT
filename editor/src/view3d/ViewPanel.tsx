@@ -126,9 +126,7 @@ function ViewBar() {
           aria-pressed={view.wireframe.value}
           title={t('view3d.wireframe.hint')}
           data-action="wireframe"
-          onClick={() => {
-            view.wireframe.value = !view.wireframe.value;
-          }}
+          onClick={() => view.setWireframe(!view.wireframe.value)}
         >
           {t('view3d.wireframe')}
         </button>

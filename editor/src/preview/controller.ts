@@ -6,27 +6,27 @@
  *
  * The view is told only what changed since it was last told: a slider drags one control
  * and only that control's objects get a new transform. When the view or the model changes,
- * everything is told again; a livery shows the model again with the livery's textures
- * (`ViewApi` has no call to swap a texture), after which everything is told again too. The
- * livery's own pictures are decoded first, once, through the subject's `textures`; until
- * they arrive the view keeps what it shows.
+ * everything is told again. A livery tells the view to draw each texture it swaps with the
+ * livery's picture (`ViewApi.setTexture`), and the base livery puts the model's own back:
+ * the camera, the selection and the rest of what the view was told stay. The livery's own
+ * pictures are decoded first, once, through the subject's `textures`; until they arrive
+ * the view keeps what it shows.
  *
  * The preview writes nothing to the pack and nothing to the journal (§3.3).
  */
 
 import { batch, effect, signal, untracked } from '@preact/signals';
-import type { ViewApi } from '../core/contracts';
-import type { ParsedModel } from '../model/types';
+import type { LoadedModel, ViewApi } from '../core/contracts';
 import type { WagonType } from '../ports/wagonType';
 import { doorsMovedWith, stepDoors, swinging, TICK_MS } from './doors';
 import { controlInput } from './inputs';
-import { inLivery, undecoded } from './livery';
+import { liveryTextures, undecoded } from './livery';
 import { initialState, LIGHTS_LAYER, previewScene, rig, type PreviewScene, type PreviewState, type Rig } from './scene';
 
 /** What the preview shows: a model as the model worker read it and the view was shown it, and its wagon type. */
 export interface PreviewSubject {
   /** The model as the view was shown it (`ViewApi.show`), base textures: its moving things are its `engine`, its liveries its `liveries`. */
-  model: ParsedModel;
+  model: LoadedModel;
   /** The wagon type paired with the model, as the engine reads it; null without one (no doors swing). */
   type: WagonType | null;
   /**
@@ -250,8 +250,9 @@ export class PreviewController {
       if (missing.length > 0) {
         this.decode(subject, missing); // the livery shows once its pictures are here
       } else {
-        view.show(inLivery(subject.model, swaps, this.decoded));
-        told = this.fresh(view, subject, state.livery);
+        const before = told.livery === null ? undefined : subject.model.liveries[told.livery];
+        for (const [path, bitmap] of liveryTextures(subject.model, before, swaps, this.decoded)) view.setTexture(path, bitmap);
+        told.livery = state.livery;
       }
     }
     this.told = told;

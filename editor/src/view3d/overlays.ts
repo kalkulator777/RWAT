@@ -1,9 +1,9 @@
 /**
  * The overlays of the 3D view (core/contracts `OverlayShape`, `ViewApi.overlay`): what the
  * markup tools and the preview draw over the model — floor zones and pieces, doors, chairs
- * and their reach, hinge arcs, headlight cones — as three.js lines and see-through fills
- * in the OBJ frame. Overlays are drawn through the model (no depth test): markup inside a
- * car stays visible from outside.
+ * and their reach, hinge arcs, headlight cones, marked points — as three.js lines, dots and
+ * see-through fills in the OBJ frame. Overlays are drawn through the model (no depth
+ * test): markup inside a car stays visible from outside.
  *
  * A shape's `style` names one of {@link OVERLAY_STYLES}; a name the table lacks is drawn in
  * the `default` style. A shape whose link is selected is drawn in the selection's colour
@@ -24,13 +24,17 @@ import {
   Mesh,
   MeshBasicMaterial,
   PlaneGeometry,
+  Points,
+  PointsMaterial,
   Quaternion,
+  ShapeUtils,
+  Vector2,
   Vector3,
   type Material,
   type Object3D,
 } from 'three';
 import type { Link, OverlayShape, Vec3 } from '../core/contracts';
-import { arcEndTangent, arcPoints, boxEdges, circlePoints, length, normalize, ordered, rectCorners, sub } from './overlayGeometry';
+import { arcEndTangent, arcPoints, boxEdges, circlePoints, length, normalize, ordered, polygonAxes, polygonNormal, rectCorners, sub } from './overlayGeometry';
 import { SELECTION_COLOR } from './modelScene';
 
 /** How a style draws: its colour, the opacity of its fill (0: lines only) and whether its lines are dashed. */
@@ -86,6 +90,8 @@ export function overlayStyle(name: string): OverlayStyle {
 /** Overlays draw after the model and over it. */
 const LINE_ORDER = 30;
 const FILL_ORDER = 29;
+/** A point's dot, CSS pixels across whatever its distance. */
+export const POINT_SIZE = 9;
 
 interface Look {
   readonly color: string | number;
@@ -127,6 +133,19 @@ function fill(geometry: BufferGeometry, look: Look): Mesh {
   return mesh;
 }
 
+/** The fill of a flat polygon: its outline triangulated on the plane it lies in. */
+function polygonFill(points: readonly Vec3[]): BufferGeometry {
+  const [u, v] = polygonAxes(polygonNormal(points));
+  const triangles = ShapeUtils.triangulateShape(
+    points.map((p) => new Vector2(p[u], p[v])),
+    [],
+  );
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new Float32BufferAttribute(points.flat(), 3));
+  geometry.setIndex(triangles.flat());
+  return geometry;
+}
+
 /** A cone at `tip` pointing along `direction`, `size` long. */
 function head(tip: Vec3, direction: Vec3, size: number, look: Look): Mesh {
   const cone = new Mesh(new ConeGeometry(size * 0.35, size, 12), new MeshBasicMaterial({ color: look.color, depthTest: false, depthWrite: false, transparent: true }));
@@ -164,6 +183,19 @@ export function shapeObject(shape: OverlayShape, selected: boolean): Object3D {
         plane.position.set((min[0] + max[0]) / 2, shape.min[1], (min[2] + max[2]) / 2);
         group.add(plane);
       }
+      break;
+    }
+    case 'polygon': {
+      group.add(lines(polyline(shape.points, true), look));
+      if (look.fill > 0 && shape.points.length >= 3) group.add(fill(polygonFill(shape.points), look));
+      break;
+    }
+    case 'point': {
+      const geometry = new BufferGeometry();
+      geometry.setAttribute('position', new Float32BufferAttribute(shape.at, 3));
+      const dot = new Points(geometry, new PointsMaterial({ color: look.color, size: POINT_SIZE, sizeAttenuation: false, depthTest: false, depthWrite: false, transparent: true }));
+      dot.renderOrder = LINE_ORDER;
+      group.add(dot);
       break;
     }
     case 'circle': {
@@ -208,7 +240,7 @@ export function layerObject(layer: string, shapes: readonly OverlayShape[], isSe
 /** Frees the GPU's copies of a layer's objects. */
 export function disposeLayer(group: Object3D): void {
   group.traverse((object) => {
-    if (object instanceof Mesh || object instanceof LineSegments) {
+    if (object instanceof Mesh || object instanceof LineSegments || object instanceof Points) {
       (object.geometry as BufferGeometry).dispose();
       (object.material as Material).dispose();
     }

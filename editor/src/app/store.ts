@@ -16,7 +16,7 @@ import type { Link, Problem } from '../core/contracts';
 import type { Journal } from '../core/journal';
 import type { Pack } from '../core/pack';
 import type { Schema } from '../core/schema';
-import type { ParsedModel } from '../model/types';
+import type { LoadedModel } from '../core/contracts';
 
 export { lang, setLang } from '../i18n';
 
@@ -73,7 +73,7 @@ export const problems = computed<Problem[]>(() => {
 export const openWagon = signal<string | null>(null);
 
 /** The open wagon's model as the model worker read it (shown in the view, previewed); null while there is none. */
-export const openModel = signal<ParsedModel | null>(null);
+export const openModel = signal<LoadedModel | null>(null);
 
 /** True while the open wagon's model is being read. */
 export const modelLoading = signal(false);

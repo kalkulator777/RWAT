@@ -1,8 +1,8 @@
 /**
  * The geometry of the view's overlays (core/contracts `OverlayShape`), as plain numbers in
  * the OBJ frame: the points of an arc and a circle, the edges of a box, the corners of a
- * flat rectangle, and where a ray meets a shape, for picking the shapes that carry a link.
- * ./overlays.ts turns these into three.js lines and fills.
+ * flat rectangle, the plane of a polygon, and where a ray meets a shape, for picking the
+ * shapes that carry a link. ./overlays.ts turns these into three.js lines and fills.
  *
  * Pure: no three, no DOM.
  */
@@ -173,8 +173,66 @@ export function rayDisc(ray: Ray, centre: Vec3, radius: number): number | null {
 }
 
 /**
- * How far along the ray it meets a shape that can be clicked: a box, a rectangle or the
- * disc of a circle. Arrows and arcs are lines, too thin to click: null.
+ * The normal of a polygon's plane by Newell's method (any winding, a corner or two out of
+ * line), of unit length; zero for points that span no plane.
+ */
+export function polygonNormal(points: readonly Vec3[]): Vec3 {
+  let n: Vec3 = [0, 0, 0];
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i] as Vec3;
+    const b = points[(i + 1) % points.length] as Vec3;
+    n = add(n, [(a[1] - b[1]) * (a[2] + b[2]), (a[2] - b[2]) * (a[0] + b[0]), (a[0] - b[0]) * (a[1] + b[1])]);
+  }
+  return normalize(n);
+}
+
+/** The two axes a polygon is drawn flat on: those its normal leans least along (x and z for a floor). */
+export function polygonAxes(normal: Vec3): [number, number] {
+  const n = normal.map(Math.abs);
+  const drop = n[0]! >= n[1]! && n[0]! >= n[2]! ? 0 : n[1]! >= n[2]! ? 1 : 2;
+  return drop === 0 ? [1, 2] : drop === 1 ? [0, 2] : [0, 1];
+}
+
+/** True if the 2D point is inside the polygon (even-odd rule). */
+function inside2(x: number, y: number, polygon: readonly (readonly [number, number])[]): boolean {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const [xi, yi] = polygon[i]!;
+    const [xj, yj] = polygon[j]!;
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/** How far along the ray it meets a flat polygon inside its outline, or null (a polygon of no plane is never met). */
+export function rayPolygon(ray: Ray, points: readonly Vec3[]): number | null {
+  if (points.length < 3) return null;
+  const normal = polygonNormal(points);
+  const facing = dot(normal, ray.direction);
+  if (length(normal) === 0 || facing === 0) return null;
+  const t = dot(normal, sub(points[0] as Vec3, ray.origin)) / facing;
+  if (t < 0) return null;
+  const hit = add(ray.origin, scale(ray.direction, t));
+  const [u, v] = polygonAxes(normal);
+  return inside2(hit[u]!, hit[v]!, points.map((p) => [p[u]!, p[v]!] as const)) ? t : null;
+}
+
+/** How near a point the ray must pass to click it, blocks: a dot is a few pixels, a little more is forgiven. */
+export const POINT_PICK_RADIUS = 0.1;
+
+/** How far along the ray it passes nearest to a point within `radius` of it, or null. */
+export function rayPoint(ray: Ray, at: Vec3, radius = POINT_PICK_RADIUS): number | null {
+  const d2 = dot(ray.direction, ray.direction);
+  if (d2 === 0) return null;
+  const t = dot(sub(at, ray.origin), ray.direction) / d2;
+  if (t < 0) return null;
+  const nearest = add(ray.origin, scale(ray.direction, t));
+  return length(sub(at, nearest)) <= radius ? t : null;
+}
+
+/**
+ * How far along the ray it meets a shape that can be clicked: a box, a rectangle, a
+ * polygon, the disc of a circle, a point. Arrows and arcs are lines, too thin to click: null.
  */
 export function rayShape(ray: Ray, shape: OverlayShape): number | null {
   switch (shape.shape) {
@@ -184,6 +242,10 @@ export function rayShape(ray: Ray, shape: OverlayShape): number | null {
       return rayRect(ray, shape.min, shape.max);
     case 'circle':
       return rayDisc(ray, shape.centre, shape.radius);
+    case 'polygon':
+      return rayPolygon(ray, shape.points);
+    case 'point':
+      return rayPoint(ray, shape.at);
     default:
       return null;
   }

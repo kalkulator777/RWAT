@@ -1,8 +1,8 @@
 import { Color, Matrix4, Ray, Texture, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { ALPHA_CUTOUT, DEFAULT_LOOK, GHOST_OPACITY, ModelScene, textureOf } from './modelScene';
+import { ALPHA_CUTOUT, DEFAULT_LOOK, GHOST_OPACITY, ModelScene } from './modelScene';
 import { roleColorCss } from './roleColors';
-import { boxModel, boxPart, exampleModel } from './testModel.node';
+import { boxModel, boxObject, boxPart, exampleModel } from './testModel.node';
 
 /** A ray straight down onto the point (x, z) from high above. */
 function down(x: number, z: number): Ray {
@@ -13,10 +13,10 @@ function colourOf(scene: ModelScene, name: string): string {
   return `#${scene.node(name)?.meshes[0]?.material.color.getHexString() ?? ''}`;
 }
 
-describe('the model scene of the example coach', () => {
-  const coach = exampleModel('coach');
+const coach = await exampleModel('coach');
 
-  it('groups the parts by object with the engine roles of golden model_parts', () => {
+describe('the model scene of the example coach', () => {
+  it('groups the parts by object with the engine roles the model worker reads (golden model_parts)', () => {
     const scene = new ModelScene(coach);
     expect(scene.objectNames()).toEqual(coach.objects.map((o) => o.name));
     expect(scene.node('ROOF')?.role).toBe('body');
@@ -83,7 +83,7 @@ describe('a model scene', () => {
     expect([ghost?.transparent, ghost?.opacity, ghost?.depthWrite]).toEqual([true, GHOST_OPACITY, false]);
     expect(scene.isDrawn('CARGO_FILL_1')).toBe(true);
     scene.setLook({ ...DEFAULT_LOOK, ghosts: false });
-    expect([scene.isDrawn('CARGO_FILL_1'), scene.node('CARGO_FILL_1')?.group.visible]).toEqual([false, false]);
+    expect([scene.isDrawn('CARGO_FILL_1'), scene.node('CARGO_FILL_1')?.meshes[0]?.visible]).toEqual([false, false]);
     scene.setLook({ ...DEFAULT_LOOK, hiddenRoles: new Set(['door_leaf']) });
     expect([scene.isDrawn('DOOR_1_LEAF'), scene.isDrawn('BODY'), scene.isDrawn('CARGO_FILL_1')]).toEqual([false, true, true]);
     expect(scene.pick(down(3.5, 0))).toBeNull();
@@ -91,22 +91,69 @@ describe('a model scene', () => {
     expect(scene.node('BODY')?.meshes[0]?.material.wireframe).toBe(true);
   });
 
-  it('textures a part by its own texture, else by its material name, and draws one without in grey', () => {
+  it('textures a part by its texture, one texture for the parts that share it, and draws one without, or missing, in grey', () => {
     const image = { width: 1, height: 1 } as unknown as ImageBitmap;
-    const parts = [boxPart('A', [0, 0, 0], [1, 1, 1], 'paint', 'tex/a.png'), boxPart('B', [2, 0, 0], [3, 1, 1], 'tex/b.png'), boxPart('C', [4, 0, 0], [5, 1, 1], 'none')];
-    // B and C as the contract gives them, without a texture of their own
-    const bare = (part: (typeof parts)[number]) => ({ object: part.object, material: part.material, positions: part.positions, normals: part.normals, uvs: part.uvs });
-    const textured = { ...model, parts: [parts[0] as (typeof parts)[number], bare(parts[1] as (typeof parts)[number]), bare(parts[2] as (typeof parts)[number])], textures: { 'tex/a.png': image, 'tex/b.png': image } };
-    expect(textured.parts.map((part) => textureOf(textured, part))).toEqual(['tex/a.png', 'tex/b.png', null]);
-    const scene = new ModelScene({ ...textured, objects: [] });
+    const parts = [
+      boxPart('A', [0, 0, 0], [1, 1, 1], { material: 'paint', texture: 'tex/a.png' }),
+      boxPart('B', [2, 0, 0], [3, 1, 1], { material: 'paint', texture: 'tex/a.png' }),
+      boxPart('C', [4, 0, 0], [5, 1, 1], { material: 'none' }),
+      boxPart('D', [6, 0, 0], [7, 1, 1], { material: 'gone', texture: 'tex/gone.png' }),
+    ];
+    const scene = new ModelScene({ ...model, parts, objects: [], textures: { 'tex/a.png': image, 'tex/gone.png': null } });
     expect(scene.node('A')?.meshes[0]?.material.map).toBeNull();
     scene.setLook({ ...DEFAULT_LOOK, display: 'textured' });
     const a = scene.node('A')?.meshes[0]?.material;
     expect(a?.map).toBeInstanceOf(Texture);
+    expect(a?.map?.image).toBe(image);
     expect(a?.alphaTest).toBe(ALPHA_CUTOUT);
-    expect(a?.map).not.toBe(scene.node('B')?.meshes[0]?.material.map);
+    expect(a?.map).toBe(scene.node('B')?.meshes[0]?.material.map);
     expect(scene.node('C')?.meshes[0]?.material.map).toBeNull();
     expect(colourOf(scene, 'C')).toBe('#808080');
+    expect(colourOf(scene, 'D')).toBe('#808080');
+  });
+
+  it('draws a texture with another picture when told, and back, the other textures as they were', () => {
+    const base = { width: 1, height: 1, name: 'base' } as unknown as ImageBitmap;
+    const blue = { width: 1, height: 1, name: 'blue' } as unknown as ImageBitmap;
+    const other = { width: 1, height: 1, name: 'other' } as unknown as ImageBitmap;
+    const parts = [boxPart('A', [0, 0, 0], [1, 1, 1], { texture: 'tex/body.png' }), boxPart('B', [2, 0, 0], [3, 1, 1], { material: 'n', texture: 'tex/roof.png' })];
+    const scene = new ModelScene({ ...model, parts, objects: [], textures: { 'tex/body.png': base, 'tex/roof.png': other } });
+    scene.setLook({ ...DEFAULT_LOOK, display: 'textured' });
+    scene.setTexture('tex/body.png', blue);
+    expect(scene.node('A')?.meshes[0]?.material.map?.image).toBe(blue);
+    expect(scene.node('B')?.meshes[0]?.material.map?.image).toBe(other);
+    scene.setTexture('tex/body.png', null);
+    expect(scene.node('A')?.meshes[0]?.material.map).toBeNull();
+    expect(colourOf(scene, 'A')).toBe('#808080');
+    scene.setTexture('tex/body.png', base);
+    expect(scene.node('A')?.meshes[0]?.material.map?.image).toBe(base);
+    scene.setTexture('tex/nobody-uses.png', blue);
+    expect(scene.texture('tex/nobody-uses.png')).toBeUndefined();
+    // the first pictures may come from elsewhere than the model: what the view was told before
+    const told = new ModelScene({ ...model, parts, objects: [], textures: { 'tex/body.png': base, 'tex/roof.png': other } }, (path) => (path === 'tex/body.png' ? blue : null));
+    expect(told.texture('tex/body.png')?.image).toBe(blue);
+    expect(told.texture('tex/roof.png')).toBeNull();
+  });
+
+  it('ghosts the parts the engine does not draw, part by part: an object half drawn is picked by its drawn half', () => {
+    const drawn = boxPart('HALF', [0, 0, 0], [1, 1, 1], { role: 'body' });
+    const bare = boxPart('HALF', [3, 0, 0], [4, 1, 1], { material: 'bare', role: 'untextured' });
+    const scene = new ModelScene({ ...model, parts: [drawn, bare], objects: [boxObject(drawn, [0, 0, 0], [4, 1, 1])] });
+    const node = scene.node('HALF')!;
+    expect(node.ghost).toBe(false);
+    expect(node.parts.map((part) => [part.role, part.ghost])).toEqual([
+      ['body', false],
+      ['untextured', true],
+    ]);
+    expect([node.meshes[0]?.material.transparent, node.meshes[1]?.material.opacity]).toEqual([false, GHOST_OPACITY]);
+    expect(colourOf(scene, 'HALF')).toBe(roleColorCss('body'));
+    expect(scene.pick(down(0.5, 0.5))?.object).toBe('HALF');
+    expect(scene.pick(down(3.5, 0.5))).toBeNull();
+    scene.setLook({ ...DEFAULT_LOOK, ghosts: false });
+    expect([node.meshes[0]?.visible, node.meshes[1]?.visible, scene.isDrawn('HALF')]).toEqual([true, false, true]);
+    expect(scene.bounds(['HALF']).max.x).toBe(1);
+    scene.setLook({ ...DEFAULT_LOOK, hiddenRoles: new Set(['body']) });
+    expect([node.meshes[0]?.visible, node.meshes[1]?.visible]).toEqual([false, true]);
   });
 
   it('lights the lit objects in the lit display only, and tints and boxes the highlight', () => {

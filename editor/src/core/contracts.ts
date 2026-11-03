@@ -9,8 +9,13 @@
  * changes this file; a module that needs more says so in its report.
  *
  * Types only: no code, no DOM, three or Preact imports, so core/ and ports/ can use
- * it in Node and in workers.
+ * it in Node and in workers. The model's types come from the ports that make them
+ * (ports/modelParts, ports/objectRole, ports/wagonType), imported as types.
  */
+
+import type { ModelParts, Role } from '../ports/modelParts';
+import type { Control } from '../ports/objectRole';
+import type { Hull } from '../ports/wagonType';
 
 // ---------------------------------------------------------------- files
 
@@ -159,68 +164,161 @@ export interface FloorFinding {
 /** A point or direction in the OBJ frame: Y up, X along the track, front −X, +Z the left side. */
 export type Vec3 = [number, number, number];
 
-/** The triangles of one object × material pair, ready for the GPU. */
+/** The triangles of one object × material pair, ready for the GPU, with what the view needs to draw them. */
 export interface PartBuffers {
   object: string;
   material: string;
+  /** Three corners a triangle, `x, y, z` each, in the OBJ frame. */
   positions: Float32Array;
   normals: Float32Array;
+  /** `u, v` a corner as the OBJ has them (V up): the view samples bitmaps decoded upside down (`imageOrientation: 'flipY'`). */
   uvs: Float32Array;
+  /** The pack path of the material's texture (a key of {@link LoadedModel.textures}); null for a material without one. */
+  texture: string | null;
+  /** The role in schema/obj-conventions.json of these faces (`body`, `control`, `untextured`, …): the role of the pair's first run of faces. */
+  role: string;
+  /** False when the engine does not draw these faces (`HIDE`, the declaration's `skip`, no texture): the view shows them as a ghost. */
+  drawn: boolean;
 }
 
-/** One object of a model as the objects tab lists it. */
+/** One object of a model as the objects tab lists it and the preview moves it. */
 export interface ObjectInfo {
   name: string;
-  /** Role id from schema/obj-conventions.json. */
+  /** Role id from schema/obj-conventions.json: of the object's first drawn part, else of its first part. */
   role: string;
-  /** The organ the object belongs to, as ports/objectRole parses it. */
-  control?: unknown;
+  /**
+   * The engine's role of that same part (ports/modelParts `Role`): where it is drawn or why
+   * not, its end, what it belongs to and where that is in its list of {@link LoadedModel.engine},
+   * how it is lit (the light group indexes `engine.lightGroups`).
+   */
+  engine: Role;
+  /**
+   * The control (or door leaf) the object belongs to: as the engine builds it — the flags of
+   * all its objects merged, a widget the declaration names in `handbrake` turned `HANDBRAKE`
+   * — or, when the engine built none for it (nothing of it drawn), as its name reads
+   * (ports/objectRole, a group too long to travel dropped; `door` for a leaf's object).
+   * Absent for an object of no control.
+   */
+  control?: Control;
+  /** The light group's name, when the object is in one. */
   lightGroup?: string;
   /** Bounding box in the OBJ frame: [min, max]. */
   bbox: [Vec3, Vec3];
 }
 
-/** A parsed model as the model worker hands it over (buffers transferred, not copied). */
+/** What the engine makes of a model but each part's role (its objects carry those): model frame, floats (ports/modelParts). */
+export type EngineParts = Omit<ModelParts, 'roles'>;
+
+/**
+ * A wagon model as the model worker hands it over (buffers and bitmaps transferred, not
+ * copied): geometry, roles and textures for the view; objects for the objects tab; what
+ * moves and lights for the preview. Everything is in the OBJ frame but {@link engine},
+ * which is the engine's own answer in the model frame. A model that can't be read comes
+ * empty, with its finding in {@link problems}.
+ */
 export interface LoadedModel {
+  /** The model's id `<namespace>:<name>`: the `model` of an object's {@link Link}. */
   id: string;
+  /** The declaration's pack path: `assets/<namespace>/wagon_models/<name>.json`. */
+  file: string;
+  /** The OBJ's pack path; null when the declaration names none that can be read. */
+  obj: string | null;
   parts: PartBuffers[];
+  /** Each object once, in the order it first comes in the OBJ. */
   objects: ObjectInfo[];
-  /** Decoded textures by pack path; null when the file is missing or broken. */
+  /** Decoded textures by pack path, the ones the parts use; null when the file is missing or broken. */
   textures: Record<string, ImageBitmap | null>;
+  /**
+   * Every material that has a texture → its texture's pack path: the `map_Kd` of the MTLs,
+   * relative to the OBJ's folder, a path Minecraft takes (the file may be missing: it is
+   * still a texture, the game draws its checker). A material not here draws nothing.
+   */
+  materials: Record<string, string>;
+  /** The declaration's `skip`, as written: the name prefixes dropped besides `CARGO_FILL`. */
+  skip: string[];
+  /** Every object an `.anim` moves (a track with frames) → its door's id; an object two doors move goes with the later. */
+  animated: Record<string, string>;
+  /** Door id → object → the frames of its `.anim` track (16 floats each, row by row, OBJ frame), tracks with frames only. */
+  animations: Record<string, Record<string, Float32Array[]>>;
+  /** The engine's reading of the parts: null when the model can't be read. */
+  engine: EngineParts | null;
+  /** Livery id → base texture → the livery's own texture (pack paths); textures the livery doesn't carry stay base. */
+  liveries: Record<string, Record<string, string>>;
   problems: Problem[];
 }
+
+/** What a wagon type's guides need, as plain data in the model frame (+Z forward): the view reads no pack JSON. */
+export interface WagonFrame {
+  /** Over buffers or couplers, blocks. */
+  readonly length: number;
+  /** Bogie pivots from the body's centre, + forward, front first (`WagonType.bogieOffsets`). */
+  readonly bogies: readonly number[];
+  /** From the body's centre to the front and the rear coupler point (`WagonType.couplerReach`). */
+  readonly couplerReach: readonly [number, number];
+  /** The solid collision hull (`WagonType.collidableHull`). */
+  readonly hull: Hull;
+}
+
+/** How the view paints the model: flat role colours, the textures as in the game, or the textures at night with the lit objects glowing. */
+export type DisplayMode = 'roles' | 'textured' | 'lit';
 
 /** A shape the view draws over the model, in the OBJ frame. `style` names an overlay style of view3d. */
 export type OverlayShape =
   | { shape: 'box'; min: Vec3; max: Vec3; style: string; link?: Link }
   /** Flat rectangle at y = min[1]. */
   | { shape: 'rect'; min: Vec3; max: Vec3; style: string; link?: Link }
+  /** A closed outline through the points in order, filled where its style fills: a flat polygon (a floor piece) of three points or more. */
+  | { shape: 'polygon'; points: Vec3[]; style: string; link?: Link }
   | { shape: 'arrow'; from: Vec3; to: Vec3; style: string; link?: Link }
   /** Arc around `axis` through `centre`, starting at `from`, sweeping `degrees` (right-hand rule). */
   | { shape: 'arc'; centre: Vec3; axis: Vec3; from: Vec3; degrees: number; style: string; link?: Link }
   /** Horizontal circle. */
-  | { shape: 'circle'; centre: Vec3; radius: number; style: string; link?: Link };
+  | { shape: 'circle'; centre: Vec3; radius: number; style: string; link?: Link }
+  /** A marked point: a dot of one size on the screen however far it is (a snap, a seat's foot, a vertex). */
+  | { shape: 'point'; at: Vec3; style: string; link?: Link };
 
-/** What the 3D view hit under the pointer. */
+/** What a click in the 3D view hit, and how it was clicked. */
 export interface PickHit {
+  /** The object drawn nearest under the pointer. */
   object?: string;
+  /** Where the ray met it, OBJ frame. */
   point?: Vec3;
+  /** Where no object is: the link of the nearest overlay shape that carries one. */
+  link?: Link;
+  shift: boolean;
+  /** Ctrl, or ⌘ on a Mac. */
+  ctrl: boolean;
+  alt: boolean;
+  /** A double click: this pick comes after those of its two clicks. */
+  double: boolean;
 }
 
 /**
  * The 3D view as the other modules drive it (§3.8). It draws and picks; it knows
- * nothing about doors, organs or pack JSON: preview and tools tell it what to move,
- * hide, light and overlay.
+ * nothing about doors, organs or pack JSON: the model pipeline shows a model, the preview
+ * and tools tell it what to move, hide, light, paint and overlay.
  */
 export interface ViewApi {
+  /** Shows a model afresh (null: none): every object at rest, shown, unlit, in the model's own textures; the camera frames it. */
   show(model: LoadedModel | null): void;
-  setDisplay(mode: 'roles' | 'textured' | 'lit'): void;
+  setDisplay(mode: DisplayMode): void;
+  /** Lays a wireframe over the display, or takes it off. */
+  setWireframe(on: boolean): void;
+  /** The wagon type the model is paired with, for the guides (hull, bogie pivots, ends, couplers); null for none. */
+  setFrame(frame: WagonFrame | null): void;
   /** Column-major 4×4 matrix in the OBJ frame (three.js `Matrix4.elements` order); null = rest pose. */
   setTransform(object: string, matrix4: Float32Array | null): void;
   setVisible(object: string, visible: boolean): void;
   setLit(object: string, lit: boolean): void;
+  /**
+   * The picture the parts of texture `path` are drawn with from now on, until the next
+   * `show`: a bitmap upside down as the model's are (a livery's), or null for none (drawn
+   * as missing). The model's own is `model.textures[path]`. The camera, the selection and
+   * whatever the preview set stay as they are.
+   */
+  setTexture(path: string, bitmap: ImageBitmap | null): void;
   /** Replaces everything drawn in the layer; an empty list clears it. */
   overlay(layer: string, shapes: OverlayShape[]): void;
-  /** Returns the function that removes the listener. */
+  /** Called with every click in the view; returns the function that removes the listener. */
   onPick(listener: (hit: PickHit) => void): () => void;
 }

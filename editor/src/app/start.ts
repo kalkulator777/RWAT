@@ -22,14 +22,7 @@ export function start(root: HTMLElement): void {
     document.title = t('shell.title');
   });
   preview.view.value = view;
-  connectModel({
-    loader: new ModelLoader(lazyModelWorker()),
-    view,
-    setFrame: (frame) => {
-      view.frame.value = frame;
-    },
-    preview,
-  });
+  connectModel({ loader: new ModelLoader(lazyModelWorker()), view, preview });
   render(h(Shell, { panels }), root);
   installShortcuts();
   void loadSchema();

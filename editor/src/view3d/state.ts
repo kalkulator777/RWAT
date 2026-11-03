@@ -1,28 +1,35 @@
 /**
  * The 3D view as the other modules drive it (core/contracts `ViewApi`, docs/proposals/
  * editor.md §3.8, §3.13): {@link view} keeps what they asked for — the model, the display,
- * each object's transform, visibility and light, the overlay layers — whether or not the
- * view is on the screen; the drawing (./viewport.ts) reads it when it starts and is told
- * of each change after. The view's own choices (camera, layers, roles shown, wireframe)
- * live here too, as signals the view's bar reads.
+ * the wireframe, the type's frame, each object's transform, visibility and light, the
+ * pictures of swapped textures, the overlay layers — whether or not the view is on the
+ * screen; the drawing (./viewport.ts) reads it when it starts and is told of each change
+ * after. The view's own choices (camera, layers, roles shown) live here too, as signals
+ * the view's bar reads.
  *
- * `show` starts a model afresh: the transforms, visibility and light of the one before are
- * forgotten (the preview sets them again for the new one). Overlays stay: they belong to
- * the tools, which clear their layers themselves.
+ * `show` starts a model afresh: the transforms, visibility, light and texture swaps of the
+ * one before are forgotten (the preview sets them again for the new one). The frame and
+ * the overlays stay: the frame is the wagon's, set with its model; the layers belong to
+ * the tools, which clear them themselves.
  */
 
 import { batch, signal } from '@preact/signals';
-import type { LoadedModel, OverlayShape, PickHit, ViewApi } from '../core/contracts';
+import type { DisplayMode, LoadedModel, OverlayShape, PickHit, Vec3, ViewApi, WagonFrame } from '../core/contracts';
 import type { CameraView } from './cameras';
-import type { WagonFrame } from './frame';
-import type { DisplayMode } from './modelScene';
 
-/** What the drawing does with a change the state cannot give it as a signal: one object's or one layer's. */
+/** What the drawing does with a change the state cannot give it as a signal: one object's, one texture's or one layer's. */
 export interface ViewSink {
   transformChanged(object: string): void;
   visibilityChanged(object: string): void;
   litChanged(object: string): void;
+  textureChanged(path: string): void;
   overlayChanged(layer: string): void;
+}
+
+/** What is under the pointer: the object and the point where the ray meets it. */
+export interface Hover {
+  object: string;
+  point: Vec3;
 }
 
 /** The layer switch of the ghosts: the roles the engine drops. */
@@ -46,7 +53,7 @@ export class ViewState implements ViewApi {
   /** The overlay layers that have shapes, sorted: the bar lists their switches. */
   readonly overlayLayers = signal<readonly string[]>([]);
   /** What is under the pointer: the object and the point, or null. */
-  readonly hover = signal<PickHit | null>(null);
+  readonly hover = signal<Hover | null>(null);
   /** Asks the drawing to frame something: a counter that grows with each request, and what to frame. */
   readonly framing = signal<{ serial: number; what: 'all' | 'selected' }>({ serial: 0, what: 'all' });
 
@@ -56,6 +63,8 @@ export class ViewState implements ViewApi {
   readonly hidden = new Set<string>();
   /** Objects the preview lit. */
   readonly lit = new Set<string>();
+  /** The pictures textures are drawn with instead of the model's own, by pack path (null: none, drawn as missing). */
+  readonly textures = new Map<string, ImageBitmap | null>();
   /** The overlay layers by name; a layer with no shapes is not kept. */
   readonly overlays = new Map<string, readonly OverlayShape[]>();
 
@@ -66,12 +75,21 @@ export class ViewState implements ViewApi {
     this.transforms.clear();
     this.hidden.clear();
     this.lit.clear();
+    this.textures.clear();
     this.hover.value = null;
     this.model.value = model;
   }
 
   setDisplay(mode: DisplayMode): void {
     this.display.value = mode;
+  }
+
+  setWireframe(on: boolean): void {
+    this.wireframe.value = on;
+  }
+
+  setFrame(frame: WagonFrame | null): void {
+    this.frame.value = frame;
   }
 
   setTransform(object: string, matrix4: Float32Array | null): void {
@@ -91,6 +109,16 @@ export class ViewState implements ViewApi {
     if (lit) this.lit.add(object);
     else this.lit.delete(object);
     this.sink?.litChanged(object);
+  }
+
+  setTexture(path: string, bitmap: ImageBitmap | null): void {
+    this.textures.set(path, bitmap);
+    this.sink?.textureChanged(path);
+  }
+
+  /** The picture texture `path` is drawn with now: a swapped one, else the model's own; null for none. */
+  textureOf(path: string): ImageBitmap | null {
+    return this.textures.has(path) ? (this.textures.get(path) ?? null) : (this.model.peek()?.textures[path] ?? null);
   }
 
   overlay(layer: string, shapes: OverlayShape[]): void {

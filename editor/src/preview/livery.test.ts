@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { inLivery, undecoded } from './livery';
+import { liveryTextures, undecoded } from './livery';
 import { assetPath, exampleModel, fakeBitmap } from './testing.node';
 
 const body = assetPath('stock/coach/coach_body.png');
@@ -17,21 +17,27 @@ describe('the model in a livery', () => {
     expect(undecoded(model, { [body]: roof }, new Map())).toEqual([]); // the model has that one
   });
 
-  it('holds the livery’s pictures in the base textures’ places, the rest and the geometry as they are', async () => {
+  it('draws the base textures the livery swaps with its pictures, one not decoded as missing, and nothing else', async () => {
     const model = await exampleModel('coach');
     const decoded = new Map([[blueBody, fakeBitmap(blueBody)]]);
-    const shown = inLivery(model, model.liveries.blue, decoded);
-    expect(shown.textures[body]).toBe(decoded.get(blueBody));
-    expect(shown.textures[door]).toBeNull(); // not decoded: drawn as missing
-    expect(shown.textures[roof]).toBe(model.textures[roof]);
-    expect(shown.parts).toBe(model.parts);
-    expect(shown.engine).toBe(model.engine);
-    expect(model.textures[body]).not.toBe(decoded.get(blueBody));
+    expect(liveryTextures(model, undefined, model.liveries.blue, decoded)).toEqual([
+      [body, decoded.get(blueBody)],
+      [door, null],
+    ]);
+    // a swap to a texture of the model's own takes the model's picture
+    expect(liveryTextures(model, undefined, { [body]: roof })).toEqual([[body, model.textures[roof]]]);
   });
 
-  it('is the model itself for no swaps', async () => {
+  it('puts the model’s own pictures back when the livery goes, and swaps one livery for another', async () => {
     const model = await exampleModel('coach');
-    expect(inLivery(model, undefined)).toBe(model);
-    expect(inLivery(model, {})).toBe(model);
+    expect(liveryTextures(model, model.liveries.blue, undefined)).toEqual([
+      [body, model.textures[body]],
+      [door, model.textures[door]],
+    ]);
+    expect(liveryTextures(model, model.liveries.blue, { [body]: roof })).toEqual([
+      [body, model.textures[roof]],
+      [door, model.textures[door]],
+    ]);
+    expect(liveryTextures(model, undefined, undefined)).toEqual([]);
   });
 });

@@ -314,33 +314,42 @@ describe('the livery', () => {
   const blueBody = assetPath('stock/coach/l_blue/coach_body.png');
   const blueDoor = assetPath('stock/coach/l_blue/coach_door.png');
 
-  it('decodes the livery’s pictures once, then shows the model again with them in the base textures’ places, and back', async () => {
+  /** The path of a stand-in bitmap (model/testing.node `fakeBitmap`), or what the view holds instead. */
+  const pathOf = (bitmap: ImageBitmap | null | undefined): string | null | undefined => (bitmap === null || bitmap === undefined ? bitmap : (bitmap as unknown as { path: string }).path);
+
+  it('decodes the livery’s pictures once, then has the view draw the base textures with them, and back, never showing the model anew', async () => {
     const asked: string[][] = [];
     const { preview, view } = setUp('coach', handTicker(), await exampleSubject('coach', asked));
     const model = preview.subject.value!.model;
     preview.setLivery('blue');
     expect(asked).toEqual([[blueBody, blueDoor]]);
-    await vi.waitFor(() => expect(view.shown).toHaveLength(2));
-    const shown = view.shown.at(-1)!;
-    expect((shown.textures[body] as unknown as { path: string }).path).toBe(blueBody);
-    expect((shown.textures[door] as unknown as { path: string }).path).toBe(blueDoor);
-    expect(shown.textures[roof]).toBe(model.textures[roof]);
-    expect(shown.parts).toBe(model.parts);
+    await vi.waitFor(() => expect(view.textures.size).toBe(2));
+    expect(pathOf(view.textures.get(body))).toBe(blueBody);
+    expect(pathOf(view.textures.get(door))).toBe(blueDoor);
+    expect(view.textures.has(roof)).toBe(false);
 
     preview.setLivery(null);
-    expect(view.shown).toHaveLength(3);
-    expect(view.shown.at(-1)).toBe(model);
+    expect(view.textures.get(body)).toBe(model.textures[body]);
+    expect(view.textures.get(door)).toBe(model.textures[door]);
+    view.clearCalls();
     preview.setLivery('blue');
-    expect(view.shown).toHaveLength(4); // the pictures are here already
+    // the pictures are here already: two textures swapped, and nothing else told
+    expect(view.calls).toEqual([
+      { method: 'setTexture', object: body },
+      { method: 'setTexture', object: door },
+    ]);
     expect(asked).toHaveLength(1);
+    expect(view.shown).toHaveLength(1);
   });
 
-  it('tells the view everything again after showing the model anew', async () => {
+  it('keeps what the view was told when the livery changes: doors, couplers and controls stay where they are', async () => {
     const { preview, view } = setUp('coach', handTicker(), await exampleSubject('coach'));
     preview.setDoor(SALON_DOOR, 0.5);
     preview.setCoupled(true, true);
+    view.clearCalls();
     preview.setLivery('blue');
-    await vi.waitFor(() => expect(view.shown).toHaveLength(2));
+    await vi.waitFor(() => expect(view.textures.size).toBe(2));
+    expect(view.calls.map((call) => call.method)).toEqual(['setTexture', 'setTexture']);
     expect(list(view.transforms.get('SALON_DOOR_KNOB'))).toEqual(transposed(framesAt(salonTracks, 0.5).get('SALON_DOOR_KNOB')!));
     expect(view.visible.get('COUPLED_FRONT_3_HIDE_INVERT')).toBe(true);
     expect(view.transforms.has('HANDBRAKE_1_HANDWHEEL')).toBe(true);
@@ -352,11 +361,12 @@ describe('the livery', () => {
     const { preview, view } = setUp('coach', handTicker(), slow);
     preview.setLivery('blue');
     preview.setDoor(SALON_DOOR, 1);
-    expect(view.shown).toHaveLength(1);
+    expect(view.textures.size).toBe(0);
     expect(view.transforms.has('SALON_DOOR_KNOB')).toBe(true);
     preview.load(subjects.coach);
     answer({});
     await Promise.resolve();
+    expect(view.textures.size).toBe(0);
     expect(view.shown).toHaveLength(1);
   });
 
@@ -365,10 +375,10 @@ describe('the livery', () => {
     const { preview, view } = setUp('coach', handTicker(), failing);
     preview.setLivery('red');
     expect(preview.state.value!.livery).toBeNull();
-    expect(view.shown).toHaveLength(1);
+    expect(view.textures.size).toBe(0);
     preview.setLivery('blue');
-    await vi.waitFor(() => expect(view.shown).toHaveLength(2));
-    expect(view.shown.at(-1)!.textures[body]).toBeNull();
+    await vi.waitFor(() => expect(view.textures.size).toBe(2));
+    expect(view.textures.get(body)).toBeNull();
   });
 });
 

@@ -1,6 +1,6 @@
 /**
  * The model worker's client on the main thread (docs/proposals/editor.md §3.4, §3.11):
- * `loader.load(files, request)` → a {@link ParsedModel}, parsed in the worker, its
+ * `loader.load(files, request)` → a {@link LoadedModel}, parsed in the worker, its
  * buffers transferred. The main thread holds the pack: the worker asks it for each file
  * it reads through a comlink proxy, and the client notes the stamp of every file asked
  * for, so the cache (./cache.ts) knows what to read again after an edit.
@@ -10,9 +10,10 @@
  */
 
 import { proxy, releaseProxy, wrap, type Remote } from 'comlink';
+import type { LoadedModel } from '../core/contracts';
 import { ModelCache, type Stamp } from './cache';
 import type { ModelFiles } from './files';
-import type { ModelReader, ModelRequest, ModelWorkerApi, ParsedModel } from './types';
+import type { ModelReader, ModelRequest, ModelWorkerApi } from './types';
 
 /** The stamp of the declaration's value in a cache entry: the value is the request's, not a file's. */
 const DECLARATION = '\u0000declaration';
@@ -66,8 +67,8 @@ function noting(files: ModelFiles, stamps: Map<string, Stamp>): ModelReader {
 
 /** Loads models through a worker, keeping the last few (§3.11: three). */
 export class ModelLoader {
-  private readonly cache: ModelCache<ParsedModel>;
-  private readonly pending = new Map<string, { declaration: string; model: Promise<ParsedModel> }>();
+  private readonly cache: ModelCache<LoadedModel>;
+  private readonly pending = new Map<string, { declaration: string; model: Promise<LoadedModel> }>();
 
   /**
    * @param worker   the worker's interface: {@link startModelWorker}'s `api`, or ./api.ts
@@ -91,7 +92,7 @@ export class ModelLoader {
    * read, else read in the worker. A model that can't be read comes back empty with one
    * finding; a second request for the same model while it is read waits for that reading.
    */
-  async load(files: ModelFiles, request: ModelRequest): Promise<ParsedModel> {
+  async load(files: ModelFiles, request: ModelRequest): Promise<LoadedModel> {
     const declaration = JSON.stringify(request.declaration) ?? 'undefined';
     const stampOf = (path: string): Stamp => (path === DECLARATION ? declaration : files.stamp(path));
     const cached = this.cache.get(request.file, stampOf);

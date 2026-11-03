@@ -1,8 +1,8 @@
-import { Color, LineBasicMaterial, LineDashedMaterial, LineSegments, Mesh, MeshBasicMaterial, Object3D, Vector3 } from 'three';
+import { Color, LineBasicMaterial, LineDashedMaterial, LineSegments, Mesh, MeshBasicMaterial, Object3D, Points, PointsMaterial, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import type { OverlayShape } from '../core/contracts';
 import { SELECTION_COLOR } from './modelScene';
-import { disposeLayer, layerObject, OVERLAY_STYLES, overlayStyle, shapeObject } from './overlays';
+import { disposeLayer, layerObject, OVERLAY_STYLES, overlayStyle, POINT_SIZE, shapeObject } from './overlays';
 
 function find<T>(root: Object3D, type: new (...args: never[]) => T): T[] {
   const found: T[] = [];
@@ -41,6 +41,44 @@ describe('the overlays', () => {
     const [disc] = find(circle, Mesh);
     expect((disc as Mesh).position.toArray()).toEqual([1, 2, 3]);
     expect(find(circle, LineSegments)[0]?.material).toBeInstanceOf(LineDashedMaterial);
+  });
+
+  it('draw a polygon as its closed outline and a fill on its plane, and a point as a dot of one size', () => {
+    // an L-shaped floor piece at y = 1.25, not convex
+    const points: [number, number, number][] = [
+      [0, 1.25, 0],
+      [4, 1.25, 0],
+      [4, 1.25, 1],
+      [1, 1.25, 1],
+      [1, 1.25, 3],
+      [0, 1.25, 3],
+    ];
+    const polygon = shapeObject({ shape: 'polygon', points, style: 'piece' }, false);
+    const [outline] = find(polygon, LineSegments);
+    expect(vertices(outline as LineSegments)).toBe(12);
+    const [fill] = find(polygon, Mesh);
+    const geometry = (fill as Mesh).geometry;
+    // six corners make four triangles, every one of them inside the L (none across its notch)
+    expect(geometry.getIndex()?.count).toBe(12);
+    const index = geometry.getIndex()!;
+    const position = geometry.getAttribute('position');
+    let area = 0;
+    for (let t = 0; t < index.count; t += 3) {
+      const [a, b, c] = [index.getX(t), index.getX(t + 1), index.getX(t + 2)];
+      area += Math.abs((position.getX(b) - position.getX(a)) * (position.getZ(c) - position.getZ(a)) - (position.getX(c) - position.getX(a)) * (position.getZ(b) - position.getZ(a))) / 2;
+      for (const i of [a, b, c]) expect(position.getY(i)).toBe(1.25);
+    }
+    expect(area).toBeCloseTo(4 + 2, 9);
+    expect(find(shapeObject({ shape: 'polygon', points: points.slice(0, 2), style: 'piece' }, false), Mesh)).toHaveLength(0);
+
+    const point = shapeObject({ shape: 'point', at: [1, 2, 3], style: 'seat' }, false);
+    const [dot] = find(point, Points);
+    expect((dot as Points).geometry.getAttribute('position').array).toEqual(new Float32Array([1, 2, 3]));
+    const material = (dot as Points).material as PointsMaterial;
+    expect([material.size, material.sizeAttenuation, material.depthTest]).toEqual([POINT_SIZE, false, false]);
+    const layer = layerObject('marks', [{ shape: 'point', at: [0, 0, 0], style: 'seat' }], () => false);
+    disposeLayer(layer);
+    expect(layer.children).toHaveLength(0);
   });
 
   it('end an arrow and an arc in a head pointing the way they go', () => {

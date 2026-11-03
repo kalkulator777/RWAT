@@ -5,8 +5,9 @@
  * - Drawn on demand: a change of the state, the controls or the size asks for one frame;
  *   nothing is drawn while nothing changes.
  * - Mouse: left button orbits (pans in the fixed views), right button pans, the wheel
- *   zooms where it points. A press and release in one place is a click: it picks.
- *   Moving without a button pressed hovers, once a frame at most.
+ *   zooms where it points. A press and release in one place is a click: it picks, with
+ *   the modifier keys held; a double click picks once more, marked double. Moving without
+ *   a button pressed hovers, once a frame at most.
  * - Keys, with the view focused: 1 side, 3 front, 7 top (Blender's keypad), 5 the orbit
  *   from three quarters, Home frames everything, `.` frames the selection; the arrows pan.
  * - No animation: views and framing jump, so `prefers-reduced-motion` has nothing to stop.
@@ -22,7 +23,7 @@ import type { Link } from '../core/contracts';
 import { pixelsPerBlock, VIEW_PRESETS, type CameraView } from './cameras';
 import { MINOR_GRID_MIN_PX } from './guides';
 import type { ViewState } from './state';
-import { ViewScene } from './viewScene';
+import { ViewScene, type ClickKeys } from './viewScene';
 
 export interface ViewportOptions {
   /** Called after each picture, with the camera it was drawn from (the panel turns its axis legend by it). */
@@ -34,6 +35,11 @@ const CLICK_SLOP = 4;
 
 /** The view keys: Blender's keypad for the fixed views, 5 for the orbit. */
 const VIEW_KEYS: Readonly<Record<string, CameraView>> = { '1': 'side', '3': 'front', '7': 'top', '5': 'orbit' };
+
+/** The modifier keys of a mouse event; ⌘ counts as Ctrl. */
+function keysOf(event: MouseEvent): ClickKeys {
+  return { shift: event.shiftKey, ctrl: event.ctrlKey || event.metaKey, alt: event.altKey };
+}
 
 export class Viewport {
   /** A viewport in `host`, or null where the browser gives no WebGL 2. */
@@ -112,7 +118,12 @@ export class Viewport {
       if (press === null || press.button !== 0 || event.button !== 0) return;
       if (Math.hypot(event.clientX - press.x, event.clientY - press.y) > CLICK_SLOP) return;
       const at = this.toDevice(event.clientX, event.clientY);
-      this.scene.clickAt(at.x, at.y, event.shiftKey);
+      this.scene.clickAt(at.x, at.y, keysOf(event));
+    });
+    this.on(canvas, 'dblclick', (event) => {
+      if (event.button !== 0) return;
+      const at = this.toDevice(event.clientX, event.clientY);
+      this.scene.doubleClickAt(at.x, at.y, keysOf(event));
     });
     this.on(this.host, 'keydown', (event) => {
       if (event.ctrlKey || event.metaKey || event.altKey) return;

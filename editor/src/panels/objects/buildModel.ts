@@ -9,6 +9,8 @@
  */
 
 import type { LoadedModel, ObjectInfo, PartBuffers, Vec3 } from '../../core/contracts';
+import { emptyModel } from '../../model/build';
+import { NO_LIGHT, type Place } from '../../ports/modelParts';
 import { CORNER_FLOATS, QUAD_FLOATS, loadModel, type ObjModel, type ObjPart } from '../../ports/obj';
 import { door, parseRole } from '../../ports/objectRole';
 import { classifyParts, type ClassifyContext } from './classify';
@@ -35,8 +37,24 @@ export interface BuiltModel {
   skip: readonly string[];
 }
 
+/** The engine's place of a role this reading gives. */
+const PLACE: Readonly<Record<string, Place>> = {
+  hidden: 'HIDDEN',
+  skip: 'SKIPPED',
+  untextured: 'UNTEXTURED',
+  body: 'BODY',
+  interior: 'INTERIOR',
+  bogie_front: 'BOGIE',
+  bogie_rear: 'BOGIE',
+  wheelset: 'WHEEL',
+  anim_object: 'ANIMATED',
+  door_leaf: 'DOOR_LEAF',
+  control: 'CONTROL',
+  coupler_head: 'COUPLER',
+};
+
 /** The triangles of a part's quads: positions, normals, uvs, three corners each. */
-function buffers(part: ObjPart): PartBuffers {
+function buffers(part: ObjPart, role: string): PartBuffers {
   const quads = part.quads.length / QUAD_FLOATS;
   const positions: number[] = [];
   const normals: number[] = [];
@@ -64,6 +82,9 @@ function buffers(part: ObjPart): PartBuffers {
   return {
     object: part.object,
     material: part.material,
+    texture: null,
+    role,
+    drawn: role !== 'hidden' && role !== 'skip' && role !== 'untextured',
     positions: Float32Array.from(positions),
     normals: Float32Array.from(normals),
     uvs: Float32Array.from(uvs),
@@ -98,7 +119,7 @@ export function buildLoadedModel(input: BuildInput): BuiltModel {
     context,
   );
 
-  const parts = parsed.parts.map(buffers);
+  const parts = parsed.parts.map((part, at) => buffers(part, roles[at]!));
   const byObject = new Map<string, { parts: PartBuffers[]; roles: string[] }>();
   parts.forEach((part, at) => {
     const entry = byObject.get(part.object) ?? { parts: [], roles: [] };
@@ -111,12 +132,13 @@ export function buildLoadedModel(input: BuildInput): BuiltModel {
     // an object is untextured only when all its parts are; otherwise the role of its drawn parts
     const drawn = entry.roles.find((role) => role !== 'untextured') ?? entry.roles[0]!;
     const control = door(name)?.control ?? parseRole(name).control;
-    const object: ObjectInfo = { name, role: drawn, bbox: boxOf(entry.parts) };
+    const engine = { place: PLACE[drawn] ?? 'BODY', front: drawn === 'bogie_front', owner: null, index: -1, light: NO_LIGHT };
+    const object: ObjectInfo = { name, role: drawn, engine, bbox: boxOf(entry.parts) };
     if (control !== null && control !== undefined) object.control = control;
     const lightGroup = parseRole(name).lightGroup;
     if (lightGroup !== null) object.lightGroup = lightGroup;
     return object;
   });
 
-  return { model: { id: input.id, parts, objects, textures: {}, problems: [] }, texturedMaterials: textured, skip };
+  return { model: { ...emptyModel(input.id, ''), parts, objects }, texturedMaterials: textured, skip };
 }

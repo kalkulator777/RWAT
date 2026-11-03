@@ -6,8 +6,12 @@ import {
   boxEdges,
   circlePoints,
   pickShape,
+  polygonAxes,
+  polygonNormal,
   rayBox,
   rayDisc,
+  rayPoint,
+  rayPolygon,
   rayRect,
   rectCorners,
   rotate,
@@ -77,6 +81,39 @@ describe('the overlay geometry', () => {
     expect(rayRect({ origin: [0, 0, 0], direction: [0, -1, 0] }, [-1, 1, -1], [1, 1, 1])).toBeNull();
     expect(rayDisc(down(0.3, 0.4), [0, 1, 0], 0.5)).toBe(9);
     expect(rayDisc(down(0.4, 0.4), [0, 1, 0], 0.5)).toBeNull();
+  });
+
+  it('meets a polygon inside its outline on its own plane, any way round, and a point within a little of it', () => {
+    // an L-shaped floor piece at y = 1, clockwise from above, and the same wound the other way
+    const ell: Vec3[] = [
+      [0, 1, 0],
+      [4, 1, 0],
+      [4, 1, 1],
+      [1, 1, 1],
+      [1, 1, 3],
+      [0, 1, 3],
+    ];
+    close(polygonNormal(ell), [0, -1, 0]);
+    close(polygonNormal([...ell].reverse()), [0, 1, 0]);
+    expect(polygonAxes(polygonNormal(ell))).toEqual([0, 2]);
+    expect(rayPolygon(down(3, 0.5), ell)).toBe(9);
+    expect(rayPolygon(down(0.5, 2.5), [...ell].reverse())).toBe(9);
+    // the notch of the L is outside
+    expect(rayPolygon(down(3, 2), ell)).toBeNull();
+    // a door's face standing upright, met from the side
+    const face: Vec3[] = [
+      [2, 0, 0],
+      [2, 0, 1],
+      [2, 2, 1],
+      [2, 2, 0],
+    ];
+    expect(polygonAxes(polygonNormal(face))).toEqual([1, 2]);
+    expect(rayPolygon({ origin: [0, 1, 0.5], direction: [1, 0, 0] }, face)).toBe(2);
+    expect(rayPolygon({ origin: [0, 1, 0.5], direction: [-1, 0, 0] }, face)).toBeNull();
+    expect(rayPolygon(down(0, 0), ell.slice(0, 2))).toBeNull();
+    expect(rayPoint(down(1, 2), [1.05, 0, 2])).toBe(10);
+    expect(rayPoint(down(1, 2), [1.5, 0, 2])).toBeNull();
+    expect(rayPoint(down(1, 2), [1, 11, 2])).toBeNull();
   });
 
   it('picks the nearest shape with a link, never one without, nor an arrow or an arc', () => {

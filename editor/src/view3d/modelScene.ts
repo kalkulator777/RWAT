@@ -3,20 +3,19 @@
  * {@link LoadedModel} as three.js meshes in the OBJ frame, grouped by object, so that an
  * object moves (`setTransform`), hides (`setVisible`) and lights up (`setLit`) as a whole.
  *
- * - Display "roles": each object in its role's colour (./roleColors.ts), evenly lit;
- *   "textured": as in the game — the texture sampled nearest, cut out where its alpha is
- *   under 0.1, both sides of every face drawn; "lit": the textures in the dark, with the
- *   objects the preview lights glowing at full brightness. A wireframe can be laid on any
- *   of them.
- * - The roles the engine drops (`HIDE`, `skip`, untextured) are see-through ghosts in every
- *   display; they can be hidden as a whole and are never picked.
+ * - Display "roles": each part in its role's colour (./roleColors.ts), evenly lit;
+ *   "textured": as in the game — the part's texture sampled nearest, cut out where its
+ *   alpha is under 0.1, both sides of every face drawn; "lit": the textures in the dark,
+ *   with the objects the preview lights glowing at full brightness. A wireframe can be laid
+ *   on any of them.
+ * - The parts the engine does not draw (`PartBuffers.drawn` false: `HIDE`, `skip`, no
+ *   texture) are see-through ghosts in every display; they can be hidden as a whole and are
+ *   never picked. Parts of the roles the bar hides are not drawn either.
+ * - A texture's picture is the model's own, or one put in its place (`setTexture`: a
+ *   livery's), until the next model.
  * - Picking casts a ray through a BVH of each part (three-mesh-bvh), built when it is first
  *   needed: a model of MVP's size answers every mouse move.
  * - What is hovered is tinted; what is selected is tinted and boxed.
- *
- * A part's texture: the contract's `PartBuffers` has none yet, so the view takes the part's
- * `texture` (pack path) when the model worker gives one, else the texture keyed by the
- * part's material name, else none ({@link textureOf}).
  */
 
 import {
@@ -37,12 +36,11 @@ import {
   Texture,
 } from 'three';
 import { MeshBVH } from 'three-mesh-bvh';
-import type { LoadedModel, PartBuffers, Vec3 } from '../core/contracts';
+import type { DisplayMode, LoadedModel, PartBuffers, Vec3 } from '../core/contracts';
 import { boxEdges } from './overlayGeometry';
-import { isGhostRole, roleColor } from './roleColors';
+import { roleColor } from './roleColors';
 
-/** How the model is painted (core/contracts `ViewApi.setDisplay`). */
-export type DisplayMode = 'roles' | 'textured' | 'lit';
+export type { DisplayMode } from '../core/contracts';
 
 export const DISPLAY_MODES: readonly DisplayMode[] = ['roles', 'textured', 'lit'];
 
@@ -50,9 +48,9 @@ export const DISPLAY_MODES: readonly DisplayMode[] = ['roles', 'textured', 'lit'
 export interface ModelLook {
   readonly display: DisplayMode;
   readonly wireframe: boolean;
-  /** Draw the dropped roles as ghosts (true) or not at all. */
+  /** Draw the parts the engine drops as ghosts (true) or not at all. */
   readonly ghosts: boolean;
-  /** Roles whose objects are not drawn. */
+  /** Roles whose parts are not drawn. */
   readonly hiddenRoles: ReadonlySet<string>;
 }
 
@@ -70,26 +68,27 @@ const HOVER_TINT = 0x2a2a2a;
 export const SELECTION_COLOR = 0x1d5bbf;
 const SELECTION_TINT = new Color(SELECTION_COLOR).multiplyScalar(0.45).getHex();
 
-/** A part as the view may get it: the contract's buffers, perhaps with the pack path of its texture. */
-type ViewPart = PartBuffers & { texture?: string | null };
-
-/**
- * The pack path of a part's texture: the part's own `texture` when the model gives one;
- * else its material's name when the model has a texture under that name; else null.
- */
-export function textureOf(model: LoadedModel, part: PartBuffers): string | null {
-  const own = (part as ViewPart).texture;
-  if (own !== undefined) return own;
-  return Object.hasOwn(model.textures, part.material) ? part.material : null;
+/** A mesh of one part, with what of the part its look depends on. */
+export interface PartMesh {
+  readonly mesh: Mesh<BufferGeometry, MeshLambertMaterial>;
+  /** The part's role: its colour in the "roles" display, and whether the bar hides it. */
+  readonly role: string;
+  /** The engine does not draw it: a ghost. */
+  readonly ghost: boolean;
+  /** Its texture's pack path, null for none. */
+  readonly texture: string | null;
 }
 
 /** One object of the model as drawn. */
 export interface ObjectNode {
   readonly name: string;
+  /** The object's role (`ObjectInfo.role`): what the status line and the objects tab name. */
   readonly role: string;
+  /** Every part of it is a ghost: the engine draws nothing of it. */
   readonly ghost: boolean;
   /** Holds the object's meshes and its selection box; its matrix is the object's transform. */
   readonly group: Group;
+  readonly parts: readonly PartMesh[];
   readonly meshes: readonly Mesh<BufferGeometry, MeshLambertMaterial>[];
   readonly outline: LineSegments;
   /** As the preview set it (`setVisible`). */
@@ -129,7 +128,8 @@ function outlineOf(bbox: readonly [Vec3, Vec3]): LineSegments {
 /** A three.js texture of a decoded image, sampled as the game samples it. */
 function textureFrom(image: ImageBitmap): Texture {
   const texture = new Texture(image);
-  // decoded upright already (createImageBitmap with imageOrientation 'flipY'): an ImageBitmap ignores flipY
+  // decoded upside down already (createImageBitmap with imageOrientation 'flipY'), so the
+  // OBJ's V samples it as the file is drawn; an ImageBitmap ignores three's flipY anyway
   texture.flipY = false;
   texture.magFilter = NearestFilter;
   texture.minFilter = NearestFilter;
@@ -143,54 +143,59 @@ export class ModelScene {
   /** Everything of the model; its own matrix stays the identity, so world is the OBJ frame. */
   readonly root = new Group();
   private readonly nodes = new Map<string, ObjectNode>();
-  private readonly textures = new Map<string, Texture>();
-  private readonly partTextures = new Map<Mesh, Texture | null>();
+  /** Each texture's three.js texture, by pack path; null when it has no picture. */
+  private readonly textures = new Map<string, Texture | null>();
   private readonly bvhs = new WeakMap<BufferGeometry, MeshBVH>();
   private look: ModelLook = DEFAULT_LOOK;
   private hovered: string | null = null;
   private selected: ReadonlySet<string> = new Set();
 
-  constructor(readonly model: LoadedModel) {
+  /**
+   * @param pictures the picture each texture is drawn with at first, by pack path: the
+   *   model's own (the default), or what the view was told to draw it with since
+   */
+  constructor(
+    readonly model: LoadedModel,
+    pictures: (path: string) => ImageBitmap | null = (path) => model.textures[path] ?? null,
+  ) {
     this.root.name = `model:${model.id}`;
     const infos = new Map(model.objects.map((info) => [info.name, info]));
+    const groups = new Map<string, { group: Group; parts: PartMesh[]; bbox: [Vec3, Vec3] | undefined }>();
     for (const part of model.parts) {
-      let node = this.nodes.get(part.object);
-      if (node === undefined) {
-        const info = infos.get(part.object);
-        const role = info?.role ?? 'body';
+      let entry = groups.get(part.object);
+      if (entry === undefined) {
         const group = new Group();
         group.name = part.object;
         group.matrixAutoUpdate = false;
-        const outline = outlineOf(info?.bbox ?? this.partBox(part));
-        group.add(outline);
-        node = { name: part.object, role, ghost: isGhostRole(role), group, meshes: [], outline, shown: true, lit: false };
-        this.nodes.set(part.object, node);
+        entry = { group, parts: [], bbox: infos.get(part.object)?.bbox };
+        groups.set(part.object, entry);
         this.root.add(group);
       }
       const mesh = new Mesh(geometryOf(part), new MeshLambertMaterial({ side: DoubleSide }));
       mesh.name = `${part.object}/${part.material}`;
       mesh.matrixAutoUpdate = false;
-      (node.meshes as Mesh<BufferGeometry, MeshLambertMaterial>[]).push(mesh);
-      node.group.add(mesh);
-      this.partTextures.set(mesh, this.textureFor(textureOf(model, part)));
+      entry.group.add(mesh);
+      entry.parts.push({ mesh, role: part.role, ghost: !part.drawn, texture: part.texture });
+      if (part.texture !== null && !this.textures.has(part.texture)) this.textures.set(part.texture, this.textureFrom(pictures(part.texture)));
+    }
+    for (const [name, { group, parts, bbox }] of groups) {
+      const outline = outlineOf(bbox ?? this.partsBox(parts));
+      group.add(outline);
+      const role = infos.get(name)?.role ?? parts[0]?.role ?? 'body';
+      const ghost = parts.every((part) => part.ghost);
+      this.nodes.set(name, { name, role, ghost, group, parts, meshes: parts.map((part) => part.mesh), outline, shown: true, lit: false });
     }
     this.applyLook();
   }
 
-  private partBox(part: PartBuffers): [Vec3, Vec3] {
-    const box = new Box3().setFromBufferAttribute(new BufferAttribute(part.positions, 3));
+  private partsBox(parts: readonly PartMesh[]): [Vec3, Vec3] {
+    const box = new Box3();
+    for (const { mesh } of parts) if (mesh.geometry.boundingBox !== null) box.union(mesh.geometry.boundingBox);
     return [box.min.toArray(), box.max.toArray()];
   }
 
-  private textureFor(path: string | null): Texture | null {
-    if (path === null) return null;
-    const known = this.textures.get(path);
-    if (known !== undefined) return known;
-    const image = this.model.textures[path];
-    if (image === null || image === undefined) return null;
-    const texture = textureFrom(image);
-    this.textures.set(path, texture);
-    return texture;
+  private textureFrom(image: ImageBitmap | null): Texture | null {
+    return image === null ? null : textureFrom(image);
   }
 
   /** The objects in the order of their first part. */
@@ -201,6 +206,11 @@ export class ModelScene {
   /** One object as drawn, or undefined if the model has no such object. */
   node(name: string): ObjectNode | undefined {
     return this.nodes.get(name);
+  }
+
+  /** The three.js texture a texture's parts sample now; null for none (they are drawn grey), undefined if no part uses it. */
+  texture(path: string): Texture | null | undefined {
+    return this.textures.get(path);
   }
 
   /** Changes how every object is drawn. */
@@ -232,6 +242,16 @@ export class ModelScene {
     this.applyNode(node);
   }
 
+  /** Draws the parts of texture `path` with another picture (null: none); a texture no part uses is ignored. */
+  setTexture(path: string, image: ImageBitmap | null): void {
+    const old = this.textures.get(path);
+    if (old === undefined) return;
+    if (old !== null && old.image === image) return;
+    old?.dispose();
+    this.textures.set(path, this.textureFrom(image));
+    for (const node of this.nodes.values()) if (node.parts.some((part) => part.texture === path)) this.applyNode(node);
+  }
+
   /** The object under the pointer (tinted) and the selected objects (tinted and boxed). */
   setHighlight(hovered: string | null, selected: ReadonlySet<string>): void {
     const before = new Set([this.hovered, hovered, ...this.selected, ...selected]);
@@ -243,14 +263,14 @@ export class ModelScene {
     }
   }
 
-  /** True if the object is drawn now: shown by the preview, its role not hidden, not a hidden ghost. */
+  /** True if something of the object is drawn now: shown by the preview, a part of it not of a hidden role nor a hidden ghost. */
   isDrawn(name: string): boolean {
     const node = this.nodes.get(name);
-    return node !== undefined && this.drawn(node);
+    return node !== undefined && node.shown && node.parts.some((part) => this.partShown(part));
   }
 
-  private drawn(node: ObjectNode): boolean {
-    return node.shown && !this.look.hiddenRoles.has(node.role) && (!node.ghost || this.look.ghosts);
+  private partShown(part: PartMesh): boolean {
+    return !this.look.hiddenRoles.has(part.role) && (!part.ghost || this.look.ghosts);
   }
 
   private applyLook(): void {
@@ -258,22 +278,24 @@ export class ModelScene {
   }
 
   private applyNode(node: ObjectNode, rebuild = false): void {
-    node.group.visible = this.drawn(node);
+    node.group.visible = node.shown;
     const selected = this.selected.has(node.name);
-    node.outline.visible = selected;
+    node.outline.visible = selected && this.isDrawn(node.name);
     const { display, wireframe } = this.look;
-    const textured = display !== 'roles' && !node.ghost;
-    const glowing = display === 'lit' && node.lit && !node.ghost;
     const tint = selected ? SELECTION_TINT : this.hovered === node.name ? HOVER_TINT : 0x000000;
-    for (const mesh of node.meshes) {
+    for (const part of node.parts) {
+      const { mesh, ghost } = part;
+      mesh.visible = this.partShown(part);
       const material = mesh.material;
-      const map = textured ? (this.partTextures.get(mesh) ?? null) : null;
+      const textured = display !== 'roles' && !ghost;
+      const glowing = display === 'lit' && node.lit && !ghost;
+      const map = textured && part.texture !== null ? (this.textures.get(part.texture) ?? null) : null;
       if (rebuild || material.map !== map) {
         material.map = map;
-        material.color.set(textured ? (map === null ? NO_TEXTURE : 0xffffff) : roleColor(node.role));
-        material.transparent = node.ghost;
-        material.opacity = node.ghost ? GHOST_OPACITY : 1;
-        material.depthWrite = !node.ghost;
+        material.color.set(textured ? (map === null ? NO_TEXTURE : 0xffffff) : roleColor(part.role));
+        material.transparent = ghost;
+        material.opacity = ghost ? GHOST_OPACITY : 1;
+        material.depthWrite = !ghost;
         material.alphaTest = map === null ? 0 : ALPHA_CUTOUT;
         material.wireframe = wireframe;
         material.needsUpdate = true;
@@ -290,7 +312,7 @@ export class ModelScene {
   }
 
   /**
-   * The nearest object the ray hits among those drawn, ghosts aside, with the point in
+   * The nearest object the ray hits among the parts drawn, ghosts aside, with the point in
    * the OBJ frame; null if it hits none.
    */
   pick(ray: Ray): ObjectHit | null {
@@ -299,10 +321,11 @@ export class ModelScene {
     const local = new Ray();
     const inverse = new Matrix4();
     for (const node of this.nodes.values()) {
-      if (node.ghost || !this.drawn(node)) continue;
-      for (const mesh of node.meshes) {
-        const geometry = mesh.geometry;
-        const bvh = this.bvhOf(geometry);
+      if (!node.shown) continue;
+      for (const part of node.parts) {
+        if (part.ghost || !this.partShown(part)) continue;
+        const { mesh } = part;
+        const bvh = this.bvhOf(mesh.geometry);
         local.copy(ray).applyMatrix4(inverse.copy(mesh.matrixWorld).invert());
         const hit = bvh.raycastFirst(local, DoubleSide);
         if (hit === null) continue;
@@ -325,9 +348,9 @@ export class ModelScene {
   }
 
   /**
-   * The box around the objects drawn now, as they stand (transforms applied), in the OBJ
-   * frame: of the named ones when names are given, else of the whole model. Empty when
-   * none of them is drawn.
+   * The box around the parts drawn now, as they stand (transforms applied), in the OBJ
+   * frame: of the named objects when names are given, else of the whole model. Empty when
+   * nothing of them is drawn.
    */
   bounds(names?: Iterable<string>): Box3 {
     this.root.updateMatrixWorld();
@@ -335,10 +358,11 @@ export class ModelScene {
     const wanted = names === undefined ? this.nodes.keys() : names;
     for (const name of wanted) {
       const node = this.nodes.get(name);
-      if (node === undefined || !this.drawn(node)) continue;
-      for (const mesh of node.meshes) {
-        const part = mesh.geometry.boundingBox;
-        if (part !== null) box.union(part.clone().applyMatrix4(mesh.matrixWorld));
+      if (node === undefined || !node.shown) continue;
+      for (const part of node.parts) {
+        if (!this.partShown(part)) continue;
+        const bounds = part.mesh.geometry.boundingBox;
+        if (bounds !== null) box.union(bounds.clone().applyMatrix4(part.mesh.matrixWorld));
       }
     }
     return box;
@@ -354,7 +378,8 @@ export class ModelScene {
       node.outline.geometry.dispose();
       (node.outline.material as LineBasicMaterial).dispose();
     }
-    for (const texture of this.textures.values()) texture.dispose();
+    for (const texture of this.textures.values()) texture?.dispose();
+    this.textures.clear();
     this.root.clear();
   }
 }

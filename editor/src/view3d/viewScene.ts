@@ -31,7 +31,7 @@ import { add, ordered, pickShape } from './overlayGeometry';
 import { disposeLayer, layerObject } from './overlays';
 import { VIEW_BACKGROUND } from './roleColors';
 import { isSelected, objectLink, selectedObjects, selectionAfterClick } from './selection';
-import { GHOSTS_LAYER, type ViewState } from './state';
+import { GHOSTS_LAYER, type Hover, type ViewState } from './state';
 
 /** The light, as a share of what shows a colour as it is (π in three.js's units): even light for the roles and textures… */
 const LIGHT_DAY = { ambient: 0.62, sun: 0.42 };
@@ -44,6 +44,14 @@ const SUN_FROM_CAMERA = new Vector3(-0.35, 0.6, 1);
 export interface ViewHit {
   readonly object?: ObjectHit;
   readonly link?: Link;
+}
+
+/** The modifier keys held at a click. */
+export interface ClickKeys {
+  readonly shift?: boolean;
+  /** Ctrl, or ⌘ on a Mac. */
+  readonly ctrl?: boolean;
+  readonly alt?: boolean;
 }
 
 export class ViewScene {
@@ -108,6 +116,10 @@ export class ViewScene {
         },
         litChanged: (object) => {
           this.modelScene?.setLit(object, state.lit.has(object));
+          this.invalidate();
+        },
+        textureChanged: (path) => {
+          this.modelScene?.setTexture(path, state.textureOf(path));
           this.invalidate();
         },
         overlayChanged: (layer) => {
@@ -180,8 +192,8 @@ export class ViewScene {
     this.modelScene = null;
     this.hovered = null;
     if (model !== null) {
-      const scene = new ModelScene(model);
       const state = this.state;
+      const scene = new ModelScene(model, (path) => state.textureOf(path));
       scene.setLook({
         display: state.display.peek(),
         wireframe: state.wireframe.peek(),
@@ -316,7 +328,7 @@ export class ViewScene {
   hoverAt(point: { x: number; y: number } | null): void {
     const hit = point === null ? {} : this.hitAt(point.x, point.y);
     const object = hit.object?.object ?? null;
-    const hover: PickHit | null = hit.object === undefined ? null : { object: hit.object.object, point: hit.object.point };
+    const hover: Hover | null = hit.object === undefined ? null : { object: hit.object.object, point: hit.object.point };
     if (!sameHit(this.state.hover.peek(), hover)) this.state.hover.value = hover;
     if (object !== this.hovered) {
       this.hovered = object;
@@ -327,17 +339,28 @@ export class ViewScene {
   }
 
   /**
-   * A click at a point of the drawing: tells the pick listeners what it hit, then selects
-   * it (Shift: adds it, or takes it out); a click on nothing keeps the selection. Returns
-   * the hit.
+   * A click at a point of the drawing: tells the pick listeners what it hit and how it was
+   * clicked, then selects it (Shift: adds it, or takes it out); a click on nothing keeps the
+   * selection. Returns the hit.
    */
-  clickAt(x: number, y: number, additive: boolean): ViewHit {
+  clickAt(x: number, y: number, keys: ClickKeys = {}): ViewHit {
     const hit = this.hitAt(x, y);
+    this.state.emitPick(pickOf(hit, keys, false));
     const model = this.modelScene?.model.id ?? null;
-    this.state.emitPick(hit.object === undefined ? {} : { object: hit.object.object, point: hit.object.point });
     const link = hit.object !== undefined && model !== null ? objectLink(model, hit.object.object) : (hit.link ?? null);
-    const next = selectionAfterClick(this.selection.peek(), link, additive);
+    const next = selectionAfterClick(this.selection.peek(), link, keys.shift === true);
     if (next !== this.selection.peek()) this.selection.value = next;
+    return hit;
+  }
+
+  /**
+   * A double click, after its two clicks came through {@link clickAt}: tells the pick
+   * listeners what it hit, marked double; the selection stays as the clicks left it.
+   * Returns the hit.
+   */
+  doubleClickAt(x: number, y: number, keys: ClickKeys = {}): ViewHit {
+    const hit = this.hitAt(x, y);
+    this.state.emitPick(pickOf(hit, keys, true));
     return hit;
   }
 
@@ -357,9 +380,21 @@ export class ViewScene {
   }
 }
 
-function sameHit(a: PickHit | null, b: PickHit | null): boolean {
+/** What the pick listeners are told of a hit. */
+function pickOf(hit: ViewHit, keys: ClickKeys, double: boolean): PickHit {
+  const pick: PickHit = { shift: keys.shift === true, ctrl: keys.ctrl === true, alt: keys.alt === true, double };
+  if (hit.object !== undefined) {
+    pick.object = hit.object.object;
+    pick.point = hit.object.point;
+  } else if (hit.link !== undefined) {
+    pick.link = hit.link;
+  }
+  return pick;
+}
+
+function sameHit(a: Hover | null, b: Hover | null): boolean {
   if (a === null || b === null) return a === b;
-  return a.object === b.object && (a.point ?? []).join() === (b.point ?? []).join();
+  return a.object === b.object && a.point.join() === b.point.join();
 }
 
 /** The corners of a shape's extent, for framing it. */
@@ -374,5 +409,9 @@ function shapeCorners(shape: OverlayShape): Vec3[] {
       return [shape.centre, shape.from];
     case 'circle':
       return [add(shape.centre, [-shape.radius, 0, -shape.radius]), add(shape.centre, [shape.radius, 0, shape.radius])];
+    case 'polygon':
+      return shape.points;
+    case 'point':
+      return [shape.at];
   }
 }

@@ -1,7 +1,7 @@
 /**
  * The preview's state and what it shows: from the model as the model worker reads it
- * (model/types `ParsedModel`: the engine's reading of its parts, `engine`, in the model
- * frame; its objects with their places; its `.anim` frames), its wagon type and the state
+ * (core/contracts `LoadedModel`: the engine's reading of its parts, `engine`, in the model
+ * frame; its objects with their engine roles; its `.anim` frames), its wagon type and the state
  * of the doors, controls, light groups and couplers — the transform, visibility and light
  * of every object the preview drives, computed the way the engine draws them
  * (`WagonRenderer.drawDoors`, `drawControls`, `drawCouplers`; the light rule of
@@ -11,8 +11,7 @@
  * Nothing here is written to the pack (editor.md §3.3: the preview edits nothing).
  */
 
-import type { OverlayShape, Vec3 } from '../core/contracts';
-import type { ModelObject, ParsedModel } from '../model/types';
+import type { LoadedModel, ObjectInfo, OverlayShape, Vec3 } from '../core/contracts';
 import { controlValue, controlVisible } from '../ports/controlPose';
 import { litMask, shines } from '../ports/lights';
 import { drawn, type Coupler, type Headlight, type Lamp, type Light, type ModelControl, type Place } from '../ports/modelParts';
@@ -101,16 +100,16 @@ const LAMP_RADIUS = 0.15;
 const BEAM_LENGTH = 1.5;
 
 /** The objects the engine draws as item `index` of the list of `place`, in the order they come. */
-function objectsAt(objects: readonly ModelObject[], place: Place, index: number): string[] {
-  return objects.filter((o) => o.place === place && o.index === index).map((o) => o.name);
+function objectsAt(objects: readonly ObjectInfo[], place: Place, index: number): string[] {
+  return objects.filter((o) => o.engine.place === place && o.engine.index === index).map((o) => o.name);
 }
 
 /** The model's moving things matched up with its objects and its type's doors; nothing moves in a model that can't be read. */
-export function rig(model: ParsedModel, type: WagonType | null): Rig {
+export function rig(model: LoadedModel, type: WagonType | null): Rig {
   const engine = model.engine;
   const objects = model.objects;
   const lights = new Map<string, Light>();
-  for (const o of objects) if (drawn(o.place) && (o.light.group >= 0 || o.light.fullbright)) lights.set(o.name, o.light);
+  for (const { name, engine: role } of objects) if (drawn(role.place) && (role.light.group >= 0 || role.light.fullbright)) lights.set(name, role.light);
   return {
     type,
     lightGroups: engine?.lightGroups ?? [],

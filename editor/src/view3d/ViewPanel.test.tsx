@@ -78,7 +78,7 @@ describe('the view panel', () => {
   });
 
   it('names what is under the pointer and where, and tells a screen reader the model and the selection', async () => {
-    const coach = exampleModel('coach');
+    const coach = await exampleModel('coach');
     view.show(coach);
     selection.value = [objectLink(coach.id, 'ROOF'), objectLink(coach.id, 'FLOOR')];
     view.hover.value = { object: 'DOOR_1_TL_0.95_X', point: [-8.75, 2.25, 1.5] };

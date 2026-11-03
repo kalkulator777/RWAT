@@ -8,9 +8,11 @@
  * Pure: no three, no DOM.
  */
 
-import type { Vec3 } from '../core/contracts';
+import type { Vec3, WagonFrame } from '../core/contracts';
 import { boxToObj, RAILHEAD_Y, toObj } from '../ports/objFrame';
-import type { Hull, WagonType } from '../ports/wagonType';
+import type { WagonType } from '../ports/wagonType';
+
+export type { WagonFrame } from '../core/contracts';
 
 /** The railhead in the OBJ frame: the plane the wheel treads stand on (`ObjFrame.RAILHEAD_Y` taken back to the OBJ, −0.03). */
 export const RAILHEAD_OBJ_Y = toObj(0, RAILHEAD_Y, 0)[1];
@@ -22,23 +24,7 @@ export const RAILHEAD_OBJ_Y = toObj(0, RAILHEAD_Y, 0)[1];
  */
 export const RAIL_Z = 0.8125;
 
-/**
- * What the guides need of a wagon type, as plain data in the model frame (+Z forward):
- * what the view is told, so it does not read pack JSON. {@link wagonFrame} takes it from
- * the port's type.
- */
-export interface WagonFrame {
-  /** Over buffers or couplers, blocks. */
-  readonly length: number;
-  /** Bogie pivots from the body's centre, + forward, front first (`WagonType.bogieOffsets`). */
-  readonly bogies: readonly number[];
-  /** From the body's centre to the front and the rear coupler point (`WagonType.couplerReach`). */
-  readonly couplerReach: readonly [number, number];
-  /** The solid collision hull (`WagonType.collidableHull`). */
-  readonly hull: Hull;
-}
-
-/** The guides' numbers of a type the port has read. */
+/** The guides' numbers of a type the port has read (core/contracts `WagonFrame`, what `ViewApi.setFrame` is told). */
 export function wagonFrame(type: Pick<WagonType, 'length' | 'bogieOffsets' | 'couplerReach' | 'collidableHull'>): WagonFrame {
   return {
     length: type.length,

@@ -1,36 +1,18 @@
 /**
  * Node only (tests): the example pack's models as the preview gets them — read by the
- * model pipeline as the model worker reads them (model/api `createModelApi`, model/build),
- * from the repository's files, textures stood in for (Node decodes no images) — their wagon
- * types as the engine reads them, and a stand-in of the 3D view that remembers what it is told.
+ * model pipeline as the model worker reads them (model/testing.node) — their wagon types
+ * as the engine reads them, and a stand-in of the 3D view that remembers what it is told.
  */
 
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import type { LoadedModel, OverlayShape, Vec3, ViewApi } from '../core/contracts';
-import { NodeFsSource } from '../io/nodeFs.node';
-import { createModelApi } from '../model/api';
-import { sourceFiles } from '../model/files';
-import type { ModelReader, ParsedModel } from '../model/types';
+import type { DisplayMode, LoadedModel, OverlayShape, Vec3, ViewApi, WagonFrame } from '../core/contracts';
+import { assetPath, exampleApi, exampleModel, exampleReader, packText, type ExampleWagon } from '../model/testing.node';
 import { CORNER_FLOATS, loadModel } from '../ports/obj';
 import { parseWagonType, type WagonType } from '../ports/wagonType';
-import { EXAMPLE_PACK } from '../testing/repo.node';
 import type { PreviewSubject } from './controller';
 
-/** The example pack's wagons. */
-export type ExampleWagon = 'coach' | 'shunter' | 'gondola';
+export { assetPath, exampleModel, fakeBitmap, packText, type ExampleWagon } from '../model/testing.node';
 
 const NAMESPACE = 'rwat_example';
-
-/** `stock/coach/coach.obj` of the example pack's namespace → `assets/rwat_example/stock/coach/coach.obj`. */
-export function assetPath(ref: string): string {
-  return `assets/${NAMESPACE}/${ref}`;
-}
-
-/** A pack file's text. */
-export function packText(packPath: string): string {
-  return readFileSync(join(EXAMPLE_PACK, ...packPath.split('/')), 'utf8');
-}
 
 /** The example wagon's model declaration, as the pack has it. */
 function declaration(name: ExampleWagon): { obj: string } {
@@ -52,27 +34,6 @@ export function cornersOf(obj: string, object: string): Vec3[] {
   return corners;
 }
 
-/** A stand-in for a decoded texture: tests only tell them apart, by path. */
-export function fakeBitmap(packPath: string): ImageBitmap {
-  return { path: packPath, width: 1, height: 1, close: () => undefined } as unknown as ImageBitmap;
-}
-
-const api = createModelApi((_bytes, path) => Promise.resolve(fakeBitmap(path)));
-
-async function exampleReader(): Promise<ModelReader> {
-  const files = await sourceFiles(new NodeFsSource(EXAMPLE_PACK));
-  return {
-    read: async (path) => ((await files.has(path)) ? files.read(path) : null),
-    has: async (path) => files.has(path),
-  };
-}
-
-/** The example wagon's model as the model worker hands it over. */
-export async function exampleModel(name: ExampleWagon): Promise<ParsedModel> {
-  const file = assetPath(`wagon_models/${name}.json`);
-  return api.load({ id: `${NAMESPACE}:${name}`, file, declaration: JSON.parse(packText(file)) as unknown }, await exampleReader());
-}
-
 /** The example wagon's type, as the engine reads it. */
 export function exampleType(name: ExampleWagon): WagonType {
   return parseWagonType(`${NAMESPACE}:${name}`, JSON.parse(packText(`data/${NAMESPACE}/wagon_types/${name}.json`)));
@@ -86,7 +47,7 @@ export async function exampleSubject(name: ExampleWagon, asked: string[][] = [])
     type: exampleType(name),
     textures: (paths) => {
       asked.push([...paths]);
-      return api.textures(paths, reader);
+      return exampleApi.textures(paths, reader);
     },
   };
 }
@@ -102,7 +63,11 @@ export interface RecordingView extends ViewApi {
   readonly visible: Map<string, boolean>;
   readonly lit: Map<string, boolean>;
   readonly overlays: Map<string, OverlayShape[]>;
-  display: 'roles' | 'textured' | 'lit' | null;
+  /** Each texture's picture as last set (null: none). */
+  readonly textures: Map<string, ImageBitmap | null>;
+  display: DisplayMode | null;
+  wireframe: boolean;
+  frame: WagonFrame | null;
   /** Forgets the calls so far (where the objects stand stays). */
   clearCalls(): void;
 }
@@ -116,21 +81,37 @@ export function recordingView(): RecordingView {
     visible: new Map(),
     lit: new Map(),
     overlays: new Map(),
+    textures: new Map(),
     display: null,
+    wireframe: false,
+    frame: null,
     clearCalls() {
       calls.length = 0;
     },
     show(model) {
       calls.push({ method: 'show' });
       view.shown.push(model);
-      // a model shown anew stands at rest, everything shown, nothing lit by the preview
+      // a model shown anew stands at rest, everything shown, nothing lit by the preview, in its own textures
       view.transforms.clear();
       view.visible.clear();
       view.lit.clear();
+      view.textures.clear();
     },
     setDisplay(mode) {
       calls.push({ method: 'setDisplay' });
       view.display = mode;
+    },
+    setWireframe(on) {
+      calls.push({ method: 'setWireframe' });
+      view.wireframe = on;
+    },
+    setFrame(frame) {
+      calls.push({ method: 'setFrame' });
+      view.frame = frame;
+    },
+    setTexture(path, bitmap) {
+      calls.push({ method: 'setTexture', object: path });
+      view.textures.set(path, bitmap);
     },
     setTransform(object, matrix) {
       calls.push({ method: 'setTransform', object });
