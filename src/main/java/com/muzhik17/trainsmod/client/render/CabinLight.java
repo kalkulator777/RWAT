@@ -37,9 +37,6 @@ public final class CabinLight {
             return 0;
         }
         long litMask = model.litMask(wagon::controlValue);
-        if (litMask == 0L) {
-            return 0; // a cabin lamp always has a light group (one an interior is lit by): all dark
-        }
         Vec3 at = rider.getPosition(partialTick).add(0.0, rider.getBbHeight() * 0.6, 0.0);
         Vector3d local = ClientWagonRay.drawn(wagon, partialTick).invertAffine()
                 .transformPosition(new Vector3d(at.x, at.y, at.z));

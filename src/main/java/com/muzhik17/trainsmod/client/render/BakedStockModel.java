@@ -156,7 +156,7 @@ public final class BakedStockModel implements AutoCloseable {
         int sky = LightTexture.sky(packedLight);
         List<StockModel.Lamp> lit = new ArrayList<>();
         for (StockModel.Lamp lamp : model.lamps()) {
-            if (StockModel.tagLit(StockModel.tag(lamp.group(), false, false, false), litMask)) {
+            if (lamp.lit(litMask)) {
                 lit.add(lamp);
             }
         }
@@ -205,7 +205,7 @@ public final class BakedStockModel implements AutoCloseable {
     public static int lampLevelAt(StockModel model, long litMask, float x, float y, float z) {
         float best = 0.0F;
         for (StockModel.Lamp lamp : model.lamps()) {
-            if (!StockModel.tagLit(StockModel.tag(lamp.group(), false, false, false), litMask)) {
+            if (!lamp.lit(litMask)) {
                 continue;
             }
             float dx = lamp.x() - x;

@@ -160,8 +160,7 @@ public record StockModel(
      * A cabin lamp (SPEC §8, {@link ModelParts.Lamp}): the centre of a glowing
      * island of its group's mesh; {@code invert}: {@code LINVERT}. The interior
      * bake ({@code BakedStockModel}) and a rider's light ({@code CabinLight})
-     * still take a lamp as lit by its group alone, {@code LINVERT} aside: no
-     * pack has an inverted cabin lamp yet.
+     * take a lamp as lit by {@link #lit}, the one rule of every fire.
      */
     public record Lamp(float x, float y, float z, int group, boolean invert) {
 
