@@ -1,0 +1,139 @@
+{
+  "description": "Double.toString(value) — how WagonTypeParser writes a number of its errors that is not whole and FloorCheck the slack at a door: the shortest digits that tell the double apart (JDK 19+), plain from 10^-3 to below 10^7 with at least one decimal, otherwise d.dddE<n>. input.double (a number or \"NaN\", \"Infinity\", \"-Infinity\"); expected: the text.",
+  "frame": "none",
+  "tolerance": 0,
+  "cases": [
+    {
+      "id": "string-0-a-short-decimal",
+      "note": "a short decimal as written",
+      "input": {"double": 0.4},
+      "expected": "0.4"
+    },
+    {
+      "id": "string-1-a-whole-number-keeps-one-decimal",
+      "note": "a whole number keeps one decimal: 1.0, not 1",
+      "input": {"double": 1},
+      "expected": "1.0"
+    },
+    {
+      "id": "string-2-a-hundred",
+      "note": "100.0",
+      "input": {"double": 100},
+      "expected": "100.0"
+    },
+    {
+      "id": "string-3-the-smallest-plain",
+      "note": "10^-3 is the smallest written plain",
+      "input": {"double": 0.001},
+      "expected": "0.001"
+    },
+    {
+      "id": "string-4-below-it-an-exponent",
+      "note": "below 10^-3 an exponent: 1.0E-4 (JS writes 0.0001)",
+      "input": {"double": 0.0001},
+      "expected": "1.0E-4"
+    },
+    {
+      "id": "string-5-a-small-one",
+      "note": "1.0E-5 (JS writes 0.00001)",
+      "input": {"double": 1e-5},
+      "expected": "1.0E-5"
+    },
+    {
+      "id": "string-6-the-largest-plain",
+      "note": "below 10^7 plain",
+      "input": {"double": 9999999},
+      "expected": "9999999.0"
+    },
+    {
+      "id": "string-7-ten-million-has-an-exponent",
+      "note": "10^7 has an exponent: 1.0E7 (JS writes 10000000)",
+      "input": {"double": 1e7},
+      "expected": "1.0E7"
+    },
+    {
+      "id": "string-8-a-large-negative",
+      "note": "a large negative with its digits: -1.23456789E7",
+      "input": {"double": -12345678.9},
+      "expected": "-1.23456789E7"
+    },
+    {
+      "id": "string-9-minus-zero",
+      "note": "a minus zero keeps its sign",
+      "input": {"double": -0.0},
+      "expected": "-0.0"
+    },
+    {
+      "id": "string-10-zero",
+      "note": "0.0",
+      "input": {"double": 0},
+      "expected": "0.0"
+    },
+    {
+      "id": "string-11-the-shortest-digits",
+      "note": "0.1 + 0.2: the shortest digits that tell the double apart, all 17 of them",
+      "input": {"double": 0.30000000000000004},
+      "expected": "0.30000000000000004"
+    },
+    {
+      "id": "string-12-ten-to-the-21",
+      "note": "1.0E21 (JS writes 1e+21)",
+      "input": {"double": 1e21},
+      "expected": "1.0E21"
+    },
+    {
+      "id": "string-13-ten-to-the-23",
+      "note": "1.0E23: the shortest digits, not 9.999999999999999E22 as before JDK 19",
+      "input": {"double": 1e23},
+      "expected": "1.0E23"
+    },
+    {
+      "id": "string-14-a-plain-fraction",
+      "note": "a plain fraction with many digits",
+      "input": {"double": 123456.789},
+      "expected": "123456.789"
+    },
+    {
+      "id": "string-15-the-largest-double",
+      "note": "the largest double",
+      "input": {"double": 1.7976931348623157e308},
+      "expected": "1.7976931348623157E308"
+    },
+    {
+      "id": "string-16-the-smallest-double",
+      "note": "the smallest double: two digits, the nearer of them (4.9E-324; JS writes 5e-324)",
+      "input": {"double": 4.9e-324},
+      "expected": "4.9E-324"
+    },
+    {
+      "id": "string-17-twice-the-smallest-double",
+      "note": "twice the smallest double: 9.9E-324 (JS writes 1e-323)",
+      "input": {"double": 1e-323},
+      "expected": "9.9E-324"
+    },
+    {
+      "id": "string-18-the-smallest-normal-double",
+      "note": "the smallest normal double",
+      "input": {"double": 2.2250738585072014e-308},
+      "expected": "2.2250738585072014E-308"
+    },
+    {
+      "id": "string-19-nan",
+      "note": "NaN prints as NaN",
+      "input": {"double": "NaN"},
+      "expected": "NaN"
+    },
+    {
+      "id": "string-20-infinity",
+      "note": "Infinity",
+      "input": {"double": "Infinity"},
+      "expected": "Infinity"
+    },
+    {
+      "id": "string-21-minus-infinity",
+      "note": "-Infinity",
+      "input": {"double": "-Infinity"},
+      "expected": "-Infinity"
+    }
+  ]
+}

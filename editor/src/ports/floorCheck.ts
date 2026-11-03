@@ -13,9 +13,10 @@
 
 import type { FloorFinding, FloorSubject, ProblemParam } from '../core/contracts';
 import { Cut, type FloorRegion, type Piece } from './floorRegion';
+import { formatFixed, javaDoubleToString } from './javaNumbers';
 import { toObj } from './objFrame';
 import { BRIDGE_REACH, DOOR_SPAN_INSET, DOOR_WALL_SLACK, PLAYER_HALF_WIDTH, SEAT_REACH, facesDoor } from './riderWalk';
-import { type Door, type WagonType, javaDoubleToString } from './wagonType';
+import { type Door, type WagonType } from './wagonType';
 
 const M = PLAYER_HALF_WIDTH;
 /** Thicker than this, a door box is more than its leaf. */
@@ -46,33 +47,6 @@ export const FLOOR_CODES = {
 
 export type FloorCode = keyof typeof FLOOR_CODES;
 
-/**
- * `String.format(Locale.ROOT, "%.<n>f", x)` of Java: half up from the shortest decimal
- * digits of the double (`1.005` → `1.01`, where `toFixed` gives `1.00`), the sign kept on
- * a zero (`-0.00`), `NaN` and the infinities by name.
- */
-// The editor's javaNumbers port (agent A2.1) owns this rule as formatFixed; this copy keeps
-// the floor check standing on its own until the two meet in one module.
-function fixed(x: number, n: number): string {
-  if (Number.isNaN(x)) return 'NaN';
-  if (!Number.isFinite(x)) return x > 0 ? 'Infinity' : '-Infinity';
-  const sign = x < 0 || Object.is(x, -0) ? '-' : '';
-  const [mantissa = '0', exponentText = '0'] = Math.abs(x).toExponential().split('e');
-  const digits = mantissa.replace('.', '');
-  // the value is digits × 10^shift; scaled by 10^n it is digits × 10^(shift + n)
-  const shift = Number(exponentText) - (digits.length - 1) + n;
-  let scaled: bigint;
-  if (shift >= 0) {
-    scaled = BigInt(digits) * 10n ** BigInt(shift);
-  } else {
-    const unit = 10n ** BigInt(-shift);
-    const whole = BigInt(digits);
-    scaled = whole / unit + ((whole % unit) * 2n >= unit ? 1n : 0n);
-  }
-  const text = scaled.toString().padStart(n + 1, '0');
-  return n === 0 ? `${sign}${text}` : `${sign}${text.slice(0, -n)}.${text.slice(-n)}`;
-}
-
 function number(params: Readonly<Record<string, ProblemParam>>, name: string): number {
   return params[name] as number;
 }
@@ -84,8 +58,8 @@ function number(params: Readonly<Record<string, ProblemParam>>, name: string): n
  */
 export function findingText(code: FloorCode, index: number, params: Readonly<Record<string, ProblemParam>>): string {
   const door = `door ${index} '${String(params.id)}'`;
-  const f2 = (name: string): string => fixed(number(params, name), 2);
-  const f1 = (name: string): string => fixed(number(params, name), 1);
+  const f2 = (name: string): string => formatFixed(number(params, name), 2);
+  const f1 = (name: string): string => formatFixed(number(params, name), 1);
   switch (code) {
     case 'SEATS_WITHOUT_INTERIOR':
       return 'cab.seats without an interior: a chair needs a floor to walk to it';

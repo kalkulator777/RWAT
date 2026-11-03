@@ -11,10 +11,10 @@
  *   of fewer than three corners draws nothing.
  * - Each corner is `[x, y, z, u, v, nx, ny, nz]` as floats: `v` is `1 − v` of the file
  *   (Minecraft samples V from the top), 0 with no `vt`; the normal `0 1 0` with no `vn`.
- * - Numbers are read as `Float.parseFloat` reads them ({@link parseJavaFloat}), indices
- *   as `Integer.parseInt`, 1-based and positive only. A bad number, a missing
- *   coordinate or an index outside what was read so far refuses the whole file
- *   ({@link ObjError}), as the engine's exception does.
+ * - Numbers are read as `Float.parseFloat` reads them, indices as `Integer.parseInt`
+ *   (./javaNumbers.ts `parseJavaFloat`, `parseJavaInt`), 1-based and positive only. A
+ *   bad number, a missing coordinate or an index outside what was read so far refuses
+ *   the whole file ({@link ObjError}), as the engine's exception does.
  * - Names: an object's is the whole rest of its `o`/`g` line ({@link objectName}), a
  *   material's the whole rest of its `usemtl` line (./mtl.ts `materialName`); `mtllib`
  *   files as written, blanks inside kept.
@@ -25,6 +25,7 @@
  * engine does. Pure: no DOM, it runs in the model worker (editor.md §3.11) and in Node.
  */
 
+import { parseJavaFloat, parseJavaInt } from './javaNumbers';
 import { javaLines, javaTrim, materialName } from './mtl';
 
 /** The object faces belong to before any `o`/`g` line, and after one that names nothing (`ObjectRole.DEFAULT_OBJECT`). */
@@ -230,153 +231,4 @@ function index(text: string, count: number, token: string, line: number): number
   const value = parseJavaInt(text);
   if (value === null || value < 1 || value > count) throw new ObjError(line, `the corner '${token}' names ${text} of ${count}`);
   return value - 1;
-}
-
-// ---------------------------------------------------------------- Java numbers
-
-/**
- * `Integer.parseInt`: an optional sign, then decimal digits — any Unicode decimal digit
- * of the BMP, as `Character.digit` takes them — and nothing else; past the `int` range
- * it refuses.
- */
-export function parseJavaInt(text: string): number | null {
-  let i = 0;
-  const sign = text.charCodeAt(0);
-  if (sign === 0x2d /* - */ || sign === 0x2b /* + */) i = 1;
-  if (i >= text.length) return null;
-  let value = 0;
-  for (; i < text.length; i++) {
-    const digit = digitOf(text.charCodeAt(i));
-    if (digit < 0) return null;
-    value = value * 10 + digit;
-    if (value > 2147483648) return null;
-  }
-  if (sign === 0x2d) return -value;
-  return value > 2147483647 ? null : value;
-}
-
-const DECIMAL_DIGIT = /\p{Nd}/u;
-
-/** `Character.digit(unit, 10)`: 0…9, or −1. A run of Unicode decimal digits starts at a zero, ten a set. */
-function digitOf(unit: number): number {
-  if (unit >= 0x30 && unit <= 0x39) return unit - 0x30;
-  if (unit < 0x80 || (unit >= 0xd800 && unit <= 0xdfff) || !DECIMAL_DIGIT.test(String.fromCharCode(unit))) return -1;
-  let zero = unit;
-  while (DECIMAL_DIGIT.test(String.fromCharCode(zero - 1))) zero--;
-  return (unit - zero) % 10;
-}
-
-/** A decimal as written in a file, nothing around it: the common case, read without the full grammar. */
-const PLAIN = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/;
-/** Java's decimal floating-point literal, with its optional type suffix. */
-const DECIMAL = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?[fFdD]?$/;
-/** Java's hexadecimal floating-point literal (`FloatingDecimal.HEX_FLOAT_PATTERN`): its binary exponent is required. */
-const HEX = /^([+-])?0[xX](?:([0-9a-fA-F]+)\.?|([0-9a-fA-F]*)\.([0-9a-fA-F]+))[pP]([+-])?(\d+)[fFdD]?$/;
-const SPECIAL = /^([+-]?)(NaN|Infinity)$/;
-
-/** The largest float. */
-const MAX_FLOAT = Math.fround(3.4028234663852886e38);
-/** The float that would come after the largest if the exponent went on: half-way to it rounds to Infinity. */
-const TWO_128 = 2 ** 128;
-const F32 = new Float32Array(1);
-const U32 = new Uint32Array(F32.buffer);
-
-/**
- * `Float.parseFloat`: Java's grammar — blanks up to U+0020 around dropped, a sign, a
- * decimal with an optional exponent and an optional `f`/`F`/`d`/`D`, a hexadecimal
- * `0x…p…`, `NaN`, `Infinity` — read straight to the nearest float (ties to even), not
- * through a double: `1.0000000596046447753906250001` is `1.0000001192092896`, where
- * `Math.fround(Number(…))` rounds twice and gives 1.
- *
- * Golden: fixtures/golden/java_numbers/parse_float.json (this port's tests read it too).
- * The same rule is ports/javaNumbers.ts `parseJavaFloat` (editor.md §4.1); this one is
- * the OBJ loader's fast reading of it, and the two are to become one.
- *
- * @returns the float, or null where Java throws NumberFormatException (the whole text,
- *   not a prefix: `1.5abc` is refused)
- */
-export function parseJavaFloat(text: string): number | null {
-  if (PLAIN.test(text)) return decimalToFloat(text);
-  const s = javaTrim(text);
-  const special = SPECIAL.exec(s);
-  if (special !== null) return special[2] === 'NaN' ? NaN : special[1] === '-' ? -Infinity : Infinity;
-  const hex = HEX.exec(s);
-  if (hex !== null) return hexToFloat(hex);
-  if (!DECIMAL.test(s)) return null;
-  return decimalToFloat(/[fFdD]$/.test(s) ? s.slice(0, -1) : s);
-}
-
-/**
- * A decimal (no suffix, no blanks) to the nearest float. `Number` gives the nearest
- * double; rounding that to a float is right unless the double lies exactly half-way
- * between two floats while the decimal does not — then the decimal is rounded exactly.
- */
-function decimalToFloat(s: string): number {
-  const d = Number(s);
-  const f = Math.fround(d);
-  if (f === d || !Number.isFinite(d) || !isFloatMidpoint(Math.abs(d))) return f;
-  const m = /^([+-]?)(\d*)\.?(\d*)(?:[eE]([+-]?\d+))?$/.exec(s)!;
-  const fraction = m[3]!;
-  const exponent = Number(m[4] ?? '0') - fraction.length;
-  const digits = BigInt(m[2]! + fraction);
-  const value = exponent >= 0 ? roundToFloat(digits * 5n ** BigInt(exponent), 1n, exponent) : roundToFloat(digits, 5n ** BigInt(-exponent), exponent);
-  return m[1] === '-' ? -value : value;
-}
-
-/** True if a positive double that is no float lies exactly half-way between two floats (MAX_FLOAT and 2^128 included). */
-function isFloatMidpoint(a: number): boolean {
-  const f = Math.fround(a);
-  let lo: number;
-  let hi: number;
-  if (f === Infinity) {
-    lo = MAX_FLOAT;
-    hi = TWO_128;
-  } else {
-    F32[0] = f;
-    const bits = U32[0]!;
-    if (f < a) {
-      lo = f;
-      U32[0] = bits + 1;
-      hi = F32[0] === Infinity ? TWO_128 : F32[0];
-    } else {
-      hi = f;
-      U32[0] = bits - 1;
-      lo = F32[0]!;
-    }
-  }
-  return (lo + hi) / 2 === a;
-}
-
-/** A hexadecimal literal's groups (see {@link HEX}) to the nearest float. */
-function hexToFloat(m: RegExpExecArray): number {
-  const fraction = m[4] ?? '';
-  const digits = ((m[2] ?? m[3] ?? '') + fraction).replace(/^0+/, '');
-  let value = 0;
-  if (digits !== '') {
-    const significand = BigInt(`0x${digits}`);
-    const exponent = (m[5] === '-' ? -1 : 1) * Number(m[6]) - 4 * fraction.length;
-    const top = significand.toString(2).length - 1 + exponent; // the value is in [2^top, 2^(top+1))
-    value = top >= 128 ? Infinity : top < -150 ? 0 : roundToFloat(significand, 1n, exponent);
-  }
-  return m[1] === '-' ? -value : value;
-}
-
-/** The float nearest `num / den × 2^exponent` (positive), ties to even; Infinity past the largest float. */
-function roundToFloat(num: bigint, den: bigint, exponent: number): number {
-  // q = ⌊num × 2^s / den⌋ with 2^23 ≤ q < 2^24: the float's 24 bits, its step 2^(exponent − s)
-  let s = 24 - (num.toString(2).length - den.toString(2).length);
-  if (scaled(num, den, s)[0] >= 1n << 24n) s--;
-  if (exponent - s < -149) s = exponent + 149; // below the normal floats the step stays the smallest float's
-  const [q, r, d] = scaled(num, den, s);
-  const twice = 2n * r;
-  const up = twice > d || (twice === d && (q & 1n) === 1n);
-  const value = Number(up ? q + 1n : q) * 2 ** (exponent - s);
-  return value >= TWO_128 ? Infinity : value;
-}
-
-/** `⌊num × 2^s / den⌋`, its remainder and the divisor it was taken by. */
-function scaled(num: bigint, den: bigint, s: number): [bigint, bigint, bigint] {
-  const n = s >= 0 ? num << BigInt(s) : num;
-  const d = s >= 0 ? den : den << BigInt(-s);
-  return [n / d, n % d, d];
 }

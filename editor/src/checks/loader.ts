@@ -14,14 +14,14 @@
  * `sounds.controls`, the limits of light and control groups) — they come with the model
  * pipeline (M3–M4); the floor's are `FloorCheck`'s (ports/floorCheck).
  *
- * Temporary until the ports land (editor.md §4.1): the geometry rule repeats
- * `WagonTypeParser.checkGeometry` and its number format; ports/wagonType (A2.3) is to
- * replace both, and its golden `wagon_type` holds the engine's words.
+ * The geometry rule repeats `WagonTypeParser.checkGeometry`; its numbers are written as
+ * the port writes them (ports/wagonType `formatNumber`).
  */
 
 import type { Link, Problem } from '../core/contracts';
 import { isJsonObject } from '../core/json';
 import { classify, MCMETA, modelPath, SUPPORTED_FORMAT, typePath, type Pack } from '../core/pack';
+import { formatNumber } from '../ports/wagonType';
 
 /** A path Minecraft takes as a resource location: `assets|data/<namespace>/<path>`, lower case (`ResourceLocation`). */
 const RESOURCE_PATH = /^(?:assets|data)\/[a-z0-9_.-]+\/[a-z0-9_./-]+$/;
@@ -29,23 +29,6 @@ const RESOURCE_PATH = /^(?:assets|data)\/[a-z0-9_.-]+\/[a-z0-9_./-]+$/;
 /** True for a file under `assets/` or `data/` whose path Minecraft refuses as a resource location. */
 export function isBadResourcePath(path: string): boolean {
   return /^(?:assets|data)\//.test(path) && !RESOURCE_PATH.test(path);
-}
-
-/**
- * A number as the engine's parser writes it into a message (`WagonTypeParser.format`): a
- * whole number without `.0`, anything else as Java's `Double.toString` (`0.5`, `1.0E-5`).
- */
-export function engineNumber(value: number): string {
-  if (value === Math.round(value) && Math.abs(value) < 1e15) return String(Math.trunc(value));
-  if (Number.isNaN(value)) return 'NaN';
-  if (!Number.isFinite(value)) return value > 0 ? 'Infinity' : '-Infinity';
-  const size = Math.abs(value);
-  if (size >= 1e-3 && size < 1e7) {
-    const text = String(value);
-    return text.includes('.') ? text : `${text}.0`;
-  }
-  const [mantissa = '', exponent = '0'] = value.toExponential().split('e');
-  return `${mantissa.includes('.') ? mantissa : `${mantissa}.0`}E${Number(exponent)}`;
 }
 
 /** `ns:path` or `path` (the declaring namespace's) → the pack file it names under `assets/`. */
@@ -79,7 +62,7 @@ function geometry(file: string, type: Record<string, unknown>, out: Problem[]): 
         source: 'loader',
         code: 'loader.bogie-outside',
         params: { index: i, value: pivot, half },
-        text: `'bogies[${i}]' = ${engineNumber(pivot)} is outside the body: a pivot must lie within ±length/2 = ±${engineNumber(half)}`,
+        text: `'bogies[${i}]' = ${formatNumber(pivot)} is outside the body: a pivot must lie within ±length/2 = ±${formatNumber(half)}`,
         at: field(file, `/bogies/${i}`),
       });
     }
@@ -91,8 +74,8 @@ function geometry(file: string, type: Record<string, unknown>, out: Problem[]): 
         code: 'loader.bogie-order',
         params: { index: i, value: pivot, previousIndex: i - 1, previous: before },
         text:
-          `'bogies' must run front to back, each pivot behind the one before: 'bogies[${i}]' = ${engineNumber(pivot)}` +
-          ` is not behind 'bogies[${i - 1}]' = ${engineNumber(before)}`,
+          `'bogies' must run front to back, each pivot behind the one before: 'bogies[${i}]' = ${formatNumber(pivot)}` +
+          ` is not behind 'bogies[${i - 1}]' = ${formatNumber(before)}`,
         at: field(file, `/bogies/${i}`),
       });
     }
@@ -107,7 +90,7 @@ function geometry(file: string, type: Record<string, unknown>, out: Problem[]): 
         source: 'loader',
         code: 'loader.coupler-outside',
         params: { end, value: offset, half },
-        text: `'couplers.${end}' = ${engineNumber(offset)} must be under length/2 = ${engineNumber(half)} in size`,
+        text: `'couplers.${end}' = ${formatNumber(offset)} must be under length/2 = ${formatNumber(half)} in size`,
         at: field(file, `/couplers/${end}`),
       });
     }

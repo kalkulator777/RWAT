@@ -21,7 +21,7 @@ import {
   aliases,
   describe as describeValue,
   equalsIgnoreCase,
-  javaDoubleToString,
+  formatNumber,
   loadWagonType,
   nearestKey,
   parseWagonType,
@@ -246,21 +246,18 @@ function compute(input: Input): unknown {
 describe('wagonType', () => {
   const minimal = { length: 25.0, bogies: [8.5, -8.5], mass_t: 50.0 };
 
-  it('writes doubles as Java does', () => {
-    expect(javaDoubleToString(0.4)).toBe('0.4');
-    expect(javaDoubleToString(1)).toBe('1.0');
-    expect(javaDoubleToString(100)).toBe('100.0');
-    expect(javaDoubleToString(0.001)).toBe('0.001');
-    expect(javaDoubleToString(0.0001)).toBe('1.0E-4');
-    expect(javaDoubleToString(1e-5)).toBe('1.0E-5');
-    expect(javaDoubleToString(9999999)).toBe('9999999.0');
-    expect(javaDoubleToString(1e7)).toBe('1.0E7');
-    expect(javaDoubleToString(-12345678.9)).toBe('-1.23456789E7');
-    expect(javaDoubleToString(-0)).toBe('-0.0');
-    expect(javaDoubleToString(0)).toBe('0.0');
-    expect(javaDoubleToString(NaN)).toBe('NaN');
-    expect(javaDoubleToString(-Infinity)).toBe('-Infinity');
-    expect(javaDoubleToString(Infinity)).toBe('Infinity');
+  it('writes a number of its errors as the parser does: whole ones without .0, others as Double.toString', () => {
+    expect([5, -2, 0, -0, 2.5, -1.5, 1e-5, 12345678.5, 1e21].map(formatNumber)).toEqual([
+      '5',
+      '-2',
+      '0',
+      '0',
+      '2.5',
+      '-1.5',
+      '1.0E-5',
+      '1.23456785E7',
+      '1.0E21',
+    ]);
   });
 
   it('says what the loader says of a file that is not an object', () => {

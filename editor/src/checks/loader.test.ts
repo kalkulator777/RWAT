@@ -5,7 +5,7 @@ import { filesOf, MemorySource, readTree } from '../core/pack/testing.node';
 import { createSchema } from '../core/schema';
 import { readSchemaFiles } from '../core/schema/files.node';
 import { EXAMPLE_PACK } from '../testing/repo.node';
-import { engineNumber, isBadResourcePath, loaderProblems, resourceFile } from './loader';
+import { isBadResourcePath, loaderProblems, resourceFile } from './loader';
 import { checkPack } from './pack';
 
 const MCMETA = dump({ pack: { pack_format: 34, description: 'x' }, rwat: { format: 1 } });
@@ -137,20 +137,6 @@ describe('the loader rules beyond the schema', () => {
 });
 
 describe('helpers', () => {
-  it('write numbers as the parser does: whole ones without .0, others as Double.toString', () => {
-    expect([5, -2, 0, -0, 2.5, -1.5, 1e-5, 12345678.5, 1e21].map(engineNumber)).toEqual([
-      '5',
-      '-2',
-      '0',
-      '0',
-      '2.5',
-      '-1.5',
-      '1.0E-5',
-      '1.23456785E7',
-      '1.0E21',
-    ]);
-  });
-
   it('resolve a resource reference in the declaring namespace or its own', () => {
     expect(resourceFile('stock/a.obj', 'ns')).toBe('assets/ns/stock/a.obj');
     expect(resourceFile('other:stock/a.obj', 'ns')).toBe('assets/other/stock/a.obj');

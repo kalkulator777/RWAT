@@ -21,6 +21,7 @@
  */
 
 import { FloorRegion, Cut, clamp } from './floorRegion';
+import { javaDoubleToString } from './javaNumbers';
 import { box as objBox, point as objPoint } from './objFrame';
 import {
   type Brakes,
@@ -42,30 +43,11 @@ export type ModelPoint = [number, number, number];
 // ---------------------------------------------------------------- numbers as Java writes them
 
 /**
- * `Double.toString` of Java (JDK 19+): the shortest digits that read back as the same
- * double (the digits JavaScript picks), plain from 10^-3 up to below 10^7 with at least
- * one decimal (`0.4`, `1.0`, `100.0`), otherwise `d.dddE±n` (`1.0E-5`, `1.2345E10`).
+ * A number as a pack author wrote it, for the parser's errors (`WagonTypeParser.format`):
+ * a whole number without `.0` (`9`, `-0` as `0`), anything else as Java's
+ * `Double.toString` (`0.5`, `1.0E-5`).
  */
-export function javaDoubleToString(x: number): string {
-  if (Number.isNaN(x)) return 'NaN';
-  if (!Number.isFinite(x)) return x > 0 ? 'Infinity' : '-Infinity';
-  if (x === 0) return Object.is(x, -0) ? '-0.0' : '0.0';
-  const sign = x < 0 ? '-' : '';
-  const magnitude = Math.abs(x);
-  const [mantissa = '', exponentText = '0'] = magnitude.toExponential().split('e');
-  const digits = mantissa.replace('.', '');
-  const exponent = Number(exponentText);
-  if (magnitude >= 1e-3 && magnitude < 1e7) {
-    const point = exponent + 1;
-    if (point <= 0) return `${sign}0.${'0'.repeat(-point)}${digits}`;
-    if (point >= digits.length) return `${sign}${digits}${'0'.repeat(point - digits.length)}.0`;
-    return `${sign}${digits.slice(0, point)}.${digits.slice(point)}`;
-  }
-  return `${sign}${digits[0] ?? ''}.${digits.length > 1 ? digits.slice(1) : '0'}E${exponent}`;
-}
-
-/** A number as a pack author wrote it, for the parser's errors: `9` rather than `9.0` (`WagonTypeParser.format`). */
-function format(value: number): string {
+export function formatNumber(value: number): string {
   return Number.isInteger(value) && Math.abs(value) < 1.0e15 ? String(Math.trunc(value) + 0) : javaDoubleToString(value);
 }
 
@@ -726,7 +708,7 @@ export function parseWagonType(id: string, json: unknown, warnings: (text: strin
   const length = asNumber(required(json, 'length', ''), 'length');
   const bogieOffsets = bogies(json);
   const massT = asNumber(required(json, 'mass_t', ''), 'mass_t');
-  if (!(massT > 0.0)) throw new WagonTypeError(`'mass_t' must be a positive number, got ${format(massT)}`);
+  if (!(massT > 0.0)) throw new WagonTypeError(`'mass_t' must be a positive number, got ${formatNumber(massT)}`);
   const maxSpeedKmh = amount(json, 'max_speed_kmh', '', 0.0);
 
   let resistance = defaultResistance(massT);
@@ -822,19 +804,19 @@ export function loadWagonType(id: string, json: unknown): LoadedType {
  * front to back and inside the body; each coupler offset under `length/2` in size.
  */
 function checkGeometry(length: number, bogieOffsets: readonly number[], couplers: Couplers): void {
-  if (!(length > 0.0)) throw new WagonTypeError(`'length' must be a positive number of blocks, got ${format(length)}`);
+  if (!(length > 0.0)) throw new WagonTypeError(`'length' must be a positive number of blocks, got ${formatNumber(length)}`);
   const half = length / 2.0;
   bogieOffsets.forEach((bogie, i) => {
     if (!(Math.abs(bogie) < half)) {
       throw new WagonTypeError(
-        `'bogies[${i}]' = ${format(bogie)} is outside the body: a pivot must lie within ±length/2 = ±${format(half)}`,
+        `'bogies[${i}]' = ${formatNumber(bogie)} is outside the body: a pivot must lie within ±length/2 = ±${formatNumber(half)}`,
       );
     }
     const before = bogieOffsets[i - 1];
     if (before !== undefined && !(bogie < before)) {
       throw new WagonTypeError(
-        `'bogies' must run front to back, each pivot behind the one before: 'bogies[${i}]' = ${format(bogie)}` +
-          ` is not behind 'bogies[${i - 1}]' = ${format(before)}`,
+        `'bogies' must run front to back, each pivot behind the one before: 'bogies[${i}]' = ${formatNumber(bogie)}` +
+          ` is not behind 'bogies[${i - 1}]' = ${formatNumber(before)}`,
       );
     }
   });
@@ -844,7 +826,7 @@ function checkGeometry(length: number, bogieOffsets: readonly number[], couplers
 
 function checkCoupler(end: string, offset: number, half: number): void {
   if (!(Math.abs(offset) < half)) {
-    throw new WagonTypeError(`'couplers.${end}' = ${format(offset)} must be under length/2 = ${format(half)} in size`);
+    throw new WagonTypeError(`'couplers.${end}' = ${formatNumber(offset)} must be under length/2 = ${formatNumber(half)} in size`);
   }
 }
 
@@ -871,7 +853,7 @@ function amount(json: JsonObject, field: string, where: string, fallback: number
     return fallback;
   }
   const value = asNumber(json[field], at(where, field));
-  if (!(value >= 0.0)) throw new WagonTypeError(`'${at(where, field)}' must be a number ≥ 0, got ${format(value)}`);
+  if (!(value >= 0.0)) throw new WagonTypeError(`'${at(where, field)}' must be a number ≥ 0, got ${formatNumber(value)}`);
   return value;
 }
 

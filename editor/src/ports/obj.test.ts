@@ -3,19 +3,14 @@
  * port ./obj.ts against `ObjLoader.loadModel` and `ObjectRole.objectName`, the reference
  * that writes the expected. Everything of the folder is compared: object names, parts
  * (object, material, every corner of every quad) or the refusal, the `mtllib` files, and
- * the example pack's models in short (as ObjGolden sums them up).
- *
- * The loader reads its numbers with its own `Float.parseFloat` (./obj.ts
- * `parseJavaFloat`), so that is checked against every case of
- * fixtures/golden/java_numbers/parse_float.json as well — the folder's runner is
- * ports/javaNumbers.test.ts; this only borrows its cases.
+ * the example pack's models in short (as ObjGolden sums them up). The loader reads its
+ * numbers with ./javaNumbers.ts, whose runner is ports/javaNumbers.test.ts.
  */
 
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { GOLDEN_DIR, REPO_ROOT } from '../testing/repo.node';
+import { REPO_ROOT } from '../testing/repo.node';
 import { mismatch, readGoldenFolder } from '../testing/goldenCases.node';
-import { CORNER_FLOATS, DEFAULT_OBJECT, loadModel, ObjError, objectName, parseJavaFloat, parseJavaInt, QUAD_FLOATS, type ObjPart } from './obj';
+import { CORNER_FLOATS, DEFAULT_OBJECT, loadModel, ObjError, objectName, QUAD_FLOATS, type ObjPart } from './obj';
 
 const FOLDER = `${REPO_ROOT}fixtures/golden/obj`;
 
@@ -89,67 +84,6 @@ describe('golden obj', () => {
       }
     });
   }
-});
-
-describe('the loader’s Float.parseFloat against java_numbers/parse_float.json', () => {
-  const file = JSON.parse(readFileSync(`${GOLDEN_DIR}/java_numbers/parse_float.json`, 'utf8')) as {
-    tolerance: number;
-    cases: { id: string; note: string; input: { text: string }; expected: unknown }[];
-  };
-  for (const c of file.cases) {
-    it(c.id, () => {
-      expect(mismatch(parseJavaFloat(c.input.text), c.expected, file.tolerance), c.note).toBeNull();
-    });
-  }
-
-  it('rounds a decimal that a double puts half-way between two floats by its exact value', () => {
-    // 1 + 2^-24 is the midpoint of 1 and 1 + 2^-23; the decimals around it round to it as doubles
-    expect(parseJavaFloat('1.00000005960464477539062500000001')).toBe(1.0000001192092896);
-    expect(parseJavaFloat('1.00000005960464477539062499999999')).toBe(1);
-    expect(parseJavaFloat('-1.00000005960464477539062500000001f')).toBe(-1.0000001192092896);
-    // half-way between the largest float and 2^128: to even, that is Infinity; just below it, the largest float
-    expect(parseJavaFloat('340282356779733661637539395458142568448')).toBe(Infinity);
-    expect(parseJavaFloat('340282356779733661637539395458142568447.9999999999')).toBe(Math.fround(3.4028234663852886e38));
-    // half the smallest float: to even, 0; a hair more, the smallest float
-    expect(parseJavaFloat('7.006492321624085354618647916449580656401309709382578858785341419448955413429303e-46')).toBe(0);
-    expect(parseJavaFloat('7.0064923216240853546186479164495806564013097093825788587853414194489554134293031e-46')).toBe(2 ** -149);
-  });
-
-  it('reads hexadecimal floats to the nearest float, past the range to Infinity or 0', () => {
-    expect(parseJavaFloat('0x1.000001p0')).toBe(1); // half-way: to even
-    expect(parseJavaFloat('0x1.0000011p0')).toBe(1.0000001192092896);
-    expect(parseJavaFloat('-0x1.8p-1d')).toBe(-0.75);
-    expect(parseJavaFloat('0x0p99999999999')).toBe(0);
-    expect(parseJavaFloat('0x1p128')).toBe(Infinity);
-    expect(parseJavaFloat('0x1p-150')).toBe(0);
-    expect(parseJavaFloat('0x1.0001p-150')).toBe(2 ** -149);
-    expect(parseJavaFloat('0x1p-151')).toBe(0);
-    expect(parseJavaFloat('0x1p-149')).toBe(2 ** -149);
-    expect(parseJavaFloat('0x1p99999999999')).toBe(Infinity);
-    expect(parseJavaFloat('0x1p')).toBeNull();
-  });
-
-  it('keeps the sign of zero and drops blanks only around the number', () => {
-    expect(Object.is(parseJavaFloat('-0'), -0)).toBe(true);
-    expect(Object.is(parseJavaFloat(' -0.0f '), -0)).toBe(true);
-    expect(parseJavaFloat('\u00011.5\u001f')).toBe(1.5);
-    expect(parseJavaFloat('-NaN')).toBeNaN();
-  });
-});
-
-describe('the loader’s Integer.parseInt', () => {
-  it('takes a sign and decimal digits, Unicode ones too, and refuses the rest and past the int range', () => {
-    expect(parseJavaInt('12')).toBe(12);
-    expect(parseJavaInt('+7')).toBe(7);
-    expect(parseJavaInt('-3')).toBe(-3);
-    expect(parseJavaInt('١٢')).toBe(12); // Arabic-Indic digits
-    expect(parseJavaInt('３')).toBe(3); // a full-width digit
-    expect(parseJavaInt('2147483647')).toBe(2147483647);
-    expect(parseJavaInt('-2147483648')).toBe(-2147483648);
-    for (const refused of ['', '+', '-', '2147483648', '-2147483649', '99999999999', '1.0', ' 1', '1e2', '²', '𝟎']) {
-      expect(parseJavaInt(refused), refused).toBeNull();
-    }
-  });
 });
 
 describe('loadModel beyond the golden cases', () => {

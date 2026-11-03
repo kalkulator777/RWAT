@@ -17,7 +17,7 @@
  */
 
 import { javaLines, javaTrim } from './mtl';
-import { parseJavaFloat } from './obj';
+import { parseJavaFloat } from './javaNumbers';
 
 /** Values in a frame: a 4×4, row by row. */
 export const FRAME_VALUES = 16;
