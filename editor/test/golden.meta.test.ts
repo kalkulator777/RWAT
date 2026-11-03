@@ -26,7 +26,6 @@ const WAITING_FOR_M2 = [
   'java_numbers', // ждёт M2: Java number parsing and printing
   'obj_frame', // ждёт M2: OBJ frame conversions
   'object_role', // ждёт M2: object name roles
-  'pivot_axis', // ждёт M2: hinge axis
   'stock_defaults', // ждёт M2: defaults of a wagon type
   'wagon_type', // ждёт M2: wagon type parser messages
 ];
