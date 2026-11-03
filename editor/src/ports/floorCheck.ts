@@ -16,6 +16,7 @@ import { Cut, type FloorRegion, type Piece } from './floorRegion';
 import { formatFixed, javaDoubleToString } from './javaNumbers';
 import { toObj } from './objFrame';
 import { BRIDGE_REACH, DOOR_SPAN_INSET, DOOR_WALL_SLACK, PLAYER_HALF_WIDTH, SEAT_REACH, facesDoor } from './riderWalk';
+import { find, forest, union } from './unionFind';
 import { type Door, type WagonType } from './wagonType';
 
 const M = PLAYER_HALF_WIDTH;
@@ -154,9 +155,9 @@ export function findings(type: WagonType): FloorFinding[] {
     }
   });
   // joined: by the floor alone (every door between zones shut), then by open doors too
-  const alone = parts.map((_, i) => i);
+  const alone = forest(parts.length);
   for (const [a, b] of shut.links()) union(alone, a, b);
-  const parent = [...alone];
+  const parent = alone.slice();
   const waysIn: number[] = []; // the floor pieces outside and gangway doors open onto
   doors.forEach((door, d) => {
     const id = door.id;
@@ -304,19 +305,4 @@ export function bridge(door: Door): [number, number, number, number] {
   return door.axis() === 0
     ? [door.minX - BRIDGE_REACH, lo, door.maxX + BRIDGE_REACH, hi]
     : [lo, door.minZ - BRIDGE_REACH, hi, door.maxZ + BRIDGE_REACH];
-}
-
-/** The root of `i` in a union-find forest, halving the path (`FloorCheck.find`). */
-export function find(parent: number[], i: number): number {
-  let at = i;
-  while (parent[at] !== at) {
-    parent[at] = parent[parent[at] as number] as number;
-    at = parent[at] as number;
-  }
-  return at;
-}
-
-/** Joins the sets of `a` and `b` (`FloorCheck.union`). */
-export function union(parent: number[], a: number, b: number): void {
-  parent[find(parent, a)] = find(parent, b);
 }

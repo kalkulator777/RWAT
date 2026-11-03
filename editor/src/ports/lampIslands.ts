@@ -19,6 +19,7 @@
  */
 
 import type { Vec3 } from '../core/contracts';
+import { find, forest, union } from './unionFind';
 
 /** Islands smaller than this (bounding-box diagonal, blocks) aren't lamps: 0.3 as a float. */
 export const MIN_LAMP_SIZE = Math.fround(0.3);
@@ -37,20 +38,6 @@ function key(x: number, y: number, z: number): string {
   return `${javaRound(Math.fround(x * 1.0e4))},${javaRound(Math.fround(y * 1.0e4))},${javaRound(Math.fround(z * 1.0e4))}`;
 }
 
-function find(parent: Int32Array, i: number): number {
-  while (parent[i] !== i) {
-    parent[i] = parent[parent[i]!]!;
-    i = parent[i]!;
-  }
-  return i;
-}
-
-function union(parent: Int32Array, a: number, b: number): void {
-  const ra = find(parent, a);
-  const rb = find(parent, b);
-  if (ra !== rb) parent[ra] = rb;
-}
-
 /**
  * `LampIslands.of`: the lamps of one glowing part, in its own frame.
  *
@@ -61,8 +48,7 @@ function union(parent: Int32Array, a: number, b: number): void {
 export function of(corners: ArrayLike<number>): Vec3[] {
   const faces = Math.floor(corners.length / 12);
   const at = (i: number): number => Math.fround(corners[i]!);
-  const parent = new Int32Array(faces);
-  for (let i = 0; i < faces; i++) parent[i] = i;
+  const parent = forest(faces);
   const firstFaceAt = new Map<string, number>();
   for (let i = 0; i < faces; i++) {
     for (let c = 0; c < 4; c++) {

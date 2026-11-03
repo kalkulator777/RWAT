@@ -6,6 +6,7 @@ import java.util.List;
 import com.muzhik17.trainsmod.kinematics.FloorFinding.Code;
 import com.muzhik17.trainsmod.stock.FloorRegion;
 import com.muzhik17.trainsmod.stock.ObjFrame;
+import com.muzhik17.trainsmod.stock.UnionFind;
 import com.muzhik17.trainsmod.stock.WagonType;
 
 /**
@@ -114,12 +115,9 @@ public final class FloorCheck {
             }
         }
         // joined: by the floor alone (every door between zones shut), then by open doors too
-        int[] alone = new int[parts.size()];
-        for (int i = 0; i < alone.length; i++) {
-            alone[i] = i;
-        }
+        int[] alone = UnionFind.of(parts.size());
         for (int[] link : shut.links()) {
-            union(alone, link[0], link[1]);
+            UnionFind.union(alone, link[0], link[1]);
         }
         int[] parent = alone.clone();
         List<Integer> waysIn = new ArrayList<>(); // the floor pieces outside and gangway doors open onto
@@ -141,7 +139,7 @@ public final class FloorCheck {
                 BridgeSides sides = bridgeSides(door, shut);
                 List<Integer> reached = sides.parts();
                 for (int i = 1; i < reached.size(); i++) {
-                    union(parent, reached.get(0), reached.get(i));
+                    UnionFind.union(parent, reached.get(0), reached.get(i));
                 }
                 if (sides.reach() == BridgeSides.Reach.NONE) {
                     out.add(FloorFinding.of(Code.INNER_DOOR_NO_FLOOR, d, "id", id));
@@ -160,7 +158,7 @@ public final class FloorCheck {
                 boolean round = false;
                 for (int p : sides.before()) {
                     for (int q : sides.behind()) {
-                        round |= find(alone, p) == find(alone, q);
+                        round |= UnionFind.find(alone, p) == UnionFind.find(alone, q);
                     }
                 }
                 if (round) {
@@ -178,15 +176,15 @@ public final class FloorCheck {
         if (!inZone.isEmpty() && !inZone.get(0).isEmpty()) {
             // reached: zone 0's part of the floor, and every part a way in opens onto
             java.util.Set<Integer> reachedParts = new java.util.HashSet<>();
-            reachedParts.add(find(parent, inZone.get(0).get(0)));
+            reachedParts.add(UnionFind.find(parent, inZone.get(0).get(0)));
             for (int p : waysIn) {
-                reachedParts.add(find(parent, p));
+                reachedParts.add(UnionFind.find(parent, p));
             }
             List<Integer> cut = new ArrayList<>();
             for (int i = 1; i < zones.size(); i++) {
                 boolean reached = false;
                 for (int p : inZone.get(i)) {
-                    reached |= reachedParts.contains(find(parent, p));
+                    reached |= reachedParts.contains(UnionFind.find(parent, p));
                 }
                 if (!inZone.get(i).isEmpty() && !reached) {
                     cut.add(i);
@@ -355,17 +353,5 @@ public final class FloorCheck {
         return door.axis() == 0
                 ? new double[]{door.minX() - RiderWalk.BRIDGE_REACH, lo, door.maxX() + RiderWalk.BRIDGE_REACH, hi}
                 : new double[]{lo, door.minZ() - RiderWalk.BRIDGE_REACH, hi, door.maxZ() + RiderWalk.BRIDGE_REACH};
-    }
-
-    static int find(int[] parent, int i) {
-        while (parent[i] != i) {
-            parent[i] = parent[parent[i]];
-            i = parent[i];
-        }
-        return i;
-    }
-
-    static void union(int[] parent, int a, int b) {
-        parent[find(parent, a)] = find(parent, b);
     }
 }
