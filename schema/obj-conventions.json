@@ -27,10 +27,10 @@
     }
   },
   "parse_order": {
-    "description": "Each object of a wagon OBJ goes through these steps in order; the first that takes it decides. The light rules then apply to any textured object, whatever took it.",
-    "x-description-ru": "Каждый объект OBJ вагона проходит эти шаги по порядку; решает первый, который его взял. Правила света затем применяются к любому текстурированному объекту, кто бы его ни взял.",
+    "description": "Each object of a wagon OBJ goes through these steps in order; the first that takes it decides. A part whose material has no texture is untextured right after hidden and skip, whatever its name says; it still counts where its corners do: a control's or a door leaf's hinge marker, a wheelset's axle. A door leaf or a control takes an object before a coupler head does (a head named like a control is that control), but not a bogie's or an .anim's object. The light rules then apply to any textured object, whatever took it.",
+    "x-description-ru": "Каждый объект OBJ вагона проходит эти шаги по порядку; решает первый, который его взял. Часть, у материала которой нет текстуры, — untextured сразу после hidden и skip, что бы ни говорило имя; она всё равно учитывается там, где важны её вершины: маркер шарнира органа или створки, ось колёсной пары. Створка и орган берут объект раньше головы сцепки (голова, названная как орган, — этот орган), но не объект тележки и не объект из .anim. Правила света затем применяются к любому текстурированному объекту, кто бы его ни взял.",
     "code": ["convention/ModelParts.java#of", "convention/ModelParts.java#Builder.place"],
-    "steps": ["hidden", "skip", "coupler_head", "bogie_front", "bogie_rear", "wheelset", "anim_object", "door_leaf", "control", "untextured", "interior", "body"]
+    "steps": ["hidden", "skip", "untextured", "door_leaf", "control", "coupler_head", "bogie_front", "bogie_rear", "wheelset", "anim_object", "interior", "body"]
   },
   "roles": [
     {
@@ -62,8 +62,8 @@
       "name": "COUPLED_FRONT_<n> / COUPLED_REAR_<n>",
       "category": "coupler",
       "match": {"type": "regex", "regex": "(?:^|_)COUPLED_(FRONT|REAR)_\\d+(?=_|$)", "input": "normalized", "captures": ["end"]},
-      "effect": "A coupler head at the front or rear end. With the HIDE token it is shown while that end is uncoupled, with HIDE and INVERT while it is coupled, without HIDE always. All heads of an end turn towards the neighbour (at most 22°) about one pivot on the centre line, at the inner end of the heads.",
-      "x-description-ru": "Голова сцепки переднего или заднего конца. С токеном HIDE видна, пока этот конец расцеплен, с HIDE и INVERT — пока сцеплен, без HIDE — всегда. Все головы конца поворачиваются к соседу (не больше 22°) вокруг одного шарнира на оси вагона, у внутреннего конца голов.",
+      "effect": "A coupler head at the front or rear end. With the HIDE token it is shown while that end is uncoupled, with HIDE and INVERT while it is coupled, without HIDE always. All heads of an end turn towards the neighbour (at most 22°) about one pivot on the centre line, at the inner end of the heads. A head is no bogie's, whatever its prefix; but a head named like a control too (COUPLED_FRONT_1_WIDGET_3) is that control, moved by its value, not by coupling.",
+      "x-description-ru": "Голова сцепки переднего или заднего конца. С токеном HIDE видна, пока этот конец расцеплен, с HIDE и INVERT — пока сцеплен, без HIDE — всегда. Все головы конца поворачиваются к соседу (не больше 22°) вокруг одного шарнира на оси вагона, у внутреннего конца голов. Голова не часть тележки, какой бы ни была приставка; но голова, названная ещё и как орган (COUPLED_FRONT_1_WIDGET_3), — этот орган: её двигает значение органа, а не сцепление.",
       "engine": "active",
       "code": ["convention/ObjectRole.java#COUPLED", "convention/ObjectRole.java#coupled", "convention/ModelParts.java#Builder.buildCouplers", "kinematics/CouplerAim.java#LIMIT_DEGREES"],
       "examples": ["COUPLED_FRONT_1_HIDE", "COUPLED_FRONT_2_HIDE_INVERT", "COUPLED_REAR_1"]
@@ -118,8 +118,8 @@
       "x-name-ru": "DOOR_<n> с DOOR_<n>_ROT[_<град>] или TL_<f>_<ось>",
       "category": "door",
       "match": {"type": "regex", "regex": "(?:^|_)(DOOR)_(\\d+)(?=_|$)", "input": "normalized", "captures": ["kind", "n"]},
-      "effect": "A rigid door leaf, if any object of DOOR_<n> has the hinge marker DOOR_<n>_ROT[_<degrees>] or a slide TL_<f>_<axis>; otherwise DOOR_<n> is body. Only objects drawn as parts of their own count, for the leaf and for its hinge or slide: not hidden (HIDE), skipped, of a bogie (BOGEY_FRONT*, BOGEY_REAR*), a coupler head or named in an .anim. The type's door whose box (grown by 0.1) holds the centre of the leaf's textured faces drives it. INVERT and OFFSET don't work on leaves. EXTERNAL / CONNECTING / INTERNAL are not read by the engine (the converter derives the type's doors from them).",
-      "x-description-ru": "Жёсткая створка, если у какого-то объекта DOOR_<n> есть маркер шарнира DOOR_<n>_ROT[_<град>] или сдвиг TL_<f>_<ось>; иначе DOOR_<n> — кузов. Считаются только объекты, которые рисуются отдельной деталью, — и для створки, и для её шарнира или сдвига: не скрытые (HIDE), не из skip, не часть тележки (BOGEY_FRONT*, BOGEY_REAR*), не голова сцепки и не названные в .anim. Её ведёт дверь типа, в коробке которой (с запасом 0.1) лежит центр текстурированных граней створки. INVERT и OFFSET у створок не работают. EXTERNAL / CONNECTING / INTERNAL движок не читает (по ним конвертер выводит двери типа).",
+      "effect": "A rigid door leaf, if any object of DOOR_<n> has the hinge marker DOOR_<n>_ROT[_<degrees>] or a slide TL_<f>_<axis>; otherwise DOOR_<n> is body. For the leaf and for its hinge or slide count the objects that are not hidden (HIDE), skipped, of a bogie (BOGEY_FRONT*, BOGEY_REAR*), a coupler head or named in an .anim, with a texture or without: a hinge marker of a material with no map_Kd is not drawn (untextured) and still makes the leaf and gives its hinge. The type's door whose box (grown by 0.1) holds the centre of the leaf's textured faces drives it. INVERT and OFFSET don't work on leaves. EXTERNAL / CONNECTING / INTERNAL are not read by the engine (the converter derives the type's doors from them).",
+      "x-description-ru": "Жёсткая створка, если у какого-то объекта DOOR_<n> есть маркер шарнира DOOR_<n>_ROT[_<град>] или сдвиг TL_<f>_<ось>; иначе DOOR_<n> — кузов. И для створки, и для её шарнира или сдвига считаются объекты не скрытые (HIDE), не из skip, не часть тележки (BOGEY_FRONT*, BOGEY_REAR*), не голова сцепки и не названные в .anim — с текстурой или без: маркер шарнира из материала без map_Kd не рисуется (untextured), но створку всё равно создаёт и шарнир ей даёт. Её ведёт дверь типа, в коробке которой (с запасом 0.1) лежит центр текстурированных граней створки. INVERT и OFFSET у створок не работают. EXTERNAL / CONNECTING / INTERNAL движок не читает (по ним конвертер выводит двери типа).",
       "engine": "active",
       "code": ["convention/DoorLeaves.java#leaf", "convention/ObjectRole.java#door", "convention/ModelParts.java#Builder.place", "convention/DoorLeaves.java#door", "stock/WagonType.java#doorHolding"],
       "examples": ["DOOR_3_ROT_90", "DOOR_3_EXTERNAL", "DOOR_5_TL_0.6_Z"]
@@ -129,8 +129,8 @@
       "name": "<KIND>_<n>",
       "category": "control",
       "match": {"type": "control_kind", "value": "the first control kind whose regex is found (see control_kinds)", "input": "normalized"},
-      "effect": "A cab control or gauge. Every object with the same key <KIND>_<n> is one control; flags and modifiers on any of them count for all.",
-      "x-description-ru": "Орган управления или прибор. Все объекты с одним ключом <KIND>_<n> — один орган; флаги и модификаторы на любом из них действуют на весь орган.",
+      "effect": "A cab control or gauge. Every object with the same key <KIND>_<n> is one control; flags and modifiers on any of them count for all. A coupler head named like a control is that control; an object of a bogie (BOGEY_FRONT*, BOGEY_REAR*) or named in an .anim is not.",
+      "x-description-ru": "Орган управления или прибор. Все объекты с одним ключом <KIND>_<n> — один орган; флаги и модификаторы на любом из них действуют на весь орган. Голова сцепки, названная как орган, — этот орган; объект тележки (BOGEY_FRONT*, BOGEY_REAR*) или названный в .anim — нет.",
       "engine": "active",
       "code": ["convention/ModelParts.java#ControlBuilder", "convention/ObjectRole.java#control"],
       "examples": ["THROTTLE_1", "WIDGET_7_TOGGLE_CG_IL", "GAUGE_SPEED_1_RANGE_0_120"]
@@ -141,8 +141,8 @@
       "x-name-ru": "материал без map_Kd",
       "category": "dropped",
       "match": {"type": "material", "value": "usemtl of a material whose MTL entry has no map_Kd", "input": "raw"},
-      "effect": "Not drawn and takes no clicks; a control's pivot marker still counts.",
-      "x-description-ru": "Не рисуется и не перехватывает клики; маркер шарнира органа при этом учитывается.",
+      "effect": "Not drawn and takes no clicks, whatever the name says beyond HIDE and skip; a control's or a door leaf's hinge marker still counts, and a wheelset's corners for its axle.",
+      "x-description-ru": "Не рисуется и не перехватывает клики, что бы ни говорило имя, кроме HIDE и skip; маркер шарнира органа или створки при этом учитывается, а вершины колёсной пары — для её оси.",
       "engine": "dropped",
       "code": ["client/render/model/IrStockModel.java#materialTextures", "client/render/model/MtlParser.java", "convention/ModelParts.java#Part"]
     },

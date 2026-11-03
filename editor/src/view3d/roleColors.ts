@@ -23,15 +23,15 @@ export const ROLE_COLORS: Readonly<Record<string, number>> = {
   // dropped at load: greys, drawn as ghosts by the view
   hidden: 0x6b7280,
   skip: 0xa3a3a3,
-  // couplers, geometry, doors, controls
+  untextured: 0xd4d4d8,
+  // doors, controls, couplers, geometry
+  door_leaf: 0xe69f00,
+  control: 0xd55e00,
   coupler_head: 0xcc79a7,
   bogie_front: 0x0072b2,
   bogie_rear: 0x009e73,
   wheelset: 0x454545,
   anim_object: 0x9a5cf0,
-  door_leaf: 0xe69f00,
-  control: 0xd55e00,
-  untextured: 0xd4d4d8,
   interior: 0x56b4e9,
   body: 0xc4c4c4,
   // rail tile
