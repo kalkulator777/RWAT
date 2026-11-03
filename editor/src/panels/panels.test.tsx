@@ -35,8 +35,8 @@ afterEach(() => {
 });
 
 describe('the shell with the real panels', () => {
-  it('registers the file buttons, the tree and the checks', () => {
-    expect(panels.map((p) => p.id)).toEqual(expect.arrayContaining(['file', 'tree', 'checks']));
+  it('registers the file buttons, the wizard, the tree, the inspector, the checks and the names', () => {
+    expect(panels.map((p) => p.id)).toEqual(expect.arrayContaining(['file', 'newpack', 'tree', 'inspector', 'checks', 'names']));
     expect(panels.map((p) => p.id)).not.toContain('io-dev');
   });
 
