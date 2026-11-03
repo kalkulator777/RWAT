@@ -20,11 +20,6 @@ import { GOLDEN_DIR } from '../src/testing/repo.node';
 /** Folders that name `ts` in ports.json and whose port is not written yet: ждёт M2 (docs/proposals/editor.md §7, M2). */
 const WAITING_FOR_M2 = [
   'door_leaves', // ждёт M2: door leaves
-  'floor_check', // ждёт M2: floor findings
-  'floor_region', // ждёт M2: floor under a point
-  'obj_frame', // ждёт M2: OBJ frame conversions
-  'stock_defaults', // ждёт M2: defaults of a wagon type
-  'wagon_type', // ждёт M2: wagon type parser messages
 ];
 
 /** Folders whose port comes with the 3D stage: ждёт M3 (docs/proposals/editor.md §7, M3). */
