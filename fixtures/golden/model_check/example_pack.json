@@ -1,0 +1,157 @@
+{
+  "description": "The example pack's wagon models (CC0) through pack.ModelCheck.check, as /rwatc packs validate checks them: nothing to say; and a copy with files gone. input: namespace (the declaring file's, for unqualified paths), declaration (the wagon model's JSON), files (ns:path -> text), present (locations that are there, contents unread: textures); any other key with a colon is a file too (what input_file reads of the example pack). A location is valid as Minecraft takes it: [a-z0-9_.-]+:[a-z0-9/._-]+. expected: the problems in the check's order, each {severity: error | warning, finding}; the engine gives only the finding's text yet (code, subject, index null, params {}).",
+  "frame": "none",
+  "tolerance": 0,
+  "cases": [
+    {
+      "id": "example-coach",
+      "note": "the example pack's coach: every file there and read, nothing to say",
+      "input": {
+        "namespace": "rwat_example",
+        "present": [
+          "rwat_example:stock/coach/coach_body.png",
+          "rwat_example:stock/coach/coach_door.png",
+          "rwat_example:stock/coach/coach_floor.png",
+          "rwat_example:stock/coach/coach_lining.png",
+          "rwat_example:stock/coach/coach_roof.png",
+          "rwat_example:stock/coach/coach_seat.png",
+          "rwat_example:stock/common/black.png",
+          "rwat_example:stock/common/dark_steel.png",
+          "rwat_example:stock/common/guide.png",
+          "rwat_example:stock/common/handwheel.png",
+          "rwat_example:stock/common/knob.png",
+          "rwat_example:stock/common/lamp.png",
+          "rwat_example:stock/common/lens.png",
+          "rwat_example:stock/common/red_lamp.png",
+          "rwat_example:stock/common/steel.png",
+          "rwat_example:stock/common/wheel.png",
+          "rwat_example:stock/coach/l_blue/coach_body.png",
+          "rwat_example:stock/coach/l_blue/coach_door.png"
+        ]
+      },
+      "input_file": {
+        "declaration": "run/rwat_packs/RwatExamplePack/assets/rwat_example/wagon_models/coach.json",
+        "rwat_example:stock/coach/coach.obj": "run/rwat_packs/RwatExamplePack/assets/rwat_example/stock/coach/coach.obj",
+        "rwat_example:stock/coach/coach.mtl": "run/rwat_packs/RwatExamplePack/assets/rwat_example/stock/coach/coach.mtl",
+        "rwat_example:stock/coach/salon_door.anim": "run/rwat_packs/RwatExamplePack/assets/rwat_example/stock/coach/salon_door.anim"
+      },
+      "expected": []
+    },
+    {
+      "id": "example-shunter",
+      "note": "the example pack's shunter: its hinge markers are no untextured faces",
+      "input": {
+        "namespace": "rwat_example",
+        "present": [
+          "rwat_example:stock/shunter/shunter_body.png",
+          "rwat_example:stock/shunter/shunter_desk.png",
+          "rwat_example:stock/shunter/shunter_dial_brake.png",
+          "rwat_example:stock/shunter/shunter_dial_speed.png",
+          "rwat_example:stock/shunter/shunter_glass.png",
+          "rwat_example:stock/shunter/shunter_grille.png",
+          "rwat_example:stock/shunter/shunter_hazard.png",
+          "rwat_example:stock/shunter/shunter_roof.png",
+          "rwat_example:stock/shunter/shunter_seat.png",
+          "rwat_example:stock/common/black.png",
+          "rwat_example:stock/common/dark_steel.png",
+          "rwat_example:stock/common/guide.png",
+          "rwat_example:stock/common/handwheel.png",
+          "rwat_example:stock/common/knob.png",
+          "rwat_example:stock/common/lamp.png",
+          "rwat_example:stock/common/lens.png",
+          "rwat_example:stock/common/red_lamp.png",
+          "rwat_example:stock/common/steel.png",
+          "rwat_example:stock/common/wheel.png",
+          "rwat_example:stock/shunter/l_green/shunter_body.png"
+        ]
+      },
+      "input_file": {
+        "declaration": "run/rwat_packs/RwatExamplePack/assets/rwat_example/wagon_models/shunter.json",
+        "rwat_example:stock/shunter/shunter.obj": "run/rwat_packs/RwatExamplePack/assets/rwat_example/stock/shunter/shunter.obj",
+        "rwat_example:stock/shunter/shunter.mtl": "run/rwat_packs/RwatExamplePack/assets/rwat_example/stock/shunter/shunter.mtl"
+      },
+      "expected": []
+    },
+    {
+      "id": "example-gondola",
+      "note": "the example pack's gondola",
+      "input": {
+        "namespace": "rwat_example",
+        "present": [
+          "rwat_example:stock/gondola/gondola_body.png",
+          "rwat_example:stock/gondola/gondola_coal.png",
+          "rwat_example:stock/gondola/gondola_floor.png",
+          "rwat_example:stock/gondola/gondola_tarp.png",
+          "rwat_example:stock/common/black.png",
+          "rwat_example:stock/common/dark_steel.png",
+          "rwat_example:stock/common/guide.png",
+          "rwat_example:stock/common/handwheel.png",
+          "rwat_example:stock/common/knob.png",
+          "rwat_example:stock/common/lamp.png",
+          "rwat_example:stock/common/lens.png",
+          "rwat_example:stock/common/red_lamp.png",
+          "rwat_example:stock/common/steel.png",
+          "rwat_example:stock/common/wheel.png"
+        ]
+      },
+      "input_file": {
+        "declaration": "run/rwat_packs/RwatExamplePack/assets/rwat_example/wagon_models/gondola.json",
+        "rwat_example:stock/gondola/gondola.obj": "run/rwat_packs/RwatExamplePack/assets/rwat_example/stock/gondola/gondola.obj",
+        "rwat_example:stock/gondola/gondola.mtl": "run/rwat_packs/RwatExamplePack/assets/rwat_example/stock/gondola/gondola.mtl"
+      },
+      "expected": []
+    },
+    {
+      "id": "example-coach-without-its-livery-and-a-texture",
+      "note": "the coach with its livery's folder and its seat texture gone",
+      "input": {
+        "namespace": "rwat_example",
+        "present": [
+          "rwat_example:stock/coach/coach_body.png",
+          "rwat_example:stock/coach/coach_door.png",
+          "rwat_example:stock/coach/coach_floor.png",
+          "rwat_example:stock/coach/coach_lining.png",
+          "rwat_example:stock/coach/coach_roof.png",
+          "rwat_example:stock/common/black.png",
+          "rwat_example:stock/common/dark_steel.png",
+          "rwat_example:stock/common/guide.png",
+          "rwat_example:stock/common/handwheel.png",
+          "rwat_example:stock/common/knob.png",
+          "rwat_example:stock/common/lamp.png",
+          "rwat_example:stock/common/lens.png",
+          "rwat_example:stock/common/red_lamp.png",
+          "rwat_example:stock/common/steel.png",
+          "rwat_example:stock/common/wheel.png"
+        ]
+      },
+      "input_file": {
+        "declaration": "run/rwat_packs/RwatExamplePack/assets/rwat_example/wagon_models/coach.json",
+        "rwat_example:stock/coach/coach.obj": "run/rwat_packs/RwatExamplePack/assets/rwat_example/stock/coach/coach.obj",
+        "rwat_example:stock/coach/coach.mtl": "run/rwat_packs/RwatExamplePack/assets/rwat_example/stock/coach/coach.mtl",
+        "rwat_example:stock/coach/salon_door.anim": "run/rwat_packs/RwatExamplePack/assets/rwat_example/stock/coach/salon_door.anim"
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": null,
+            "subject": null,
+            "index": null,
+            "params": {},
+            "text": "model rwat_example:stock/coach/coach.obj: texture rwat_example:stock/coach/coach_seat.png of material seat not found"
+          }
+        },
+        {
+          "severity": "warning",
+          "finding": {
+            "code": null,
+            "subject": null,
+            "index": null,
+            "params": {},
+            "text": "livery 'blue' replaces no texture (folder l_blue next to the model)"
+          }
+        }
+      ]
+    }
+  ]
+}
