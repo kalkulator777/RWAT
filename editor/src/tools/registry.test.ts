@@ -110,6 +110,19 @@ describe('the registration of tools', () => {
     expect(() => tools.map((t) => t.id)).not.toThrow();
     for (const t of tools) expect(t.fields.length).toBeGreaterThan(0);
   });
+
+  it('refuses a kind of link that is no markup, or that two tools select', () => {
+    const broken = (): ToolDef[] =>
+      collectTools({
+        './a/index.ts': { default: tool('floor', ['/interior'], { selects: ['zone'] }) },
+        './b/index.ts': { default: tool('zones', ['/doors/*'], { selects: ['zone', 'object' as never] }) },
+        './c/index.ts': { default: tool('chairs', ['/cab/seat'], { selects: 'seat' as never }) },
+      });
+    expect(broken).toThrow(/'zones': 'zone' links are already tool 'floor''s/);
+    expect(broken).toThrow(/'zones': 'object' is no kind of markup link/);
+    expect(broken).toThrow(/'chairs': selects must be a list of link kinds/);
+    expect(() => collectTools({ './a/index.ts': { default: tool('lights', []) } })).not.toThrow();
+  });
 });
 
 describe('every spatial field has a tool', () => {
@@ -225,6 +238,47 @@ describe('the tool that is on', () => {
     expect(host.active.value).toBe('picky');
     stop();
     expect(picky.log).toEqual(['on rwat_example:coach', 'off rwat_example:coach']);
+  });
+
+  it('is turned on by a zone, door or chair of the open wagon coming into the selection, as a finding in the checks selects it', async () => {
+    const b = await bench();
+    const zones = recorder('zones', { selects: ['zone'] });
+    const doors = recorder('doors', { selects: ['door'], fields: ['/doors/*'] });
+    const host = new ToolHost([zones.def, doors.def]);
+    const stop = host.connect(b.wiring);
+    expect(host.active.value).toBeNull();
+    b.selection.value = [{ kind: 'field', file: 'data/rwat_example/wagon_types/coach.json', at: '/doors/6' }, { kind: 'door', type: 'rwat_example:coach', index: 6 }];
+    expect(host.active.value).toBe('doors');
+    expect(doors.log).toEqual(['on rwat_example:coach']);
+    // the tool on selects that kind: it stays; another kind: its tool comes on
+    b.selection.value = [{ kind: 'door', type: 'rwat_example:coach', index: 2 }];
+    expect(host.active.value).toBe('doors');
+    b.selection.value = [{ kind: 'zone', type: 'rwat_example:coach', index: 1 }];
+    expect(host.active.value).toBe('zones');
+    // turned off by hand, it stays off while the selection stands
+    host.use(null);
+    b.revision.value++;
+    expect(host.active.value).toBeNull();
+    // the plain selection of an object turns nothing on
+    b.selection.value = [{ kind: 'object', model: 'rwat_example:coach', name: 'ROOF' }];
+    expect(host.active.value).toBeNull();
+    stop();
+  });
+
+  it('waits with it for the wagon of the link to open, and forgets it for a selection that moves on', async () => {
+    const b = await bench();
+    const chairs = recorder('chairs', { selects: ['seat'] });
+    const host = new ToolHost([chairs.def]);
+    const stop = host.connect(b.wiring);
+    b.selection.value = [{ kind: 'seat', type: 'rwat_example:shunter', index: 0 }];
+    expect(host.active.value).toBeNull();
+    b.selection.value = [{ kind: 'file', file: 'pack.mcmeta' }];
+    b.openWagon.value = 'rwat_example:shunter';
+    expect(host.active.value).toBeNull();
+    b.selection.value = [{ kind: 'seat', type: 'rwat_example:shunter', index: 1 }];
+    expect(host.active.value).toBe('chairs');
+    expect(chairs.log).toEqual(['on rwat_example:shunter']);
+    stop();
   });
 
   it('takes no wagon without a type or a model', async () => {
