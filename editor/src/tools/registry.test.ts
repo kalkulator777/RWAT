@@ -10,12 +10,11 @@ const schema = createSchema(readSchemaFiles());
 
 /**
  * The spatial fields of the wagon type no tool edits yet, each with the tool that is to:
- * the doors' and the chairs' come with the next wave of M4 (docs/proposals/editor.md §7,
- * A4.2, A4.3). A tool that lands takes its fields off this list; a new spatial field of the
- * schema with no tool turns the test red. The floor's zones are tools/floor's.
+ * the chairs' come with the next wave of M4 (docs/proposals/editor.md §7, A4.3). A tool
+ * that lands takes its fields off this list; a new spatial field of the schema with no tool
+ * turns the test red. The floor's zones are tools/floor's, the doors tools/doors'.
  */
 const WAITING_IN_WAGON_TYPE: Readonly<Record<string, string>> = {
-  '/doors/*': 'A4.2 tools/doors',
   '/cab/seat': 'A4.3 tools/seats (the old form of one chair)',
   '/cab/seats/*/at': 'A4.3 tools/seats',
 };
