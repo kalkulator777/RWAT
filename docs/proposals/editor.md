@@ -161,7 +161,7 @@
    - Вкладка «Свет» в предпросмотре: переключатели групп `LCG` (не больше 64).
    - Объекты группы горят, `LINVERT` — наоборот. Лампы салона (острова `FULLBRIGHT` ≥ 0.3 в группе с `INTERIOR`) — точки света.
    - Фары: конус в свою сторону (по половине модели) и цвет `_0X…`.
-   - Правило «эффекты фар видны, пока горит любая группа» соблюдается.
+   - Огонь (светящаяся грань, лампа, фара) горит по `ModelParts.lit`: без группы — всегда, с группой — пока она включена, с `LINVERT` — пока выключена. Тот же код у граней, ламп салона и фар.
    - Имена групп — во вкладке «Имена» с цепочкой: ключ пака → ключ мода → `_LABEL_` → код.
 4. **Звуки** (вкладка инспектора модели):
    - `idle`, `wheels`, `horn`, `bell` — петли (строка или `start`/`main`/`stop` с `pitch`/`volume`);
@@ -335,13 +335,13 @@ editor/
 
 - **Файл без операций** не пишется (папка) или копируется содержимым как был (zip).
 - **Изменённый JSON:** считается разница между исходным значением и текущим (по указателям), и каждая разница применяется к **исходному тексту** через `jsonc-parser` `modify` + `applyEdits` с отступом, взятым из файла. Меняются только затронутые места. Комментарии-ключи `_…` рецепта и оверрайдов остаются.
-- **Новый JSON** пишется функцией `dump` — порт `ir2rwat.dump`: отступ 2, массив скаляров в одну строку, `ensure_ascii=False`, перевод строки в конце. Файлы редактора и инструментов выглядят одинаково. Целое значение пишется без `.0` (Python пишет `20.0` у float): разница только в записи, движок и инструменты читают одинаково.
+- **Новый JSON** пишется функцией `dump` — порт `ir2rwat.dump` — из чтения без потерь (`parseLossless`: число хранит свою запись), иначе `20.0` и `20` склеиваются в одно число и запись теряет, что было в файле: отступ 2, массив скаляров в одну строку, `ensure_ascii=False`, перевод строки в конце. Файлы редактора и инструментов выглядят одинаково. Целое значение пишется без `.0` (Python пишет `20.0` у float): разница только в записи, движок и инструменты читают одинаково.
 - **Числа, снятые с модели**, — это координаты вершин как в OBJ или кратные шагу сетки; пишутся кратчайшей записью, которая читается обратно в то же число.
 - **Запись в папку** (FS Access) идёт файл за файлом через `createWritable` (Chromium пишет во временный файл и подменяет). Порядок — как у конвертера: `pack.mcmeta` последним.
 
 ### 3.7. Формы по схеме
 
-- **Источник — сами файлы `schema/*.json`**, собранные в бандл (`import.meta.glob('../../schema/*.json')`). Отдельной копии нет: правка схемы сразу меняет формы (R4).
+- **Источник — сами файлы `schema/*.json`**. *Решение дирижёра:* редактор грузит их с сайта (`fetchSchemaFiles`; сборка кладёт `schema/` в `dist/schema/`, 5.4), в сборку они не встраиваются (`import.meta.glob` не нужен). Отдельной копии нет: правка схемы сразу меняет формы (R4).
 - **По схеме строится описатель поля:**
   - тип;
   - `enum`;
@@ -538,19 +538,19 @@ export interface ViewApi {
 | Числа Java | `Float.parseFloat`, `Integer.parseInt` (переполнение → `MAX_VALUE` в `ObjectRole.number`), `String.format(Locale.ROOT, "%.Nf")` | — | `javaNumbers.ts`: `parseJavaFloat(s): number \| null` (грамматика Java: знак, `NaN`, `Infinity`, суффиксы `f`/`d`, hex, пробелы по краям) с `Math.fround`; `formatFixed(x, n)` | разбор `OFFSET`, `RANGE`, `TL`, `ROT_<град>`; тексты `FloorCheck` | `java_numbers` | M2 |
 | Кадры | `stock/ObjFrame` | `floorgen.point_/box_from_obj` и обратные | `objFrame.ts`: `point`, `box`, `toObj`, `Y_LIFT` | перевод разметки для портов пола и обратно | `obj_frame` | M2 |
 | Имена объектов | `convention/ObjectRole` (`parse`, `door`, `coupled`, `hasToken`, `Control`) | частично `ir2rwat` (`DOOR_KEY`, `CONTROL_GROUP`…) | `objectRole.ts`: регулярные выражения берутся из `schema/obj-conventions.json`, порядок и правила — код | роли, флаги, модификаторы, ключи органов; ключи `sounds.controls` | `object_role` | M2 |
-| Положение органа | `ControlValue.value`, `visible`; `StockModel.Control.transform` (сдвиг, потом поворот) | — | `controlPose.ts` | ползунок значения | `control_pose` | M2 |
+| Положение органа | `ControlValue.value`, `visible`; `convention/ControlPose.transform` (сдвиг, потом поворот) | — | `controlPose.ts` | ползунок значения | `control_pose` | M2 |
 | OBJ | `client/render/model/ObjLoader` (части по `o`/`g`/`usemtl`, квады, веер, вырожденный квад у треугольника, порядок вершин) | `ir2rwat.parse_obj` (имена и габариты) | `obj.ts` | геометрия, порядок вершин для `PivotAxis` | `obj` | M2 |
 | MTL и пути | `MtlParser` (`materialName`, `parse`, `resolve`, `folderOf`, `fileNameOf`) | `ir2rwat.material_name`, `parse_mtl` | `mtl.ts` | текстуры, ливреи | `mtl` | M2 |
-| `.anim` | `IrAnim.parse`; выбор кадра и поэлементная интерполяция из `WagonRenderer` (кадр = прогресс × (N−1)) | — | `anim.ts`: `parse`, `frameAt(tracks, progress)` | ход дверей | `anim` | M2 |
+| `.anim` | `IrAnim.parse`, `IrAnim.frameAt` (выбор кадра и поэлементная интерполяция; кадр = прогресс × (N−1)) | — | `anim.ts`: `parse`, `frameAt(tracks, progress)` | ход дверей | `anim` | M2 |
 | Ось шарнира | `convention/PivotAxis` + отбор различных вершин маркера (`IrStockModel.ControlBuilder`) | — | `pivotAxis.ts` | шарниры органов и створок | `pivot_axis` (от текста OBJ) | M2 |
-| Острова ламп | `LampIslands` | — | `lampIslands.ts` | лампы салона | `lamp_islands` | M2 |
+| Острова ламп | `convention/LampIslands` | — | `lampIslands.ts` | лампы салона | `lamp_islands` | M2 |
 | Тип в кадре движка | `WagonTypeParser` (перевод зон, дверей, кресел; `checkGeometry`; кресла `seat`/`seats`); `WagonType.Door` (`axis`, `outward`, `innerFace`, `spanMin/Max`, `open`), `doorHolding`, `doorsWorkedBy`, `doorsOpenedWith`, `Interior` (`region`, `floorAt`, `clampFeet`), `collidableHull` | — | `wagonType.ts` | всё пространственное и проверки геометрии | `wagon_type` | M2 |
 | Умолчания движка | `stock/StockDefaults` | — | `stockDefaults.ts` | значения в пустых полях | `stock_defaults` | M2 |
 | Пол | `stock/FloorRegion` | `floorgen.Region` | `floorRegion.ts` | «где может стоять игрок» | `floor_region` | M2 |
 | Проверки пола | `kinematics/FloorCheck` + константы и `facesDoor`, `along` из `RiderWalk` | `floorgen` (`door_seeds` = `walkablePieces`) | `floorCheck.ts`, `riderWalk.ts` (только константы и эти функции) | панель проверок, выходы | `floor_check` | M2 |
 | Кабины | `kinematics/CabArea` | — | `cabArea.ts` | кабины, двери под ключом, кресло → кабина | `cab_area` | M2 |
 | Разбор модели | новый чистый `ModelParts` (из `IrStockModel.load`, M0): порядок шагов, `movingDoors`, слияние флагов органа, колёса, `measurePivots`, шарниры и головы сцепок, кандидаты в лампы и группы салона, фары | — | `modelParts.ts` | раскраска по ролям, список объектов, предпросмотр | `model_parts` | M3 |
-| Свет фар | правило «эффекты фар видны, пока горит любая группа» (`WagonRenderer`, `LampEffects`), вынесенное в чистый метод в M0 | — | `lights.ts` | предпросмотр света | `lights` | M3 |
+| Свет фар | `ModelParts.lit`, `ModelParts.litMask`: правило огня — без группы всегда, с группой пока включена, с `LINVERT` пока выключена (одно для граней, ламп и фар; сделано в M0) | — | `lights.ts` | предпросмотр света | `lights` | M3 |
 | Проверка моделей | `pack/ModelCheck` | — | `modelCheck.ts` | находки по моделям | `model_check` | M4 |
 | JSON пака | — | `ir2rwat.dump`/`encode` | `core/json/dump.ts` | новые файлы | `json_dump` | M1 |
 | Проверка схемы | — | `validate_pack.py` (валидатор подмножества 2020-12, `suggestion`) | Ajv на той же схеме + порт `suggestion` | находки схемы | `validate` (файл → указатели и важность находок) | M1 |
@@ -570,7 +570,6 @@ export interface ViewApi {
 - **`float` против `double`.** `PivotAxis`, `ObjectRole`, `LampIslands`, `ObjLoader` считают во `float`. Порт округляет `Math.fround` в тех же местах, golden задаёт допуск.
 - **`Float.parseFloat` ≠ `parseFloat`.** JS читает префикс (`"1.5abc"` → 1.5), Java отказывает. Java принимает `1f`, `0x1p3`, пробелы. Отсюда свой `parseJavaFloat`.
 - **`%.2f` Java ≠ `toFixed`.** Java округляет половину вверх от кратчайшей десятичной записи (`1.005` → `1.01`), `toFixed` — от двоичного значения (`1.00`). Отсюда `formatFixed`: кратчайшая запись JS (совпадает с `Double.toString` JDK 19+) и округление половины вверх.
-- **Ключ вершины в `LampIslands` и `ControlBuilder`** — 64-битный хеш с умножением и XOR. В TS его не повторить без `BigInt`. Порт берёт точный ключ (`Math.round(fround(x · 1e4))` по трём осям строкой). Если Java на золотом случае склеит острова по коллизии хеша, правится Java на точный ключ (M0), а не порт на хеш.
 - **Регулярные выражения** берутся из `obj-conventions.json`: они написаны одинаковыми для Java, JS и Python, `validate_pack --self-check` сверяет их с Java. Тест порта ещё и компилирует каждое в JS (флаг `u`) и прогоняет примеры `examples` схемы.
 - **Порядок.** Поиск по видам органов (`control_kinds` по порядку), «первый маркер `ROT` органа», «первая дверь, чья коробка держит створку», порядок вершин маркера — всё важно. Golden даёт имена и вершины в порядке файла.
 
@@ -599,7 +598,7 @@ export interface ViewApi {
 7. **Ввод из файлов репозитория.** `"input_file"` — путь от корня репозитория, только пак-пример `run/rwat_packs/RwatExamplePack/…` (CC0; схема и раннеры не пустят другой): строка — весь вход это файл, объект — файлы кладутся во `input` под своими ключами; `.json` читается как JSON, прочее — как текст. Файлов и чисел из моделей MVP в golden нет (лицензия, R12). Разметку из оверрайдов MVP (наша работа, без ассетов) брать можно.
 8. **Размер:** файл ≤ 200 КБ, папка `fixtures/golden/` целиком ≤ 3 МБ, в папке логики ≥ 10 случаев (проверяет `test_golden_folders.py`). Это тест, а не склад моделей.
 9. **Ожидаемое записывает эталон логики:** Java для всего, что есть в Java; Python — только для `json_dump` (`ir2rwat.dump`) и `validate` (`validate_pack.py`), у которых Java нет. Режим перезаписи — явный флаг: `./gradlew test --tests 'com.muzhik17.trainsmod.golden.*' -Pgolden.update` (свойство Gradle — входные данные задачи `test`, так что прогоны с флагом и без не отвечают друг за друга из кэша; прежнего `-Dgolden.update=true` больше нет) и `python -I tools/tests/test_golden_<папка>.py --update`. Без флага тест только сравнивает. TS ожидаемое не пишет никогда.
-10. **Раннеры — по файлу на логику:** `src/test/java/…/golden/<Logic>Golden.java` (константа `FOLDER`, `@TestFactory`), `tools/tests/test_golden_<папка>.py`, `editor/src/ports/<logic>.test.ts`. Общая часть — `Golden.java` и `tools/tests/golden.py`. Мета-тесты: `GoldenFoldersTest` (у каждой папки, где назван Java, есть свой раннер) и `test_golden_folders.py` (то же для Python, плюс каждый файл по схеме, `id`, размеры).
+10. **Раннеры — по файлу на логику:** `src/test/java/…/golden/<Logic>Golden.java` (константа `FOLDER`, `@TestFactory`), `tools/tests/test_golden_<папка>.py`, `editor/src/ports/<logic>.test.ts`; *решение дирижёра:* раннер TS лежит рядом с модулем, который проверяет (не обязательно в `ports/`), и объявляет `const FOLDER = '<папка>'` — общий мета-тест находит раннеры по этой строке. Общая часть — `Golden.java` и `tools/tests/golden.py`. Мета-тесты: `GoldenFoldersTest` (у каждой папки, где назван Java, есть свой раннер) и `test_golden_folders.py` (то же для Python, плюс каждый файл по схеме, `id`, размеры).
 11. **Схема формата** golden — `fixtures/golden/schema.json` (draft 2020-12): корень — файл случаев, `$defs/ports` — `ports.json`, `$defs/finding` — находка. Python проверяет по ней каждый файл валидатором `validate_pack.py`; тест Vitest — Ajv, прежде чем читать.
 12. **Наборы M1–M2** (596 случаев в 16 папках; эталон Java, если не сказано иное):
 
@@ -637,7 +636,7 @@ export interface ViewApi {
 
 ### 4.6. Что меняется в Java и Python до портов (M0)
 
-1. **`ModelParts` — чистый разбор модели.** Сейчас он внутри `IrStockModel.load` с `ResourceLocation` и Minecraft, Java-тест его не видит, и golden `model_parts` проверял бы только TS. Выносится в чистый класс (`convention/ModelParts`): на входе части OBJ (имя, материал, «есть текстура», вершины), на выходе роли, органы, створки, колёса, шарниры, лампы, фары. `IrStockModel` строит меши по его ответу. Туда же — правило «фара светит». Так требует `CLAUDE.md`: что решается без Minecraft, решается в ядре.
+1. **`ModelParts` — чистый разбор модели (выполнено в M0, A0.1).** Сейчас он внутри `IrStockModel.load` с `ResourceLocation` и Minecraft, Java-тест его не видит, и golden `model_parts` проверял бы только TS. Выносится в чистый класс (`convention/ModelParts`): на входе части OBJ (имя, материал, «есть текстура», вершины), на выходе роли, органы, створки, колёса, шарниры, лампы, фары. `IrStockModel` строит меши по его ответу. Туда же — правило «фара светит». Так требует `CLAUDE.md`: что решается без Minecraft, решается в ядре.
 2. **`FloorCheck` отдаёт структурированные находки** — сделано: `FloorCheck.findings` даёт `FloorFinding` (`code`, предмет и его номер, параметры) и текст из них же (`FloorFinding.text`). Тексты для лога и `/rwat packs` не изменились (`FloorCheckTextsTest`). Golden `floor_check` пишет находки целиком (4.5, п. 6).
 3. **Знак оси `PivotAxis` при ничьей** — решено, как в IR (UMC `ModelGroup`): шарнир — центр коробки точек в `double`; конец A и конец B — первая по порядку файла из равноудалённых точек; ближний конец — B, только если `|B|² < |A|²`; точка на равном расстоянии от обоих концов не входит ни в одну половину. Правило в javadoc `PivotAxis`, случаи ничьих — в golden `pivot_axis` (`corners.json`).
 4. **Имя объекта с пробелом** — сделано: имя — **весь остаток строки** `o`/`g` без пробелов по краям, пробелы внутри сохраняются, как читают импорт Blender и Immersive Railroading (`ObjectRole.objectName`, `ObjLoader`, `floorgen.object_name_of`, `ir2rwat.parse_obj`; схема `obj-conventions.json#naming`). Первый токен прежнего загрузчика превращал `o Door Leaf` в `Door`. Случаи — golden `obj/object_names.json`.
