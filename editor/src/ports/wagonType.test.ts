@@ -9,20 +9,18 @@
 import { describe, expect, it } from 'vitest';
 import { goldenNumber, shortestFloat, mismatch, readGoldenFolder } from '../testing/golden.node';
 import { REPO_ROOT } from '../testing/repo.node';
+import { PackJsonError } from './packJson';
 import { PLAYER_HALF_WIDTH } from './riderWalk';
 import {
   Door,
   Interior,
   Seat,
   WagonType,
-  WagonTypeError,
   Zone,
   aliases,
-  describe as describeValue,
   equalsIgnoreCase,
   formatNumber,
   loadWagonType,
-  nearestKey,
   parseWagonType,
 } from './wagonType';
 
@@ -144,7 +142,7 @@ function compute(input: Input): unknown {
   try {
     type = parseWagonType('golden:type', input.type, (w) => warnings.push(finding(w)));
   } catch (e) {
-    if (!(e instanceof WagonTypeError)) throw e;
+    if (!(e instanceof PackJsonError)) throw e;
     return { error: finding(e.message), warnings, type: null, answers: null };
   }
   return { error: null, warnings, type: typeOut(type), answers: answersOut(type, input) };
@@ -190,12 +188,7 @@ describe('wagonType', () => {
     expect(() => loadWagonType('x', { get length(): number { throw new TypeError('not the parser'); } })).toThrow(TypeError);
   });
 
-  it('describes values as the engine does', () => {
-    expect(describeValue(undefined)).toBe('nothing');
-    expect(describeValue(true)).toBe('true');
-    expect(describeValue(-0)).toBe('the number -0');
-    expect(describeValue({})).toBe('an object');
-    expect(describeValue('x'.repeat(41))).toBe(`the string "${'x'.repeat(40)}…"`);
+  it('names a value of the wrong type as the engine does', () => {
     expect(() => parseWagonType('x', { ...minimal, cab: true })).toThrow("'cab' must be an object, got true");
     expect(() => parseWagonType('x', { ...minimal, doors: [{ id: 1 }] })).toThrow("'doors[0].id' must be a string, got the number 1");
     expect(() => parseWagonType('x', { ...minimal, doors: {} })).toThrow("'doors' must be an array, got an object");
@@ -203,17 +196,6 @@ describe('wagonType', () => {
       "'doors[0].group' must be a string, got the number 5",
     );
     expect(() => parseWagonType('x', { ...minimal, brakes: { system: 1 } })).toThrow("'brakes.system' must be a string, got the number 1");
-  });
-
-  it('hints the nearest known key', () => {
-    expect(nearestKey('livery', ['liveries'])).toBe('liveries');
-    expect(nearestKey('ab', ['a', 'ab', 'abc'])).toBe('ab');
-    expect(nearestKey('AB', ['ab'])).toBe('ab');
-    expect(nearestKey('xy', ['ab'])).toBeNull();
-    expect(nearestKey('cfront', ['c_front'])).toBe('c_front');
-    expect(nearestKey('max_tractive', ['max_tractive_effort_kn'])).toBe('max_tractive_effort_kn');
-    expect(nearestKey('maxx_tractive_effort_kn', ['max_tractive_effort_kn'])).toBe('max_tractive_effort_kn');
-    expect(nearestKey('aplpy_s', ['apply_s'])).toBe('apply_s');
   });
 
   it('matches names case aside as Java does', () => {

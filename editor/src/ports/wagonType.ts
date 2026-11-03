@@ -1,8 +1,8 @@
 /**
  * A wagon type as the engine holds it, read from the pack's JSON as the engine reads it:
- * port of `stock/WagonTypeParser.java` (with the strict reading of `pack/PackJson.java`
- * it uses), `stock/WagonType.java` and the per-file steps of `pack/WagonTypeLoader.java`
- * (golden `fixtures/golden/wagon_type/`).
+ * port of `stock/WagonTypeParser.java`, `stock/WagonType.java` and the per-file steps of
+ * `pack/WagonTypeLoader.java` (golden `fixtures/golden/wagon_type/`). The strict reading
+ * of the JSON it uses, `pack/PackJson.java`, is ./packJson.ts.
  *
  * The markup — the `interior` zones, the `doors` boxes, the `cab` chairs — is written in
  * the OBJ frame and turned into the engine's model frame here (./objFrame), so a
@@ -11,7 +11,7 @@
  *
  * The parser says what the engine says, word for word: a key a section doesn't know is a
  * warning with the nearest known key as a hint; a `null` or a value of the wrong type, a
- * missing required field or impossible geometry is an error ({@link WagonTypeError}) and
+ * missing required field or impossible geometry is an error ({@link PackJsonError}) and
  * the type does not load. The checks run in Java's order, so the first error and the
  * warnings before it are Java's.
  *
@@ -22,6 +22,26 @@
 
 import { FloorRegion, Cut, clamp } from './floorRegion';
 import { javaDoubleToString } from './javaNumbers';
+import {
+  type JsonObject,
+  PackJsonError,
+  asArray,
+  asNumber,
+  asObject,
+  asString,
+  at,
+  checkKeys,
+  describe,
+  get,
+  has,
+  isObject,
+  optionalArray,
+  optionalBool,
+  optionalNumber,
+  optionalObject,
+  required,
+  wrongType,
+} from './packJson';
 import { box as objBox, point as objPoint } from './objFrame';
 import {
   type Brakes,
@@ -49,164 +69,6 @@ export type ModelPoint = [number, number, number];
  */
 export function formatNumber(value: number): string {
   return Number.isInteger(value) && Math.abs(value) < 1.0e15 ? String(Math.trunc(value) + 0) : javaDoubleToString(value);
-}
-
-// ---------------------------------------------------------------- strict reading (PackJson)
-
-/** What the loader says when a declaration can't load: the engine's `JsonSyntaxException`, its message as Java's. */
-export class WagonTypeError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'WagonTypeError';
-  }
-}
-
-type JsonObject = Record<string, unknown>;
-
-function isObject(value: unknown): value is JsonObject {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function has(object: JsonObject, key: string): boolean {
-  return Object.hasOwn(object, key);
-}
-
-/** The member `key` of an object, undefined when absent (never a prototype's). */
-function get(object: JsonObject, key: string): unknown {
-  return has(object, key) ? object[key] : undefined;
-}
-
-/** The path of `key` in the object at `where` (`PackJson.at`). */
-export function at(where: string, key: string | number): string {
-  if (typeof key === 'number') return `${where}[${key}]`;
-  return where === '' ? key : `${where}.${key}`;
-}
-
-function lowerCase(text: string): string {
-  return text.toLowerCase();
-}
-
-function bare(key: string): string {
-  return key.replace(/[_\- ]/g, '');
-}
-
-/** Optimal string alignment distance: insertions, deletions, substitutions, neighbour swaps (`PackJson.distance`). */
-function distance(a: string, b: string): number {
-  const d: number[][] = [];
-  for (let i = 0; i <= a.length; i++) d.push(new Array<number>(b.length + 1).fill(0));
-  const row = (i: number): number[] => d[i] as number[];
-  for (let i = 0; i <= a.length; i++) row(i)[0] = i;
-  for (let j = 0; j <= b.length; j++) row(0)[j] = j;
-  for (let i = 1; i <= a.length; i++) {
-    for (let j = 1; j <= b.length; j++) {
-      const cost = a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1;
-      let best = Math.min(
-        Math.min((row(i - 1)[j] as number) + 1, (row(i)[j - 1] as number) + 1),
-        (row(i - 1)[j - 1] as number) + cost,
-      );
-      if (i > 1 && j > 1 && a.charAt(i - 1) === b.charAt(j - 2) && a.charAt(i - 2) === b.charAt(j - 1)) {
-        best = Math.min(best, (row(i - 2)[j - 2] as number) + 1);
-      }
-      row(i)[j] = best;
-    }
-  }
-  return row(a.length)[b.length] as number;
-}
-
-/**
- * The known key `key` most likely is a typo of, or null if none is close (`PackJson.nearest`):
- * the fewest edits (a swap of two neighbours counts as one), at most about a third of the
- * known key's length (a key of one or two letters only case aside); or one contains the
- * other, underscores aside. Ties go to the key listed first.
- */
-export function nearestKey(key: string, known: Iterable<string>): string | null {
-  const lower = lowerCase(key);
-  const keyBare = bare(lower);
-  let best: string | null = null;
-  let bestDistance = Number.MAX_SAFE_INTEGER;
-  for (const candidate of known) {
-    const other = lowerCase(candidate);
-    const otherBare = bare(other);
-    const d = distance(lower, other);
-    const allowed = other.length <= 2 ? 0 : Math.max(1, Math.trunc((other.length + 1) / 3));
-    const close =
-      d <= allowed || (keyBare.length >= 3 && otherBare.includes(keyBare)) || (otherBare.length >= 3 && keyBare.includes(otherBare));
-    if (close && d < bestDistance) {
-      best = candidate;
-      bestDistance = d;
-    }
-  }
-  return best;
-}
-
-/** Warn about every key of `object` that `known` doesn't list, with the nearest known one as a hint (`PackJson.checkKeys`). */
-function checkKeys(object: JsonObject, known: readonly string[], where: string, warnings: (text: string) => void): void {
-  for (const key of Object.keys(object)) {
-    if (known.includes(key)) continue;
-    const hint = nearestKey(key, known);
-    warnings(`unknown key '${at(where, key)}' (ignored)${hint !== null ? ` — did you mean '${at(where, hint)}'?` : ''}`);
-  }
-}
-
-/** What a value is, for an error message: `null`, `the string "95"`, `an object` (`PackJson.describe`). */
-export function describe(value: unknown): string {
-  if (value === undefined) return 'nothing';
-  if (value === null) return 'null';
-  if (Array.isArray(value)) return 'an array';
-  if (typeof value === 'boolean') return String(value);
-  if (typeof value === 'number') return `the number ${Object.is(value, -0) ? '-0' : String(value)}`;
-  if (typeof value === 'string') return `the string "${value.length > 40 ? `${value.substring(0, 40)}…` : value}"`;
-  return 'an object';
-}
-
-function wrongType(path: string, expected: string, found: unknown): WagonTypeError {
-  return new WagonTypeError(`'${path}' must be ${expected}, got ${describe(found)}`);
-}
-
-function asObject(value: unknown, path: string): JsonObject {
-  if (!isObject(value)) throw wrongType(path, 'an object', value);
-  return value;
-}
-
-function asArray(value: unknown, path: string): unknown[] {
-  if (!Array.isArray(value)) throw wrongType(path, 'an array', value);
-  return value as unknown[];
-}
-
-function asNumber(value: unknown, path: string): number {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  throw wrongType(path, 'a finite number', value);
-}
-
-function asString(value: unknown, path: string): string {
-  if (typeof value === 'string') return value;
-  throw wrongType(path, 'a string', value);
-}
-
-function asBool(value: unknown, path: string): boolean {
-  if (typeof value === 'boolean') return value;
-  throw wrongType(path, 'true or false', value);
-}
-
-function required(object: JsonObject, key: string, where: string): unknown {
-  if (!has(object, key)) throw new WagonTypeError(`missing required field '${at(where, key)}'`);
-  return object[key];
-}
-
-function optionalNumber(object: JsonObject, key: string, where: string, fallback: number): number {
-  return has(object, key) ? asNumber(object[key], at(where, key)) : fallback;
-}
-
-function optionalBool(object: JsonObject, key: string, where: string, fallback: boolean): boolean {
-  return has(object, key) ? asBool(object[key], at(where, key)) : fallback;
-}
-
-function optionalObject(object: JsonObject, key: string, where: string): JsonObject | null {
-  return has(object, key) ? asObject(object[key], at(where, key)) : null;
-}
-
-function optionalArray(object: JsonObject, key: string, where: string): unknown[] | null {
-  return has(object, key) ? asArray(object[key], at(where, key)) : null;
 }
 
 // ---------------------------------------------------------------- the type (WagonType)
@@ -698,17 +560,17 @@ export const COUPLERS_KEYS = ['front', 'rear'] as const;
  * Parse one declaration as the engine does (`WagonTypeParser.parse`); `id` comes from the
  * file's place in the pack, not its body. `warnings` is told what the declaration says that
  * the engine ignores (unknown keys, reserved fields, an obsolete null group), each as the
- * engine words it. Throws {@link WagonTypeError} with the engine's message on a missing
+ * engine words it. Throws {@link PackJsonError} with the engine's message on a missing
  * required field, a null or wrongly typed value or impossible geometry; a value that is not
  * an object gets the loader's message (`WagonTypeLoader`).
  */
 export function parseWagonType(id: string, json: unknown, warnings: (text: string) => void = () => undefined): WagonType {
-  if (!isObject(json)) throw new WagonTypeError(`the file must be a JSON object {…}, got ${describe(json)}`);
+  if (!isObject(json)) throw new PackJsonError(`the file must be a JSON object {…}, got ${describe(json)}`);
   checkKeys(json, KEYS, '', warnings);
   const length = asNumber(required(json, 'length', ''), 'length');
   const bogieOffsets = bogies(json);
   const massT = asNumber(required(json, 'mass_t', ''), 'mass_t');
-  if (!(massT > 0.0)) throw new WagonTypeError(`'mass_t' must be a positive number, got ${formatNumber(massT)}`);
+  if (!(massT > 0.0)) throw new PackJsonError(`'mass_t' must be a positive number, got ${formatNumber(massT)}`);
   const maxSpeedKmh = amount(json, 'max_speed_kmh', '', 0.0);
 
   let resistance = defaultResistance(massT);
@@ -768,7 +630,7 @@ export function parseWagonType(id: string, json: unknown, warnings: (text: strin
 
 /**
  * Optional `aliases`: old type ids this declaration takes over (`WagonTypeParser.aliases`).
- * Throws {@link WagonTypeError} unless it is an array of strings.
+ * Throws {@link PackJsonError} unless it is an array of strings.
  */
 export function aliases(json: unknown): string[] {
   if (!isObject(json)) return [];
@@ -794,7 +656,7 @@ export function loadWagonType(id: string, json: unknown): LoadedType {
     const type = parseWagonType(id, json, (text) => warnings.push(text));
     return { type, aliases: aliases(json), error: null, warnings };
   } catch (e) {
-    if (!(e instanceof WagonTypeError)) throw e;
+    if (!(e instanceof PackJsonError)) throw e;
     return { type: null, aliases: [], error: e.message, warnings };
   }
 }
@@ -804,17 +666,17 @@ export function loadWagonType(id: string, json: unknown): LoadedType {
  * front to back and inside the body; each coupler offset under `length/2` in size.
  */
 function checkGeometry(length: number, bogieOffsets: readonly number[], couplers: Couplers): void {
-  if (!(length > 0.0)) throw new WagonTypeError(`'length' must be a positive number of blocks, got ${formatNumber(length)}`);
+  if (!(length > 0.0)) throw new PackJsonError(`'length' must be a positive number of blocks, got ${formatNumber(length)}`);
   const half = length / 2.0;
   bogieOffsets.forEach((bogie, i) => {
     if (!(Math.abs(bogie) < half)) {
-      throw new WagonTypeError(
+      throw new PackJsonError(
         `'bogies[${i}]' = ${formatNumber(bogie)} is outside the body: a pivot must lie within ±length/2 = ±${formatNumber(half)}`,
       );
     }
     const before = bogieOffsets[i - 1];
     if (before !== undefined && !(bogie < before)) {
-      throw new WagonTypeError(
+      throw new PackJsonError(
         `'bogies' must run front to back, each pivot behind the one before: 'bogies[${i}]' = ${formatNumber(bogie)}` +
           ` is not behind 'bogies[${i - 1}]' = ${formatNumber(before)}`,
       );
@@ -826,7 +688,7 @@ function checkGeometry(length: number, bogieOffsets: readonly number[], couplers
 
 function checkCoupler(end: string, offset: number, half: number): void {
   if (!(Math.abs(offset) < half)) {
-    throw new WagonTypeError(`'couplers.${end}' = ${formatNumber(offset)} must be under length/2 = ${formatNumber(half)} in size`);
+    throw new PackJsonError(`'couplers.${end}' = ${formatNumber(offset)} must be under length/2 = ${formatNumber(half)} in size`);
   }
 }
 
@@ -842,18 +704,18 @@ function brakeSystem(brakes: JsonObject): BrakeSystem {
   if (!has(brakes, 'system')) return DEFAULT_BRAKE_SYSTEM;
   const name = asString(brakes.system, 'brakes.system');
   const system = brakeSystemByName(name);
-  if (system === null) throw new WagonTypeError(`unknown brake system 'brakes.system' = '${name}' (passenger, freight or ep)`);
+  if (system === null) throw new PackJsonError(`unknown brake system 'brakes.system' = '${name}' (passenger, freight or ep)`);
   return system;
 }
 
 /** A physical amount: `fallback` if absent (NaN fallback = required), else a finite number ≥ 0. */
 function amount(json: JsonObject, field: string, where: string, fallback: number): number {
   if (!has(json, field)) {
-    if (Number.isNaN(fallback)) throw new WagonTypeError(`missing required field '${at(where, field)}'`);
+    if (Number.isNaN(fallback)) throw new PackJsonError(`missing required field '${at(where, field)}'`);
     return fallback;
   }
   const value = asNumber(json[field], at(where, field));
-  if (!(value >= 0.0)) throw new WagonTypeError(`'${at(where, field)}' must be a number ≥ 0, got ${formatNumber(value)}`);
+  if (!(value >= 0.0)) throw new PackJsonError(`'${at(where, field)}' must be a number ≥ 0, got ${formatNumber(value)}`);
   return value;
 }
 
@@ -880,7 +742,7 @@ function readDoors(json: JsonObject, warnings: (text: string) => void): Door[] {
 /** The `cab` section: optional chairs `seats` (OBJ frame, turned) or the older one-chair `seat`/`seat_yaw`. */
 function readCab(cab: JsonObject, warnings: (text: string) => void): Cab {
   if (has(cab, 'seat') && has(cab, 'seats')) {
-    throw new WagonTypeError("'cab' has both 'seat' and 'seats': list every chair in 'seats'");
+    throw new PackJsonError("'cab' has both 'seat' and 'seats': list every chair in 'seats'");
   }
   if (has(cab, 'seat')) {
     const [x, y, z] = point(vec3(cab, 'seat', 'cab'));
@@ -888,7 +750,7 @@ function readCab(cab: JsonObject, warnings: (text: string) => void): Cab {
   }
   const array = optionalArray(cab, 'seats', 'cab');
   if (array === null) return { seats: [] };
-  if (array.length > MAX_SEATS) throw new WagonTypeError(`'cab.seats' lists more than ${MAX_SEATS} chairs`);
+  if (array.length > MAX_SEATS) throw new PackJsonError(`'cab.seats' lists more than ${MAX_SEATS} chairs`);
   const seats = array.map((element, i) => {
     const where = at('cab.seats', i);
     const seat = asObject(element, where);
@@ -906,7 +768,7 @@ function readInterior(json: JsonObject, warnings: (text: string) => void): Inter
   const zones: Zone[] = [];
   if (Array.isArray(element)) {
     element.forEach((item: unknown, i) => zones.push(zone(asObject(item, at('interior', i)), at('interior', i), warnings)));
-    if (zones.length === 0) throw new WagonTypeError("'interior' lists no zones");
+    if (zones.length === 0) throw new PackJsonError("'interior' lists no zones");
   } else if (isObject(element)) {
     zones.push(zone(element, 'interior', warnings));
   } else {
@@ -929,12 +791,12 @@ function point(obj: readonly [number, number, number]): ModelPoint {
 function vec3(json: JsonObject, field: string, where: string): [number, number, number] {
   const path = at(where, field);
   const array = asArray(required(json, field, where), path);
-  if (array.length !== 3) throw new WagonTypeError(`'${path}' must be a 3-element array [x, y, z]`);
+  if (array.length !== 3) throw new PackJsonError(`'${path}' must be a 3-element array [x, y, z]`);
   return [asNumber(array[0], at(path, 0)), asNumber(array[1], at(path, 1)), asNumber(array[2], at(path, 2))];
 }
 
 function bogies(json: JsonObject): number[] {
   const array = asArray(required(json, 'bogies', ''), 'bogies');
-  if (array.length === 0) throw new WagonTypeError("'bogies' must list at least one pivot offset");
+  if (array.length === 0) throw new PackJsonError("'bogies' must list at least one pivot offset");
   return array.map((bogie, i) => asNumber(bogie, at('bogies', i)));
 }
