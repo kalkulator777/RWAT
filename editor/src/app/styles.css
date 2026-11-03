@@ -486,7 +486,7 @@ button {
 
 .finding {
   display: grid;
-  grid-template-columns: 7em minmax(0, 1fr) minmax(0, 18em);
+  grid-template-columns: minmax(7em, max-content) minmax(0, 1fr) minmax(0, 18em);
   gap: 8px;
   width: 100%;
   border: 0;
@@ -518,4 +518,17 @@ button {
   font-size: 12px;
   color: var(--text-muted);
   overflow-wrap: anywhere;
+}
+
+.checks-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.checks-bar .checks-summary {
+  margin: 0;
+  flex: 1;
 }

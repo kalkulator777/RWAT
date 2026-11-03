@@ -4,11 +4,13 @@
  * is `computed` in the module that owns it.
  *
  * Here: what the shell needs and the open pack with its journal, the schema and the
- * findings (M1). The open model and the preview state join when their modules are
- * wired in. Signals only; what changes them is ./session.ts.
+ * findings (M1), and the findings as the panels show them, checked with a delay (M2).
+ * The open model and the preview state join when their modules are wired in. Signals
+ * only; what changes them is ./session.ts.
  */
 
 import { computed, signal } from '@preact/signals';
+import { liveFindings } from '../checks/live';
 import { checkPack } from '../checks/pack';
 import type { Link, Problem } from '../core/contracts';
 import type { Journal } from '../core/journal';
@@ -56,12 +58,19 @@ export const schemaError = signal<string | null>(null);
 /** The last failure of opening, saving or loading the schema, as text for the user; null when there is none. */
 export const failure = signal<{ key: string; params: Record<string, string | number> } | null>(null);
 
-/** The findings of the open pack: the loader's and the schema's (the schema's join once it is loaded). */
+/** The findings of the open pack as it stands now: the loader's and the schema's (the schema's join once it is loaded). */
 export const problems = computed<Problem[]>(() => {
   void revision.value;
   const open = pack.value;
   return open === null ? [] : checkPack(open, schema.value);
 });
+
+/**
+ * The findings the panels show (checks tab, tree, inspector): {@link problems}, checked at
+ * once when a pack opens or the schema arrives and 150 ms after the last of a run of edits
+ * (checks/live.ts), so typing into a big pack's forms does not check it on every key.
+ */
+export const findings = liveFindings({ pack, schema, revision });
 
 /** The number of files saving would write or delete. */
 export const dirtyCount = computed(() => {

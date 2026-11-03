@@ -1,4 +1,4 @@
-import { pack, problems, revision, selection } from '../../app/store';
+import { findings, pack, revision, selection } from '../../app/store';
 import type { Problem } from '../../core/contracts';
 import { classify, MCMETA } from '../../core/pack';
 import { t } from '../../i18n';
@@ -20,7 +20,7 @@ function countByFile(list: readonly Problem[]): Map<string, [number, number]> {
 
 function FileButton(props: { file: string; label?: string; counts: Map<string, [number, number]> }) {
   const { file, counts } = props;
-  const chosen = selection.value.some((link) => link.kind === 'file' && link.file === file);
+  const chosen = selection.value.some((link) => (link.kind === 'file' || link.kind === 'field') && link.file === file);
   const [errors, warnings] = counts.get(file) ?? [0, 0];
   return (
     <button
@@ -43,13 +43,14 @@ function FileButton(props: { file: string; label?: string; counts: Map<string, [
 /**
  * The pack tree (editor.md §6.1): `pack.mcmeta`, wagons as pairs of a type and a model
  * by id (a missing half is said), rail styles, lang files and the rest of the files,
- * each with the number of its findings. Clicking a file selects it.
+ * each with the number of its findings. Clicking a file selects it, and the inspector
+ * shows its form.
  */
 export function TreePanel() {
   void revision.value;
   const open = pack.value;
   if (open === null) return <p class="slot-empty">{t('shell.empty.tree')}</p>;
-  const counts = countByFile(problems.value);
+  const counts = countByFile(findings.value);
   const stock = open.stock();
   const styles = open.railStyles();
   const langs = open.declarations().filter((declaration) => declaration.kind === 'lang');
