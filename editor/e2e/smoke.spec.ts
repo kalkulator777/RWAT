@@ -88,7 +88,7 @@ test.describe('in an English browser', () => {
     await languages.getByRole('button', { name: 'RU' }).click();
     await expect(page.locator('html')).toHaveAttribute('lang', 'ru');
     await expect(page).toHaveTitle('Редактор паков RWAT');
-    await expect(page.getByRole('main', { name: 'Вид' })).toHaveText('Модель не открыта.');
+    await expect(page.getByRole('main', { name: 'Вид' }).locator('.view3d-message')).toHaveText('Модель не открыта.');
     await expect(page.getByRole('group', { name: 'Язык интерфейса' }).getByRole('button', { name: 'RU' })).toHaveAttribute(
       'aria-pressed',
       'true',
@@ -132,7 +132,7 @@ test.describe('in an English browser', () => {
     await context.setOffline(true);
     await page.reload();
     await expect(page).toHaveTitle('RWAT pack editor');
-    await expect(page.getByRole('main', { name: 'View' })).toHaveText('No model open.');
+    await expect(page.getByRole('main', { name: 'View' }).locator('.view3d-message')).toHaveText('No model open.');
     expect(await schemaId()).toBe('https://kalkulator777.github.io/RWAT/schema/wagon_type.schema.json');
     await context.setOffline(false);
   });
