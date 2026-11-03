@@ -218,9 +218,10 @@ export function collectTools(modules: Readonly<Record<string, ToolModule>>): Too
         problems.push(`${where}: field '${String(pattern)}' is not a pointer`);
         continue;
       }
-      const clash = claims.find((claim) => covers(claim.pattern, pattern) || covers(pattern, claim.pattern));
+      const owner = `tool '${def.id}'`;
+      const clash = claims.find((claim) => claim.where !== owner && (covers(claim.pattern, pattern) || covers(pattern, claim.pattern)));
       if (clash !== undefined) problems.push(`${where}: field '${pattern}' is already ${clash.where}'s ('${clash.pattern}')`);
-      claims.push({ pattern, where: `tool '${def.id}'` });
+      claims.push({ pattern, where: owner });
     }
     const first = seen.get(def.id);
     if (first !== undefined) problems.push(`${where}: id already used in ${first}`);

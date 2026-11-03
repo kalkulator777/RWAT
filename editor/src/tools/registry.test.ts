@@ -12,11 +12,9 @@ const schema = createSchema(readSchemaFiles());
  * The spatial fields of the wagon type no tool edits yet, each with the tool that is to:
  * the doors' and the chairs' come with the next wave of M4 (docs/proposals/editor.md §7,
  * A4.2, A4.3). A tool that lands takes its fields off this list; a new spatial field of the
- * schema with no tool turns the test red.
+ * schema with no tool turns the test red. The floor's zones are tools/floor's.
  */
 const WAITING_IN_WAGON_TYPE: Readonly<Record<string, string>> = {
-  '/interior': 'A4.1 tools/floor',
-  '/interior/*': 'A4.1 tools/floor',
   '/doors/*': 'A4.2 tools/doors',
   '/cab/seat': 'A4.3 tools/seats (the old form of one chair)',
   '/cab/seats/*/at': 'A4.3 tools/seats',
@@ -90,9 +88,10 @@ describe('the registration of tools', () => {
       collectTools({
         './a/index.ts': {},
         './b/index.ts': { default: tool('Bad Id', ['interior'], { title: '', hint: '', order: Number.NaN }) },
-        './c/index.ts': { default: tool('floor', ['/interior/*']) },
-        './d/index.ts': { default: tool('floor', ['/interior/2/min']) },
-        './e/index.ts': { default: { ...tool('x', []), activate: undefined } as unknown as ToolDef },
+        './c/index.ts': { default: tool('floor', ['/interior', '/interior/*']) },
+        './d/index.ts': { default: tool('zones', ['/interior/2/min']) },
+        './e/index.ts': { default: tool('floor', ['/doors/*']) },
+        './f/index.ts': { default: { ...tool('x', []), activate: undefined } as unknown as ToolDef },
       });
     expect(broken).toThrow(/no default export of defineTool/);
     expect(broken).toThrow(/'Bad Id': id must be/);
@@ -100,7 +99,9 @@ describe('the registration of tools', () => {
     expect(broken).toThrow(/no hint key/);
     expect(broken).toThrow(/order must be a finite number/);
     expect(broken).toThrow(/field 'interior' is not a pointer/);
-    expect(broken).toThrow(/field '\/interior\/2\/min' is already tool 'floor''s \('\/interior\/\*'\)/);
+    expect(broken).toThrow(/'zones': field '\/interior\/2\/min' is already tool 'floor''s \('\/interior'\)/);
+    // a tool's own places may lie one inside another
+    expect(broken).not.toThrow(/field '\/interior\/\*' is already/);
     expect(broken).toThrow(/id already used in \.\/c\/index\.ts/);
     expect(broken).toThrow(/'x': no activate/);
   });
