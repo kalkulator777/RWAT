@@ -197,7 +197,7 @@ class ExamplePackLoadTest {
         ModelCheck.Files files = new ModelCheck.Files() {
             @Override
             public boolean valid(String location) {
-                return location.matches("[a-z0-9_.-]+:[a-z0-9/._-]+");
+                return ResourceLocations.valid(location);
             }
 
             @Override

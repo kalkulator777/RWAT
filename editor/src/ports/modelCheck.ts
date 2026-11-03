@@ -33,9 +33,19 @@
  * `modelDeclaration` reads a parsed value, the engine Gson's object, which keeps the file's
  * order) — the golden data has no such key.
  *
- * Locations are `ns:path`, as the engine names resources; the caller's
- * {@link ModelCheckFiles} says which Minecraft takes and what is there. Pure: it runs in
- * the model worker (editor.md §3.11) and in Node.
+ * Locations are `ns:path`, as the engine names resources, split as Minecraft's
+ * `ResourceLocation.tryParse` splits them ({@link splitLocation}: `ModelCheck.namespace`,
+ * `path`); the caller's {@link ModelCheckFiles} says which Minecraft takes — the rule is
+ * {@link validLocation} — and what is there.
+ *
+ * Not ported: `/rwatc packs validate` also builds each model the check passes without an
+ * error (`StockModels.checkFiles`, `IrStockModel.load`) and says `model <obj> fails to
+ * build: <exception>` when the build throws. No rule of the pack predicts that line: what
+ * the build refuses, the check above has refused already (the files, the OBJ's indices and
+ * numbers, the `.anim`s), so a throw there is a fault of the engine's, with the JVM's words
+ * for it. The editor builds the model in its own worker (model/build) and says so of its
+ * own failure (`model.failed`), in its words. Pure: it runs in the model worker (editor.md
+ * §3.11) and in Node.
  */
 
 import type { ProblemParam } from '../core/contracts';
@@ -46,9 +56,13 @@ import { fileNameOf, folderOf, javaLines, javaTrim, parse as parseMtl, resolve }
 import { loadModel, ObjError, type ObjModel } from './obj';
 import { door, parseRole } from './objectRole';
 
-/** Where the files are read from (`ModelCheck.Files`): locations are `ns:path` strings. */
+/**
+ * Where the files are read from (`ModelCheck.Files`): locations are `ns:path` strings, a
+ * file named by its namespace and path as {@link splitLocation} gives them (`:a` and `a`
+ * are `minecraft:a`, as Minecraft reads them).
+ */
 export interface ModelCheckFiles {
-  /** True if `location` is a resource location Minecraft takes at all. */
+  /** True if `location` is a resource location Minecraft takes at all ({@link validLocation}). */
   valid(location: string): boolean;
   exists(location: string): boolean | Promise<boolean>;
   /** The file's text, read as UTF-8 (a byte-order mark kept, as Java keeps it); rejects when it can't be read. */
@@ -219,7 +233,7 @@ export async function checkObj(decl: ModelDeclaration, model: ObjModel, files: M
 
 /** Material → its texture's location, each library and texture checked on the way (`ModelCheck.textures`). */
 async function materialTextures(obj: string, model: ObjModel, files: ModelCheckFiles, out: ModelFinding[]): Promise<Map<string, string>> {
-  const { namespace, path } = split(obj);
+  const { namespace, path } = splitLocation(obj);
   const folder = folderOf(path);
   const textures = new Map<string, string>();
   for (const library of model.materialLibraries) {
@@ -314,12 +328,12 @@ async function checkAnimations(decl: ModelDeclaration, files: ModelCheckFiles, o
 
 /** A livery should swap at least one texture: one of the same file name in its folder next to the OBJ (`ModelCheck.checkLiveries`). */
 async function checkLiveries(decl: ModelDeclaration, textures: ReadonlyMap<string, string>, files: ModelCheckFiles, out: ModelFinding[]): Promise<void> {
-  const { namespace, path } = split(decl.obj);
+  const { namespace, path } = splitLocation(decl.obj);
   const folder = folderOf(path);
   for (const [livery, liveryFolder] of decl.liveries) {
     let swaps = false;
     for (const base of new Set(textures.values())) {
-      const swap = relative(namespace, folder, `${liveryFolder}/${fileNameOf(split(base).path)}`);
+      const swap = relative(namespace, folder, `${liveryFolder}/${fileNameOf(splitLocation(base).path)}`);
       if (swap !== null && files.valid(swap) && (await files.exists(swap))) {
         swaps = true;
         break;
@@ -335,10 +349,30 @@ function relative(namespace: string, folder: string, path: string): string | nul
   return resolved === null ? null : `${namespace}:${resolved}`;
 }
 
-/** The namespace (`minecraft` when none) and the path of a location (`ModelCheck.namespace`, `path`). */
-function split(location: string): { namespace: string; path: string } {
+/**
+ * The namespace and the path of a location `ns:path` as Minecraft's
+ * `ResourceLocation.tryParse` splits it (`ModelCheck.namespace`, `path`): at the first
+ * colon; the namespace `minecraft` when there is no colon or nothing before it.
+ */
+export function splitLocation(location: string): { namespace: string; path: string } {
   const colon = location.indexOf(':');
-  return colon < 0 ? { namespace: 'minecraft', path: location } : { namespace: location.slice(0, colon), path: location.slice(colon + 1) };
+  return { namespace: colon <= 0 ? 'minecraft' : location.slice(0, colon), path: location.slice(colon + 1) };
+}
+
+/** A path Minecraft takes (`ResourceLocation.isValidPath`): `a-z 0-9 / . _ -`, empty too. */
+const VALID_PATH = /^[a-z0-9/._-]*$/;
+/** A namespace Minecraft takes (`ResourceLocation.isValidNamespace`): `a-z 0-9 . _ -`. */
+const VALID_NAMESPACE = /^[a-z0-9._-]*$/;
+
+/**
+ * True if Minecraft takes `location` for a resource location (`ResourceLocation.tryParse`
+ * of 1.21.1, which the tests of the engine write out as `pack/ResourceLocations`): the path
+ * — all after the first colon, or all — holds only `a-z 0-9 / . _ -` and may be empty, the
+ * namespace before it only `a-z 0-9 . _ -`, and may be empty (it is `minecraft` then).
+ */
+export function validLocation(location: string): boolean {
+  const colon = location.indexOf(':');
+  return VALID_PATH.test(location.slice(colon + 1)) && (colon < 0 || VALID_NAMESPACE.test(location.slice(0, colon)));
 }
 
 // ---------------------------------------------------------------- the engine's exceptions

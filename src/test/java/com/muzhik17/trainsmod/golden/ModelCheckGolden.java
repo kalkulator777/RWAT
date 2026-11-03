@@ -23,6 +23,7 @@ import com.muzhik17.trainsmod.client.render.model.WagonModelDecl;
 import com.muzhik17.trainsmod.pack.ModelCheck;
 import com.muzhik17.trainsmod.pack.ModelFinding;
 import com.muzhik17.trainsmod.pack.PackProblem;
+import com.muzhik17.trainsmod.pack.ResourceLocations;
 
 /**
  * {@code fixtures/golden/model_check/}: a wagon model declaration and the
@@ -38,7 +39,13 @@ import com.muzhik17.trainsmod.pack.PackProblem;
  * text), {@code present} (locations that are there, their contents unread:
  * textures), and any other key with a colon — what {@code input_file} reads of
  * the example pack — a file too. A location is valid as Minecraft's
- * {@code ResourceLocation} takes it: {@code [a-z0-9_.-]+:[a-z0-9/._-]+}.
+ * {@code ResourceLocation.tryParse} takes it ({@link ResourceLocations}, its
+ * rule written out), and names the file of its namespace and path as
+ * {@link ModelCheck#namespace} and {@link ModelCheck#path} split it
+ * ({@code :a} and {@code a} are {@code minecraft:a}).
+ *
+ * <p>Or the input is a {@code location} alone → how the check takes it:
+ * {@code {valid, namespace, path}}.
  */
 class ModelCheckGolden {
 
@@ -48,6 +55,14 @@ class ModelCheckGolden {
     Stream<DynamicNode> cases() throws IOException {
         return Golden.run(FOLDER, input -> {
             JsonObject in = input.getAsJsonObject();
+            if (in.has("location")) {
+                String location = in.get("location").getAsString();
+                JsonObject out = new JsonObject();
+                out.addProperty("valid", ResourceLocations.valid(location));
+                out.addProperty("namespace", ModelCheck.namespace(location));
+                out.addProperty("path", ModelCheck.path(location));
+                return out;
+            }
             WagonModelDecl decl = WagonModelDecl.parse(in.get("namespace").getAsString(),
                     in.getAsJsonObject("declaration"));
             JsonArray out = new JsonArray();
@@ -75,32 +90,37 @@ class ModelCheckGolden {
         return out;
     }
 
-    /** The case's pack: its files with their text, and the ones only there. */
+    /** The case's pack: its files with their text, and the ones only there, each by the location Minecraft names it. */
     private static ModelCheck.Files files(JsonObject in) {
         Map<String, String> texts = new LinkedHashMap<>();
         if (in.has("files")) {
-            in.getAsJsonObject("files").entrySet().forEach(file -> texts.put(file.getKey(), file.getValue().getAsString()));
+            in.getAsJsonObject("files").entrySet().forEach(file -> texts.put(ResourceLocations.normal(file.getKey()),
+                    file.getValue().getAsString()));
         }
         for (Map.Entry<String, JsonElement> entry : in.entrySet()) {
             if (entry.getKey().contains(":")) {
-                texts.put(entry.getKey(), entry.getValue().getAsString());
+                texts.put(ResourceLocations.normal(entry.getKey()), entry.getValue().getAsString());
             }
         }
-        Set<String> present = new HashSet<>(Golden.strings(in, "present"));
+        Set<String> present = new HashSet<>();
+        Golden.strings(in, "present").forEach(location -> present.add(ResourceLocations.normal(location)));
         return new ModelCheck.Files() {
             @Override
             public boolean valid(String location) {
-                return location.matches("[a-z0-9_.-]+:[a-z0-9/._-]+");
+                return ResourceLocations.valid(location);
             }
 
             @Override
             public boolean exists(String location) {
-                return texts.containsKey(location) || present.contains(location);
+                String file = ResourceLocations.normal(location);
+                return valid(location) && (texts.containsKey(file) || present.contains(file));
             }
 
             @Override
             public InputStream open(String location) throws IOException {
-                String text = texts.containsKey(location) ? texts.get(location) : present.contains(location) ? "" : null;
+                String file = ResourceLocations.normal(location);
+                String text = !valid(location) ? null : texts.containsKey(file) ? texts.get(file)
+                        : present.contains(file) ? "" : null;
                 if (text == null) {
                     throw new FileNotFoundException(location);
                 }

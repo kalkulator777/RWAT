@@ -29,28 +29,28 @@ class ModelCheckTest {
             vt 0 0
             """;
 
-    /** An in-memory pack: {@code ns:path} → contents. */
+    /** An in-memory pack: {@code ns:path} → contents, a location naming its file as Minecraft does ({@code :a} is {@code minecraft:a}). */
     private static final class Pack implements ModelCheck.Files {
         final Map<String, String> files = new HashMap<>();
 
         Pack with(String location, String contents) {
-            files.put(location, contents);
+            files.put(ResourceLocations.normal(location), contents);
             return this;
         }
 
         @Override
         public boolean valid(String location) {
-            return location.matches("[a-z0-9_.-]+:[a-z0-9/._-]+");
+            return ResourceLocations.valid(location);
         }
 
         @Override
         public boolean exists(String location) {
-            return files.containsKey(location);
+            return valid(location) && files.containsKey(ResourceLocations.normal(location));
         }
 
         @Override
         public InputStream open(String location) throws FileNotFoundException {
-            String contents = files.get(location);
+            String contents = valid(location) ? files.get(ResourceLocations.normal(location)) : null;
             if (contents == null) {
                 throw new FileNotFoundException(location);
             }
@@ -115,6 +115,41 @@ class ModelCheckTest {
         assertEquals(List.of("W model t:car/car.obj: control group '" + name + "' is longer than 32 characters"
                 + " and is dropped: its switches can't be worked, its lights stay off (an LINVERT one on)"),
                 check("{ \"obj\": \"car/car.obj\" }", pack));
+    }
+
+    /**
+     * A location that starts with a colon is Minecraft's ({@code
+     * ResourceLocation.tryParse}), and so are the libraries and textures the
+     * model loader finds next to its OBJ: the check named them {@code
+     * :car/car.mtl}, a file the game never looks for under that name.
+     */
+    @Test
+    void aLocationWithAnEmptyNamespaceIsMinecrafts() {
+        assertEquals("minecraft", ModelCheck.namespace(":car/car.obj"));
+        assertEquals("minecraft", ModelCheck.namespace("car/car.obj"));
+        assertEquals("t", ModelCheck.namespace("t:car/car.obj"));
+        assertEquals("car/car.obj", ModelCheck.path(":car/car.obj"));
+        assertEquals("b:c", ModelCheck.path("a:b:c"));
+        Pack pack = new Pack().with("minecraft:car/car.obj", "mtllib car.mtl\n" + QUAD + "o BODY\nusemtl body\nf 1 2 3\n");
+        assertEquals(List.of("E model :car/car.obj: material library minecraft:car/car.mtl not found",
+                "E model :car/car.obj draws nothing: no face has a textured material"),
+                check("{ \"obj\": \":car/car.obj\" }", pack));
+        pack.with("minecraft:car/car.mtl", "newmtl body\nmap_Kd body.png\n").with("minecraft:car/body.png", "png");
+        assertEquals(List.of(), check("{ \"obj\": \":car/car.obj\", \"liveries\": { \"red\": \"red\" } }",
+                pack.with("minecraft:car/red/body.png", "png")));
+    }
+
+    /** What Minecraft takes for a location: the rule the tests' packs answer {@code valid} by. */
+    @Test
+    void aLocationIsValidAsMinecraftTakesIt() {
+        for (String taken : List.of("t:car/car.obj", "car/car.obj", ":car/car.obj", "t:", ":", "", "my-pack.v2:a_b/c-d.e",
+                "t:../car.obj", "t:a//b")) {
+            assertEquals(true, ResourceLocations.valid(taken), taken);
+        }
+        for (String refused : List.of("T:car.obj", "t:Car.obj", "t:car.obj:x", "a b:c", "t:my car.obj", "t:вагон.obj",
+                "t/x:car.obj", "t:car\\car.obj")) {
+            assertEquals(false, ResourceLocations.valid(refused), refused);
+        }
     }
 
     @Test

@@ -57,9 +57,12 @@ public final class ModelCheck {
     private ModelCheck() {
     }
 
-    /** Where the files are read from: locations are {@code ns:path} strings. */
+    /**
+     * Where the files are read from: locations are {@code ns:path} strings,
+     * the namespace and path as {@link #namespace} and {@link #path} split them.
+     */
     public interface Files {
-        /** True if {@code location} is a valid resource location at all. */
+        /** True if {@code location} is a valid resource location at all ({@code ResourceLocation.tryParse}). */
         boolean valid(String location);
 
         boolean exists(String location);
@@ -252,12 +255,19 @@ public final class ModelCheck {
         return resolved == null ? null : namespace + ":" + resolved;
     }
 
-    private static String namespace(String location) {
+    /**
+     * The namespace of a location {@code ns:path} as Minecraft's {@code
+     * ResourceLocation.tryParse} splits it, the one the model loader resolves
+     * the OBJ's libraries and textures in: what comes before the first colon,
+     * {@code minecraft} when that is empty or there is no colon.
+     */
+    public static String namespace(String location) {
         int colon = location.indexOf(':');
-        return colon < 0 ? "minecraft" : location.substring(0, colon);
+        return colon <= 0 ? "minecraft" : location.substring(0, colon);
     }
 
-    private static String path(String location) {
+    /** The path of a location {@code ns:path} as {@link #namespace} splits it: all after the first colon, or all. */
+    public static String path(String location) {
         return location.substring(location.indexOf(':') + 1);
     }
 }

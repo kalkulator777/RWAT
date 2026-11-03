@@ -3,10 +3,14 @@
  * ./modelCheck against `pack/ModelCheck.java`, the reference that writes the expected — a
  * wagon model declaration and a pack's files → what the check of `/rwatc packs validate`
  * finds in them, in its order, each finding's severity, its code (`ModelFinding.Code.key`),
- * its params in the line's order and its line; no subject or index (null).
+ * its params in the line's order and its line; no subject or index (null). Or, for a
+ * `location` alone, how the check takes it: {@link validLocation} and {@link splitLocation}
+ * against the Java runner's `ResourceLocations.valid` (Minecraft's `ResourceLocation.tryParse`
+ * written out) and `ModelCheck.namespace`, `path`.
  *
- * A location is valid by the rule of Minecraft's `ResourceLocation` the Java runner writes
- * out (the model worker's own reader, model/build `checkFiles`, is model/resources').
+ * The case's pack takes a location by {@link validLocation} and names its file by
+ * {@link splitLocation}, as the Java runner does by Minecraft's rule (the model worker's own
+ * reader, model/build `checkFiles`, is model/resources').
  */
 
 import { readFileSync } from 'node:fs';
@@ -14,7 +18,18 @@ import { describe, expect, it } from 'vitest';
 import { mismatch, readGoldenFolder } from '../testing/golden.node';
 import { REPO_ROOT } from '../testing/repo.node';
 import { AnimError } from './anim';
-import { animRefusal, MODEL_CODES, modelCheck, modelFindingText, objOf, objRefusal, type ModelCheckFiles, type ModelCode } from './modelCheck';
+import {
+  animRefusal,
+  MODEL_CODES,
+  modelCheck,
+  modelFindingText,
+  objOf,
+  objRefusal,
+  splitLocation,
+  validLocation,
+  type ModelCheckFiles,
+  type ModelCode,
+} from './modelCheck';
 import { modelDeclaration } from './modelParts';
 import { ObjError } from './obj';
 
@@ -22,10 +37,8 @@ const FOLDER = `${REPO_ROOT}fixtures/golden/model_check`;
 
 const golden = readGoldenFolder(FOLDER);
 
-/** A resource location as `ModelCheckGolden` takes it. */
-const RESOURCE_LOCATION = /^[a-z0-9_.-]+:[a-z0-9/._-]+$/;
-
 interface Input {
+  location?: string;
   namespace: string;
   declaration: unknown;
   files?: Record<string, string>;
@@ -33,16 +46,24 @@ interface Input {
   [location: string]: unknown;
 }
 
+/** The file a location names, as Minecraft names it: `namespace:path`, the namespace never left out. */
+function fileOf(location: string): string {
+  const { namespace, path } = splitLocation(location);
+  return `${namespace}:${path}`;
+}
+
 /** The case's pack: its files with their text (a key of the input with a colon is one too), and the ones only there. */
 function filesOf(input: Input): ModelCheckFiles {
-  const texts = new Map<string, string>(Object.entries(input.files ?? {}));
-  for (const [key, value] of Object.entries(input)) if (key.includes(':')) texts.set(key, value as string);
-  const present = new Set(input.present ?? []);
+  const texts = new Map<string, string>(Object.entries(input.files ?? {}).map(([location, text]) => [fileOf(location), text]));
+  for (const [key, value] of Object.entries(input)) if (key.includes(':')) texts.set(fileOf(key), value as string);
+  const present = new Set((input.present ?? []).map(fileOf));
+  const textOf = (location: string): string | undefined =>
+    validLocation(location) ? (texts.get(fileOf(location)) ?? (present.has(fileOf(location)) ? '' : undefined)) : undefined;
   return {
-    valid: (location) => RESOURCE_LOCATION.test(location),
-    exists: (location) => texts.has(location) || present.has(location),
+    valid: validLocation,
+    exists: (location) => textOf(location) !== undefined,
     read: (location) => {
-      const text = texts.get(location) ?? (present.has(location) ? '' : undefined);
+      const text = textOf(location);
       return text === undefined ? Promise.reject(new Error(`no file ${location}`)) : Promise.resolve(text);
     },
   };
@@ -50,6 +71,7 @@ function filesOf(input: Input): ModelCheckFiles {
 
 /** What the port makes of an input, laid out as ModelCheckGolden lays the engine's. */
 async function compute(input: Input): Promise<unknown> {
+  if (input.location !== undefined) return { valid: validLocation(input.location), ...splitLocation(input.location) };
   const findings = await modelCheck(modelDeclaration(input.namespace, input.declaration), filesOf(input));
   return findings.map((f) => ({ severity: f.severity, finding: { code: f.code, subject: null, index: null, params: f.params, text: f.text } }));
 }
