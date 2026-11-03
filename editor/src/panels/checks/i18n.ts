@@ -11,6 +11,10 @@ export default defineStrings({
     'checks.severity.info': 'Сведение',
     'checks.schemaLoading': 'Схема формата загружается: пока есть только проверки загрузки.',
     'checks.schemaFailed': 'Схему формата загрузить не удалось, проверок по схеме нет: {detail}',
+    'checks.filter': 'Какие находки показывать',
+    'checks.filter.error': 'Ошибки: {count}',
+    'checks.filter.warning': 'Предупреждения: {count}',
+    'checks.filter.info': 'Сведения: {count}',
   },
   en: {
     'checks.title': 'Checks',
@@ -22,5 +26,9 @@ export default defineStrings({
     'checks.severity.info': 'Note',
     'checks.schemaLoading': 'The format schema is loading: only the loader checks so far.',
     'checks.schemaFailed': 'The format schema did not load, so there are no schema checks: {detail}',
+    'checks.filter': 'Which findings to show',
+    'checks.filter.error': 'Errors: {count}',
+    'checks.filter.warning': 'Warnings: {count}',
+    'checks.filter.info': 'Notes: {count}',
   },
 });
