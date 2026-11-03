@@ -18,6 +18,9 @@ const WAITING_IN_WAGON_TYPE: Readonly<Record<string, string>> = {
   '/doors/*': 'A4.2 tools/doors',
 };
 
+/** The tools that only show and edit no field (docs/proposals/editor.md §3.9). */
+const SHOW_ONLY = ['lights'];
+
 /**
  * The spatial fields of a conversion override (2b): the type's markup as the override
  * writes it (`type`), and the floor generator's level and boxes. Their tools come with the
@@ -106,7 +109,7 @@ describe('the registration of tools', () => {
 
   it('registers the tools of the editor without a problem', () => {
     expect(() => tools.map((t) => t.id)).not.toThrow();
-    for (const t of tools) expect(t.fields.length).toBeGreaterThan(0);
+    for (const t of tools) expect(t.fields.length > 0, t.id).toBe(!SHOW_ONLY.includes(t.id));
   });
 
   it('refuses a kind of link that is no markup, or that two tools select', () => {

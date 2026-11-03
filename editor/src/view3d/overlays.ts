@@ -90,6 +90,8 @@ export const OVERLAY_STYLES: Readonly<Record<string, OverlayStyle>> = Object.fre
   /** The arrow of a driver's chair that drives forward, and of one that drives backward (tools/seats). */
   'seats.forward': { color: '#099268', fill: 0, dashed: false },
   'seats.back': { color: '#e64980', fill: 0, dashed: false },
+  /** A headlight's cone or a cabin lamp of the light group chosen (tools/lights). */
+  'lights.chosen': { color: '#f03e3e', fill: 0.3, dashed: false },
 });
 
 /** The style a name stands for; `default` for one the table lacks. */
