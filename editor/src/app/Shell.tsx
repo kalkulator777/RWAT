@@ -42,9 +42,11 @@ function PackStatus() {
   if (open === null) return <span class="pack-status">{t('shell.noPack')}</span>;
   const { source } = open;
   const how = open.readOnly ? 'shell.pack.generated' : source.writable ? 'shell.pack.folder' : 'shell.pack.zipSave';
+  const text = t('shell.pack.status', { name: source.name, how: t(how) });
+  // the top bar cuts the status short where the buttons need the room: the whole of it on hover
   return (
-    <span class="pack-status" data-testid="pack-status" data-kind={source.kind}>
-      {t('shell.pack.status', { name: source.name, how: t(how) })}
+    <span class="pack-status" data-testid="pack-status" data-kind={source.kind} title={text}>
+      {text}
     </span>
   );
 }

@@ -206,10 +206,19 @@ button {
 
 /* ------------------------------------------------------------ top bar */
 
+/*
+ * One line from 1280 px in either language: the buttons and the toggles keep their width,
+ * the pack status gives way (cut short, whole on hover). A line is filled with the brand at
+ * its least, so the buttons never wrap while the status could still shrink; the brand then
+ * grows back up to its whole text, and the toggles keep to the right end. Narrower than
+ * the bar's least, whole groups go to the next line, not single buttons.
+ */
 .topbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  column-gap: 8px;
+  row-gap: 4px;
   padding: 6px 12px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
@@ -220,7 +229,22 @@ button {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-width: 0;
+  flex: 1 1 7.5rem;
+  min-width: 7.5rem;
+  max-width: max-content;
+}
+
+.brand-icon,
+.brand-name {
+  flex: none;
+}
+
+.topbar > .toggle {
+  flex: none;
+}
+
+.toolbar + .toggle {
+  margin-left: auto;
 }
 
 .brand-name {
@@ -229,6 +253,7 @@ button {
 }
 
 .pack-status {
+  min-width: 0;
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -237,9 +262,10 @@ button {
 
 .toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
 }
 
@@ -379,9 +405,25 @@ button {
   gap: 4px;
 }
 
+.file-actions button {
+  white-space: nowrap;
+}
+
 .file-actions button:disabled {
   opacity: 0.55;
   cursor: default;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.25rem;
+  align-self: stretch;
+}
+
+.icon[data-forward='true'] {
+  transform: scaleX(-1);
 }
 
 .tree {
