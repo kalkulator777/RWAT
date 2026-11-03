@@ -83,7 +83,7 @@ python -I -m unittest discover tools/tests
 | `java_numbers` | Java: `Float.parseFloat`, `String.format(Locale.ROOT, "%.Nf")` | ts | `parse_float`, `format_fixed` | текст → `float` или `null` (отказ); число и знаки → текст |
 | `obj_frame` | Java: `stock.ObjFrame` | ts, python (`floorgen.point_/box_from_obj`, `…_to_obj`) | `to_model`, `to_obj` | точка или коробка → в другом кадре |
 | `object_role` | Java: `convention.ObjectRole` (`parse`, `door`, `coupled`, `hasToken INTERIOR`) | ts, python (`ir2rwat`: `LIGHT_GROUP`, `DOOR_KEY`, `HEADLIGHT`) | `roles`, `conventions` (все `examples` из `schema/obj-conventions.json` — проверяет `ObjectRoleGolden`) | имя объекта → орган, шарнир, свет, створка, голова сцепки |
-| `control_pose` | Java: `ControlValue.value`, `visible`; `StockModel.Control.transform` | ts | `pose` | имя, положение 0…1, шарнир (кадр OBJ) → значение, видимость, матрица 4×4 по строкам |
+| `control_pose` | Java: `ControlValue.value`, `visible`; `convention.ControlPose.transform` | ts | `pose` | имя, положение 0…1, шарнир (кадр OBJ) → значение, видимость, матрица 4×4 по строкам |
 | `obj` | Java: `ObjLoader.loadModel`, `ObjectRole.objectName` | ts, python (`floorgen.object_name_of`) | `object_names`, `parse`, `example_pack` | строка `o`/`g` → имя; текст OBJ → части (объект, материал, квады) или `{error: true}`; OBJ пака-примера → части вкратце |
 | `mtl` | Java: `MtlParser` (`materialName`, `parse`, `resolve`, `folderOf`, `fileNameOf`) | ts, python (`ir2rwat.material_name`, `parse_mtl`) | `material_names`, `parse`, `paths`, `example_pack` | строка → имя материала; текст MTL → материал → путь `map_Kd`; пути |
 | `anim` | Java: `IrAnim.parse` | ts, python (`ir2rwat.anim_objects`: имена) | `parse` (и `salon_door.anim` пака-примера) | текст `.anim` → дорожки, как в файле, или `{error: true}` |
@@ -144,5 +144,4 @@ python -I -m unittest discover tools/tests
 ## Чего нет и почему
 
 - **Выбор кадра `.anim` и интерполяция** (`frameAt`: кадр = прогресс × (N − 1), поэлементно) живут в `client/render/WagonRenderer` с Minecraft: эталону нечего вызвать. Нужна чистая точка входа (например, `IrAnim.frameAt(frames, progress)`).
-- **`StockModel.Control.transform`** — в классе с `ResourceLocation`, которого нет в тестовом classpath: `ControlPoseGolden` строит орган и зовёт его метод отражением, код движка тот же. Чистый дом для преобразования убрал бы отражение.
 - **Выходы `floor_check`** берутся из `FloorCheck.walkablePieces` (пакетный доступ) отражением.

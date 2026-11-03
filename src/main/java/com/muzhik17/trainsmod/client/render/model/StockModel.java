@@ -6,6 +6,7 @@ import java.util.Map;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
+import com.muzhik17.trainsmod.convention.ControlPose;
 import com.muzhik17.trainsmod.convention.ModelParts;
 import com.muzhik17.trainsmod.convention.ObjectRole;
 import com.muzhik17.trainsmod.kinematics.EdgeOutline;
@@ -138,15 +139,9 @@ public record StockModel(
             return new Control(newRole, meshes, interior, pivot, axis, degrees, slide, boxMin, boxMax, outline);
         }
 
-        /** The model-space transform at animation value {@code value} (IR order: slide, then turn). */
+        /** The model-space transform at animation value {@code value} ({@link ControlPose}: slide, then turn). */
         public Matrix4f transform(float value, Matrix4f dest) {
-            dest.identity().translate(slide.x * value, slide.y * value, slide.z * value);
-            if (pivot != null && degrees != 0.0F) {
-                dest.translate(pivot)
-                        .rotate((float) Math.toRadians(value * degrees), axis)
-                        .translate(-pivot.x, -pivot.y, -pivot.z);
-            }
-            return dest;
+            return ControlPose.transform(value, slide, pivot, axis, degrees, dest);
         }
     }
 
