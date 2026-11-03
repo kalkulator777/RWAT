@@ -1,11 +1,10 @@
 /** Node only (tests, tools): the repository's schema folder read from disk. */
 
 import { readdirSync, readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { REPO_SCHEMA_DIR } from '../../testing/repo.node';
 import type { SchemaFiles } from './files';
 
-/** The repository's `schema/` folder. */
-export const REPO_SCHEMA_DIR = fileURLToPath(new URL('../../../../schema/', import.meta.url));
+export { REPO_SCHEMA_DIR };
 
 /** Every `*.json` of a schema folder, parsed. */
 export function readSchemaFiles(dir: string = REPO_SCHEMA_DIR): SchemaFiles {

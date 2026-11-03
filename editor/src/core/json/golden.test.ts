@@ -14,12 +14,12 @@
 
 import Ajv2020 from 'ajv/dist/2020';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { REPO_ROOT } from '../../testing/repo.node';
 import { describe, expect, it } from 'vitest';
 import { dump } from './dump';
 import { parseLossless } from './parse';
 
-const REPO = fileURLToPath(new URL('../../../../', import.meta.url));
+const REPO = REPO_ROOT;
 const FOLDER = `${REPO}fixtures/golden/json_dump`;
 
 interface Case {

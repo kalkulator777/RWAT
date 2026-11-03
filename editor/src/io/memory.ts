@@ -6,7 +6,7 @@
 import type { FileChange, FileEntry, PackSink, PackSource } from '../core/contracts';
 import { applyChanges, type FolderBackend } from './changes';
 import { PackIoError } from './errors';
-import { comparePaths, isPackPath, packPathProblem } from './paths';
+import { comparePaths, isPackPath, packPathProblem } from '../core/paths';
 
 /** File contents for the constructor: bytes, or text that is written as UTF-8. */
 export type MemoryFiles = Iterable<readonly [string, Uint8Array | string]> | Readonly<Record<string, Uint8Array | string>>;

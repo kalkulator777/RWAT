@@ -3,7 +3,7 @@ import { layout } from './layout';
 import { panelsIn, type PanelDef } from './registry';
 import { SlotTabs } from './SlotTabs';
 import { Splitter } from './Splitter';
-import { EDITOR_MODES, lang, mode, updateReady } from './store';
+import { EDITOR_MODES, failure, lang, mode, pack, updateReady } from './store';
 
 /** Two or more buttons of which one is on, such as the language: each says whether it is pressed. */
 function Toggle<T extends string>(props: {
@@ -36,13 +36,26 @@ function Toggle<T extends string>(props: {
   );
 }
 
+/** The open pack's name and where it came from; whether saving writes in place or downloads a zip. */
+function PackStatus() {
+  const open = pack.value;
+  if (open === null) return <span class="pack-status">{t('shell.noPack')}</span>;
+  const { source } = open;
+  const how = open.readOnly ? 'shell.pack.generated' : source.writable ? 'shell.pack.folder' : 'shell.pack.zipSave';
+  return (
+    <span class="pack-status" data-testid="pack-status" data-kind={source.kind}>
+      {t('shell.pack.status', { name: source.name, how: t(how) })}
+    </span>
+  );
+}
+
 function TopBar({ toolbar }: { toolbar: readonly PanelDef[] }) {
   return (
     <header class="topbar">
       <div class="brand">
         <img class="brand-icon" src={`${import.meta.env.BASE_URL}icons/icon.svg`} alt="" width={24} height={24} />
         <span class="brand-name">RWAT</span>
-        <span class="pack-status">{t('shell.noPack')}</span>
+        <PackStatus />
       </div>
       <div class="toolbar" role="group" aria-label={t('shell.region.actions')}>
         {toolbar.map((p) => {
@@ -76,6 +89,25 @@ function TopBar({ toolbar }: { toolbar: readonly PanelDef[] }) {
         onPick={setLang}
       />
     </header>
+  );
+}
+
+/** Why the last open or save failed (app/session.ts), until the next action or the user closes it. */
+function FailureBanner() {
+  const problem = failure.value;
+  if (!problem) return null;
+  return (
+    <div class="banner banner-error" role="alert" data-testid="failure">
+      <span>{t(problem.key, problem.params)}</span>
+      <button
+        type="button"
+        onClick={() => {
+          failure.value = null;
+        }}
+      >
+        {t('shell.failure.close')}
+      </button>
+    </div>
   );
 }
 
@@ -120,7 +152,10 @@ export function Shell({ panels }: { panels: readonly PanelDef[] }) {
   return (
     <div class="shell" style={style} data-mode={current}>
       <TopBar toolbar={panelsIn(panels, 'toolbar', current)} />
-      <UpdateBanner />
+      <div class="banners">
+        <FailureBanner />
+        <UpdateBanner />
+      </div>
       <aside class="area area-tree" aria-label={t('shell.region.tree')}>
         <SlotTabs
           slot="tree"

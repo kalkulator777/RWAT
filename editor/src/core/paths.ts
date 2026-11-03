@@ -1,5 +1,7 @@
 /**
  * Paths inside a pack (docs/proposals/editor.md §3.2, `core/contracts.ts` `FileEntry`).
+ * A pure module that both core/ (the pack model checks the paths of its ops) and io/
+ * (sources and sinks check the names they list and write) import.
  *
  * A pack path is '/'-separated, relative, spelled as the file spells it (the case is
  * kept) and never leaves the pack: no leading '/', no drive letter, no '.' or '..'
@@ -91,7 +93,7 @@ export function comparePaths(a: string, b: string): number {
   }
 }
 
-/** The name the converter writes last, so a folder cut short is not yet a pack (`ir2rwat.Converter.contents`). */
+/** The pack's metadata file; the converter writes it last, so a folder cut short is not yet a pack (`ir2rwat.Converter.contents`). */
 export const MCMETA = 'pack.mcmeta';
 
 /** `comparePaths`, but `pack.mcmeta` after everything else: the order a folder is written in. */

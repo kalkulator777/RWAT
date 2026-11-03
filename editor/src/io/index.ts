@@ -24,7 +24,7 @@ export {
   type FsPermission,
 } from './fsAccess';
 export { MemoryPack, type MemoryFiles } from './memory';
-export { comparePaths, isPackPath, normalizeEntryName, packPathProblem } from './paths';
+export { comparePaths, isPackPath, normalizeEntryName, packPathProblem } from '../core/paths';
 export { pickFiles, pickFolderPack, pickZipPack } from './pickers';
 export { buildZip, openZipSource, ZipSink, type ZipFile, type ZipInput } from './zip';
 

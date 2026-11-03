@@ -1,12 +1,6 @@
-/** Helpers of the io tests: where the example pack is, and a fake File System Access folder. */
+/** Helper of the io tests: a fake File System Access folder. */
 
-import { fileURLToPath } from 'node:url';
 import type { FsDirectoryHandle, FsFileHandle, FsWritable } from './fsAccess';
-
-/** The example pack of the repository, a folder on the disk. */
-export const EXAMPLE_PACK = fileURLToPath(new URL('../../../run/rwat_packs/RwatExamplePack', import.meta.url));
-/** The converter's folder, for the test that compares with what it writes. */
-export const TOOLS_DIR = fileURLToPath(new URL('../../../tools', import.meta.url));
 
 class NotFound extends Error {
   override name = 'NotFoundError';

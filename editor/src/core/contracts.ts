@@ -69,6 +69,17 @@ export type Op =
   | { op: 'deleteFile'; file: string }
   | { op: 'renameFile'; file: string; to: string };
 
+/** What the journal edits (the pack model implements it): the journal knows nothing else of the pack. */
+export interface OpTarget {
+  /**
+   * Applies one op and returns the ops that undo it, in the order they are to be
+   * applied. Throws, having changed nothing, when the op cannot be applied.
+   */
+  apply(op: Op): Op[];
+  /** Readies what the ops need (reads the files whose bytes their inverse holds) before they are applied; the journal's `run` calls it. */
+  prepare?(ops: readonly Op[]): Promise<void>;
+}
+
 /** A signed set of ops applied at once: one entry in undo and redo. */
 export interface Command {
   /** i18n key of what the command does, shown in the journal tab. */

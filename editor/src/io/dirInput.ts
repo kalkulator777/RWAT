@@ -7,7 +7,7 @@
 
 import type { FileEntry, PackSource } from '../core/contracts';
 import { causeText, PackIoError, pathsSummary } from './errors';
-import { comparePaths, normalizeEntryName } from './paths';
+import { comparePaths, normalizeEntryName } from '../core/paths';
 
 class DirInputSource implements PackSource {
   readonly kind = 'dir-input';
