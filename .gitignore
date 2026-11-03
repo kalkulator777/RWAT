@@ -1,6 +1,7 @@
 ### Gradle ###
 .gradle
-build/
+# Gradle's own output sits at the root only: editor/ and other folders may have a build/ of theirs.
+/build/
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/**/build/
 
@@ -9,7 +10,7 @@ build/
 *.iws
 *.iml
 *.ipr
-out/
+/out/
 !**/src/**/out/
 
 .run/
@@ -23,7 +24,7 @@ out/
 .settings
 .springBeans
 .sts4-cache
-bin/
+/bin/
 !**/src/**/bin/
 
 ### VS Code ###
