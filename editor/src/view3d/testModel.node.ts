@@ -9,7 +9,7 @@ import type { LoadedModel, ObjectInfo, PartBuffers, Vec3 } from '../core/contrac
 import { emptyModel } from '../model/build';
 import { NO_LIGHT, type Place } from '../ports/modelParts';
 
-export { exampleModel, packBytes as exampleFile, type ExampleWagon } from '../model/testing.node';
+export { exampleModel } from '../model/testing.node';
 
 /** The engine's place of a part of a role, as far as the view's tests care. */
 const PLACE_OF_ROLE: Readonly<Record<string, Place>> = {
