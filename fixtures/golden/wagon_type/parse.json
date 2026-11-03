@@ -652,7 +652,7 @@
     {
       "id": "numbers-in-exponent-form",
       "note": "2.5e1 and 1E1 are numbers",
-      "input": {"type": {"length": 25.0, "bogies": [10.0, -10.0], "mass_t": 100.0}},
+      "input": {"type": {"length": 2.5e1, "bogies": [1E1, -1E1], "mass_t": 100.0}},
       "expected": {
         "error": null,
         "warnings": [],
