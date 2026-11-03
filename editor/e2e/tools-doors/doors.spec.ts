@@ -5,6 +5,7 @@
  * object picked in the Objects tab (the light switch's plate: a doorway too narrow, where
  * no floor ends) brings the floor check's findings up in the Checks tab; its edge dragged
  * in the view from the front across the aisle, the findings go; undone, they come back.
+ * A finding clicked in the Checks tab turns the doors tool on with its door selected.
  * Screenshots of the coach and the shunter go to the test's output.
  *
  * The model comes as it comes to a user (e2e/examplePack.ts); where a point of the OBJ
@@ -115,11 +116,15 @@ test('a door made of an object is found by the floor check; stretched across the
   await page.keyboard.press('Control+z');
   await expect(noFloor).toHaveCount(1);
 
-  // the plain selection: the doors' layers go
+  // the plain selection: the doors' layers go; a finding clicked turns the doors tool on with its door
   await view.locator('[data-toggle="tool"] [data-tool="select"]').click();
   await expect(tool).toHaveCount(0);
   const after = await page.evaluate(() => (window as HookWindow).__rwatView?.view.overlayLayers.value);
   expect(after?.filter((layer) => layer.startsWith('doors.'))).toEqual([]);
+  await noFloor.click();
+  await expect(view.locator('[data-tool="doors"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('[data-testid="doors-list"] [data-door="8"]')).toHaveAttribute('data-selected', 'true');
+  await expect(page.getByTestId('doors-door')).toHaveAttribute('data-door', '8');
   expect(errors).toEqual([]);
 });
 

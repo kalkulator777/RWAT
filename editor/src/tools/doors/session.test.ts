@@ -76,6 +76,24 @@ describe('the doors tool turned on', () => {
     expect(b.view.overlays.get('doors.boxes')).toHaveLength(7);
     stop();
   });
+
+  it('comes on for a door the checks point at, with the door selected', async () => {
+    const b = await bench(COACH, coachModel);
+    const host = new ToolHost([floorTool, doorsTool]);
+    const stop = host.connect(b.wiring);
+    // the links of a floor finding about door 0 (checks/floor/problems)
+    const links: Link[] = [{ kind: 'field', file: FILE, at: '/doors/0' }, doorLink(COACH, 0)];
+    b.selection.value = links;
+    host.reveal(links);
+    expect(host.current.value?.tool.id).toBe('doors');
+    expect((host.current.value?.session as DoorsSession).tool.selected()).toBe(0);
+    // a zone's finding brings the floor tool; a field no tool edits, nothing
+    host.reveal([{ kind: 'field', file: FILE, at: '/interior/2' }]);
+    expect(host.current.value?.tool.id).toBe('floor');
+    host.reveal([{ kind: 'field', file: FILE, at: '/length' }, { kind: 'field', file: 'data/other.json', at: '/doors/0' }]);
+    expect(host.current.value?.tool.id).toBe('floor');
+    stop();
+  });
 });
 
 describe('a door from objects of the model', () => {

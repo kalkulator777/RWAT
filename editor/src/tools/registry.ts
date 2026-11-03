@@ -28,9 +28,10 @@
  * ({@link ToolDef.fields}, {@link framedFields}): the forms show such a field as a summary
  * and the tool edits it (registry.test.ts holds the list of fields still waiting for theirs).
  *
- * One tool is on at a time ({@link ToolHost}): the view's bar switches them, the
- * inspector shows the section of the one that is on (./ToolBar.tsx), the shell wires the
- * host to its state (app/start.ts).
+ * One tool is on at a time ({@link ToolHost}): the view's bar switches them, a finding
+ * clicked in the checks turns on the tool of what it points at ({@link ToolHost.reveal}),
+ * the inspector shows the section of the one that is on (./ToolBar.tsx), the shell wires
+ * the host to its state (app/start.ts).
  */
 
 import { computed, effect, signal, untracked, type ReadonlySignal, type Signal } from '@preact/signals';
@@ -315,6 +316,25 @@ export class ToolHost {
   use(id: string | null): void {
     if (id !== null && !this.tools.some((tool) => tool.id === id)) return;
     this.active.value = id;
+  }
+
+  /**
+   * Turns on the tool that edits what `links` point at — a finding the user clicked in the
+   * checks: the tool whose fields hold the place of a field link into the open wagon's type
+   * (`/doors/3` → the doors tool). Call it after the selection took the links, so that their
+   * wagon is the open one; links into no tool's place change nothing.
+   */
+  reveal(links: readonly Link[]): void {
+    const subject = this.subject.value;
+    if (subject === null) return;
+    for (const link of links) {
+      if (link.kind !== 'field' || link.file !== subject.typeFile) continue;
+      const tool = toolFor(this.tools, link.at);
+      if (tool !== undefined) {
+        this.use(tool.id);
+        return;
+      }
+    }
   }
 
   /** Follows the shell's state, turning tools on and off, until the returned function is called (which turns the one on off). */
