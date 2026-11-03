@@ -237,6 +237,42 @@ test('the textures stand as their files are drawn: the coach’s cream band unde
   expect(errors).toEqual([]);
 });
 
+/** Relative luminance 0…255 of an sRGB pixel, near enough. */
+function luminance(pixel: readonly number[]): number {
+  return 0.2126 * pixel[0]! + 0.7152 * pixel[1]! + 0.0722 * pixel[2]!;
+}
+
+test('in the light display a lit object glows against the night, an unlit one stays dark', async ({ page }) => {
+  const errors = watchErrors(page);
+  await show(page, 'shunter');
+  const view = page.getByTestId('view3d');
+  await view.locator('[data-toggle="camera"] [data-value="front"]').click();
+  await view.locator('[data-toggle="display"] [data-value="lit"]').click();
+  await expect(view).toHaveAttribute('data-display', 'lit');
+  const lens = 'HEADLIGHT_1_LCG_FHL_0XFFF2CC';
+  const centre = async (): Promise<[number, number, number]> => {
+    const box = await page.evaluate((name) => {
+      const model = (window as HookWindow).__rwatView?.view.model.value;
+      return model?.objects.find((o) => o.name === name)?.bbox ?? null;
+    }, lens);
+    if (box === null) throw new Error(`no ${lens}`);
+    // the lens's face towards the front view (−X), at its middle
+    return [box[0][0], (box[0][1] + box[1][1]) / 2, (box[0][2] + box[1][2]) / 2];
+  };
+  const at = await centre();
+  const hood: [number, number, number] = [at[0] + 0.01, at[1] + 0.6, at[2]];
+  // the preview has told the view the group FHL is off: the lens is not lit, and its cover
+  // (WIDGET_7_CG_FHL_HIDE_NOTOUCH, shown while FHL is not on) is in front of it
+  await page.evaluate(() => (window as HookWindow).__rwatView?.view.setVisible('WIDGET_7_CG_FHL_HIDE_NOTOUCH', false));
+  const [off] = await coloursAt(page, [at]);
+  await page.evaluate((name) => (window as HookWindow).__rwatView?.view.setLit(name, true), lens);
+  const [on, dark] = await coloursAt(page, [at, hood]);
+  await screenshot(page, 'shunter-front-lit');
+  expect(luminance(on!)).toBeGreaterThan(luminance(off!) + 90);
+  expect(luminance(dark!)).toBeLessThan(60);
+  expect(errors).toEqual([]);
+});
+
 test('the textured display, the shunter with its headlight group lit, and axe with a model shown', async ({ page }) => {
   const errors = watchErrors(page);
   await show(page, 'coach');

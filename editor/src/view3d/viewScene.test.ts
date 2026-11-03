@@ -1,11 +1,11 @@
 import { signal } from '@preact/signals';
-import { Matrix4, OrthographicCamera, PerspectiveCamera } from 'three';
+import { AmbientLight, DirectionalLight, Matrix4, OrthographicCamera, PerspectiveCamera } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import type { Link, OverlayShape, PickHit } from '../core/contracts';
 import { objectLink } from './selection';
 import { ViewState } from './state';
 import { exampleModel } from './testModel.node';
-import { ViewScene } from './viewScene';
+import { LIGHT_DAY, LIGHT_NIGHT, ViewScene } from './viewScene';
 
 const coach = await exampleModel('coach');
 const COACH = coach.id;
@@ -107,6 +107,18 @@ describe('the view scene', () => {
     expect(scene.model?.isDrawn('INTERIOR_SEATS_LCG_IL')).toBe(false);
     state.setLayerShown('ghosts', false);
     expect(scene.model?.isDrawn('GUIDE_FLOOR_0')).toBe(false);
+  });
+
+  it('dims the light at night, the light display, to a fraction of the day’s', () => {
+    const { state, scene } = setUp();
+    state.show(coach);
+    const lights = () => scene.scene.children.flatMap((o) => [o, ...o.children]).filter((o): o is AmbientLight | DirectionalLight => o instanceof AmbientLight || o instanceof DirectionalLight);
+    const total = () => lights().reduce((sum, light) => sum + light.intensity, 0);
+    const day = total();
+    expect(day).toBeCloseTo((LIGHT_DAY.ambient + LIGHT_DAY.sun) * Math.PI, 9);
+    state.setDisplay('lit');
+    expect(total()).toBeCloseTo((LIGHT_NIGHT.ambient + LIGHT_NIGHT.sun) * Math.PI, 9);
+    expect(total()).toBeLessThan(day / 15);
   });
 
   it('draws a texture with the picture it is told, before or after the model is shown, until the next model', () => {

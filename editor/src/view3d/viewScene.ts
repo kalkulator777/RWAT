@@ -34,9 +34,14 @@ import { isSelected, objectLink, selectedObjects, selectionAfterClick } from './
 import { GHOSTS_LAYER, type Hover, type ViewState } from './state';
 
 /** The light, as a share of what shows a colour as it is (π in three.js's units): even light for the roles and textures… */
-const LIGHT_DAY = { ambient: 0.62, sun: 0.42 };
-/** …and night for the "lit" display, where only lit objects shine, against the dark background. */
-const LIGHT_NIGHT = { ambient: 0.07, sun: 0.05 };
+export const LIGHT_DAY = { ambient: 0.62, sun: 0.42 } as const;
+/**
+ * …and night for the "lit" display, where only lit objects shine, against the dark
+ * background: dim enough that an unlit object keeps its shape but no more (the output is
+ * sRGB, so a share of 0.05 still shows a quarter of the colour), and a lit one, drawn at
+ * its full colour, stands out at once.
+ */
+export const LIGHT_NIGHT = { ambient: 0.03, sun: 0.02 } as const;
 /** Where the light comes from, in the camera's axes: above and to the left of the eye. */
 const SUN_FROM_CAMERA = new Vector3(-0.35, 0.6, 1);
 

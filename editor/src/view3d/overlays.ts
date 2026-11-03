@@ -72,6 +72,10 @@ export const OVERLAY_STYLES: Readonly<Record<string, OverlayStyle>> = Object.fre
   reach: { color: '#1971c2', fill: 0.06, dashed: true },
   headlight: { color: '#f59f00', fill: 0.2, dashed: false },
   lamp: { color: '#f59f00', fill: 0.35, dashed: false },
+  /** A cabin lamp the preview lights (preview/scene `LAMP_STYLE`, a small circle): bright on the night's dark background. */
+  'preview.lamp': { color: '#ffe066', fill: 0.55, dashed: false },
+  /** A headlight the preview lights (preview/scene `HEADLIGHT_STYLE`, an arrow the way it shines). */
+  'preview.headlight': { color: '#fff3bf', fill: 0, dashed: false },
   /** A hinge: its axis. */
   pivot: { color: '#d6336c', fill: 0, dashed: false },
   /** The travel of a hinge or a slide. */

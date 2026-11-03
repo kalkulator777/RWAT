@@ -2,7 +2,9 @@ import { Color, LineBasicMaterial, LineDashedMaterial, LineSegments, Mesh, MeshB
 import { describe, expect, it } from 'vitest';
 import type { OverlayShape } from '../core/contracts';
 import { SELECTION_COLOR } from './modelScene';
+import { HEADLIGHT_STYLE, LAMP_STYLE } from '../preview/scene';
 import { disposeLayer, layerObject, OVERLAY_STYLES, overlayStyle, POINT_SIZE, shapeObject } from './overlays';
+import { VIEW_BACKGROUND } from './roleColors';
 
 function find<T>(root: Object3D, type: new (...args: never[]) => T): T[] {
   const found: T[] = [];
@@ -94,6 +96,19 @@ describe('the overlays', () => {
     // the head ends at the arc's end, a quarter round +Y from +X: −Z
     expect((arcHead as Mesh).position.clone().add(tip.multiplyScalar(0.1)).toArray().map((v) => Math.round(v * 1e6) / 1e6)).toEqual([0, 0, -1]);
     expect(find(shapeObject({ shape: 'arrow', from: [1, 1, 1], to: [1, 1, 1], style: 'x' }, false), Mesh)).toHaveLength(0);
+  });
+
+  it('have a style for every shape the preview draws, bright against the night of the light display', () => {
+    for (const style of [LAMP_STYLE, HEADLIGHT_STYLE]) {
+      expect(OVERLAY_STYLES[style], style).toBeDefined();
+      const colour = new Color(overlayStyle(style).color);
+      const night = new Color(VIEW_BACKGROUND.dark);
+      // luminance well over the dark background's: a lit lamp is the brightest thing there
+      const luminance = (c: Color): number => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+      expect(luminance(colour) - luminance(night), style).toBeGreaterThan(0.6);
+    }
+    const lamp = shapeObject({ shape: 'circle', centre: [0, 2, 0], radius: 0.15, style: LAMP_STYLE }, false);
+    expect(((find(lamp, Mesh)[0] as Mesh).material as MeshBasicMaterial).opacity).toBe(OVERLAY_STYLES[LAMP_STYLE]?.fill);
   });
 
   it('draw an unknown style as the default, and a selected shape in the selection colour with more fill', () => {
