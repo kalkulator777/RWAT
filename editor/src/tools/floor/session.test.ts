@@ -282,7 +282,7 @@ describe('the drawing of a big floor', () => {
     const host = new ToolHost([]);
     const stop = host.connect(b.wiring);
     const session = startFloor(
-      { subject: host.subject, dispatch: (command) => b.wiring.dispatch(command), selection: b.selection, view: b.view, previewDoors: b.previewDoors },
+      { subject: host.subject, dispatch: (command) => b.wiring.dispatch(command), selection: b.selection, reveal: (links) => host.reveal(links), view: b.view, previewDoors: b.previewDoors },
       { slowMs: -1, settleMs: 100 },
     );
     expect(b.view.overlays.get('floor.zones')).toHaveLength(4);

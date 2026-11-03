@@ -41,7 +41,7 @@ export interface FloorTool {
   /** The selected zone (the last of the selection's), or null. */
   selected(): number | null;
   select(index: number | null, toggle?: boolean): void;
-  /** Selects what a finding points at (zones, a door, a chair). */
+  /** Selects what a finding points at (zones, a door, a chair) and turns on the tool that edits it: a door's finding, the doors tool. */
   show(links: readonly Link[]): void;
   dispatch(command: Command): boolean;
   /** Adds a zone (from the keyboard): a block's square in the middle of the selected zone (or the first), on its floor; with no zone, at the car's middle. */
@@ -114,7 +114,9 @@ export function startFloor(context: ToolContext, options: { settleMs?: number; s
     selected,
     select,
     show(links) {
-      if (links.length > 0) context.selection.value = [...links];
+      if (links.length === 0) return;
+      context.selection.value = [...links];
+      context.reveal(links);
     },
     dispatch,
     add() {

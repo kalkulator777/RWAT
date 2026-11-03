@@ -4,7 +4,8 @@
  * walk starts) to select, move up and down, remove and add; the selected zone's six numbers
  * and its height from a click on the model; which doors stand open in the drawing; what
  * edges snap to; what the floor check finds now, in the interface's words, each finding
- * selecting what it is about; the legend of the layers.
+ * selecting what it is about and turning on its tool, as the checks tab does (a door's
+ * finding: the doors tool; a chair's: the chairs tool); the legend of the layers.
  */
 
 import { Fragment } from 'preact';
@@ -239,7 +240,7 @@ function ZoneNumbers({ tool, index, zone, readOnly }: { tool: FloorTool; index: 
 /**
  * What the floor check finds now, in the interface's words as the checks tab has them (the
  * finding of checks/floor, translated by its code), the engine's line as the tooltip; a
- * click selects what it is about.
+ * click selects what it is about and turns on the tool that edits it (`ToolContext.reveal`).
  */
 function Findings({ tool, subject }: { tool: FloorTool; subject: ToolSubject }) {
   const found = tool.picture.value?.findings ?? [];

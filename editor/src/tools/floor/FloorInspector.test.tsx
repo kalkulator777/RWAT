@@ -1,7 +1,9 @@
 import { act, fireEvent, render } from '@testing-library/preact';
 import { describe, expect, it } from 'vitest';
 import { setLang } from '../../i18n';
+import doorsTool from '../doors';
 import { ToolHost } from '../registry';
+import seatsTool from '../seats';
 import { ToolSection } from '../ToolBar';
 import { bench } from '../testing.node';
 import floorTool, { type FloorSession } from './index';
@@ -77,6 +79,31 @@ describe('the floor tool’s section of the inspector', () => {
     fireEvent.click(finding);
     expect(b.selection.value).toEqual([{ kind: 'field', file: FILE, at: '/interior/4' }, zoneLink(COACH, 4)]);
     setLang('en');
+    stop();
+  });
+
+  it('turns on the doors tool for a door’s finding, the chairs tool for a chair’s, as the checks do', async () => {
+    setLang('en');
+    const b = await bench(COACH, null);
+    const host = new ToolHost([floorTool, doorsTool, seatsTool]);
+    const stop = host.connect(b.wiring);
+    host.use('floor');
+    const view = render(<ToolSection host={host} />);
+    const q = <T extends Element = HTMLElement>(selector: string) => view.container.querySelector<T>(selector);
+    // door_fl half a block off the side wall (ExamplePackLoadTest.coachBreaks)
+    await act(() => b.journal.dispatch({ label: 'x', ops: [{ op: 'set', file: FILE, at: '/doors/0/min/2', value: 1.95 }, { op: 'set', file: FILE, at: '/doors/0/max/2', value: 2.01 }] }));
+    fireEvent.click(q('[data-code="DOOR_NOT_AT_FLOOR_END"] button') as HTMLElement);
+    expect(host.active.value).toBe('doors');
+    expect(b.selection.value).toEqual([{ kind: 'field', file: FILE, at: '/doors/0' }, { kind: 'door', type: COACH, index: 0 }]);
+    expect(q('[data-testid="doors-door"]')?.getAttribute('data-door')).toBe('0');
+    await act(() => void b.journal.undo());
+
+    // a chair off the floor in the coach, which has none: its finding hands over to the chairs tool
+    host.use('floor');
+    await act(() => b.journal.dispatch({ label: 'x', ops: [{ op: 'set', file: FILE, at: '/cab', value: { seats: [{ at: [0, 3.3, 0], yaw: 0 }] } }] }));
+    fireEvent.click(q('[data-code="SEAT_NOT_SITTABLE"] button') as HTMLElement);
+    expect(host.active.value).toBe('seats');
+    expect(b.selection.value).toEqual([{ kind: 'field', file: FILE, at: '/cab/seats/0' }, { kind: 'seat', type: COACH, index: 0 }]);
     stop();
   });
 

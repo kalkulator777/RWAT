@@ -48,7 +48,7 @@ export interface SeatsTool {
   /** The place selected last, or null. */
   selected(): PlaceRef | null;
   select(ref: PlaceRef | null, toggle?: boolean): void;
-  /** Selects what a finding points at (its chair, or the field of the cab). */
+  /** Selects what a finding points at (its chair, or the field of the cab), the tool that edits it on (`ToolContext.reveal`). */
   show(links: readonly Link[]): void;
   dispatch(command: Command): boolean;
   /** Places a place of `kind` where a click at `point` on `object` puts one (`exact`: the point itself); false when nothing was placed. */
@@ -128,7 +128,9 @@ export function startSeats(context: ToolContext, options: { settleMs?: number; s
     selected,
     select,
     show(links) {
-      if (links.length > 0) context.selection.value = [...links];
+      if (links.length === 0) return;
+      context.selection.value = [...links];
+      context.reveal(links);
     },
     dispatch,
     placeOn(object, point, exact = false, kind = kinds[0]) {

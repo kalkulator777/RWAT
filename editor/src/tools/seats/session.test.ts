@@ -288,7 +288,7 @@ describe('the chairs edited from the keyboard', () => {
     const stop = host.connect(b.wiring);
     // every picture is slow: each edit's drawing waits for the run to end
     const own = startSeats(
-      { subject: host.subject, dispatch: (command) => b.wiring.dispatch(command), selection: b.selection, view: b.view, previewDoors: b.previewDoors },
+      { subject: host.subject, dispatch: (command) => b.wiring.dispatch(command), selection: b.selection, reveal: (links) => host.reveal(links), view: b.view, previewDoors: b.previewDoors },
       { slowMs: 0, settleMs: 50 },
     );
     const drawn = () => b.view.overlays.get('seats.chairs')?.length ?? 0;

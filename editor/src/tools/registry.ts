@@ -31,7 +31,8 @@
  * A tool that only shows (the lights, the hinges) edits no field.
  *
  * One tool is on at a time ({@link ToolHost}): the view's bar switches them, a finding
- * clicked in the checks turns on the tool of what it points at ({@link ToolHost.reveal}),
+ * clicked in the checks or in a tool's own list turns on the tool of what it points at
+ * ({@link ToolHost.reveal}, {@link ToolContext.reveal}),
  * the inspector shows the section of the one that is on (./ToolBar.tsx), the shell wires
  * the host to its state (app/start.ts).
  */
@@ -73,6 +74,12 @@ export interface ToolContext {
   dispatch(command: Command): boolean;
   /** The editor's one selection: zones, doors and chairs are `{kind, type: subject.wagon, index}` links. */
   readonly selection: Signal<readonly Link[]>;
+  /**
+   * Turns on the tool that edits what `links` point at ({@link ToolHost.reveal}), as a
+   * finding clicked in the checks does: a door's or a chair's finding in a tool's own list
+   * hands over to the doors' or the chairs' tool. Call it after the selection took the links.
+   */
+  reveal(links: readonly Link[]): void;
   readonly view: ViewApi;
   /**
    * The doors the preview shows open, as the engine's open-door bits (bit i: door i of the
@@ -331,7 +338,7 @@ export class ToolHost {
 
   /**
    * Turns on the tool that edits what `links` point at — a finding the user clicked in the
-   * checks: the tool of the place of a field link into the open wagon's type
+   * checks or in a tool's list: the tool of the place of a field link into the open wagon's type
    * ({@link toolAround}: `/doors/3` → the doors tool, `/cab/seats/0` → the chairs'). Call it
    * after the selection took the links, so that their wagon is the open one; links into no
    * tool's place change nothing.
@@ -386,6 +393,7 @@ export class ToolHost {
       subject: own,
       dispatch: (command) => wiring.dispatch(command),
       selection: wiring.selection,
+      reveal: (links) => this.reveal(links),
       view: wiring.view,
       previewDoors: wiring.previewDoors,
     });
