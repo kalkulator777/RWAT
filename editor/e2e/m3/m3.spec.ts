@@ -25,10 +25,9 @@ import { Uint8ArrayReader, Uint8ArrayWriter, ZipWriter } from '@zip.js/zip.js';
 import { framesAt, parse as parseAnim } from '../../src/ports/anim';
 import { toObj } from '../../src/ports/objFrame';
 import { EXAMPLE_PACK, GOLDEN_DIR, REPO_ROOT } from '../../src/testing/repo.node';
-import type { ViewTestHook } from '../../src/view3d/testHook';
 import { filesOf, openPack, pickWagon, watchErrors } from '../examplePack';
+import { coloursAt, luminance, type HookWindow } from '../viewPixels';
 
-type HookWindow = { __RWAT_E2E__?: boolean; __rwatView?: ViewTestHook | null };
 type Vec3 = [number, number, number];
 
 const COACH = 'rwat_example:coach';
@@ -59,31 +58,6 @@ async function previewSection(page: Page, section: 'doors' | 'controls' | 'light
   await page.getByRole('tab', { name: 'Preview', exact: true }).click();
   await page.getByTestId('preview').locator(`button[data-section="${section}"]`).click();
   await expect(page.getByTestId('preview')).toHaveAttribute('data-section', section);
-}
-
-/** Draws now and reads the drawing's colour at each point of the OBJ frame, `[r, g, b]`. */
-async function coloursAt(page: Page, points: readonly Vec3[]): Promise<Vec3[]> {
-  return page.evaluate(async (points) => {
-    const hook = (window as HookWindow).__rwatView;
-    const canvas = document.querySelector<HTMLCanvasElement>('.view3d-gl');
-    if (!hook || !canvas) throw new Error('no view');
-    hook.renderNow();
-    const image = new Image();
-    image.src = canvas.toDataURL('image/png');
-    await image.decode();
-    const copy = document.createElement('canvas');
-    copy.width = image.width;
-    copy.height = image.height;
-    const context = copy.getContext('2d');
-    if (!context) throw new Error('no 2d');
-    context.drawImage(image, 0, 0);
-    const rect = canvas.getBoundingClientRect();
-    return points.map((point) => {
-      const at = hook.pointOnPage(point);
-      const pixel = context.getImageData(Math.round(((at.x - rect.left) / rect.width) * image.width), Math.round(((at.y - rect.top) / rect.height) * image.height), 1, 1).data;
-      return [pixel[0] ?? 0, pixel[1] ?? 0, pixel[2] ?? 0] as Vec3;
-    });
-  }, points);
 }
 
 /** What the view holds now of some objects: transform (column-major), hidden, lit. */
@@ -260,7 +234,6 @@ test('the shunter: THROTTLE_1 at notch 8 turns the lever about its marker; FHL o
   await page.getByRole('button', { name: 'Show in the Light display' }).click();
   await expect.poll(async () => await viewOf(page, [lens, cover])).toEqual({ [lens]: { transform: null, hidden: false, lit: true }, [cover]: expect.objectContaining({ hidden: true }) as unknown });
   const [bright] = await coloursAt(page, [face]);
-  const luminance = (p: Vec3): number => 0.2126 * p[0] + 0.7152 * p[1] + 0.0722 * p[2];
   expect(luminance(bright!)).toBeGreaterThan(luminance(dark!) + 90);
   const beams = await page.evaluate(() => (window as HookWindow).__rwatView?.view.overlays.get('preview.lights')?.map((s) => `${s.shape} ${s.style}`) ?? []);
   expect(beams).toContain('arrow preview.headlight');

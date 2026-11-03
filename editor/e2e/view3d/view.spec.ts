@@ -17,10 +17,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { roleColor, VIEW_BACKGROUND } from '../../src/view3d/roleColors';
-import type { ViewTestHook } from '../../src/view3d/testHook';
 import { openPack, pickWagon, watchErrors } from '../examplePack';
-
-type HookWindow = { __RWAT_E2E__?: boolean; __rwatView?: ViewTestHook | null };
+import { coloursAt, luminance, type HookWindow } from '../viewPixels';
 
 type ExampleWagon = 'coach' | 'shunter' | 'gondola';
 
@@ -168,34 +166,6 @@ test('a click selects the object under the pointer, Shift adds another', async (
   expect(errors).toEqual([]);
 });
 
-/** Draws now and reads the drawing's colour at each point of the OBJ frame, as `[r, g, b]`. */
-async function coloursAt(page: Page, points: readonly [number, number, number][]): Promise<[number, number, number][]> {
-  return page.evaluate(async (points) => {
-    const hook = (window as HookWindow).__rwatView;
-    const canvas = document.querySelector<HTMLCanvasElement>('.view3d-gl');
-    if (!hook || !canvas) throw new Error('no view');
-    hook.renderNow();
-    const url = canvas.toDataURL('image/png');
-    const image = new Image();
-    image.src = url;
-    await image.decode();
-    const copy = document.createElement('canvas');
-    copy.width = image.width;
-    copy.height = image.height;
-    const context = copy.getContext('2d');
-    if (!context) throw new Error('no 2d');
-    context.drawImage(image, 0, 0);
-    const rect = canvas.getBoundingClientRect();
-    return points.map((point) => {
-      const at = hook.pointOnPage(point);
-      const x = Math.round(((at.x - rect.left) / rect.width) * image.width);
-      const y = Math.round(((at.y - rect.top) / rect.height) * image.height);
-      const pixel = context.getImageData(x, y, 1, 1).data;
-      return [pixel[0] ?? 0, pixel[1] ?? 0, pixel[2] ?? 0] as [number, number, number];
-    });
-  }, points);
-}
-
 /** The name of the colour a pixel is, lit by any share 0.4…1.3 of white: the nearest after the best share. */
 function nearest(pixel: readonly number[], colours: Readonly<Record<string, number>>): string {
   let best = '';
@@ -236,11 +206,6 @@ test('the textures stand as their files are drawn: the coach’s cream band unde
   await screenshot(page, 'coach-textured-side');
   expect(errors).toEqual([]);
 });
-
-/** Relative luminance 0…255 of an sRGB pixel, near enough. */
-function luminance(pixel: readonly number[]): number {
-  return 0.2126 * pixel[0]! + 0.7152 * pixel[1]! + 0.0722 * pixel[2]!;
-}
 
 test('in the light display a lit object glows against the night, an unlit one stays dark', async ({ page }) => {
   const errors = watchErrors(page);
