@@ -5,7 +5,8 @@
  *   Pages under /RWAT/, from `vite preview` at / and from any other folder.
  * - The site carries the pack schema at schema/*.json, byte for byte as in the
  *   repository: the schemas' `$id` (https://kalkulator777.github.io/RWAT/schema/…) point
- *   there, and the service worker precaches them with the rest.
+ *   there, and the service worker precaches them with the rest. `vite dev` serves the
+ *   same files from the repository at the same place.
  * - The service worker (vite-plugin-pwa, Workbox) precaches the shell on the first visit;
  *   Pyodide (dist/pyodide/, added in M6) is cached when first used, not on the first visit.
  *
@@ -23,16 +24,36 @@ const editorDir = dirname(fileURLToPath(import.meta.url));
 const repoDir = resolve(editorDir, '..');
 const schemaDir = resolve(repoDir, 'schema');
 
-/** Emits ../schema/*.json into the build as schema/*.json, unchanged. */
+/** The schema files: every ../schema/*.json, sorted. */
+function schemaFiles(): string[] {
+  return readdirSync(schemaDir)
+    .filter((name) => name.endsWith('.json'))
+    .sort();
+}
+
+/**
+ * ../schema/*.json at schema/*.json next to the page, unchanged: emitted into the build,
+ * and served by `vite dev` straight from the repository (the dev server has no build to
+ * serve them from, and its fallback would answer index.html). Only the schema's own file
+ * names are served, so nothing else of the repository is reachable this way.
+ */
 function publishSchema(): Plugin {
   return {
     name: 'rwat-publish-schema',
-    apply: 'build',
+    configureServer(server) {
+      server.middlewares.use('/schema', (request, response, next) => {
+        const name = (request.url ?? '').split('?')[0]?.replace(/^\//, '') ?? '';
+        if (!schemaFiles().includes(name)) {
+          next();
+          return;
+        }
+        response.setHeader('Content-Type', 'application/json; charset=utf-8');
+        response.setHeader('Cache-Control', 'no-cache');
+        response.end(readFileSync(resolve(schemaDir, name)));
+      });
+    },
     generateBundle() {
-      const files = readdirSync(schemaDir)
-        .filter((name) => name.endsWith('.json'))
-        .sort();
-      for (const name of files) {
+      for (const name of schemaFiles()) {
         this.emitFile({ type: 'asset', fileName: `schema/${name}`, source: readFileSync(resolve(schemaDir, name)) });
       }
     },
