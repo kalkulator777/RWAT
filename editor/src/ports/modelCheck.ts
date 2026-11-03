@@ -27,8 +27,11 @@
  *
  * Order as the engine's: the OBJ (a finding here stops the check), each material library
  * in `mtllib` order with its materials, what draws, the control groups by the parts, the
- * animations, the liveries. The engine's animations and liveries come in no set order
- * (`WagonModelDecl` keeps them by `Map.copyOf`); here they come in the file's.
+ * animations and the liveries, each in the file's order (`WagonModelDecl` keeps it). But
+ * for one thing a JavaScript object does to keys: a key that is an array index (`"2"`,
+ * `"10"`) comes before the others, in ascending order, whatever the file's (./modelParts
+ * `modelDeclaration` reads a parsed value, the engine Gson's object, which keeps the file's
+ * order) — the golden data has no such key.
  *
  * Locations are `ns:path`, as the engine names resources; the caller's
  * {@link ModelCheckFiles} says which Minecraft takes and what is there. Pure: it runs in
