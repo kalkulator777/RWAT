@@ -13,14 +13,16 @@
  *   edit of the model's own files reads it again, and only then is it shown anew. An edit
  *   of the type only gives the view the new frame and the preview the new type.
  * - A model that can't be read comes empty with its finding (model/build); a worker that
- *   fails is one finding too.
+ *   fails is one finding too, the one "Check all models" makes of it (checks/model
+ *   `failedModel`).
  *
  * The rules are the modules': what a wagon is (core/pack `stock`), what a type is
  * (ports/wagonType), the guides' frame (view3d/frame). This only wires them.
  */
 
 import { batch, effect, untracked } from '@preact/signals';
-import type { Link, LoadedModel, Problem, ViewApi } from '../core/contracts';
+import { failedModel } from '../checks/model/problems';
+import type { Link, LoadedModel, ViewApi } from '../core/contracts';
 import type { Pack, StockEntry } from '../core/pack';
 import { packFiles, type ModelFiles } from '../model/files';
 import type { ModelRequest } from '../model/types';
@@ -74,19 +76,6 @@ export function wagonToOpen(links: readonly Link[], stock: readonly StockEntry[]
   if (open !== null && stock.some((entry) => entry.id === open)) return open;
   const models = stock.filter((entry) => entry.model !== null);
   return models.length === 1 ? models[0]!.id : null;
-}
-
-/** The finding of a model the worker failed to read (not the model's fault: the worker's). */
-function failed(wagon: string, file: string, error: unknown): Problem {
-  const detail = error instanceof Error ? error.message : String(error);
-  return {
-    severity: 'error',
-    source: 'model',
-    code: 'model.failed',
-    params: { model: wagon, error: detail },
-    text: `model ${wagon} could not be read: ${detail}`,
-    at: [{ kind: 'file', file }],
-  };
 }
 
 /**
@@ -153,7 +142,7 @@ export function connectModel(wiring: ModelWiring): () => void {
       (error: unknown) => {
         if (gen !== generation) return;
         closeModel();
-        modelProblems.value = [failed(wagon, request.file, error)];
+        modelProblems.value = [failedModel({ id: wagon, file: request.file }, error)];
       },
     );
   };

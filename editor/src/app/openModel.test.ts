@@ -7,6 +7,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { failedModel } from '../checks/model/problems';
 import type { Command, Link } from '../core/contracts';
 import { MemorySource, readTree } from '../core/pack/testing.node';
 import { createModelApi } from '../model/api';
@@ -211,6 +212,8 @@ describe('the open model', () => {
     select({ kind: 'file', file: COACH_MODEL });
     await vi.waitFor(() => expect(modelProblems.value).toHaveLength(1));
     expect(modelProblems.value[0]).toMatchObject({ severity: 'error', source: 'model', code: 'model.failed', text: 'model rwat_example:coach could not be read: worker gone' });
+    // the finding "Check all models" makes of a worker that fails, word for word
+    expect(modelProblems.value[0]).toEqual(failedModel({ id: COACH, file: COACH_MODEL }, new Error('worker gone')));
     expect(findings.value).toContain(modelProblems.value[0]);
     expect(rig.view.shown).toEqual([]);
     expect(openModel.value).toBeNull();

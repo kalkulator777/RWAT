@@ -96,7 +96,7 @@ export function badDeclaration(model: CheckedModel, error: string): Problem {
   };
 }
 
-/** The finding of a model the worker failed to read: not the model's fault, the worker's (app/openModel, ./all.ts). */
+/** The finding of a model the worker failed to read: not the model's fault, the worker's. The one finding of it, of the open model (app/openModel) and in "Check all models" (./all.ts). */
 export function failedModel(model: Pick<CheckedModel, 'id' | 'file'>, error: unknown): Problem {
   const detail = error instanceof Error ? error.message : String(error);
   return {
