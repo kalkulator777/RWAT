@@ -23,6 +23,9 @@ import java.util.Objects;
  * seated player reaches) are params too, so the line needs nothing else.
  * Pure.
  *
+ * <p>Ported: {@code editor/src/ports/floorCheck.ts} ({@code findingText});
+ * golden: {@code fixtures/golden/floor_check/}.
+ *
  * @param code   what kind of thing is wrong
  * @param index  the zone, door or chair (its index in the type's
  *               {@code interior}, {@code doors} or {@code cab.seats}), or −1

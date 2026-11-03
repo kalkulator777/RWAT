@@ -25,6 +25,9 @@ package com.muzhik17.trainsmod.stock;
  * ({@code length}, {@code bogies}, {@code couplers}: + forward): only points
  * and boxes are translated. {@code tools/floorgen.py} ports this ({@code
  * Y_LIFT}, {@code point_from_obj}, {@code box_from_obj} and back). Pure.
+ *
+ * <p>Ported: {@code editor/src/ports/objFrame.ts}, {@code tools/floorgen.py};
+ * golden: {@code fixtures/golden/obj_frame/}.
  */
 public final class ObjFrame {
 

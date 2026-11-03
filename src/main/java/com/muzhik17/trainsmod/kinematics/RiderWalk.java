@@ -31,6 +31,10 @@ import com.muzhik17.trainsmod.stock.WagonType;
  * open hull door or opening doesn't let them out ({@link #exitDoor}), so
  * nobody steps off a moving train by accident; gangways into the next car
  * still pass — that is walking the train, not leaving it (SPEC §9.5).
+ *
+ * <p>Ported: {@code editor/src/ports/riderWalk.ts} (the constants,
+ * {@code facesDoor}, {@code along}); golden: through
+ * {@code fixtures/golden/floor_check/}.
  */
 public final class RiderWalk {
 

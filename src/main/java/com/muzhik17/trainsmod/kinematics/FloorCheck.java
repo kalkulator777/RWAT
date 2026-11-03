@@ -34,6 +34,10 @@ import com.muzhik17.trainsmod.stock.WagonType;
  * lines on load, a unit test runs it over every type of the generated
  * packs, and another holds the lines to what they were before the findings
  * had codes ({@code FloorCheckTextsTest}).
+ *
+ * <p>Ported: {@code editor/src/ports/floorCheck.ts}, {@code tools/floorgen.py}
+ * ({@code Region.door_seeds}: the ways out); golden:
+ * {@code fixtures/golden/floor_check/}.
  */
 public final class FloorCheck {
 

@@ -26,6 +26,10 @@ import org.joml.Matrix4f;
  *
  * <p>No MC imports: parsing and the change of space are unit-tested against
  * the real asset.
+ *
+ * <p>Ported: {@code editor/src/ports/anim.ts} ({@code parse}, {@code frameAt}),
+ * {@code tools/ir2rwat.py} ({@code anim_objects}: the objects); golden:
+ * {@code fixtures/golden/anim/}.
  */
 public final class IrAnim {
 

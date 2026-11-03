@@ -35,6 +35,9 @@ import java.util.Set;
  * pack was set up there). A marker of two points comes out the same either
  * way round — from the point nearer the origin to the other — so that is the
  * one to draw for a hinge whose sign matters. Pure.
+ *
+ * <p>Ported: {@code editor/src/ports/pivotAxis.ts}; golden:
+ * {@code fixtures/golden/pivot_axis/}.
  */
 public final class PivotAxis {
 

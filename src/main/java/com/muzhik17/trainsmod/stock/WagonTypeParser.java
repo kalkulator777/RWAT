@@ -69,6 +69,9 @@ import com.muzhik17.trainsmod.pack.PackJson;
  *
  * <p>Uses GSON only (ships with the game, not an MC class) so the stock
  * package stays engine-free and the parser unit-testable.
+ *
+ * <p>Ported: {@code editor/src/ports/wagonType.ts}; golden:
+ * {@code fixtures/golden/wagon_type/}.
  */
 public final class WagonTypeParser {
 

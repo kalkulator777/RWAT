@@ -600,7 +600,7 @@ export interface ViewApi {
 9. **Ожидаемое записывает эталон логики:** Java для всего, что есть в Java; Python — только для `json_dump` (`ir2rwat.dump`) и `validate` (`validate_pack.py`), у которых Java нет. Режим перезаписи — явный флаг: `./gradlew test --tests 'com.muzhik17.trainsmod.golden.*' -Pgolden.update` (свойство Gradle — входные данные задачи `test`, так что прогоны с флагом и без не отвечают друг за друга из кэша; прежнего `-Dgolden.update=true` больше нет) и `python -I tools/tests/test_golden_<папка>.py --update`. Флаг Java меняет в файле только `expected`, вход и прочий текст остаются как записаны (`fixtures/golden/README.md`, «Как обновить»). Без флага тест только сравнивает. TS ожидаемое не пишет никогда.
 10. **Раннеры — по файлу на логику:** `src/test/java/…/golden/<Logic>Golden.java` (константа `FOLDER`, `@TestFactory`), `tools/tests/test_golden_<папка>.py`, `editor/src/ports/<logic>.test.ts`; *решение дирижёра:* раннер TS лежит рядом с модулем, который проверяет (не обязательно в `ports/`), и объявляет `const FOLDER = '<папка>'` — общий мета-тест находит раннеры по этой строке. Общая часть — `Golden.java`, `tools/tests/golden.py` и `editor/src/testing/golden.node.ts` (один модуль на все раннеры TS: чтение папки с `input_file`, проверка по `schema.json`, сравнение `mismatch`). Мета-тесты: `GoldenFoldersTest` (у каждой папки, где назван Java, есть свой раннер) и `test_golden_folders.py` (то же для Python, плюс каждый файл по схеме, `id`, размеры).
 11. **Схема формата** golden — `fixtures/golden/schema.json` (draft 2020-12): корень — файл случаев, `$defs/ports` — `ports.json`, `$defs/finding` — находка. Python проверяет по ней каждый файл валидатором `validate_pack.py`; тест Vitest — Ajv, прежде чем читать.
-12. **Наборы M1–M2** (596 случаев в 16 папках; эталон Java, если не сказано иное):
+12. **Наборы M1–M2** (642 случая в 17 папках; эталон Java, если не сказано иное):
 
    | Папка | Порты | Случаев | Что внутри |
    |---|---|---|---|
@@ -610,7 +610,7 @@ export interface ViewApi {
    | `control_pose` | ts | 22 | значение, видимость, матрица органа |
    | `obj` | ts, python (имена) | 48 | имена из строк `o`/`g`, разбор текста OBJ, OBJ пака-примера вкратце |
    | `mtl` | ts, python (имя, `parse_mtl`) | 50 | имена материалов, разбор MTL, пути, MTL пака-примера |
-   | `anim` | ts, python (имена) | 15 | старые случаи и `salon_door.anim` пака-примера |
+   | `anim` | ts, python (имена) | 26 | старые случаи и `salon_door.anim` пака-примера; `frame_at` — кадр при прогрессе (`IrAnim.frameAt`) |
    | `pivot_axis` | ts | 29 | маркер-линия, маркер-коробка, ничьи концов A и B, точка ни в одной половине; маркер из текста OBJ, в том числе пака-примера |
    | `floor_region` | ts, python | 28 | типы пака-примера, поломки из `ExamplePackLoadTest`, ступени, касающиеся, перекрытые и сходящиеся углом зоны, узкий проход, закрытая и открытая внутренняя дверь в стыке зон |
    | `floor_check` | ts, python (выходы) | 48 | то же плюс кресла (`Infinity`, `NaN`, `-0.00` в тексте); выходы `exits_of` — `floorgen.door_seeds` |
@@ -620,6 +620,7 @@ export interface ViewApi {
    | `validate` | ts (эталон Python) | 37 | файлы пака-примера (0 находок), поломки, `suggestion` |
    | `door_leaves` | ts (`modelParts.ts`, M3) | 12 | створки и их двери |
    | `anim_model` | — | 14 | кадры `.anim` в кадре модели |
+   | `cab_area` | ts | 13 | кабины машиниста: кабина кресла и куска пола, двери под ключ, боковые двери пассажиров, `cabAt`, `nearestChair`, `cabDoor`, `facing`, `leftSide` (`kinematics.CabArea`; набор добавлен в M2, A2.3) |
 
 **Отступления от первоначального замысла** (решения агента A0.4):
 
@@ -631,7 +632,7 @@ export interface ViewApi {
 - **`validate`: ожидаемое — `{pointer, severity, text}`** (указатель RFC 6901, `""` — весь файл). Ajv формулирует находки иначе, поэтому порт сверяет места и важность, текст — справочно; подсказку к незнакомому ключу проверяет `suggestion.json`.
 - **Поломки из `ExamplePackLoadTest`** — копии типов пака-примера с одной правкой прямо во входе, а не `input_file` с заплаткой: правка пака-примера не меняет смысл случая, а портам не нужен механизм заплаток.
 - **Отражение вместо чистых точек входа:** `StockModel.Control.transform` (класс держит `ResourceLocation`, которого нет в тестовом classpath) и `FloorCheck.walkablePieces` (пакетный доступ). Код движка тот же; чистый дом для них уберёт отражение.
-- **Чего нет:** выбора кадра `.anim` и интерполяции (`frameAt`, таблица 4.1) — они внутри `WagonRenderer` с Minecraft. Нужна чистая точка входа (например, `IrAnim.frameAt(frames, progress)`), тогда случаи добавятся в `anim/`.
+- **Выбор кадра `.anim` и интерполяция** (`frameAt`, таблица 4.1) были внутри `WagonRenderer` с Minecraft; теперь это чистый `IrAnim.frameAt`, и его случаи — `anim/frame_at.json`.
 - **CI:** новых шагов не понадобилось — задача `mod` гоняет `./gradlew build`, `pack-format` — `unittest discover tools/tests`, оба подхватывают раннеры сами.
 
 ### 4.6. Что меняется в Java и Python до портов (M0)

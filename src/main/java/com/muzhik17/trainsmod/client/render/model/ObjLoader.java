@@ -25,6 +25,9 @@ import com.muzhik17.trainsmod.convention.ObjectRole;
  * (4th vertex = 3rd) since the render type draws quads; larger n-gons are
  * fanned into triangles. Only positive 1-based indices are
  * supported (what the dev assets use).
+ *
+ * <p>Ported: {@code editor/src/ports/obj.ts}, {@code tools/ir2rwat.py}
+ * ({@code parse_obj}: names and bounds); golden: {@code fixtures/golden/obj/}.
  */
 public final class ObjLoader {
 

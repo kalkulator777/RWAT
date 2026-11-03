@@ -31,6 +31,9 @@ import java.util.Map;
  * 64-bit multiply-and-XOR hash could take two far corners for one and join
  * their islands (no pack had such a pair), and a port could not repeat it
  * without 64-bit integers.
+ *
+ * <p>Ported: {@code editor/src/ports/lampIslands.ts}; golden:
+ * {@code fixtures/golden/lamp_islands/}.
  */
 public final class LampIslands {
 

@@ -36,6 +36,9 @@ import com.google.gson.JsonSyntaxException;
  * {@code sounds.idle.pitch}); {@code where} is the path of the object being
  * read, empty at the top level. GSON only, no MC types: the core parsers
  * ({@code stock.WagonTypeParser}) and their tests use it.
+ *
+ * <p>Ported: {@code editor/src/ports/packJson.ts}; golden: through
+ * {@code fixtures/golden/wagon_type/}.
  */
 public final class PackJson {
 

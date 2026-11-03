@@ -35,6 +35,9 @@ import com.muzhik17.trainsmod.stock.WagonType;
  *
  * <p>All in the <b>model</b> frame (a flipped wagon's riders are turned back
  * into it). Pure; one instance per type, made on first use.
+ *
+ * <p>Ported: {@code editor/src/ports/cabArea.ts}; golden:
+ * {@code fixtures/golden/cab_area/}.
  */
 public final class CabArea {
 

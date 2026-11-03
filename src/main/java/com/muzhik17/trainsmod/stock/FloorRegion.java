@@ -26,6 +26,9 @@ import java.util.List;
  * out of where centres stand: the pieces end at its faces, and a step must
  * not pass through it ({@link #throughCut}) — a leaf may be thinner than a step.
  * Only a cut that takes something out is kept: one in a wall changes nothing.
+ *
+ * <p>Ported: {@code editor/src/ports/floorRegion.ts}, {@code tools/floorgen.py}
+ * ({@code Region}); golden: {@code fixtures/golden/floor_region/}.
  */
 public final class FloorRegion {
 

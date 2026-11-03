@@ -24,6 +24,10 @@ import java.util.Map;
  *
  * <p>No MC imports — paths are plain strings, unit-tested; turning them into
  * resource locations is the loader's job.
+ *
+ * <p>Ported: {@code editor/src/ports/mtl.ts}, {@code tools/ir2rwat.py}
+ * ({@code material_name}, {@code parse_mtl}); golden:
+ * {@code fixtures/golden/mtl/}.
  */
 public final class MtlParser {
 

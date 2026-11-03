@@ -38,6 +38,12 @@ import java.util.regex.Pattern;
  * <p>A Blender copy suffix ({@code .001}) at the end of a name is dropped
  * first: {@code DOOR_3_INTERIOR_LCG_IL.001} lights with {@code IL}.
  *
+ * <p>Ported: {@code editor/src/ports/objectRole.ts} ({@code objectName}:
+ * {@code obj.ts}), {@code tools/ir2rwat.py} ({@code LIGHT_GROUP},
+ * {@code DOOR_KEY}, {@code HEADLIGHT}), {@code tools/floorgen.py}
+ * ({@code object_name_of}); golden: {@code fixtures/golden/object_role/},
+ * {@code obj/}.
+ *
  * @param control      the control this object belongs to, or null
  * @param pivotDegrees if this object is its control's pivot marker: the swing
  *                     at full travel, degrees (0 if the name gives none); NaN

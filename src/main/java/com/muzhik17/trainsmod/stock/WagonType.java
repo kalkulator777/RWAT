@@ -16,6 +16,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * presence of a {@link Cab}. A locomotive has both; a cab car only the cab; an
  * EMU motor car only traction; freight stock neither.
  *
+ * <p>Ported: {@code editor/src/ports/wagonType.ts}; golden:
+ * {@code fixtures/golden/wagon_type/}.
+ *
  * @param id           namespaced type id, e.g. {@code rwat:chme3}
  * @param length       over buffers/couplers, blocks
  * @param bogieOffsets longitudinal bogie pivot positions relative to the body
