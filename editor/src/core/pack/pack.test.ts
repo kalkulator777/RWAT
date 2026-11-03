@@ -205,6 +205,11 @@ describe('the pack model, case by case', () => {
       [{ op: 'deleteFile', file: 'a.png' }, 'not-loaded'],
       [{ op: 'putFile', file: 'b.txt', bytes: new Uint8Array() }, 'not-loaded'],
       [{ op: 'deleteFile', file: 'gone' }, 'no-file'],
+      [{ op: 'putFile', file: '../evil.json', bytes: new Uint8Array() }, 'bad-path'],
+      [{ op: 'putFile', file: '/abs.json', bytes: new Uint8Array() }, 'bad-path'],
+      [{ op: 'putFile', file: 'a//b.json', bytes: new Uint8Array() }, 'bad-path'],
+      [{ op: 'renameFile', file: 'b.txt', to: 'x/../y.txt' }, 'bad-path'],
+      [{ op: 'renameFile', file: 'b.txt', to: 'C:/y.txt' }, 'bad-path'],
     ];
     for (const [op, expected] of cases) expect(code(() => pack.apply(op)), JSON.stringify(op)).toBe(expected);
     expect(pack.version).toBe(before);

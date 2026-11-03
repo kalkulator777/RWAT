@@ -16,7 +16,7 @@ import type { FileEntry as ZipJsFile } from '@zip.js/zip.js';
 import type { FileChange, FileEntry, PackSink, PackSource } from '../core/contracts';
 import { planChanges } from './changes';
 import { causeText, PackIoError, pathsSummary, wrapIoError } from './errors';
-import { comparePaths, normalizeEntryName, packPathProblem } from './paths';
+import { comparePaths, normalizeEntryName, packPathProblem } from '../core/paths';
 import { loadZipJs, NO_WORKERS } from './zipjs';
 
 /** What `openZipSource` reads: a file the user picked, or bytes already in memory. */

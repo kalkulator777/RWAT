@@ -4,8 +4,10 @@
  * spelled, where the pack's root is when it was zipped inside a folder.
  */
 
-/** The pack's metadata file at its root (pack-layout.json `files`). */
-export const MCMETA = 'pack.mcmeta';
+import { MCMETA } from '../paths';
+
+/** The pack's metadata file at its root (pack-layout.json `files`); the constant is core/paths.ts's. */
+export { MCMETA };
 
 /** The file tools/ir2rwat.py writes into a pack it generated (`MARKER`): such a pack is edited through its recipe. */
 export const CONVERSION_MARKER = 'RWAT_CONVERSION.txt';

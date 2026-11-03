@@ -6,7 +6,7 @@
 
 import type { FileChange } from '../core/contracts';
 import { PackIoError, pathsSummary } from './errors';
-import { compareForWriting, comparePaths, packPathProblem, parentPath } from './paths';
+import { compareForWriting, comparePaths, packPathProblem, parentPath } from '../core/paths';
 
 /** A change that deletes. */
 export function isDelete(change: FileChange): change is { path: string; delete: true } {

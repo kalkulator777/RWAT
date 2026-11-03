@@ -25,6 +25,7 @@ import { JsonSyntaxError, parseJson, putMember } from '../json/parse';
 import { PointerError, formatPointer, parsePointer } from '../json/pointer';
 import { ValuePathError, deepEqual, insertIn, isJsonObject, removeIn, setIn } from '../json/value';
 import type { OpTarget } from '../journal/journal';
+import { packPathProblem } from '../paths';
 import {
   CONVERSION_MARKER,
   type Declaration,
@@ -58,7 +59,9 @@ export type PackErrorCode =
   /** The value is not JSON: undefined, NaN, a function, a class instance. */
   | 'bad-value'
   /** A rename that would make a JSON file binary or the other way round. */
-  | 'kind-change';
+  | 'kind-change'
+  /** A `putFile` or `renameFile` target that is no path inside the pack (`../x`, `/x`, `a//b`). */
+  | 'bad-path';
 
 export class PackError extends Error {
   constructor(
@@ -417,6 +420,7 @@ export class Pack implements OpTarget {
       case 'insert':
         return this.applyJson(op);
       case 'putFile':
+        this.requirePackPath(op.file);
         return this.putFile(op.file, op.bytes);
       case 'deleteFile': {
         const undo = this.restoreOps(op.file, this.currentOf(op.file));
@@ -424,8 +428,15 @@ export class Pack implements OpTarget {
         return undo;
       }
       case 'renameFile':
+        this.requirePackPath(op.to);
         return this.renameFile(op.file, op.to);
     }
+  }
+
+  /** A file the pack will hold is named by a normal pack path, so a save can never write outside the pack. */
+  private requirePackPath(path: string): void {
+    const problem = packPathProblem(path);
+    if (problem !== null) throw new PackError('bad-path', `${JSON.stringify(path)} is not a path inside the pack (${problem})`, path);
   }
 
   private applyJson(op: Extract<Op, { at: string }>): Op[] {

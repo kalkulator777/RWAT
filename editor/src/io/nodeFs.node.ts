@@ -13,7 +13,7 @@ import { basename, join, resolve } from 'node:path';
 import type { FileChange, FileEntry, PackSink, PackSource } from '../core/contracts';
 import { applyChanges, type FolderBackend } from './changes';
 import { PackIoError, pathsSummary, wrapIoError } from './errors';
-import { comparePaths, packPathProblem, parentPath } from './paths';
+import { comparePaths, packPathProblem, parentPath } from '../core/paths';
 
 async function listFolder(root: string, prefix: string, entries: FileEntry[], unsafe: string[]): Promise<void> {
   const here = prefix === '' ? root : join(root, ...prefix.slice(0, -1).split('/'));

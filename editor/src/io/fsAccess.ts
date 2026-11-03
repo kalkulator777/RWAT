@@ -18,7 +18,7 @@
 import type { FileChange, FileEntry, PackSink, PackSource } from '../core/contracts';
 import { applyChanges, planChanges, type FolderBackend } from './changes';
 import { PackIoError, pathsSummary, wrapIoError } from './errors';
-import { comparePaths, packPathProblem, parentPath } from './paths';
+import { comparePaths, packPathProblem, parentPath } from '../core/paths';
 
 export type FsMode = 'read' | 'readwrite';
 export type FsPermission = 'granted' | 'denied' | 'prompt';
