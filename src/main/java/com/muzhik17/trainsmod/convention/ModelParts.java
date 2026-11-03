@@ -81,10 +81,12 @@ public final class ModelParts {
      * Object-name prefixes that are never geometry in the IR convention:
      * {@code CARGO_FILL} — the cargo at each load level (1/20/…/100 %), all
      * overlapping; cargo isn't modelled, so the wagon renders empty. IR draws
-     * its {@code SEAT_} objects like the rest of the model, and so do we: in
-     * MVP the textured ones are cushions (the DR1's seats, its cab chairs),
-     * the flat passenger-seat markers have no material and drop out with
-     * every untextured part.
+     * its {@code SEAT_} objects like the rest of the model, and so do we. In
+     * MVP they are flat squares marking where a passenger sits, not cushions
+     * ({@code docs/proposals/passenger-places.md} §1.3): the DR1's have a
+     * textured material and are drawn, 0.13–0.16 below the top of the seat
+     * they mark, inside its cushion; the platzkart's have no material and
+     * drop out with every untextured part.
      */
     public static final List<String> DEFAULT_SKIP_PREFIXES = List.of("CARGO_FILL");
 
