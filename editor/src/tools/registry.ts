@@ -27,13 +27,18 @@
  * Every spatial field of the wagon type's schema (`x-frame`) has a tool that edits it
  * ({@link ToolDef.fields}, {@link framedFields}): the forms show such a field as a summary
  * and the tool edits it (registry.test.ts holds the list of fields still waiting for theirs).
+ *
+ * One tool is on at a time ({@link ToolHost}): the view's bar switches them, the
+ * inspector shows the section of the one that is on (./ToolBar.tsx), the shell wires the
+ * host to its state (app/start.ts).
  */
 
-import type { ReadonlySignal, Signal } from '@preact/signals';
+import { computed, effect, signal, untracked, type ReadonlySignal, type Signal } from '@preact/signals';
 import type { ComponentType } from 'preact';
 import type { Command, Link, LoadedModel, ViewApi } from '../core/contracts';
+import type { Pack } from '../core/pack';
 import type { FieldDescriptor } from '../core/schema';
-import type { WagonType } from '../ports/wagonType';
+import { loadWagonType, type WagonType } from '../ports/wagonType';
 import type { CameraView } from '../view3d/cameras';
 import type { ViewDragger, ViewPointer } from '../view3d/state';
 
@@ -224,4 +229,140 @@ export function collectTools(modules: Readonly<Record<string, ToolModule>>): Too
   }
   if (problems.length > 0) throw new Error(`Tool registration failed:\n${problems.join('\n')}`);
   return tools.sort((a, b) => a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+// ---------------------------------------------------------------- the tool that is on
+
+/** What the shell wires the tools to (app/start.ts): its state's signals, the journal, the view, the preview. */
+export interface ToolWiring {
+  readonly pack: ReadonlySignal<Pack | null>;
+  /** Grows with every change of the pack. */
+  readonly revision: ReadonlySignal<number>;
+  /** The open wagon's id (app/store `openWagon`). */
+  readonly openWagon: ReadonlySignal<string | null>;
+  /** The model the view shows (app/store `openModel`). */
+  readonly openModel: ReadonlySignal<LoadedModel | null>;
+  readonly selection: Signal<readonly Link[]>;
+  dispatch(command: Command): boolean;
+  readonly view: ToolView;
+  /** The preview's open-door bits (see {@link ToolContext.previewDoors}). */
+  readonly previewDoors: ReadonlySignal<number | null>;
+}
+
+/** The open wagon as a tool works on it: a type paired with a model; null for none. */
+export function subjectOf(open: Pack | null, wagon: string | null, model: LoadedModel | null): ToolSubject | null {
+  if (open === null || wagon === null) return null;
+  const entry = open.stock().find((candidate) => candidate.id === wagon);
+  if (entry === undefined || entry.type === null || entry.model === null) return null;
+  const typeJson = open.json(entry.type);
+  let type: WagonType | null = null;
+  try {
+    type = typeJson === undefined ? null : loadWagonType(wagon, typeJson).type;
+  } catch {
+    // the loader says what it does not take; anything else it throws on is no type either
+  }
+  return {
+    wagon,
+    typeFile: entry.type,
+    modelFile: entry.model,
+    typeJson,
+    type,
+    model: model?.id === wagon ? model : null,
+    readOnly: open.readOnly,
+  };
+}
+
+/** The tool that is on and its session. */
+export interface ActiveTool {
+  readonly tool: ToolDef;
+  readonly session: ToolSession;
+  /** The wagon it was turned on for. */
+  readonly wagon: string;
+}
+
+/**
+ * The tools and the one that is on. A tool is on while the user wants it ({@link use})
+ * and it applies to the open wagon; once the wagon closes or stops applying (no model, no
+ * type) it is turned off, and another wagon opened turns it off and on afresh for that
+ * one. The plain selection is no tool (null).
+ */
+export class ToolHost {
+  /** The tool the user turned on, null for none. */
+  readonly active = signal<string | null>(null);
+  /** The tool that is on and its session, or null. */
+  readonly current = signal<ActiveTool | null>(null);
+  /** The open wagon as a tool works on it, as the shell's state has it now; null for none or before {@link connect}. */
+  readonly subject: ReadonlySignal<ToolSubject | null>;
+  private readonly wiring = signal<ToolWiring | null>(null);
+
+  constructor(readonly tools: readonly ToolDef[]) {
+    this.subject = computed(() => {
+      const wiring = this.wiring.value;
+      if (wiring === null) return null;
+      void wiring.revision.value;
+      return subjectOf(wiring.pack.value, wiring.openWagon.value, wiring.openModel.value);
+    });
+  }
+
+  /** Whether a tool can be turned on for the open wagon. */
+  canUse(tool: ToolDef): boolean {
+    const subject = this.subject.value;
+    return subject !== null && (tool.applies?.(subject) ?? true);
+  }
+
+  /** Turns a tool on (by id), or every tool off (null). An unknown id changes nothing. */
+  use(id: string | null): void {
+    if (id !== null && !this.tools.some((tool) => tool.id === id)) return;
+    this.active.value = id;
+  }
+
+  /** Follows the shell's state, turning tools on and off, until the returned function is called (which turns the one on off). */
+  connect(wiring: ToolWiring): () => void {
+    this.wiring.value = wiring;
+    const stop = effect(() => {
+      const id = this.active.value;
+      const subject = this.subject.value;
+      untracked(() => this.follow(wiring, id, subject));
+    });
+    return () => {
+      stop();
+      this.end();
+      this.wiring.value = null;
+    };
+  }
+
+  private follow(wiring: ToolWiring, id: string | null, subject: ToolSubject | null): void {
+    const tool = id === null ? undefined : this.tools.find((candidate) => candidate.id === id);
+    const fits = tool !== undefined && subject !== null && (tool.applies?.(subject) ?? true);
+    const on = this.current.peek();
+    if (on !== null && (!fits || on.tool !== tool || on.wagon !== subject.wagon)) this.end();
+    if (!fits) {
+      if (id !== null) this.active.value = null;
+      return;
+    }
+    if (this.current.peek() !== null) return;
+    const wagon = subject.wagon;
+    // the session sees its own wagon only: the last state of it, never another's or none
+    let last = subject;
+    const own = computed<ToolSubject | null>(() => {
+      const now = this.subject.value;
+      if (now !== null && now.wagon === wagon) last = now;
+      return last;
+    });
+    const session = tool.activate({
+      subject: own,
+      dispatch: (command) => wiring.dispatch(command),
+      selection: wiring.selection,
+      view: wiring.view,
+      previewDoors: wiring.previewDoors,
+    });
+    this.current.value = { tool, session, wagon };
+  }
+
+  private end(): void {
+    const on = this.current.peek();
+    if (on === null) return;
+    this.current.value = null;
+    on.session.dispose();
+  }
 }

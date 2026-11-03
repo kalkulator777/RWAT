@@ -170,4 +170,21 @@ describe('the view scene', () => {
     expect(scene.model).toBeNull();
     scene.dispose();
   });
+
+  it('tells a tool that takes the presses where the pointer is: the ray, the size of a pixel, the view, the keys', () => {
+    const { state, scene } = setUp();
+    state.show(coach);
+    state.setCamera('top');
+    const centre = scene.pointerAt(0, 0, { shift: true }, 900);
+    expect(centre.view).toBe('top');
+    expect(centre.direction[1]).toBeCloseTo(-1, 6);
+    expect(centre.shift && !centre.ctrl && !centre.alt).toBe(true);
+    // from the top the ray falls straight down onto the point the drawing shows there
+    const right = scene.pointerAt(0.5, 0, {}, 900);
+    const projected = scene.project([right.origin[0], 1, right.origin[2]]);
+    expect(projected.x).toBeCloseTo(0.5, 6);
+    // a pixel is the view's height in blocks over its height in pixels
+    const camera = scene.camera as OrthographicCamera;
+    expect(centre.pixel).toBeCloseTo((camera.top - camera.bottom) / camera.zoom / 900, 9);
+  });
 });

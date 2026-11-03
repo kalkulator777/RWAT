@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createSchema } from '../core/schema';
 import { readSchemaFiles } from '../core/schema/files.node';
+import { exampleModel } from '../model/testing.node';
 import { tools } from './index';
-import { collectTools, covers, defineTool, framedFields, toolFor, type ToolDef } from './registry';
+import { collectTools, covers, defineTool, framedFields, subjectOf, toolFor, ToolHost, type ToolContext, type ToolDef } from './registry';
+import { bench, openExamplePack } from './testing.node';
 
 const schema = createSchema(readSchemaFiles());
 
@@ -124,5 +126,110 @@ describe('every spatial field has a tool', () => {
     for (const t of tools) {
       for (const pattern of t.fields) expect(fields.some((field) => covers(pattern, field) || covers(field, pattern)), `${t.id}: ${pattern}`).toBe(true);
     }
+  });
+});
+
+describe('the tool that is on', () => {
+  /** A tool that records what it was given and when it was turned off. */
+  function recorder(id = 'probe', extra: Partial<ToolDef> = {}) {
+    const log: string[] = [];
+    const contexts: ToolContext[] = [];
+    const def = tool(id, ['/interior/*'], {
+      activate: (context) => {
+        contexts.push(context);
+        log.push(`on ${context.subject.value?.wagon ?? 'none'}`);
+        return {
+          Inspector: () => null,
+          dispose: () => {
+            log.push(`off ${context.subject.value?.wagon ?? 'none'}`);
+          },
+        };
+      },
+      ...extra,
+    });
+    return { def, log, contexts };
+  }
+
+  it('works on a type paired with a model, as the pack holds it, and follows its edits', async () => {
+    const b = await bench();
+    const probe = recorder();
+    const host = new ToolHost([probe.def]);
+    const stop = host.connect(b.wiring);
+    expect(host.subject.value).toMatchObject({
+      wagon: 'rwat_example:coach',
+      typeFile: 'data/rwat_example/wagon_types/coach.json',
+      modelFile: 'assets/rwat_example/wagon_models/coach.json',
+      model: null,
+      readOnly: false,
+    });
+    expect(host.subject.value?.type?.doors.length).toBe(8);
+    expect(host.canUse(probe.def)).toBe(true);
+
+    host.use('probe');
+    expect(probe.log).toEqual(['on rwat_example:coach']);
+    expect(host.current.value?.tool.id).toBe('probe');
+    const context = probe.contexts[0] as ToolContext;
+    expect(context.view).toBe(b.view);
+    expect(context.selection).toBe(b.selection);
+
+    // an edit through the context is the journal's, and the subject follows it
+    expect(context.dispatch({ label: 'x', ops: [{ op: 'set', file: 'data/rwat_example/wagon_types/coach.json', at: '/length', value: 21 }] })).toBe(true);
+    expect((context.subject.value?.typeJson as { length: number }).length).toBe(21);
+    expect(context.subject.value?.type?.length).toBe(21);
+    expect(b.journal.canUndo).toBe(true);
+
+    host.use(null);
+    expect(probe.log).toEqual(['on rwat_example:coach', 'off rwat_example:coach']);
+    expect(host.current.value).toBeNull();
+    stop();
+  });
+
+  it('is turned off and on afresh for another wagon, and off for good when none applies', async () => {
+    const b = await bench();
+    const probe = recorder();
+    const host = new ToolHost([probe.def]);
+    const stop = host.connect(b.wiring);
+    host.use('probe');
+    b.openWagon.value = 'rwat_example:shunter';
+    expect(probe.log).toEqual(['on rwat_example:coach', 'off rwat_example:coach', 'on rwat_example:shunter']);
+    // the first session never saw the shunter: its subject stays its own wagon's
+    expect(probe.contexts[0]?.subject.value?.wagon).toBe('rwat_example:coach');
+    expect(host.active.value).toBe('probe');
+
+    b.openWagon.value = null;
+    expect(probe.log.at(-1)).toBe('off rwat_example:shunter');
+    expect(host.active.value).toBeNull();
+    expect(host.canUse(probe.def)).toBe(false);
+    host.use('probe');
+    expect(host.current.value).toBeNull();
+    expect(host.active.value).toBeNull();
+    stop();
+  });
+
+  it('gives the open model to the tool once it is the wagon’s, and refuses a tool that does not apply', async () => {
+    const coach = await exampleModel('coach');
+    const b = await bench('rwat_example:shunter', coach);
+    const picky = recorder('picky', { applies: (subject) => subject.wagon.endsWith(':coach') });
+    const host = new ToolHost([picky.def]);
+    const stop = host.connect(b.wiring);
+    expect(host.subject.value?.model).toBeNull();
+    expect(host.canUse(picky.def)).toBe(false);
+    host.use('picky');
+    expect(picky.log).toEqual([]);
+    b.openWagon.value = 'rwat_example:coach';
+    expect(host.subject.value?.model).toBe(coach);
+    host.use('picky');
+    expect(picky.log).toEqual(['on rwat_example:coach']);
+    host.use('nonsense');
+    expect(host.active.value).toBe('picky');
+    stop();
+    expect(picky.log).toEqual(['on rwat_example:coach', 'off rwat_example:coach']);
+  });
+
+  it('takes no wagon without a type or a model', async () => {
+    const { pack } = await openExamplePack();
+    expect(subjectOf(pack, 'rwat_example:nope', null)).toBeNull();
+    expect(subjectOf(null, 'rwat_example:coach', null)).toBeNull();
+    expect(subjectOf(pack, null, null)).toBeNull();
   });
 });

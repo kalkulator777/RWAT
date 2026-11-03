@@ -8,6 +8,10 @@
  *   zooms where it points. A press and release in one place is a click: it picks, with
  *   the modifier keys held; a double click picks once more, marked double. Moving without
  *   a button pressed hovers, once a frame at most.
+ * - A markup tool may take the left button's presses (state `dragger`): it is asked at each
+ *   press, before the orbit controls; a press it takes moves no camera, its moves past the
+ *   click's slop are the tool's drag, and its click is the tool's unless the tool gives it
+ *   back to be picked as usual. While the pointer hovers, the tool may set the cursor.
  * - Keys, with the view focused: 1 side, 3 front, 7 top (Blender's keypad), 5 the orbit
  *   from three quarters, Home frames everything, `.` frames the selection; the arrows pan.
  * - No animation: views and framing jump, so `prefers-reduced-motion` has nothing to stop.
@@ -22,7 +26,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { Link } from '../core/contracts';
 import { pixelsPerBlock, VIEW_PRESETS, type CameraView } from './cameras';
 import { MINOR_GRID_MIN_PX } from './guides';
-import type { ViewState } from './state';
+import type { ViewDragger, ViewPointer, ViewState } from './state';
 import { ViewScene, type ClickKeys } from './viewScene';
 
 export interface ViewportOptions {
@@ -62,6 +66,8 @@ export class Viewport {
   private dirty = true;
   private pendingHover: { x: number; y: number } | null | undefined = undefined;
   private press: { x: number; y: number; button: number } | null = null;
+  /** A press a tool took: the tool, the pointer, where it went down, whether it has moved past the slop. */
+  private gesture: { dragger: ViewDragger; pointerId: number; x: number; y: number; moved: boolean } | null = null;
   private readonly cleanups: (() => void)[] = [];
 
   private constructor(
@@ -100,7 +106,38 @@ export class Viewport {
 
   private listen(): void {
     const canvas = this.canvas;
+    // a tool's press is seen on the way down, before the orbit controls and the click see it
+    const onToolPress = (event: PointerEvent): void => {
+      const dragger = this.scene.state.dragger;
+      if (dragger === null || event.button !== 0 || event.target !== canvas || this.gesture !== null) return;
+      if (!dragger.press(this.pointerOf(event))) return;
+      event.stopPropagation();
+      this.gesture = { dragger, pointerId: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
+      this.host.focus({ preventScroll: true });
+      try {
+        canvas.setPointerCapture(event.pointerId);
+      } catch {
+        // a pointer the browser no longer knows: the moves over the canvas still come
+      }
+    };
+    this.host.addEventListener('pointerdown', onToolPress, true);
+    this.cleanups.push(() => this.host.removeEventListener('pointerdown', onToolPress, true));
+    const endGesture = (): void => {
+      const gesture = this.gesture;
+      this.gesture = null;
+      gesture?.dragger.cancel();
+    };
+    this.on(canvas, 'pointercancel', endGesture);
+    this.on(canvas, 'lostpointercapture', endGesture);
     this.on(canvas, 'pointermove', (event) => {
+      const gesture = this.gesture;
+      if (gesture !== null) {
+        if (event.pointerId !== gesture.pointerId) return;
+        if (!gesture.moved && Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) <= CLICK_SLOP) return;
+        gesture.moved = true;
+        gesture.dragger.drag(this.pointerOf(event));
+        return;
+      }
       if (event.buttons !== 0) return;
       this.pendingHover = this.toDevice(event.clientX, event.clientY);
       this.schedule();
@@ -113,6 +150,18 @@ export class Viewport {
       this.press = { x: event.clientX, y: event.clientY, button: event.button };
     });
     this.on(canvas, 'pointerup', (event) => {
+      const gesture = this.gesture;
+      if (gesture !== null) {
+        if (event.pointerId !== gesture.pointerId) return;
+        this.gesture = null;
+        const pointer = this.pointerOf(event);
+        if (gesture.moved) gesture.dragger.release(pointer);
+        else if (!gesture.dragger.click(pointer)) {
+          const at = this.toDevice(event.clientX, event.clientY);
+          this.scene.clickAt(at.x, at.y, keysOf(event));
+        }
+        return;
+      }
       const press = this.press;
       this.press = null;
       if (press === null || press.button !== 0 || event.button !== 0) return;
@@ -157,6 +206,24 @@ export class Viewport {
     };
   }
 
+  /** Where a pointer event is, as a tool that takes the presses reads it. */
+  private pointerOf(event: MouseEvent, keys: ClickKeys = keysOf(event)): ViewPointer {
+    const at = this.toDevice(event.clientX, event.clientY);
+    return this.scene.pointerAt(at.x, at.y, keys, this.canvas.getBoundingClientRect().height);
+  }
+
+  /** The cursor the tool asks for where the pointer hovers (device coordinates; null: it left). */
+  private toolCursor(point: { x: number; y: number } | null): void {
+    const dragger = this.scene.state.dragger;
+    if (dragger?.hover === undefined) {
+      if (this.canvas.style.cursor !== '') this.canvas.style.cursor = '';
+      return;
+    }
+    const height = this.canvas.getBoundingClientRect().height;
+    const cursor = dragger.hover(point === null ? null : this.scene.pointerAt(point.x, point.y, {}, height));
+    this.canvas.style.cursor = cursor ?? '';
+  }
+
   /** A point of normalised device coordinates as a point of the page. */
   toClient(point: { x: number; y: number }): { x: number; y: number } {
     const rect = this.canvas.getBoundingClientRect();
@@ -186,6 +253,7 @@ export class Viewport {
         const point = this.pendingHover;
         this.pendingHover = undefined;
         this.scene.hoverAt(point);
+        this.toolCursor(point);
       }
       if (this.dirty) this.renderNow();
     });
