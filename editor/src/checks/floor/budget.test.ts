@@ -1,11 +1,11 @@
 /**
  * The floor check's budget (docs/proposals/editor.md §3.10–3.11). It runs on the main
  * thread a moment after an edit, type by type, giving the page back between them
- * (./live.ts). A type of the example pack is checked within 10 ms. The largest types of MVP
+ * (../live.ts). A type of the example pack is checked within 10 ms. The largest types of MVP
  * take tens of milliseconds each — some 70 ms for `dr1a_motorhead`, 350 ms for all 45
  * types on a quiet machine, several times that under coverage — not the "units of
  * milliseconds" the plan reckoned: what keeps the page responsive is the slicing (one type
- * at most between two turns of the page, ./live.test.ts), and the number here is a guard
+ * at most between two turns of the page, ../live.test.ts), and the number here is a guard
  * against a check gone quadratic, wide enough for a busy runner with coverage on.
  * Measured in Node, the same engine (V8) and code as the page; each type warmed up once,
  * then the best of three runs. MVP is in the repository for now (D3, R12): without it

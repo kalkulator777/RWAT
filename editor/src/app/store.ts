@@ -59,7 +59,10 @@ export const schemaError = signal<string | null>(null);
 /** The last failure of opening, saving or loading the schema, as text for the user; null when there is none. */
 export const failure = signal<{ key: string; params: Record<string, string | number> } | null>(null);
 
-/** The findings of the open pack as it stands now: the loader's and the schema's (the schema's join once it is loaded). */
+/**
+ * The findings of the open pack as it stands now, checked at once: the loader's, the
+ * schema's (once it is loaded) and the floor check's. The panels show {@link findings}.
+ */
 export const problems = computed<Problem[]>(() => {
   void revision.value;
   const open = pack.value;
@@ -87,8 +90,8 @@ const packFindings = liveFindings({ pack, schema, revision });
 /**
  * The findings the panels show (checks tab, tree, inspector): {@link problems}, checked at
  * once when a pack opens or the schema arrives and 150 ms after the last of a run of edits
- * (checks/live.ts), so typing into a big pack's forms does not check it on every key; then
- * the open model's.
+ * (checks/live.ts), so typing into a big pack's forms does not check it on every key, the
+ * floor check type by type, giving the page back between them; then the open model's.
  */
 export const findings = computed<Problem[]>(() => {
   const model = modelProblems.value;

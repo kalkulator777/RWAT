@@ -1,8 +1,8 @@
 /**
  * Every way `ExamplePackLoadTest` breaks the example pack's markup (`coachBreaks`,
  * `shunterBreaks`, `coachLeafBreaks`: copies of a type file with one change) is caught by
- * the checks — the floor check here, the loader's rules for a door no model key names —
- * with a finding that points at what was broken (docs/proposals/editor.md §7, M4: "каждая
+ * the pack check the checks tab lists (../pack.ts `checkPack`) — the floor check's, the
+ * loader's rules for a door no model key names — with a finding that points at what was broken (docs/proposals/editor.md §7, M4: "каждая
  * поломка из ExamplePackLoadTest ловится панелью проверок").
  *
  * Two of them no check sees, the engine's `FloorCheck` neither: the arch moved off the
@@ -19,7 +19,6 @@ import { dump } from '../../core/json';
 import { Pack } from '../../core/pack';
 import { EXAMPLE_PACK, MemorySource, readTree } from '../../core/pack/testing.node';
 import { checkPack } from '../pack';
-import { floorProblems } from './problems';
 
 const COACH = 'data/rwat_example/wagon_types/coach.json';
 const SHUNTER = 'data/rwat_example/wagon_types/shunter.json';
@@ -125,7 +124,7 @@ const BREAKS: Record<string, Break> = {
   },
 };
 
-/** What the checks say of the example pack with `file` changed: the loader's rules and the floor check (the schema has nothing to say of geometry). */
+/** What the pack check says of the example pack with `file` changed: the loader's rules and the floor check (the schema has nothing to say of geometry). */
 async function checked(file?: string, change?: (type: TypeJson) => void): Promise<Problem[]> {
   const files = readTree(EXAMPLE_PACK);
   if (file !== undefined && change !== undefined) {
@@ -134,7 +133,7 @@ async function checked(file?: string, change?: (type: TypeJson) => void): Promis
     files.set(file, new TextEncoder().encode(dump(type)));
   }
   const pack = await Pack.open(new MemorySource(files));
-  return [...checkPack(pack, null), ...floorProblems(pack)];
+  return checkPack(pack, null);
 }
 
 describe("the checks catch every way ExamplePackLoadTest breaks the example pack's markup", () => {
