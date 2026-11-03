@@ -13,8 +13,10 @@
  *   whole number put where the file wrote a float (`20.0`) keeps the float's form (`21.0`);
  * - a member removed takes its line with it (and the comma before it, when it was the
  *   last); on a one-line object only its own text and one comma go;
- * - a member added goes after the last one, on a line of its own in the file's indent,
- *   or inline (`, "key": value`) in a one-line object;
+ * - a member added goes where the new value has it: before the first member after it that
+ *   the text has already, else after the last one — on a line of its own in the file's
+ *   indent, or inline (`"key": value, `) in a one-line object; so a member put back where
+ *   it was taken from (an undone removal) comes back to its own line;
  * - array elements likewise, at their place;
  * - an empty object or array, or one that becomes empty, is replaced whole;
  * - of duplicate keys the last is the one edited (it is the one that counts), and a
@@ -199,7 +201,12 @@ class Editor {
     } else if (isJsonObject(from) && isJsonObject(to)) {
       for (const key of Object.keys(from)) if (!Object.hasOwn(to, key)) this.removeMember(segments, key);
       for (const key of Object.keys(from)) if (Object.hasOwn(to, key)) this.diff([...segments, key], from[key], to[key]);
-      for (const key of Object.keys(to)) if (!Object.hasOwn(from, key)) this.addMember(segments, key, to[key]);
+      const keys = Object.keys(to);
+      keys.forEach((key, i) => {
+        if (Object.hasOwn(from, key)) return;
+        // before the first member after it that the text has; the members added before it are in the text already, before that one
+        this.addMember(segments, key, to[key], keys.slice(i + 1).find((next) => Object.hasOwn(from, next)));
+      });
     } else if (Array.isArray(from) && Array.isArray(to)) {
       let head = 0;
       while (head < from.length && head < to.length && deepEqual(from[head], to[head])) head++;
@@ -266,9 +273,19 @@ class Editor {
     }
   }
 
-  private addMember(segments: readonly string[], key: string, value: unknown): void {
+  /** Adds a member before the member `before` (its first, of duplicates), or after the last one when there is none to go before. */
+  private addMember(segments: readonly string[], key: string, value: unknown, before?: string): void {
     const object = this.node(segments);
-    this.append(object, (indent) => `${JSON.stringify(key)}: ${encodeValue(value, indent, this.style)}`, `${JSON.stringify(key)}: ${encodeInline(value)}`);
+    const name = JSON.stringify(key);
+    const next = before === undefined ? undefined : (object.children ?? []).find((property) => property.children?.[0]?.value === before);
+    if (next === undefined) {
+      this.append(object, (indent) => `${name}: ${encodeValue(value, indent, this.style)}`, `${name}: ${encodeInline(value)}`);
+    } else if (ownLine(this.text, next.offset)) {
+      const indent = lineIndent(this.text, next.offset);
+      this.apply([{ offset: next.offset, length: 0, content: `${name}: ${encodeValue(value, indent, this.style)},${this.style.eol}${indent}` }]);
+    } else {
+      this.apply([{ offset: next.offset, length: 0, content: `${name}: ${encodeInline(value)}, ` }]);
+    }
   }
 
   private insertElement(segments: readonly string[], index: number, value: unknown): void {

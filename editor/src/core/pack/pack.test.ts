@@ -111,6 +111,46 @@ describe('the pack model on the example pack', () => {
     expect(await pack.bytes(COACH_TYPE)).toEqual(files.get(COACH_TYPE));
   });
 
+  it('puts a member an undone edit removed back where it stood: the value’s order and the file’s text as they were', async () => {
+    const { pack, files } = await openExample();
+    const journal = new Journal(pack);
+    const json = [...files.keys()].filter((path) => pack.kind(path) === 'json' && pack.jsonError(path) === null);
+    let members = 0;
+    for (const file of json) {
+      const walk = (value: unknown, at: string): void => {
+        if (Array.isArray(value)) value.forEach((item, i) => walk(item, `${at}/${i}`));
+        if (value === null || typeof value !== 'object' || Array.isArray(value)) return;
+        for (const key of Object.keys(value)) {
+          const place = `${at}/${key.replaceAll('~', '~0').replaceAll('/', '~1')}`;
+          journal.dispatch({ label: 'x', ops: [{ op: 'remove', file, at: place }] });
+          journal.undo();
+          expect(JSON.stringify(pack.json(file)), `${file} ${place}`).toBe(JSON.stringify(parseJson(decoder.decode(files.get(file)))));
+          members++;
+          walk((value as Record<string, unknown>)[key], place);
+        }
+      };
+      walk(pack.json(file), '');
+    }
+    expect(members).toBeGreaterThan(150);
+
+    // saved without a member, then undone: the file's text comes back byte for byte
+    journal.dispatch({ label: 'x', ops: [{ op: 'remove', file: COACH_TYPE, at: '/max_speed_kmh' }] });
+    await pack.save(new MemorySink(new Map(files)));
+    journal.undo();
+    expect(await pack.text(COACH_TYPE)).toBe(decoder.decode(files.get(COACH_TYPE)));
+
+    // a door made in the editor, a flag of it turned off and the edit undone: its text as before the edit
+    const door = { id: 'hatch', min: [0, 1.15, 1.45], max: [1, 3.3, 1.51] };
+    journal.dispatch({ label: 'x', ops: [{ op: 'insert', file: COACH_TYPE, at: '/doors/-', value: door }] });
+    journal.dispatch({ label: 'x', ops: [{ op: 'set', file: COACH_TYPE, at: '/doors/8/inner', value: true }] });
+    journal.dispatch({ label: 'x', ops: [{ op: 'set', file: COACH_TYPE, at: '/doors/8/group', value: 'Hatches' }] });
+    const before = await pack.text(COACH_TYPE);
+    journal.dispatch({ label: 'x', ops: [{ op: 'remove', file: COACH_TYPE, at: '/doors/8/inner' }] });
+    expect(await pack.text(COACH_TYPE)).not.toBe(before);
+    journal.undo();
+    expect(await pack.text(COACH_TYPE)).toBe(before);
+  });
+
   it('writes the whole pack, and a new JSON file as dump writes it', async () => {
     const { pack, files } = await openExample();
     const journal = new Journal(pack);
