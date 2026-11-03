@@ -160,6 +160,26 @@ export function toolFor(tools: readonly ToolDef[], pointer: string): ToolDef | u
   return tools.find((tool) => tool.fields.some((pattern) => covers(pattern, pointer)));
 }
 
+/**
+ * The tool that edits what a place of the wagon type holds — the place a finding points
+ * at: the tool whose field holds it ({@link toolFor}: `/doors/3`, `/interior/2`), else the
+ * first one with a field inside it (`/cab/seats/0` holds `/cab/seats/*\/at`, `/cab` both
+ * forms of a chair); undefined for the whole file or a place with no tool's field in it or
+ * around it.
+ */
+export function toolAround(tools: readonly ToolDef[], pointer: string): ToolDef | undefined {
+  const holding = toolFor(tools, pointer);
+  if (holding !== undefined) return holding;
+  const place = segmentsOf(pointer);
+  if (place === null || place.length === 0) return undefined;
+  return tools.find((tool) =>
+    tool.fields.some((pattern) => {
+      const field = segmentsOf(pattern);
+      return field !== null && field.length > place.length && place.every((segment, i) => field[i] === '*' || field[i] === segment);
+    }),
+  );
+}
+
 /** A pointer segment as RFC 6901 writes it. */
 function escaped(key: string): string {
   return key.replaceAll('~', '~0').replaceAll('/', '~1');
@@ -320,16 +340,17 @@ export class ToolHost {
 
   /**
    * Turns on the tool that edits what `links` point at — a finding the user clicked in the
-   * checks: the tool whose fields hold the place of a field link into the open wagon's type
-   * (`/doors/3` → the doors tool). Call it after the selection took the links, so that their
-   * wagon is the open one; links into no tool's place change nothing.
+   * checks: the tool of the place of a field link into the open wagon's type
+   * ({@link toolAround}: `/doors/3` → the doors tool, `/cab/seats/0` → the chairs'). Call it
+   * after the selection took the links, so that their wagon is the open one; links into no
+   * tool's place change nothing.
    */
   reveal(links: readonly Link[]): void {
     const subject = this.subject.value;
     if (subject === null) return;
     for (const link of links) {
       if (link.kind !== 'field' || link.file !== subject.typeFile) continue;
-      const tool = toolFor(this.tools, link.at);
+      const tool = toolAround(this.tools, link.at);
       if (tool !== undefined) {
         this.use(tool.id);
         return;

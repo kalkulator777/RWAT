@@ -3,7 +3,7 @@ import { createSchema } from '../core/schema';
 import { readSchemaFiles } from '../core/schema/files.node';
 import { exampleModel } from '../model/testing.node';
 import { tools } from './index';
-import { collectTools, covers, defineTool, framedFields, subjectOf, toolFor, ToolHost, type ToolContext, type ToolDef } from './registry';
+import { collectTools, covers, defineTool, framedFields, subjectOf, toolAround, toolFor, ToolHost, type ToolContext, type ToolDef } from './registry';
 import { bench, openExamplePack } from './testing.node';
 
 const schema = createSchema(readSchemaFiles());
@@ -64,6 +64,17 @@ describe('the places a tool edits', () => {
     expect(toolFor(list, '/interior/3/max')?.id).toBe('floor');
     expect(toolFor(list, '/doors/0')?.id).toBe('doors');
     expect(toolFor(list, '/cab/seats/0/at')).toBeUndefined();
+  });
+
+  it('name the tool of what a place holds, for a finding that points at it', () => {
+    const list = [tool('floor', ['/interior', '/interior/*']), tool('doors', ['/doors/*']), tool('seats', ['/cab/seat', '/cab/seats/*/at'])];
+    expect(toolAround(list, '/doors/3')?.id).toBe('doors');
+    expect(toolAround(list, '/interior')?.id).toBe('floor');
+    // a chair's place holds its tool's field, the cab both forms of a chair
+    expect(toolAround(list, '/cab/seats/0')?.id).toBe('seats');
+    expect(toolAround(list, '/cab')?.id).toBe('seats');
+    expect(toolAround(list, '/length')).toBeUndefined();
+    expect(toolAround(list, '')).toBeUndefined();
   });
 
   it('are found in the schema by x-frame: list elements as a star, the old forms of a oneOf as the place itself', () => {
