@@ -6,7 +6,7 @@ RWAT: мод на поезда для Minecraft 1.21.1 / NeoForge (Java 21) и P
 
 - **План:** `docs/roadmap.md` — главный документ: решения R1–R17, фазы, «Как работаем». Основания: `docs/reviews/2026-10-15-code-audit.md` (находки H/M/T), `docs/reviews/2026-10-21-fix-list.md` (партии A–F, решения D1–D5), `docs/reviews/2026-10-15-pack-authoring.md`, `docs/proposals/pack-capabilities.md` (что пак может задать и где кончается движок).
 - **Источник правды — код и тесты.** `SPEC.md` — журнал решений за всё время, местами устарел и спорит с кодом: читай его ради мотивов, не как описание текущего поведения. Он правится только по плану (новая нормативная SPEC — после партии B). Нашёл устаревшее утверждение — не чини, а запиши в отчёт: раздел, цитата, что в коде.
-- **Формат паков** — JSON Schema в `schema/` (появится в фазе 1), справочник автора `docs/pack-format.md` генерируется из неё. До тех пор — `stock/WagonTypeParser.java` и `docs/proposals/pack-capabilities.md`.
+- **Формат паков** — JSON Schema в `schema/`, справочник автора `docs/pack-format.md` генерируется из неё (`python -I tools/gen_pack_docs.py`, проверка — `--check`). Что пак может задать и где кончается движок — `docs/proposals/pack-capabilities.md`; разбор ключей — `stock/WagonTypeParser.java`.
 - Карта пакетов и инструментов — `README.md`.
 
 ## Как работаем
@@ -20,7 +20,7 @@ RWAT: мод на поезда для Minecraft 1.21.1 / NeoForge (Java 21) и P
 
 ## Архитектура
 
-- **Чистое ядро без импортов Minecraft и NeoForge:** `path`, `kinematics`, `physics`, `stock`, `convention` (в нём и `GroupName` — предел имени группы), а в адаптерах отдельные чистые классы: в `consist` — `Coupling`, `ChunkCover`, `ChunkLease`, `Handles`, `TouchRules` (кто и откуда может трогать вагон), `WalkBudget` (шаг ходьбы за тик); в `network` — `PacketNumbers` (числа из пакета). Что можно решить без Minecraft — решай в ядре и тестируй там; адаптеры (`consist`, `rail`, `network`, `data`, `client`, `mixin`) держи тонкими. Не расширяй единственную связь наружу: `convention.ControlValue` и `DriverReadout` ссылаются на `consist.Consist` (план — вынести в `Handles`, E5).
+- **Чистое ядро без импортов Minecraft и NeoForge:** `path`, `kinematics`, `physics`, `stock`, `convention` (в нём `GroupName` — предел имени группы, `ModelParts` — роли частей модели, `LampIslands`, `ControlPose`, `DoorLeaves`), `kinematics` (в нём и `FloorFinding`); а в адаптерах отдельные чистые классы: в `consist` — `Coupling`, `ChunkCover`, `ChunkLease`, `Handles`, `TouchRules` (кто и откуда может трогать вагон), `WalkBudget` (шаг ходьбы за тик); в `network` — `PacketNumbers` (числа из пакета); в `rail` — `RailEdit`, `SwitchStandPoll`. Что можно решить без Minecraft — решай в ядре и тестируй там; адаптеры (`consist`, `rail`, `network`, `data`, `client`, `mixin`) держи тонкими. Не расширяй единственную связь наружу: `convention.ControlValue` и `DriverReadout` ссылаются на `consist.Consist` (план — вынести в `Handles`, E5).
 - **Класс с импортом MC в тесты не попадает:** тестовый classpath — только joml, gson и JUnit, и тест, которому такой класс нужен, упадёт с `NoClassDefFoundError`. Известное исключение случайное: `client/render/model/Mesh.java` импортирует `OverlayTexture`, `PoseStack` и `VertexConsumer`, но через `ObjLoader` грузится в тестах, потому что JVM связывает классы лениво и дотягивается до MC только в `emit*`, которые тесты не зовут (`OverlayTexture.NO_OVERLAY` — не константа времени компиляции, а `getstatic`). Так делать не надо: класс, который нужен тесту, держи без таких импортов.
 - Общий код не тянет `client.*`: клиентские классы не должны грузиться на выделенном сервере. Нынешние нарушения (`WagonEntity`, `RwatNetwork`, `RollingStockItem`, `RailItem`) не множь.
 - `debug/` (команды `/rwat`, автосцены) продакшен-код не использует.
@@ -68,6 +68,8 @@ RWAT: мод на поезда для Minecraft 1.21.1 / NeoForge (Java 21) и P
 
 - **JDK 21** (`JAVA_HOME` на него, иначе Gradle падает): `./gradlew test`, `./gradlew build`; один класс — `./gradlew test --tests '*RiderWalkTest'`. Python 3.9+, только стандартная библиотека, запуск `python -I tools/<имя>.py`.
 - **Автосцены в облаке** (без экрана и звука): мир — `./gradlew runServer` с `eula=true` и `level-type=minecraft\:flat`, после «Done» SIGTERM серверу и копия `run/server/world` в `run/saves/<имя>` без `session.lock`; клиент — `xvfb-run -a -s "-screen 0 1920x1080x24" ./gradlew runClient -PquickPlay=<имя> -Pautoscene=<сцена>` (снимок пикера — `-Pautoshot`), в `run/options.txt` — `pauseOnLostFocus:false` и `onboardAccessibility:false`. Сцена меняет мир — работай с копией. Снимки — `run/screenshots/`, сцены — в `debug/`. Подробности и запись звука — SPEC §9.7, «Как запустить игру в облаке».
+- **Эталоны** (`fixtures/golden/`): проверка — `./gradlew test`, `python -I -m unittest discover tools/tests`; намеренное изменение логики — `./gradlew test --tests 'com.muzhik17.trainsmod.golden.*' -Pgolden.update` (папки, где эталон — Java; для Python — `--update` у `tools/tests/test_golden_*.py`, см. `fixtures/golden/README.md`), затем просмотри разницу в `fixtures/golden`: каждое изменение ожидания должно быть объяснимо.
+- **Редактор** (`editor/`, Node): `cd editor && npm ci && npm run lint && npm test && npm run build`; e2e — `CI=1 RWAT_CHROME=/opt/pw-browsers/chromium npm run e2e` (`playwright install` не запускать: браузер уже лежит в `/opt/pw-browsers`).
 
 ## Коммиты
 
@@ -76,6 +78,7 @@ RWAT: мод на поезда для Minecraft 1.21.1 / NeoForge (Java 21) и P
 
 ## Лицензии
 
+- Запрет ниже — про чужой **контент** под несвободными лицензиями (как MVP). Свободные шрифты под OFL лежат в `editor/public/fonts/` вместе с текстом лицензии — это допустимо.
 - Код мода — MIT. Контент MVP (Matoi Vanilla Pack, FrozeRain и др.) — **CC BY-NC-ND 4.0**: его файлы нельзя менять. Конвертер копирует ассеты байт в байт, правка — через рецепт `packs/mvp.json` и `packs/mvp/<id>.json`.
 - Исходные zip MVP и сгенерированный пак `run/rwat_packs/MatoiVanillaPack` лежат в репозитории **временно** (D3, R12): их уберут после фазы 2, историю перепишут один раз и по команде пользователя. Новых чужих ассетов в репозиторий не добавляй; пак-пример — только свои модели (CC0) и ванильные звуки.
 - Ассеты чужих паков не распространяем: ни в релизах, ни в примерах, ни в тестовых фикстурах сверх уже лежащей `mvp_ir_amendorf_door1.anim`. Тесты на пак MVP без входных данных должны явно пропускаться, а не молча зеленеть (E9).
