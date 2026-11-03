@@ -155,6 +155,7 @@
 E4, E5, часть E10 (R13). Делается под тестами.
 - Общий `PickContext` для пяти выборов под прицелом.
 - `WagonEntity` → `WagonRiders`, `WagonDoors`, `WagonSeats`, `WagonControls`.
+  - `WagonSeats` проектируется под занятость мест вообще, а не только кресел машиниста `cab.seats`: в фазе 5 туда же лягут места пассажиров (`places`, сидя и лёжа) с их синхронизацией, позами, возвратом после выхода и `retyped` (`docs/proposals/passenger-places.md` §7.1, §10.1).
 - `ConsistManager` → `ConsistSync`, `CouplingApplier`, `ConsistInteractions`, `Drivers`.
 
 Остальная партия E (мёртвый код, дубли, `debug/` в набор `dev`, локализация, тесты) идёт в любой момент после A, параллельно.

@@ -154,4 +154,6 @@ python -I -m unittest discover tools/tests
 
 ## Чего нет и почему
 
-- **Выходы `floor_check`** берутся из `FloorCheck.walkablePieces` (пакетный доступ) отражением.
+- **«fails to build»** в `model_check` нет. Эту строку `/rwatc packs validate` добавляет после проверки (`StockModels.checkFiles`), когда сборка модели (`IrStockModel.load`) падает на файлах, которые проверка пропустила. Правила пака её не предсказывают: это ошибка движка словами JVM. Редактор собирает модель сам и о своём отказе говорит своими словами (`model.failed`); почему так — в javadoc `editor/src/ports/modelCheck.ts`.
+- **Стороны мостика (`bridges_of`)** Python не читает: `floorgen` соединяет куски, которых касается мостик внутренней двери, но стороны створки не различает — генератору пола это не нужно.
+- **Правило места Minecraft** (`ResourceLocation.tryParse`) в тестах Java выписано (`pack/ResourceLocations`), а не взято у Minecraft: его классов нет в тестовом classpath.
