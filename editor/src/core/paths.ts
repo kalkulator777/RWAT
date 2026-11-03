@@ -11,6 +11,8 @@
  * the converter's (`tools/ir2rwat.py` `safe_relative`), plus control characters.
  */
 
+import { validLocation } from '../ports/modelCheck';
+
 /** Why a name is not a path inside a pack. */
 export type PathProblem =
   /** Nothing, or only '.' and empty parts. */
@@ -108,20 +110,14 @@ export function parentPath(path: string): string {
   return slash < 0 ? '' : path.slice(0, slash);
 }
 
-/** A namespace Minecraft takes in a resource location (`ResourceLocation`): lower-case letters, digits and `_ . -`. */
-export const RESOURCE_NAMESPACE = /^[a-z0-9_.-]+$/;
-
-/** A path Minecraft takes in a resource location (`ResourceLocation`): as a namespace, and `/` besides. */
-export const RESOURCE_PATH = /^[a-z0-9_./-]+$/;
-
 /**
  * True for a pack path Minecraft loads as a resource: `assets/<namespace>/<path>` or
- * `data/<namespace>/<path>`, the namespace and the path as {@link RESOURCE_NAMESPACE} and
- * {@link RESOURCE_PATH} take them. The loader's checks (checks/loader) say which files the
- * game will not load; the model pipeline (model/resources) reads a location the game takes
- * only.
+ * `data/<namespace>/<path>`, the two a resource location Minecraft takes
+ * (ports/modelCheck `validLocation`: lower-case letters, digits and `_ . -`, and `/`
+ * besides in the path). The loader's checks (checks/loader) say which files the game will
+ * not load; the model pipeline (model/resources) finds a location's file by the same rule.
  */
 export function isResourcePath(path: string): boolean {
   const match = /^(?:assets|data)\/([^/]+)\/(.+)$/.exec(path);
-  return match !== null && RESOURCE_NAMESPACE.test(match[1] as string) && RESOURCE_PATH.test(match[2] as string);
+  return match !== null && validLocation(`${match[1]}:${match[2]}`);
 }

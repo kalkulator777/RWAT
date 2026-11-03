@@ -46,7 +46,7 @@ import {
 } from '../ports/modelParts';
 import { door, parseRole } from '../ports/objectRole';
 import { PackJsonError } from '../ports/packJson';
-import { relativeFile, resourceFile, splitLocation } from './resources';
+import { relativeFile, resourceFile, splitLocation, validLocation } from './resources';
 import type { ModelReader, ModelRequest, TextureDecoder } from './types';
 
 /** A built model and what to transfer with it: its buffers and bitmaps. */
@@ -99,11 +99,12 @@ function unreadable(request: ModelRequest, obj: string | null, problem: Problem)
 /**
  * The pack's files as the model check reads them (ports/modelCheck): locations `ns:path`
  * are the pack files `assets/<ns>/<path>` (./resources.ts), a location Minecraft refuses
- * names nothing, a file is read as UTF-8 with its byte-order mark kept.
+ * or takes with an empty path names nothing, a file is read as UTF-8 with its byte-order
+ * mark kept.
  */
 export function checkFiles(files: ModelReader): ModelCheckFiles {
   return {
-    valid: (location) => resourceFile(location) !== null,
+    valid: validLocation,
     exists: async (location) => {
       const path = resourceFile(location);
       return path !== null && (await files.has(path));
@@ -339,11 +340,12 @@ export async function buildModel(request: ModelRequest, files: ModelReader, deco
   if (!('obj' in decl)) return unreadable(request, null, decl);
   const subject: CheckedModel = request;
   const stop = (finding: ModelFinding, obj: string | null): Built => unreadable(request, obj, modelProblem(finding, subject));
+  if (!validLocation(decl.obj)) return stop(modelFinding('bad-path', { path: decl.obj }), null);
+  // a location Minecraft takes with an empty path (`t:`) names no file: missing
   const objFile = resourceFile(decl.obj);
-  if (objFile === null) return stop(modelFinding('bad-path', { path: decl.obj }), null);
-  let bytes: Uint8Array | null;
+  let bytes: Uint8Array | null = null;
   try {
-    bytes = await files.read(objFile);
+    if (objFile !== null) bytes = await files.read(objFile);
   } catch (error) {
     return stop(modelFinding('unreadable', { path: decl.obj, error: String(error) }), objFile);
   }

@@ -1,27 +1,31 @@
 /**
  * Where the files a wagon model names are in the pack, as the engine finds them
  * (`IrStockModel.load`, `materialTextures`, `liveries`, `loadAnimations`): a resource
- * location `ns:path` is the pack file `assets/<ns>/<path>`, and Minecraft takes only
- * lower-case letters, digits and `_ . -` in a namespace, and `/` besides in a path
- * (`ResourceLocation`): a location it refuses names no file. One rule with the loader
- * checks' resource paths (core/paths `RESOURCE_NAMESPACE`, `RESOURCE_PATH`); a file under
- * `assets/` the rule refuses is not loaded by the game, and the model is read as the game
- * reads it.
+ * location `ns:path` is the pack file `assets/<ns>/<path>`, taken as Minecraft takes it
+ * (`ResourceLocation.tryParse`) by the model check's rule (ports/modelCheck
+ * `validLocation`, `splitLocation`; golden `model_check/locations`): lower-case letters,
+ * digits and `_ . -` in a namespace, and `/` besides in a path; an empty namespace or none
+ * is `minecraft` (`:a` and `a` are `minecraft:a`); an empty path (`t:`) is taken but names
+ * no file. A location Minecraft refuses names no file either, and the model is read as the
+ * game reads it. The loader's checks take a pack path by the same rule (core/paths
+ * `isResourcePath`).
  */
 
-import { RESOURCE_NAMESPACE, RESOURCE_PATH } from '../core/paths';
+import { splitLocation, validLocation } from '../ports/modelCheck';
 import * as Mtl from '../ports/mtl';
 
+export { splitLocation, validLocation };
 
-/** The pack file of a resource location `ns:path` (`ResourceLocation.tryParse`); null when Minecraft refuses it. */
+/** The pack file of a resource location `ns:path`; null when Minecraft refuses it, or takes it with an empty path (`t:`), which no file has. */
 export function resourceFile(location: string): string | null {
+  if (!validLocation(location)) return null;
   const { namespace, path } = splitLocation(location);
-  return assetFile(namespace, path);
+  return path === '' ? null : `assets/${namespace}/${path}`;
 }
 
-/** `assets/<namespace>/<path>` (`ResourceLocation.tryBuild`); null when Minecraft refuses the namespace or the path. */
+/** `assets/<namespace>/<path>` (`ResourceLocation.tryBuild`); null when Minecraft refuses the namespace or the path, or the path is empty. */
 export function assetFile(namespace: string, path: string): string | null {
-  return RESOURCE_NAMESPACE.test(namespace) && RESOURCE_PATH.test(path) ? `assets/${namespace}/${path}` : null;
+  return resourceFile(`${namespace}:${path}`);
 }
 
 /**
@@ -34,10 +38,4 @@ export function assetFile(namespace: string, path: string): string | null {
 export function relativeFile(namespace: string, folder: string, path: string): string | null {
   const resolved = Mtl.resolve(folder, path);
   return resolved === null ? null : assetFile(namespace, resolved);
-}
-
-/** The namespace and the path of a location `ns:path` (no colon: `minecraft`). */
-export function splitLocation(location: string): { namespace: string; path: string } {
-  const colon = location.indexOf(':');
-  return colon < 0 ? { namespace: 'minecraft', path: location } : { namespace: location.slice(0, colon), path: location.slice(colon + 1) };
 }

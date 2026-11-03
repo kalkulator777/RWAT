@@ -140,6 +140,7 @@ describe('helpers', () => {
   it('resolve a resource reference in the declaring namespace or its own', () => {
     expect(resourceFile('stock/a.obj', 'ns')).toBe('assets/ns/stock/a.obj');
     expect(resourceFile('other:stock/a.obj', 'ns')).toBe('assets/other/stock/a.obj');
+    expect(resourceFile(':stock/a.obj', 'ns')).toBe('assets/minecraft/stock/a.obj');
   });
 
   it('take only lower-case resource paths under assets/ and data/', () => {
