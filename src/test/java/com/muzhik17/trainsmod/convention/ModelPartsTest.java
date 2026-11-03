@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -19,7 +20,8 @@ import com.muzhik17.trainsmod.convention.ModelParts.Place;
 /**
  * What a wagon model's parts are ({@link ModelParts}): the order of the
  * steps, controls and leaves with their merged flags and hinges, wheelsets,
- * bogie pivots, coupler heads, light groups, cabin lamps and headlights.
+ * bogie pivots, coupler heads, light groups, cabin lamps and headlights —
+ * and when a light shines ({@link ModelParts#lit}), {@code LINVERT} included.
  */
 class ModelPartsTest {
 
@@ -248,6 +250,34 @@ class ModelPartsTest {
         assertTrue(parts.lamps().isEmpty(), "a glowing headlight is no cabin lamp");
     }
 
+    /** One rule for every light: a glowing face, a cabin lamp, a headlight (IR's LightFlare honours LINVERT). */
+    @Test
+    void aLightShinesWithItsGroupAndAnInvertedOneWithout() {
+        long fhlOn = 1L << 1;
+        assertTrue(ModelParts.lit(-1, false, 0L), "no group: always");
+        assertTrue(ModelParts.lit(-1, true, -1L), "no group: always, LINVERT or not");
+        assertTrue(ModelParts.lit(1, false, fhlOn));
+        assertFalse(ModelParts.lit(1, false, 0L));
+        assertTrue(ModelParts.lit(1, true, 0L), "LINVERT: while the group is off");
+        assertFalse(ModelParts.lit(1, true, fhlOn));
+        assertFalse(ModelParts.lit(64, false, -1L), "past the 64th group never on");
+        assertTrue(ModelParts.lit(64, true, -1L));
+        ModelParts parts = read(box("HEADLIGHT_2_LCG_RHL_LINVERT", 6.9F, 2.8F, -0.1F, 7.0F, 3.0F, 0.1F));
+        assertTrue(parts.headlights().get(0).lit(0L), "an LINVERT headlight shines with its group off");
+        assertFalse(parts.headlights().get(0).lit(1L));
+    }
+
+    @Test
+    void aGroupIsOnAboveZero() {
+        List<String> groups = new ArrayList<>(List.of("IL", "FHL", "NL", "X"));
+        Map<String, Double> values = Map.of("IL", 1.0, "FHL", 0.0, "NL", 0.25, "X", Double.NaN);
+        assertEquals(0b101L, ModelParts.litMask(groups, g -> values.getOrDefault(g, 0.0)));
+        for (int i = 0; i < 70; i++) {
+            groups.add("G" + i);
+        }
+        assertEquals(-1L, ModelParts.litMask(groups, g -> 1.0), "the first 64 groups only");
+    }
+
     @Test
     void aGroupNamedTooLongIsDroppedAndOnlyAnInvertedHeadlightStays() {
         String longName = "A".repeat(GroupName.MAX_LENGTH + 1);
@@ -289,6 +319,8 @@ class ModelPartsTest {
                 .indexOf("IND_LAMP_FULLBRIGHT_LCG_FHL_LINVERT");
         ModelParts.Light light = parts.roles().get(indicator).light();
         assertTrue(light.invert() && light.fullbright());
+        long fhl = 1L << parts.lightGroups().indexOf("FHL");
+        assertTrue(light.lit(0L) && !light.lit(fhl), "the indicator glows while the headlight is off");
         assertTrue(parts.controls().stream().anyMatch(c -> c.role().kind() == ObjectRole.Kind.HANDBRAKE));
         assertEquals(1, parts.lamps().size(), "the cab lamp");
         assertTrue(parts.controls().stream().anyMatch(c -> c.role().key().equals("WIDGET_7") && c.role().hide()),

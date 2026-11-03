@@ -229,7 +229,7 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
         long litMask = model.litMask(wagon::controlValue);
         float[] box = null;
         for (StockModel.Headlight lamp : model.headlights()) {
-            if (StockModel.tagLit(StockModel.tag(lamp.group(), false, false, false), litMask)) {
+            if (lamp.lit(litMask)) {
                 box = HeadlightBeam.reach(lamp.x(), lamp.y(), lamp.z(), lamp.dirZ(), lamp.radius(), box);
             }
         }
@@ -338,7 +338,7 @@ public class WagonRenderer extends EntityRenderer<WagonEntity> {
         }
 
         // headlight flares, beams and track light (SPEC §8): queued, drawn after translucents;
-        // a lamp of no light group is lit with none of the groups on
+        // a lamp shines as its faces glow (ModelParts.lit): of no light group with none of the groups on
         if (!model.headlights().isEmpty()) {
             float skyDarken = wagon.level() instanceof net.minecraft.client.multiplayer.ClientLevel client
                     ? client.getSkyDarken(partialTick) : 1.0F;

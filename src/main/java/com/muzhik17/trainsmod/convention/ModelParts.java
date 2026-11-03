@@ -9,6 +9,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.ToDoubleFunction;
 
 import com.muzhik17.trainsmod.stock.ObjFrame;
 
@@ -67,8 +68,12 @@ import com.muzhik17.trainsmod.stock.ObjFrame;
  * cabin lamp. A control or light group named longer than the wire takes is
  * dropped first ({@link GroupName#fit}).
  *
- * <p>Ported: {@code editor/src/ports/modelParts.ts} (M3); golden:
- * {@code fixtures/golden/model_parts/}.
+ * <p><b>When a light shines</b> — a glowing face, a cabin lamp, a headlight
+ * alike — is {@link #lit}: with no light group always; else while its group
+ * is on, or with {@code LINVERT} while it is off.
+ *
+ * <p>Ported: {@code editor/src/ports/modelParts.ts} and {@code lights.ts} (M3);
+ * golden: {@code fixtures/golden/model_parts/}, {@code lights/}.
  */
 public final class ModelParts {
 
@@ -92,6 +97,9 @@ public final class ModelParts {
      * the railhead (0.40625 above the path spline).
      */
     public static final float Y_LIFT = (float) ObjFrame.Y_LIFT;
+
+    /** The most light groups a model's lit groups are told by ({@link #litMask}: one bit each). */
+    public static final int MAX_LIGHT_GROUPS = 64;
 
     /**
      * One run of faces of the OBJ, as {@code ObjLoader} reads it.
@@ -163,6 +171,11 @@ public final class ModelParts {
 
         /** Lit as the world lights it. */
         public static final Light NONE = new Light(-1, false, false, false);
+
+        /** True if the faces are lit given the lit groups ({@link #lit}). */
+        public boolean lit(long litMask) {
+            return ModelParts.lit(group, invert, litMask);
+        }
     }
 
     /**
@@ -229,6 +242,11 @@ public final class ModelParts {
 
     /** A cabin lamp: the centre of a glowing island (model frame), its light group, {@code LINVERT}. */
     public record Lamp(float x, float y, float z, int group, boolean invert) {
+
+        /** True if it shines given the lit groups ({@link #lit}). */
+        public boolean lit(long litMask) {
+            return ModelParts.lit(group, invert, litMask);
+        }
     }
 
     /**
@@ -239,6 +257,11 @@ public final class ModelParts {
      */
     public record Headlight(float x, float y, float z, float dirZ, float radius, int rgb, int group,
             boolean invert) {
+
+        /** True if it shines given the lit groups ({@link #lit}). */
+        public boolean lit(long litMask) {
+            return ModelParts.lit(group, invert, litMask);
+        }
     }
 
     private final List<Role> roles;
@@ -334,6 +357,41 @@ public final class ModelParts {
     /** How many parts aren't drawn: hidden, skipped, or untextured (a wheelset's aside). */
     public int skipped() {
         return skipped;
+    }
+
+    /**
+     * When a light shines (SPEC §8) — the faces of a glowing part, a cabin
+     * lamp, a headlight alike: with no light group ({@code group} −1) always;
+     * else while its group is on, or, with {@code LINVERT} ({@code invert}),
+     * while it is off. A group past the {@link #MAX_LIGHT_GROUPS}th is never
+     * on. As IR's {@code LightFlare} and {@code ModelState} treat a lamp of a
+     * group, {@code LINVERT} or not.
+     *
+     * @param litMask the model's lit groups ({@link #litMask})
+     */
+    public static boolean lit(int group, boolean invert, long litMask) {
+        if (group < 0) {
+            return true;
+        }
+        boolean on = group < MAX_LIGHT_GROUPS && (litMask >> group & 1L) != 0;
+        return on != invert;
+    }
+
+    /**
+     * The lit groups of a model: bit {@code i} is set while light group
+     * {@code i} is on — its control group's value above 0.
+     *
+     * @param lightGroups the model's light groups ({@link #lightGroups})
+     * @param groupValue  a control group's value on the wagon
+     */
+    public static long litMask(List<String> lightGroups, ToDoubleFunction<String> groupValue) {
+        long mask = 0L;
+        for (int i = 0; i < lightGroups.size() && i < MAX_LIGHT_GROUPS; i++) {
+            if (groupValue.applyAsDouble(lightGroups.get(i)) > 0.0) {
+                mask |= 1L << i;
+            }
+        }
+        return mask;
     }
 
     /** {minX, minY, minZ, maxX, maxY, maxZ} of nothing yet. */

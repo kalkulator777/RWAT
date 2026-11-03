@@ -145,7 +145,9 @@ public final class LambDynLightsCompat {
 
     /**
      * A wagon's lit lamps and beams in world space, or null if it is dark — a
-     * headlight of no light group is lit with none of the groups on.
+     * lamp shines as its faces glow ({@code convention.ModelParts#lit}): of no
+     * light group with none of the groups on, an {@code LINVERT} one while its
+     * group is off.
      */
     private static Shape shape(WagonEntity wagon) {
         ConsistComposition.Slot slot = ClientConsists.slot(wagon.getConsistId(), wagon.getWagonIndex());
@@ -158,14 +160,14 @@ public final class LambDynLightsCompat {
         double flip = slot.flipped() ? -1.0 : 1.0;
         List<double[]> points = new ArrayList<>();
         for (StockModel.Lamp lamp : model.lamps()) {
-            if (StockModel.tagLit(StockModel.tag(lamp.group(), false, false, false), litMask)) {
+            if (lamp.lit(litMask)) {
                 Vector3d w = PoseMath.localToWorld(body, wagon.getYRot(), wagon.getXRot(),
                         new Vector3d(lamp.x() * flip, lamp.y(), lamp.z() * flip));
                 points.add(new double[]{w.x, w.y, w.z, w.x, w.y, w.z, CABIN_LUMINANCE});
             }
         }
         for (StockModel.Headlight lamp : model.headlights()) {
-            if (StockModel.tagLit(StockModel.tag(lamp.group(), false, false, false), litMask)) {
+            if (lamp.lit(litMask)) {
                 Vector3d a = PoseMath.localToWorld(body, wagon.getYRot(), wagon.getXRot(),
                         new Vector3d(lamp.x() * flip, lamp.y(), lamp.z() * flip));
                 Vector3d b = PoseMath.localToWorld(body, wagon.getYRot(), wagon.getXRot(),

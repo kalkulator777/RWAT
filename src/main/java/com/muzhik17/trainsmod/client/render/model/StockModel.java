@@ -46,7 +46,8 @@ import net.minecraft.resources.ResourceLocation;
  * <p>Light (SPEC §8): every quad's {@code tag} says how it is lit —
  * {@link #tag}; {@code lightGroups} are the model's light groups (a tag's group
  * index points here), {@code lamps} the cabin lamps that light the interior,
- * {@code headlights} the lamps that throw a flare and a beam.
+ * {@code headlights} the lamps that throw a flare and a beam. A glowing quad,
+ * a cabin lamp and a headlight shine by one rule, {@link ModelParts#lit}.
  *
  * <p>{@code liveries} are paint schemes (SPEC §6.7): livery id → which base
  * textures it replaces with which. The meshes are shared — a livery is the
@@ -90,14 +91,9 @@ public record StockModel(
         return tag(light.group(), light.fullbright(), light.interior(), light.invert());
     }
 
-    /** True if a quad with this tag is lit given the model's lit groups. */
+    /** True if a quad with this tag is lit given the model's lit groups ({@link ModelParts#lit}). */
     public static boolean tagLit(int tag, long litMask) {
-        int group = tagGroup(tag);
-        if (group < 0) {
-            return true;
-        }
-        boolean on = group < 64 && (litMask >> group & 1L) != 0;
-        return on != ((tag & TAG_LINVERT) != 0);
+        return ModelParts.lit(tagGroup(tag), (tag & TAG_LINVERT) != 0, litMask);
     }
 
     /** The light group index of a tag, −1 if none. */
@@ -165,16 +161,34 @@ public record StockModel(
             Vector3f pivot) {
     }
 
-    /** A cabin lamp (SPEC §8): the centre of a glowing island of its group's mesh. */
-    public record Lamp(float x, float y, float z, int group) {
+    /**
+     * A cabin lamp (SPEC §8, {@link ModelParts.Lamp}): the centre of a glowing
+     * island of its group's mesh; {@code invert}: {@code LINVERT}. The interior
+     * bake ({@code BakedStockModel}) and a rider's light ({@code CabinLight})
+     * still take a lamp as lit by its group alone, {@code LINVERT} aside: no
+     * pack has an inverted cabin lamp yet.
+     */
+    public record Lamp(float x, float y, float z, int group, boolean invert) {
+
+        /** True if it shines given the model's lit groups ({@link ModelParts#lit}). */
+        public boolean lit(long litMask) {
+            return ModelParts.lit(group, invert, litMask);
+        }
     }
 
     /**
-     * A headlight (SPEC §8): the centre of its lens face, which way it shines
-     * along the model ({@code dirZ} = +1 forward, −1 back), the lens radius,
-     * its colour and light group (−1 = always lit).
+     * A headlight (SPEC §8, {@link ModelParts.Headlight}): the centre of its
+     * lens face, which way it shines along the model ({@code dirZ} = +1
+     * forward, −1 back), the lens radius, its colour, light group (−1 none)
+     * and {@code LINVERT}.
      */
-    public record Headlight(float x, float y, float z, float dirZ, float radius, int rgb, int group) {
+    public record Headlight(float x, float y, float z, float dirZ, float radius, int rgb, int group,
+            boolean invert) {
+
+        /** True if it shines given the model's lit groups ({@link ModelParts#lit}). */
+        public boolean lit(long litMask) {
+            return ModelParts.lit(group, invert, litMask);
+        }
     }
 
     /** The non-spinning bogie frame plus its wheelsets. */
@@ -234,14 +248,8 @@ public record StockModel(
                 && rearBogie.meshes().isEmpty() && rearBogie.wheels().isEmpty();
     }
 
-    /** Bitmask of this model's light groups that are on, by {@link #lightGroups} index. */
+    /** Bitmask of this model's light groups that are on, by {@link #lightGroups} index ({@link ModelParts#litMask}). */
     public long litMask(java.util.function.ToDoubleFunction<String> groupValue) {
-        long mask = 0L;
-        for (int i = 0; i < lightGroups.size() && i < 64; i++) {
-            if (groupValue.applyAsDouble(lightGroups.get(i)) > 0.0) {
-                mask |= 1L << i;
-            }
-        }
-        return mask;
+        return ModelParts.litMask(lightGroups, groupValue);
     }
 }

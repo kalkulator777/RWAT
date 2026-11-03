@@ -42,7 +42,9 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
  *       railheads ahead of the lamp, so the line ahead shows lit up.</li>
  * </ul>
  * All of it shows in the dark and washes out in daylight or under lamps. A
- * lamp of no light group is always lit. The sizes are {@link HeadlightBeam}'s;
+ * lamp shines as its lens glows ({@code convention.ModelParts#lit}): with no
+ * light group always, else while its group is on — with {@code LINVERT}
+ * while it is off. The sizes are {@link HeadlightBeam}'s;
  * a car out of view whose light may be in it is still passed to the renderer,
  * which then queues only the light ({@link WagonRenderer#shouldRender}).
  *
@@ -104,7 +106,7 @@ public final class LampEffects {
      *
      * @param body        model space → camera-relative world (the body's pose, turned if flipped)
      * @param camera      the camera's orientation (spots face it)
-     * @param litMask     the model's lit light groups (a lamp of none is lit whatever they are)
+     * @param litMask     the model's lit light groups (a lamp shines by {@link StockModel.Headlight#lit})
      * @param packedLight the wagon's light (bright surroundings drown the beam)
      * @param dayLight    0 at night … 1 at noon
      */
@@ -122,7 +124,7 @@ public final class LampEffects {
         Vector3f dir = new Vector3f();
         Vector3f bodyUp = body.transformDirection(new Vector3f(0.0F, 1.0F, 0.0F)).normalize();
         for (StockModel.Headlight lamp : model.headlights()) {
-            if (!StockModel.tagLit(StockModel.tag(lamp.group(), false, false, false), litMask)) {
+            if (!lamp.lit(litMask)) {
                 continue;
             }
             body.transformPosition(lamp.x(), lamp.y(), lamp.z(), centre);

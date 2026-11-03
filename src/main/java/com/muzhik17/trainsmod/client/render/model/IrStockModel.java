@@ -176,11 +176,12 @@ public final class IrStockModel {
         }
         List<StockModel.Lamp> lamps = new ArrayList<>();
         for (ModelParts.Lamp lamp : parts.lamps()) {
-            lamps.add(new StockModel.Lamp(lamp.x(), lamp.y(), lamp.z(), lamp.group()));
+            lamps.add(new StockModel.Lamp(lamp.x(), lamp.y(), lamp.z(), lamp.group(), lamp.invert()));
         }
         List<StockModel.Headlight> headlights = new ArrayList<>();
         for (ModelParts.Headlight h : parts.headlights()) {
-            headlights.add(new StockModel.Headlight(h.x(), h.y(), h.z(), h.dirZ(), h.radius(), h.rgb(), h.group()));
+            headlights.add(new StockModel.Headlight(h.x(), h.y(), h.z(), h.dirZ(), h.radius(), h.rgb(), h.group(),
+                    h.invert()));
         }
         List<StockModel.Coupler> builtCouplers = new ArrayList<>();
         for (int c = 0; c < parts.couplers().size(); c++) {
