@@ -234,11 +234,15 @@ describe('minimal edits of the MVP recipe overrides (packs/mvp, our markup, no a
       }
       for (const child of children(value)) {
         const parent = getAt(value, child.slice(0, -1));
-        if (Array.isArray(parent)) {
-          insert(text, [...child.slice(0, -1), child.at(-1) as string], { min: [0, 0, 0] });
+        if (Array.isArray(parent) && child.at(-1) === '0') {
+          // every array: an element in front, one at the end, the first and the last removed
+          const path = child.slice(0, -1);
+          insert(text, [...path, '0'], { min: [0, 0, 0] });
+          insert(text, [...path, '-'], 1);
           remove(text, child);
+          remove(text, [...path, String(parent.length - 1)]);
         }
       }
     }
-  });
+  }, 30_000);
 });

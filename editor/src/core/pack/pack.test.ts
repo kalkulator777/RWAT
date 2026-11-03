@@ -16,6 +16,11 @@ async function openExample(): Promise<{ pack: Pack; source: MemorySource; files:
   return { pack: await Pack.open(source), source, files };
 }
 
+/** The same bytes (vitest's deep equality is slow on a big array). */
+function same(a: Uint8Array | undefined, b: Uint8Array): boolean {
+  return a !== undefined && Buffer.from(a).equals(Buffer.from(b));
+}
+
 /** The lines where two texts differ, by line number. */
 function changedLines(before: string, after: string): number[] {
   const a = before.split('\n');
@@ -98,7 +103,7 @@ describe('the pack model on the example pack', () => {
     const written = await pack.save(sink);
     expect(written.map((change) => change.path)).toEqual([COACH_TYPE]);
     expect(changedLines(original, decoder.decode(sink.files.get(COACH_TYPE)))).toEqual([4]);
-    for (const [path, bytes] of files) if (path !== COACH_TYPE) expect(sink.files.get(path), path).toEqual(bytes);
+    for (const [path, bytes] of files) if (path !== COACH_TYPE) expect(same(sink.files.get(path), bytes), path).toBe(true);
     expect(pack.dirtyPaths()).toEqual([]);
 
     journal.undo();
@@ -116,7 +121,7 @@ describe('the pack model on the example pack', () => {
     const sink = new MemorySink();
     const written = await pack.save(sink, { whole: true });
     expect(written.length).toBe(files.size + 1);
-    for (const [path, bytes] of files) expect(sink.files.get(path), path).toEqual(bytes);
+    for (const [path, bytes] of files) expect(same(sink.files.get(path), bytes), path).toBe(true);
     expect((await pack.snapshot()).length).toBe(files.size + 1);
   });
 });
