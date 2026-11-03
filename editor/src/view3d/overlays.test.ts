@@ -4,6 +4,7 @@ import type { OverlayShape } from '../core/contracts';
 import { SELECTION_COLOR } from './modelScene';
 import { HEADLIGHT_STYLE, LAMP_STYLE } from '../preview/scene';
 import { disposeLayer, layerObject, OVERLAY_STYLES, overlayStyle, POINT_SIZE, shapeObject } from './overlays';
+import { contrast, rgbOf, tooClose } from './colours.node';
 import { VIEW_BACKGROUND } from './roleColors';
 
 function find<T>(root: Object3D, type: new (...args: never[]) => T): T[] {
@@ -129,5 +130,23 @@ describe('the overlays', () => {
     expect(doorLines.color.getHex()).toBe(SELECTION_COLOR);
     disposeLayer(layer);
     expect(layer.children).toHaveLength(0);
+  });
+});
+
+describe('the overlay styles the markup tools draw side by side', () => {
+  /** The styles drawn with the doorway's span and the ways out (`exit`): the zones tool's floor and the doors tool's doors. */
+  const NEIGHBOURS = ['warning', 'bridge', 'piece', 'cut', 'zone', 'door', 'door-inner', 'doors.face', 'doors.leaf', 'cab', 'unreachable'];
+
+  it('tell the doorway’s span and the ways out from a warning and from what they are drawn with, for normal vision and the colour blindnesses', () => {
+    const colours = Object.fromEntries(['exit', ...NEIGHBOURS].map((name) => [name, rgbOf(overlayStyle(name).color)]));
+    expect(tooClose(colours, 15, 'exit')).toEqual([]);
+  });
+
+  it('draw the doorway’s span, the ways out and a warning in lines that stand out from the view’s background, light and dark', () => {
+    for (const name of ['exit', 'warning']) {
+      for (const [scheme, background] of Object.entries(VIEW_BACKGROUND)) {
+        expect(contrast(rgbOf(overlayStyle(name).color), background), `${name} on ${scheme}`).toBeGreaterThanOrEqual(2.5);
+      }
+    }
   });
 });

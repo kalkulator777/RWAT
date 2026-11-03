@@ -58,8 +58,12 @@ export const OVERLAY_STYLES: Readonly<Record<string, OverlayStyle>> = Object.fre
   cut: { color: '#e03131', fill: 0.3, dashed: false },
   /** The bridge an open inner door lays across. */
   bridge: { color: '#1c7ed6', fill: 0.28, dashed: false },
-  /** A piece from which a door is walked out of. */
-  exit: { color: '#f08c00', fill: 0.3, dashed: false },
+  /**
+   * A piece from which a door is walked out of, and a doorway's span (tools/doors): a muted
+   * violet, told from a warning's amber and from the floor and doors it is drawn with, for
+   * colour-blind eyes too, and standing out from both backgrounds (./overlays.test.ts).
+   */
+  exit: { color: '#9977aa', fill: 0.3, dashed: false },
   /** A cab's area; a car's other cabs take the shades after it (tools/common `CAB_STYLES`). */
   cab: { color: '#7048e8', fill: 0.18, dashed: false },
   'cab-2': { color: '#ae3ec9', fill: 0.18, dashed: false },
