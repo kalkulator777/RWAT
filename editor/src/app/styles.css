@@ -6,6 +6,12 @@
  * from Fontsource 5.3.0 (@fontsource-variable/inter, @fontsource-variable/jetbrains-mono).
  * Own files rather than system fonts: Cyrillic and tabular digits everywhere, and the
  * same screenshots on every machine.
+ *
+ * The font URLs are root-absolute (`/fonts/…`) on purpose: that is how Vite wants files
+ * of public/ named, and with `base: './'` (vite.config.ts) the build writes them relative
+ * to the built stylesheet (`../fonts/…`), so they load wherever the site is, GitHub Pages'
+ * /RWAT/ included (e2e/forms/subfolder.spec.ts). A relative path here would either not
+ * resolve at build time or copy the fonts a second time into assets/.
  */
 
 @font-face {
