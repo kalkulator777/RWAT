@@ -3,6 +3,7 @@ import { h, render } from 'preact';
 import { lang, t } from '../i18n';
 import { panels } from './panels';
 import { registerServiceWorker } from './pwa';
+import { installShortcuts, loadSchema } from './session';
 import { Shell } from './Shell';
 
 /**
@@ -16,5 +17,7 @@ export function start(root: HTMLElement): void {
     document.title = t('shell.title');
   });
   render(h(Shell, { panels }), root);
+  installShortcuts();
+  void loadSchema();
   if (import.meta.env.PROD) registerServiceWorker();
 }

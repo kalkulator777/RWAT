@@ -6,10 +6,10 @@
  */
 
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 /** The repository's root folder, with a trailing separator. */
-export const REPO_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
+// import.meta.dirname, not a file: URL: under happy-dom (the interface tests) import.meta.url is http:.
+export const REPO_ROOT = `${join(import.meta.dirname, '..', '..', '..')}/`;
 
 /** The example pack's folder (R11, CC0). */
 export const EXAMPLE_PACK = join(REPO_ROOT, 'run', 'rwat_packs', 'RwatExamplePack');
