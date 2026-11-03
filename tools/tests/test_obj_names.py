@@ -6,8 +6,8 @@ a material named "Dark Wood" found no texture, and an object "o Door Leaf" was
 "Door" to the mod and "Door Leaf" to the converter. The mod reads materials with
 MtlParser.materialName and objects with ObjectRole.objectName; the converter's
 ports are ir2rwat.material_name and floorgen.object_name_of. Their line -> name
-cases are the shared golden data (fixtures/golden/material_names.json and
-object_names.json, test_golden.py); here, the readers that use them."""
+cases are the shared golden data (fixtures/golden/mtl/material_names.json and
+fixtures/golden/obj/object_names.json, test_golden_mtl.py and test_golden_obj.py); here, the readers that use them."""
 
 import unittest
 

@@ -20,8 +20,8 @@ import com.muzhik17.trainsmod.convention.ObjectRole;
  * the first word and the converter the whole line, so {@code o Door Leaf} was
  * {@code Door} to the one and {@code Door Leaf} to the other. The line → name
  * cases are shared with the converter's port ({@code floorgen.object_name_of})
- * and the editor's: {@code fixtures/golden/object_names.json}, run by {@code
- * GoldenTest}; here, the loader names its parts by that rule.
+ * and the editor's: {@code fixtures/golden/obj/object_names.json}, run by {@code
+ * ObjGolden}; here, the loader names its parts by that rule.
  */
 class ObjectNamesTest {
 

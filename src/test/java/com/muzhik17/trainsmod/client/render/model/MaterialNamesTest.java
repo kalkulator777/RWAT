@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
  * MTL parser the whole line, so a material named {@code Dark Wood} found no
  * texture. The line → name cases are shared with the converter's port
  * ({@code ir2rwat.material_name}) and the editor's: {@code
- * fixtures/golden/material_names.json}, run by {@code GoldenTest}.
+ * fixtures/golden/mtl/material_names.json}, run by {@code MtlGolden}.
  */
 class MaterialNamesTest {
 
