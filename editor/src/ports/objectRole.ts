@@ -10,6 +10,9 @@
  *
  * Numbers are floats in Java: they come through {@link parseJavaFloat}, which rounds to a
  * float, and a text Java refuses falls back to the same default.
+ *
+ * `ObjectRole.objectName` — the name an `o`/`g` line gives — is not here but in ./obj.ts
+ * (`objectName`), where the OBJ is read: the one port of that rule.
  */
 
 import conventions from '../../../schema/obj-conventions.json';
