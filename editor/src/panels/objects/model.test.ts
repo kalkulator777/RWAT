@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { NO_FILTER, buildRows, filterRows, flagsOf, roleCounts, rolesPresent, sortRows } from './model';
-import { exampleModel } from './example.node';
+import { exampleModel } from '../../model/testing.node';
 import { ROLE_ORDER } from './roles';
 
-const shunter = await exampleModel('rwat_example:shunter');
-const coach = await exampleModel('rwat_example:coach');
-const shunterRows = buildRows(shunter.model, shunter.texturedMaterials);
-const coachRows = buildRows(coach.model, coach.texturedMaterials);
+const shunter = await exampleModel('shunter');
+const coach = await exampleModel('coach');
+const shunterRows = buildRows(shunter);
+const coachRows = buildRows(coach);
 
 function row(rows: typeof shunterRows, name: string) {
   const found = rows.find((candidate) => candidate.name === name);
@@ -23,7 +23,7 @@ describe('the table of a model', () => {
     expect(row(shunterRows, 'CAB_LAMP_FULLBRIGHT_LCG_IL').faces % 2).toBe(0);
   });
 
-  it('reads the control, its group, the light group and the flags from the name', () => {
+  it('takes the control the engine built and its group, the light group, and the flags of the name', () => {
     expect(row(shunterRows, 'THROTTLE_1_ROT_-50')).toMatchObject({ role: 'control', key: 'THROTTLE_1', controlGroup: null, lit: false });
     expect(row(shunterRows, 'THROTTLE_1_ROT_-50').flags).toEqual(['ROT -50']);
     expect(row(shunterRows, 'WIDGET_7_CG_FHL_HIDE_NOTOUCH')).toMatchObject({ role: 'control', key: 'WIDGET_7', controlGroup: 'FHL' });
@@ -48,9 +48,18 @@ describe('the table of a model', () => {
     expect(row(shunterRows, 'GUIDE_FLOOR_0')?.role).toBe('skip');
   });
 
-  it('says nothing about a texture it cannot know', () => {
-    const unknown = buildRows(shunter.model, null);
-    expect(unknown.every((r) => r.textured === null)).toBe(true);
+  it('says a material has no texture when the model has none for it, and nothing for an object of no faces', () => {
+    const bare = { ...shunter, materials: {} };
+    expect(buildRows(bare).every((r) => r.textured === false)).toBe(true);
+    const faceless = { ...shunter, parts: [] };
+    expect(buildRows(faceless).every((r) => r.textured === null && r.faces === 0)).toBe(true);
+  });
+
+  it('keys a control by the control the engine built, whatever its object is called', () => {
+    // the shunter's handbrake wheel is a widget its declaration names: the engine makes it HANDBRAKE
+    const control = shunter.objects.find((o) => o.control?.kind === 'HANDBRAKE');
+    expect(control).toBeDefined();
+    expect(row(shunterRows, control!.name).key).toBe(control!.control!.key);
   });
 });
 
@@ -61,6 +70,8 @@ describe('search, role filter and the light filter', () => {
       'HEADLIGHT_1_LCG_FHL_0XFFF2CC',
       'WIDGET_7_CG_FHL_HIDE_NOTOUCH',
       'IND_LAMP_FULLBRIGHT_LCG_FHL_LINVERT',
+      // the switch's hinge marker: the engine merges it into WIDGET_1, of group FHL
+      'WIDGET_1_ROT_60',
       'WIDGET_1_TOGGLE_CG_FHL_OFFSET_-0.5',
     ]);
     expect(filterRows(shunterRows, { ...NO_FILTER, text: ' NOTOUCH ' })).toHaveLength(1);

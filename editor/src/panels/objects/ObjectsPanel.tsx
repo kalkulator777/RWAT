@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { pack, revision, selection } from '../../app/store';
-import type { Link } from '../../core/contracts';
+import { modelLoading, modelProblems, openModel, openWagon, pack, revision, selection } from '../../app/store';
+import { problemMessage } from '../../checks/messages';
+import type { Link, LoadedModel, Problem } from '../../core/contracts';
 import { catalog, lang, t } from '../../i18n';
 import { roleColorCss } from '../../view3d/roleColors';
 import { explainObject, type Explanation } from './explain';
-import type { BuiltModel } from './buildModel';
 import {
   NO_FILTER,
   SORT_KEYS,
@@ -18,7 +18,6 @@ import {
   type SortDirection,
   type SortKey,
 } from './model';
-import { declarationKey, loadWagonModel, stockIdOf, workerModel, type ModelFailure } from './source';
 import './objects.css';
 
 /** Rows drawn at once; a model of thousands of objects shows the rest on request. */
@@ -39,18 +38,6 @@ function RoleMark(props: { role: string }) {
   );
 }
 
-function failureText(failure: ModelFailure): string {
-  switch (failure.failure) {
-    case 'no-model':
-      return t('objects.failure.noModel');
-    case 'no-obj':
-      return t('objects.failure.noObj', { path: failure.path });
-    case 'bad-obj':
-      return t('objects.failure.badObj', { detail: failure.detail });
-  }
-}
-
-type Loaded = { key: string; built: BuiltModel } | { key: string; failure: ModelFailure } | null;
 
 /** The links of the selection that point at objects of this model, by object name. */
 function selectedNames(links: readonly Link[], model: string): string[] {
@@ -111,11 +98,16 @@ function Detail(props: { name: string | null; row: ObjectRow | undefined; skip: 
 }
 
 /**
- * The "Objects" tab (editor.md §6.1, §3.8): the objects of the selected wagon's model as a
+ * The "Objects" tab (editor.md §6.1, §3.8): the objects of the open wagon's model as a
  * table — name, role, control key, group, flags, material, texture, faces — with a search,
  * a legend of the roles in the colours of the 3D view (view3d/roleColors), which is also
  * the role filter, sorting by column, and beside it why the chosen object has its role:
  * the rule of schema/obj-conventions.json that took it, in the interface language.
+ *
+ * The model is the one the shell opened (app/openModel.ts: the wagon the selection points
+ * at, read by the model worker with the engine's roles of ports/modelParts); picking a wagon
+ * in the tab's own list selects its model file, and the shell opens it. A model that can't
+ * be read is said by its finding.
  *
  * The selection is the editor's one `selection` signal: a click on a row writes the
  * object's link there (Shift or Ctrl adds or removes), and objects the 3D view or the
@@ -124,35 +116,19 @@ function Detail(props: { name: string | null; row: ObjectRow | undefined; skip: 
 export function ObjectsPanel() {
   void revision.value;
   const open = pack.value;
-  const stock = open === null ? [] : open.stock().filter((entry) => entry.model !== null);
-  const fromSelection = stockIdOf(selection.value, stock);
+  const declared = open === null ? [] : open.stock();
+  const stock = declared.filter((entry) => entry.model !== null);
+  const wagonId = openWagon.value;
+  const wagon = stock.find((entry) => entry.id === wagonId);
+  const typeOnly = wagon === undefined && declared.some((entry) => entry.id === wagonId);
 
-  const [chosen, setChosen] = useState<string | null>(null);
-  useEffect(() => {
-    if (fromSelection !== null) setChosen(fromSelection);
-  }, [fromSelection]);
-  const wagon = stock.find((entry) => entry.id === (fromSelection ?? chosen)) ?? (stock.length === 1 ? stock[0] : undefined);
+  // the shell's model, once it is this wagon's; a model that can't be read is empty, with its finding
+  const current = openModel.value;
+  const read: LoadedModel | null = current !== null && wagon !== undefined && current.id === wagon.id ? current : null;
+  const finding: Problem | undefined = read !== null ? (read.objects.length === 0 ? read.problems[0] : undefined) : wagon !== undefined && !modelLoading.value ? modelProblems.value[0] : undefined;
+  const built = finding === undefined ? read : null;
 
-  // the model: the worker's if it has one for this wagon, else the pack's OBJ read here
-  const supplied = workerModel.value;
-  const useSupplied = supplied !== null && wagon !== undefined && supplied.model.id === wagon.id;
-  const key = open !== null && wagon !== undefined ? `${wagon.id}\n${declarationKey(open, wagon)}` : '';
-  const [loaded, setLoaded] = useState<Loaded>(null);
-  useEffect(() => {
-    if (open === null || wagon === undefined || useSupplied) return;
-    let current = true;
-    void loadWagonModel(open, wagon).then((result) => {
-      if (current) setLoaded('built' in result ? { key, built: result.built } : { key, failure: result });
-    });
-    return () => {
-      current = false;
-    };
-  }, [open, key, useSupplied]);
-
-  const built: BuiltModel | null = useSupplied ? supplied : loaded !== null && loaded.key === key && 'built' in loaded ? loaded.built : null;
-  const failure: ModelFailure | null = !useSupplied && loaded !== null && loaded.key === key && 'failure' in loaded ? loaded.failure : null;
-
-  const rows = useMemo(() => (built === null ? [] : buildRows(built.model, built.texturedMaterials)), [built]);
+  const rows = useMemo(() => (built === null ? [] : buildRows(built)), [built]);
   const counts = useMemo(() => roleCounts(rows), [rows]);
   const present = useMemo(() => rolesPresent(rows), [rows]);
 
@@ -168,7 +144,7 @@ export function ObjectsPanel() {
   );
   const drawn = all ? shown : shown.slice(0, ROW_LIMIT);
 
-  const modelId = built?.model.id ?? '';
+  const modelId = built?.id ?? '';
   const names = selectedNames(selection.value, modelId);
   const chosenSet = new Set(names);
   const tableRef = useRef<HTMLDivElement>(null);
@@ -227,7 +203,6 @@ export function ObjectsPanel() {
             value={wagon?.id ?? ''}
             onChange={(event) => {
               const id = event.currentTarget.value;
-              setChosen(id === '' ? null : id);
               const entry = stock.find((candidate) => candidate.id === id);
               if (entry?.model != null) selection.value = [{ kind: 'file', file: entry.model }];
             }}
@@ -289,11 +264,16 @@ export function ObjectsPanel() {
         )}
       </div>
 
-      {wagon === undefined && <p class="objects-hint">{stock.length === 0 ? t('objects.noWagons') : t('objects.pickWagon')}</p>}
-      {wagon !== undefined && built === null && failure === null && <p class="objects-hint" role="status">{t('objects.loading')}</p>}
-      {failure !== null && (
+      {wagon === undefined && !typeOnly && <p class="objects-hint">{stock.length === 0 ? t('objects.noWagons') : t('objects.pickWagon')}</p>}
+      {typeOnly && (
         <p class="objects-hint" role="status" data-testid="objects-failure">
-          {failureText(failure)}
+          {t('objects.failure.noModel')}
+        </p>
+      )}
+      {wagon !== undefined && built === null && finding === undefined && <p class="objects-hint" role="status">{t('objects.loading')}</p>}
+      {finding !== undefined && (
+        <p class="objects-hint" role="status" data-testid="objects-failure" data-code={finding.code}>
+          {problemMessage(finding, { pack: open })}
         </p>
       )}
 

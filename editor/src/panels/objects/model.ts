@@ -2,12 +2,12 @@
  * The objects tab's table as data: the rows of a {@link LoadedModel}, the search and role
  * filters, the sorting, the counts of the legend. Pure, no DOM, tested in Node.
  *
- * A row is one object of the model (`LoadedModel.objects`), with what the table shows of
- * it: its role, the control it belongs to and that control's group, the flags of its name,
- * its materials, whether they have a texture, and the number of triangles it is drawn with.
- * What the name says (key, group, flags) is read again from the name by `ports/objectRole`,
- * the one reading of the convention, not taken from `ObjectInfo.control`, which is `unknown`
- * in the contract.
+ * A row is one object of the model as the model worker read it (`LoadedModel.objects`),
+ * with what the table shows of it: its role, the control the engine built it into
+ * (`ObjectInfo.control`: the key, and the group when it is not the key's own), its light
+ * group, the flags and marks of its name (read by `ports/objectRole`, the one reading of
+ * the convention), its materials, whether they have a texture (`LoadedModel.materials`),
+ * and the number of triangles it is drawn with.
  */
 
 import type { LoadedModel, ObjectInfo } from '../../core/contracts';
@@ -32,7 +32,7 @@ export interface ObjectRow {
   flags: string[];
   /** The materials of the object's parts, in order, each once. */
   materials: string[];
-  /** Whether the materials have a texture: null when the model does not say. */
+  /** Whether a material of the object has a texture (`LoadedModel.materials`): null for an object with no faces. */
   textured: boolean | null;
   /** Triangles the object is drawn with. */
   faces: number;
@@ -59,25 +59,23 @@ export function flagsOf(name: string): string[] {
   return flags;
 }
 
-/** The control key, the explicit control group and the light group the name gives. */
-function identity(name: string): { key: string | null; controlGroup: string | null; lightGroup: string | null } {
-  const role = door(name) ?? parseRole(name);
-  const head = coupled(name);
-  const control = role.control;
+/**
+ * The control key and its group (when it is not the key's own) of the control the engine
+ * built the object into, or a coupler head's end; and its light group: the engine's, else
+ * what the name says (an object the engine draws nothing of has none of the engine's).
+ */
+function identity(info: ObjectInfo): { key: string | null; controlGroup: string | null; lightGroup: string | null } {
+  const control = info.control ?? null;
+  const head = control === null ? coupled(info.name) : null;
   return {
     key: control?.key ?? (head === null ? null : head.front ? 'COUPLED_FRONT' : 'COUPLED_REAR'),
     controlGroup: control !== null && control.group !== control.key ? control.group : null,
-    lightGroup: role.lightGroup,
+    lightGroup: info.lightGroup ?? (door(info.name) ?? parseRole(info.name)).lightGroup,
   };
 }
 
-/**
- * The rows of a model, in its object order.
- *
- * @param texturedMaterials the materials that have a texture; null when it is not known,
- *   and then the column says nothing (the tab never guesses)
- */
-export function buildRows(model: LoadedModel, texturedMaterials: ReadonlySet<string> | null = null): ObjectRow[] {
+/** The rows of a model, in its object order. */
+export function buildRows(model: LoadedModel): ObjectRow[] {
   const materials = new Map<string, string[]>();
   const faces = new Map<string, number>();
   for (const part of model.parts) {
@@ -88,7 +86,7 @@ export function buildRows(model: LoadedModel, texturedMaterials: ReadonlySet<str
   }
   return model.objects.map((info: ObjectInfo, index) => {
     const used = materials.get(info.name) ?? [];
-    const { key, controlGroup, lightGroup } = identity(info.name);
+    const { key, controlGroup, lightGroup } = identity(info);
     const flags = flagsOf(info.name);
     return {
       index,
@@ -96,11 +94,11 @@ export function buildRows(model: LoadedModel, texturedMaterials: ReadonlySet<str
       role: info.role,
       key,
       controlGroup,
-      lightGroup: lightGroup ?? info.lightGroup ?? null,
+      lightGroup,
       flags,
-      lit: (lightGroup ?? info.lightGroup ?? null) !== null || flags.includes('FULLBRIGHT') || flags.includes('HEADLIGHT'),
+      lit: lightGroup !== null || flags.includes('FULLBRIGHT') || flags.includes('HEADLIGHT'),
       materials: used,
-      textured: texturedMaterials === null || used.length === 0 ? null : used.some((material) => texturedMaterials.has(material)),
+      textured: used.length === 0 ? null : used.some((material) => Object.hasOwn(model.materials, material)),
       faces: faces.get(info.name) ?? 0,
     };
   });

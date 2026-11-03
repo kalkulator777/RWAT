@@ -1,32 +1,64 @@
+/**
+ * The objects tab in the DOM, on the example pack as the shell opens it: the open wagon's
+ * model read by the model pipeline (the worker's own code, in this thread, app/openModel.ts
+ * wired as the shell wires it), its objects listed with the engine's roles.
+ */
+
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/preact';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { connectModel } from '../../app/openModel';
 import { panels } from '../../app/panels';
 import { openSource } from '../../app/session';
-import { journal, pack, revision, schema, schemaError, selection } from '../../app/store';
+import { journal, modelLoading, modelProblems, openModel, openWagon, pack, revision, schema, schemaError, selection } from '../../app/store';
 import { MemorySource, readTree } from '../../core/pack/testing.node';
 import { setLang } from '../../i18n';
+import { createModelApi } from '../../model/api';
+import { ModelLoader } from '../../model/client';
+import { PreviewController } from '../../preview/controller';
+import { recordingView } from '../../preview/testing.node';
 import { EXAMPLE_PACK } from '../../testing/repo.node';
 import { ObjectsPanel, roleLabel } from './ObjectsPanel';
 import { ROLE_ORDER } from './roles';
-import { exampleModel } from './example.node';
-import { workerModel } from './source';
+import { exampleModel } from '../../model/testing.node';
 
 const files = readTree(EXAMPLE_PACK);
 const SHUNTER_MODEL = 'assets/rwat_example/wagon_models/shunter.json';
 const COACH_MODEL = 'assets/rwat_example/wagon_models/coach.json';
 
+let disconnect: (() => void) | null = null;
+
 function reset(): void {
+  disconnect?.();
+  disconnect = null;
   pack.value = null;
   journal.value = null;
   schema.value = null;
   schemaError.value = null;
   selection.value = [];
   revision.value = 0;
-  workerModel.value = null;
+  openWagon.value = null;
+  openModel.value = null;
+  modelLoading.value = false;
+  modelProblems.value = [];
+}
+
+/** The shell's wiring of the open model, its worker in this thread. */
+function wire(): void {
+  const preview = new PreviewController({ every: () => () => undefined });
+  const stop = connectModel({ loader: new ModelLoader(createModelApi(() => Promise.resolve(null))), view: recordingView(), preview, delayMs: 0 });
+  disconnect = () => {
+    stop();
+    preview.dispose();
+  };
+}
+
+async function openPack(source = files, name = 'RwatExamplePack'): Promise<void> {
+  wire();
+  await openSource(new MemorySource(source, name));
 }
 
 async function openShunter(): Promise<HTMLElement> {
-  await openSource(new MemorySource(files, 'RwatExamplePack'));
+  await openPack();
   render(<ObjectsPanel />);
   selection.value = [{ kind: 'file', file: SHUNTER_MODEL }];
   return screen.findByTestId('objects-table');
@@ -67,7 +99,7 @@ describe('the objects tab', () => {
   it('asks for a pack, then for a wagon', async () => {
     render(<ObjectsPanel />);
     expect(screen.getByText('No pack open.')).toBeTruthy();
-    await openSource(new MemorySource(files, 'RwatExamplePack'));
+    await openPack();
     await screen.findByText(/Pick a wagon/);
     const select = screen.getByTestId<HTMLSelectElement>('objects-wagon');
     expect([...select.options].map((o) => o.value)).toEqual(['', 'rwat_example:coach', 'rwat_example:gondola', 'rwat_example:shunter']);
@@ -168,21 +200,40 @@ describe('the objects tab', () => {
     expect(screen.getByTestId('objects-how').textContent).toContain('«WIDGET_1»');
   });
 
-  it('shows the worker\'s model instead of its own when the worker has one for the wagon', async () => {
-    const built = await exampleModel('rwat_example:shunter');
-    const model = { ...built.model, objects: [{ ...built.model.objects[0]!, name: 'FRAME', role: 'wheelset' }] };
-    workerModel.value = { ...built, model: { ...model, parts: built.model.parts.filter((p) => p.object === 'FRAME') } };
-    await openShunter();
+  it('lists the model the shell opened and nothing of its own: it reads no OBJ', async () => {
+    const shunter = await exampleModel('shunter');
+    const frame = shunter.objects.find((o) => o.name === 'FRAME')!;
+    await openSource(new MemorySource(files, 'RwatExamplePack'));
+    render(<ObjectsPanel />);
+    openWagon.value = shunter.id;
+    await screen.findByText('Reading the model…');
+    openModel.value = { ...shunter, objects: [{ ...frame, role: 'wheelset' }], parts: shunter.parts.filter((p) => p.object === 'FRAME') };
+    await screen.findByTestId('objects-table');
     expect(document.querySelectorAll('tr[data-object]')).toHaveLength(1);
     expect(rowOf('FRAME').dataset.role).toBe('wheelset');
+    // a model of another wagon is not this wagon's
+    openWagon.value = 'rwat_example:coach';
+    await screen.findByText('Reading the model…');
   });
 
-  it('says so when the wagon has no model file the engine can read', async () => {
+  it('says why when the wagon’s model can’t be read, in the words of its finding', async () => {
     const broken = new Map(files);
     broken.set('assets/rwat_example/stock/shunter/shunter.obj', new TextEncoder().encode('v 1 2\n'));
-    await openSource(new MemorySource(broken, 'broken'));
+    await openPack(broken, 'broken');
     render(<ObjectsPanel />);
     selection.value = [{ kind: 'file', file: SHUNTER_MODEL }];
-    expect((await screen.findByTestId('objects-failure')).textContent).toContain('does not read this OBJ');
+    const failure = await screen.findByTestId('objects-failure');
+    expect(failure.getAttribute('data-code')).toBe('model.unreadable');
+    expect(failure.textContent).toContain("model rwat_example:stock/shunter/shunter.obj can't be read");
+    setLang('ru');
+    await waitFor(() => expect(screen.getByTestId('objects-failure').textContent).toContain('не читается'));
+  });
+
+  it('says a wagon without a model has none', async () => {
+    const typeOnly = new Map([...files].filter(([path]) => path !== SHUNTER_MODEL));
+    await openPack(typeOnly, 'type only');
+    render(<ObjectsPanel />);
+    selection.value = [{ kind: 'file', file: 'data/rwat_example/wagon_types/shunter.json' }];
+    expect((await screen.findByTestId('objects-failure')).textContent).toContain('no model declaration');
   });
 });
