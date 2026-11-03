@@ -9,13 +9,13 @@ Where Python is a port, its runner compares with the file's tolerance: numbers
 within it, "NaN"/"Infinity"/"-Infinity" against those values, the rest exactly.
 Where Python is the reference (json_dump, validate), its runner compares exactly,
 and run as a script with --update rewrites the expected of every case from the
-code now:
+code now, and nothing else of the file (with_expected, as Golden.withExpected):
 
     python -I tools/tests/test_golden_json_dump.py --update
 
-The files are laid out as the Java runners lay theirs (Golden.java): two-space
-indents, an array or object on one line while it fits in 110 columns, the file,
-its cases and each case a key a line."""
+An expected is laid out as the Java runners lay theirs (Golden.java): two-space
+indents from its key, an array or object on one line while it fits in 110
+columns, the file, its cases and each case a key a line."""
 
 import json
 import math
@@ -142,17 +142,165 @@ class PortTest(unittest.TestCase):
 
 # ---------------------------------------------------------------- the reference
 
-def update(folder, compute):
-    """Rewrites the expected of every case of a folder Python is the reference of."""
-    if ports(folder)["reference"] != "python":
-        raise SystemExit(f"{folder}: Python is no reference of it, its expected are written by "
-                         f"{ports(folder)['reference']}")
-    for path in case_files(folder):
-        document = load(path)
-        for case in document["cases"]:
-            case["expected"] = compute(resolve_input(case))
-        path.write_text(write(document) + "\n", encoding="utf-8")
-        print(f"{path.relative_to(ROOT)}: {len(document['cases'])} case(s) written")
+# an expected the update leaves as it is (the case's logic failed): None is JSON's null
+KEEP = object()
+
+
+def update(folder, compute, root=GOLDEN):
+    """Rewrites the expected of every case of a folder Python is the reference of, and
+    nothing else of its files (with_expected); a case whose logic fails keeps its own, and
+    the update ends with an error naming it. A file the code agrees with is not written.
+    root: where the folders are (the tests' own, in a temporary one)."""
+    reference = json.loads((root / folder / "ports.json").read_text(encoding="utf-8"))["reference"]
+    if reference != "python":
+        raise SystemExit(f"{folder}: Python is no reference of it, its expected are written by {reference}")
+    failed = []
+    for path in sorted(p for p in (root / folder).glob("*.json") if p.name != "ports.json"):
+        name = f"{folder}/{path.name}"
+        text = path.read_text(encoding="utf-8")
+        written = []
+        for case in json.loads(text)["cases"]:
+            try:
+                written.append(compute(resolve_input(case)))
+            except Exception as e:  # noqa: BLE001 (any failure of the logic keeps the case's expected)
+                failed.append(f"{name} {case['id']}: {e!r}")
+                written.append(KEEP)
+        updated = with_expected(text, written)
+        if updated != text:
+            path.write_text(updated, encoding="utf-8")
+            print(f"{name}: rewritten")
+    if failed:
+        raise SystemExit("the logic failed, the expected kept:\n  " + "\n  ".join(failed))
+
+
+def with_expected(text, expected):
+    """The text of a case file with the expected of each case replaced by expected (one per
+    case, in order; KEEP keeps the case's own), laid out as write lays a value, indented as
+    its key; everything else in the text stays as it was, character for character — an
+    input's numbers as written (2.5e1), its escapes, its line breaks (Golden.withExpected)."""
+    spans = _Spans(text).expected_of_cases()
+    if len(spans) != len(expected):
+        raise ValueError(f"{len(spans)} cases with an expected in the text, {len(expected)} given")
+    out = text
+    for (start, end, column), value in reversed(list(zip(spans, expected))):
+        if value is not KEEP:
+            out = out[:start] + write(value, column) + out[end:]
+    return out
+
+
+class _Spans:
+    """Where the expected of each case lies in the text of a case file: (start, end, column
+    of the key) per case, in order. A reader of JSON that keeps places, not values."""
+
+    def __init__(self, text):
+        self.text = text
+        self.at = 0
+
+    def expected_of_cases(self):
+        spans = []
+
+        def case_member(key, key_start):
+            if key != "expected":
+                self.value()
+                return
+            start = self.at
+            self.value()
+            spans.append((start, self.at, key_start - (self.text.rfind("\n", 0, key_start) + 1)))
+
+        def member(key, _):
+            if key == "cases":
+                self.elements(lambda: self.members(case_member))
+            else:
+                self.value()
+
+        self.members(member)
+        self.blank()
+        if self.at != len(self.text):
+            raise self.error("text after the file's object")
+        return spans
+
+    def members(self, member):
+        """An object at the place: each member's key to member(key, key_start), which reads its value."""
+        self.blank()
+        self.expect("{")
+        self.blank()
+        if self.peek() == "}":
+            self.at += 1
+            return
+        while True:
+            self.blank()
+            key_start = self.at
+            key = json.loads(self.text[key_start:self.skip_string()])
+            self.blank()
+            self.expect(":")
+            self.blank()
+            member(key, key_start)
+            self.blank()
+            if self.peek() == ",":
+                self.at += 1
+                continue
+            self.expect("}")
+            return
+
+    def elements(self, element):
+        """An array at the place: element() reads each element."""
+        self.blank()
+        self.expect("[")
+        self.blank()
+        if self.peek() == "]":
+            self.at += 1
+            return
+        while True:
+            self.blank()
+            element()
+            self.blank()
+            if self.peek() == ",":
+                self.at += 1
+                continue
+            self.expect("]")
+            return
+
+    def value(self):
+        """Past any value at the place."""
+        self.blank()
+        c = self.peek()
+        if c == "{":
+            self.members(lambda key, key_start: self.value())
+        elif c == "[":
+            self.elements(self.value)
+        elif c == '"':
+            self.skip_string()
+        else:
+            start = self.at
+            while self.at < len(self.text) and self.text[self.at] not in '{}[],: \t\r\n"':
+                self.at += 1
+            if self.at == start:
+                raise self.error("no value")
+
+    def skip_string(self):
+        """Past the string at the place; its end."""
+        self.expect('"')
+        while self.at < len(self.text) and self.text[self.at] != '"':
+            self.at += 2 if self.text[self.at] == "\\" else 1
+        self.expect('"')
+        return self.at
+
+    def blank(self):
+        while self.at < len(self.text) and self.text[self.at] in " \t\r\n":
+            self.at += 1
+
+    def peek(self):
+        if self.at >= len(self.text):
+            raise self.error("the text ends")
+        return self.text[self.at]
+
+    def expect(self, c):
+        if self.peek() != c:
+            raise self.error(f"'{c}' expected")
+        self.at += 1
+
+    def error(self, what):
+        return ValueError(f"case file, at {self.at}: {what}")
 
 
 class ReferenceTest(unittest.TestCase):
