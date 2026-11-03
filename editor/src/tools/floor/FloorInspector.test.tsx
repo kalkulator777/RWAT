@@ -4,7 +4,6 @@ import { setLang } from '../../i18n';
 import { ToolHost } from '../registry';
 import { ToolSection } from '../ToolBar';
 import { bench } from '../testing.node';
-import { findingLinks } from './FloorInspector';
 import floorTool, { type FloorSession } from './index';
 import { FLOOR_TIMING } from './session';
 import { zoneLink, zonesOf } from './zones';
@@ -62,15 +61,22 @@ describe('the floor tool’s section of the inspector', () => {
     stop();
   });
 
-  it('shows what the floor check finds, each finding selecting what it is about', async () => {
+  it('shows what the floor check finds in the interface’s words, the engine’s line as the tooltip, each finding selecting what it is about', async () => {
     const { b, stop, q } = await shown();
     expect(q('[data-testid="floor-findings"]')?.getAttribute('data-count')).toBe('0');
     await act(() => b.journal.dispatch({ label: 'x', ops: [{ op: 'insert', file: FILE, at: '/interior/-', value: { min: [3, 1.3, 0.55], max: [3.4, 3.8, 0.95] } }] }));
     const findings = q('[data-testid="floor-findings"]');
     expect(findings?.getAttribute('data-codes')).toBe('ZONE_TOO_NARROW');
     expect(q('[data-zone="4"] .floor-zone-flag')?.textContent).toBe('no room for a player');
-    fireEvent.click(q('[data-code="ZONE_TOO_NARROW"] button') as HTMLElement);
-    expect(b.selection.value).toEqual([zoneLink(COACH, 4)]);
+    const finding = q('[data-code="ZONE_TOO_NARROW"] button') as HTMLElement;
+    expect(finding.textContent).toBe('zone 4 holds no place a player fits (0.40 × 0.40): widen it to 0.6 or join it to a wider zone');
+    expect(finding.getAttribute('title')).toMatch(/^zone 4 .*0\.40/);
+    expect(finding.getAttribute('title')).not.toBe(finding.textContent);
+    await act(() => setLang('ru'));
+    expect(finding.textContent).toBe('в зоне 4 игроку негде встать (0.40 × 0.40): расширьте её до 0.6 или соедините с зоной пошире');
+    fireEvent.click(finding);
+    expect(b.selection.value).toEqual([{ kind: 'field', file: FILE, at: '/interior/4' }, zoneLink(COACH, 4)]);
+    setLang('en');
     stop();
   });
 
@@ -88,11 +94,5 @@ describe('the floor tool’s section of the inspector', () => {
     fireEvent.click(q('[data-action="floor-pick-height"]') as HTMLElement);
     expect(q('[data-action="floor-pick-height"]')?.getAttribute('aria-pressed')).toBe('true');
     stop();
-  });
-
-  it('points a finding at its zone, its door or the zones out of reach', () => {
-    expect(findingLinks(COACH, { code: 'ZONES_UNREACHABLE', subject: 'zone', index: -1, params: { zones: [1, 3] }, text: '' })).toEqual([zoneLink(COACH, 1), zoneLink(COACH, 3)]);
-    expect(findingLinks(COACH, { code: 'DOOR_TOO_NARROW', subject: 'door', index: 2, params: {}, text: '' })).toEqual([{ kind: 'door', type: COACH, index: 2 }]);
-    expect(findingLinks(COACH, { code: 'CAB_WITHOUT_SEAT', subject: 'cab', index: -1, params: {}, text: '' })).toEqual([]);
   });
 });

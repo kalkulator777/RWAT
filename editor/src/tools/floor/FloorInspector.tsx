@@ -3,20 +3,22 @@
  * view's gestures by keyboard — the zones in their order (zone 0 is where the floor check's
  * walk starts) to select, move up and down, remove and add; the selected zone's six numbers
  * and its height from a click on the model; which doors stand open in the drawing; what
- * edges snap to; what the floor check finds now, each finding selecting its zone or door;
- * the legend of the layers.
+ * edges snap to; what the floor check finds now, in the interface's words, each finding
+ * selecting what it is about; the legend of the layers.
  */
 
 import { Fragment } from 'preact';
 import { useState } from 'preact/hooks';
-import type { FloorFinding, Link } from '../../core/contracts';
+import { floorProblem } from '../../checks/floor/problems';
+import { problemMessage } from '../../checks/messages';
 import { numberText, parseNumber } from '../../forms/values';
 import { formatNumber, t } from '../../i18n';
 import { overlayStyle } from '../../view3d/overlays';
 import { CAB_STYLES, DOOR_STATES } from './analysis';
+import type { ToolSubject } from '../registry';
 import type { FloorTool } from './session';
 import type { Snapping } from './snap';
-import { selectedZones, zoneLink, type ZoneBox } from './zones';
+import { selectedZones, type ZoneBox } from './zones';
 import './floor.css';
 
 const AXES = ['x', 'y', 'z'] as const;
@@ -234,20 +236,12 @@ function ZoneNumbers({ tool, index, zone, readOnly }: { tool: FloorTool; index: 
   );
 }
 
-/** What a finding of the floor check points at: its zone, door or chair, or the zones nobody walks to. */
-export function findingLinks(wagon: string, finding: FloorFinding): Link[] {
-  if (finding.code === 'ZONES_UNREACHABLE' && Array.isArray(finding.params.zones)) return finding.params.zones.map((zone) => zoneLink(wagon, zone));
-  if (finding.index >= 0 && (finding.subject === 'zone' || finding.subject === 'door' || finding.subject === 'seat')) {
-    return [{ kind: finding.subject, type: wagon, index: finding.index }];
-  }
-  return [];
-}
-
 /**
- * What the floor check finds now, as the engine logs it: the tool's own indicator, until
- * the checks tab lists the floor's findings in the interface's language (checks/, A4.4).
+ * What the floor check finds now, in the interface's words as the checks tab has them (the
+ * finding of checks/floor, translated by its code), the engine's line as the tooltip; a
+ * click selects what it is about.
  */
-function Findings({ tool, wagon }: { tool: FloorTool; wagon: string }) {
+function Findings({ tool, subject }: { tool: FloorTool; subject: ToolSubject }) {
   const found = tool.picture.value?.findings ?? [];
   return (
     <section class="floor-findings" data-testid="floor-findings" data-count={found.length} data-codes={found.map((f) => f.code).join(' ')} aria-live="polite">
@@ -255,11 +249,11 @@ function Findings({ tool, wagon }: { tool: FloorTool; wagon: string }) {
       {found.length > 0 && (
         <ul class="floor-finding-list">
           {found.map((finding, i) => {
-            const links = findingLinks(wagon, finding);
+            const problem = floorProblem(finding, subject.wagon, subject.typeFile, subject.typeJson);
             return (
               <li key={i} data-code={finding.code} data-index={finding.index}>
-                <button type="button" class="floor-finding" disabled={links.length === 0} onClick={() => tool.show(links)}>
-                  <code>{finding.code}</code> <span lang="en">{finding.text}</span>
+                <button type="button" class="floor-finding" title={finding.text} disabled={problem.at.length === 0} onClick={() => tool.show(problem.at)}>
+                  {problemMessage(problem)}
                 </button>
               </li>
             );
@@ -309,7 +303,7 @@ export function FloorInspector({ tool }: { tool: FloorTool }) {
       <DoorsChoice tool={tool} />
       <ZoneList tool={tool} zones={picture.zones} chosen={chosen} readOnly={subject.readOnly} />
       {index !== undefined && zone !== null && <ZoneNumbers tool={tool} index={index} zone={zone} readOnly={subject.readOnly} />}
-      <Findings tool={tool} wagon={subject.wagon} />
+      <Findings tool={tool} subject={subject} />
       <p class="floor-note" data-testid="floor-stats">
         {t('tools.floor.stats', { pieces: picture.pieces, cabs: picture.cabs })}
       </p>
