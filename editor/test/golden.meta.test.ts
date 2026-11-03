@@ -20,15 +20,12 @@ import { GOLDEN_DIR } from '../src/testing/repo.node';
 /** Folders that name `ts` in ports.json and whose port is not written yet: ждёт M2 (docs/proposals/editor.md §7, M2). */
 const WAITING_FOR_M2 = [
   'anim', // ждёт M2: .anim parser and door travel
-  'control_pose', // ждёт M2: organ poses
   'door_leaves', // ждёт M2: door leaves
   'floor_check', // ждёт M2: floor findings
   'floor_region', // ждёт M2: floor under a point
-  'java_numbers', // ждёт M2: Java number parsing and printing
   'mtl', // ждёт M2: MTL parser
   'obj', // ждёт M2: OBJ parser
   'obj_frame', // ждёт M2: OBJ frame conversions
-  'object_role', // ждёт M2: object name roles
   'pivot_axis', // ждёт M2: hinge axis
   'stock_defaults', // ждёт M2: defaults of a wagon type
   'wagon_type', // ждёт M2: wagon type parser messages
