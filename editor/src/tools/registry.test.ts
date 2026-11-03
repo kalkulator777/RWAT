@@ -19,7 +19,7 @@ const WAITING_IN_WAGON_TYPE: Readonly<Record<string, string>> = {
 };
 
 /** The tools that only show and edit no field (docs/proposals/editor.md §3.9). */
-const SHOW_ONLY = ['lights'];
+const SHOW_ONLY = ['lights', 'pivots'];
 
 /**
  * The spatial fields of a conversion override (2b): the type's markup as the override

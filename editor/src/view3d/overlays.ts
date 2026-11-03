@@ -92,6 +92,8 @@ export const OVERLAY_STYLES: Readonly<Record<string, OverlayStyle>> = Object.fre
   'seats.back': { color: '#e64980', fill: 0, dashed: false },
   /** A headlight's cone or a cabin lamp of the light group chosen (tools/lights). */
   'lights.chosen': { color: '#f03e3e', fill: 0.3, dashed: false },
+  /** A control at the end of its travel (tools/pivots). */
+  'pivots.ghost': { color: '#d6336c', fill: 0.08, dashed: true },
 });
 
 /** The style a name stands for; `default` for one the table lacks. */
