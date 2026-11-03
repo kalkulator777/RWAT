@@ -6,6 +6,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.muzhik17.trainsmod.stock.UnionFind;
+
 /**
  * Cabin lamps out of a glowing object (SPEC §8): an IR {@code FULLBRIGHT}
  * object is usually many separate lamps in one mesh (the platzkart's 22
@@ -57,24 +59,21 @@ public final class LampIslands {
      */
     public static List<float[]> of(float[] corners) {
         int faces = corners.length / 12;
-        int[] parent = new int[faces];
-        for (int i = 0; i < faces; i++) {
-            parent[i] = i;
-        }
+        int[] parent = UnionFind.of(faces);
         Map<Key, Integer> firstFaceAt = new HashMap<>();
         for (int i = 0; i < faces; i++) {
             for (int c = 0; c < 4; c++) {
                 int at = i * 12 + c * 3;
                 Integer other = firstFaceAt.putIfAbsent(key(corners[at], corners[at + 1], corners[at + 2]), i);
                 if (other != null) {
-                    union(parent, i, other);
+                    UnionFind.union(parent, i, other);
                 }
             }
         }
         // island root → its box, in the order of each island's first face
         Map<Integer, float[]> boxes = new LinkedHashMap<>();
         for (int i = 0; i < faces; i++) {
-            float[] box = boxes.computeIfAbsent(find(parent, i), r -> new float[]{
+            float[] box = boxes.computeIfAbsent(UnionFind.find(parent, i), r -> new float[]{
                     Float.MAX_VALUE, Float.MAX_VALUE, Float.MAX_VALUE,
                     -Float.MAX_VALUE, -Float.MAX_VALUE, -Float.MAX_VALUE});
             for (int c = 0; c < 4; c++) {
@@ -101,19 +100,4 @@ public final class LampIslands {
         return new Key(Math.round(x * 1.0e4F), Math.round(y * 1.0e4F), Math.round(z * 1.0e4F));
     }
 
-    private static int find(int[] parent, int i) {
-        while (parent[i] != i) {
-            parent[i] = parent[parent[i]];
-            i = parent[i];
-        }
-        return i;
-    }
-
-    private static void union(int[] parent, int a, int b) {
-        int ra = find(parent, a);
-        int rb = find(parent, b);
-        if (ra != rb) {
-            parent[ra] = rb;
-        }
-    }
 }

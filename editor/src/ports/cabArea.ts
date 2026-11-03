@@ -12,9 +12,10 @@
  * sitting reach; otherwise the floor nearest to it is its cab. All in the model frame.
  */
 
-import { bridge, find, union, walkablePieces } from './floorCheck';
+import { bridge, walkablePieces } from './floorCheck';
 import type { FloorRegion, Piece } from './floorRegion';
 import { PLAYER_HALF_WIDTH, SEAT_REACH } from './riderWalk';
+import { find, forest, union } from './unionFind';
 import type { Door, Seat, WagonType } from './wagonType';
 
 const M = PLAYER_HALF_WIDTH;
@@ -115,7 +116,7 @@ export function cabArea(type: WagonType | null): CabArea {
 
 function build(type: WagonType, region: FloorRegion, chairs: readonly Seat[]): CabArea {
   const pieces = region.pieces;
-  const parent = pieces.map((_, i) => i);
+  const parent = forest(pieces.length);
   for (const [a, b] of region.links()) union(parent, a, b);
   // each chair's cab: the floor where one stands to sit down in it, and all it joins
   const roots: number[] = [];

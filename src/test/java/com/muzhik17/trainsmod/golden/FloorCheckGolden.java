@@ -26,7 +26,10 @@ import com.muzhik17.trainsmod.stock.WagonTypeParser;
  * code's name, its subject's key, the index or −1, the params in the order
  * of the line, the line); or its ways out ({@code exits_of}): for each hull
  * or gangway door, the pieces of the floor with every door between zones shut
- * a rider walks out through it from ({@code FloorCheck.walkablePieces}). Ported:
+ * a rider walks out through it from ({@code FloorCheck.walkablePieces}); or
+ * where its inner doors' bridges meet that floor ({@code bridges_of}): for each
+ * door, the pieces before and behind its leaf and on how many sides
+ * ({@link FloorCheck#bridgeSides}), null for a hull or gangway door. Ported:
  * {@code tools/floorgen.py} ({@code Region.door_seeds}, the ways out),
  * {@code editor/src/ports/floorCheck.ts}.
  */
@@ -40,6 +43,9 @@ class FloorCheckGolden {
             JsonObject in = input.getAsJsonObject();
             if (in.has("exits_of")) {
                 return exits(WagonTypeParser.parse("golden:case", in.getAsJsonObject("exits_of")));
+            }
+            if (in.has("bridges_of")) {
+                return bridges(WagonTypeParser.parse("golden:case", in.getAsJsonObject("bridges_of")));
             }
             WagonType type = WagonTypeParser.parse("golden:case", in.getAsJsonObject("type"));
             JsonArray findings = new JsonArray();
@@ -74,6 +80,31 @@ class FloorCheckGolden {
             return array;
         }
         return Golden.string((String) value);
+    }
+
+    private static JsonElement bridges(WagonType type) {
+        if (type.interior() == null) {
+            return JsonNull.INSTANCE;
+        }
+        FloorRegion shut = type.interior().region(RiderWalk.PLAYER_HALF_WIDTH, type.doors(), 0);
+        JsonArray bridges = new JsonArray();
+        for (WagonType.Door door : type.doors()) {
+            if (!door.inner()) {
+                bridges.add(JsonNull.INSTANCE);
+                continue;
+            }
+            FloorCheck.BridgeSides sides = FloorCheck.bridgeSides(door, shut);
+            JsonArray before = new JsonArray();
+            sides.before().forEach(before::add);
+            JsonArray behind = new JsonArray();
+            sides.behind().forEach(behind::add);
+            JsonObject bridge = new JsonObject();
+            bridge.add("before", before);
+            bridge.add("behind", behind);
+            bridge.addProperty("reach", sides.reach().key);
+            bridges.add(bridge);
+        }
+        return bridges;
     }
 
     private static JsonElement exits(WagonType type) {

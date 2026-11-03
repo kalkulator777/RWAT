@@ -1,10 +1,12 @@
 package com.muzhik17.trainsmod.client.render.model;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -46,9 +48,10 @@ import com.muzhik17.trainsmod.pack.PackJson;
  * @param skip       extra object-name prefixes left out of the render (on top
  *                   of the convention's {@code HIDE}/{@code CARGO_FILL})
  * @param animations animated group → its IR {@code .anim} ({@code ns:path});
- *                   the group id (lower case) matches a door id of the type
+ *                   the group id (lower case) matches a door id of the type;
+ *                   in the file's order
  * @param liveries   livery id → folder next to the OBJ whose same-named
- *                   textures replace the base ones
+ *                   textures replace the base ones; in the file's order
  * @param handbrake  controls ({@code <KIND>_<n>} keys) that are the wagon's
  *                   handbrake wheel (SPEC §5.3): a click turns the handbrake,
  *                   the wheel shows it — e.g. MVP's {@code WIDGET}s labelled
@@ -79,9 +82,22 @@ public record WagonModelDecl(
 
     public WagonModelDecl {
         skip = List.copyOf(skip);
-        animations = Map.copyOf(animations);
-        liveries = Map.copyOf(liveries);
+        animations = ordered(animations);
+        liveries = ordered(liveries);
         handbrake = List.copyOf(handbrake);
+    }
+
+    /**
+     * An unmodifiable copy in the order given — the file's — where {@link
+     * Map#copyOf} keeps none: what is said of the animations and liveries
+     * ({@code ModelCheck}) comes in the order the author wrote them, and of
+     * two animations that move one object the later in the file wins
+     * ({@code IrStockModel.loadAnimations}), every time. No nulls, as there.
+     */
+    private static Map<String, String> ordered(Map<String, String> map) {
+        Map<String, String> copy = new LinkedHashMap<>();
+        map.forEach((key, value) -> copy.put(Objects.requireNonNull(key), Objects.requireNonNull(value)));
+        return Collections.unmodifiableMap(copy);
     }
 
     /** {@link #parse(String, JsonObject, Consumer)} with the warnings dropped. */

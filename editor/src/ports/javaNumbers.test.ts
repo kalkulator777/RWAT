@@ -1,10 +1,10 @@
 /**
  * Golden runner of fixtures/golden/java_numbers/ (editor.md §4.5; fixtures/golden/README.md):
- * `parseJavaFloat`, `formatFixed` and `javaDoubleToString` against Java's
- * `Float.parseFloat`, `String.format(Locale.ROOT, "%.<n>f")` and `Double.toString`, the
- * reference that writes the expected. Every `*.json` of the folder is read; a case with
- * `input.text` is a parse, one with `input.value` and `input.digits` a format, one with
- * `input.double` a `toString`. `parseJavaInt` has no golden file: its cases are below.
+ * `parseJavaFloat`, `formatFixed`, `javaDoubleToString` and `parseJavaInt` against Java's
+ * `Float.parseFloat`, `String.format(Locale.ROOT, "%.<n>f")`, `Double.toString` and
+ * `Integer.parseInt`, the reference that writes the expected. Every `*.json` of the folder
+ * is read; a case with `input.text` is a parse, one with `input.value` and `input.digits` a
+ * format, one with `input.double` a `toString`, one with `input.int` an int's parse.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -26,13 +26,15 @@ describe('golden java_numbers', () => {
     describe(file.name, () => {
       for (const c of file.cases) {
         it(c.id, () => {
-          const input = c.input as { text?: string; value?: unknown; digits?: number; double?: unknown };
+          const input = c.input as { text?: string; value?: unknown; digits?: number; double?: unknown; int?: string };
           const actual =
             input.text !== undefined
               ? parseJavaFloat(input.text)
-              : input.double !== undefined
-                ? javaDoubleToString(toNumber(input.double))
-                : formatFixed(toNumber(input.value), input.digits as number);
+              : input.int !== undefined
+                ? parseJavaInt(input.int)
+                : input.double !== undefined
+                  ? javaDoubleToString(toNumber(input.double))
+                  : formatFixed(toNumber(input.value), input.digits as number);
           expect(mismatch(actual, c.expected, file.tolerance), c.note).toBeNull();
         });
       }

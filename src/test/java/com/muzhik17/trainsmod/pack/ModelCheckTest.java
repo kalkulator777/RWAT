@@ -6,6 +6,7 @@ import java.io.ByteArrayInputStream;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,28 +29,28 @@ class ModelCheckTest {
             vt 0 0
             """;
 
-    /** An in-memory pack: {@code ns:path} → contents. */
+    /** An in-memory pack: {@code ns:path} → contents, a location naming its file as Minecraft does ({@code :a} is {@code minecraft:a}). */
     private static final class Pack implements ModelCheck.Files {
         final Map<String, String> files = new HashMap<>();
 
         Pack with(String location, String contents) {
-            files.put(location, contents);
+            files.put(ResourceLocations.normal(location), contents);
             return this;
         }
 
         @Override
         public boolean valid(String location) {
-            return location.matches("[a-z0-9_.-]+:[a-z0-9/._-]+");
+            return ResourceLocations.valid(location);
         }
 
         @Override
         public boolean exists(String location) {
-            return files.containsKey(location);
+            return valid(location) && files.containsKey(ResourceLocations.normal(location));
         }
 
         @Override
         public InputStream open(String location) throws FileNotFoundException {
-            String contents = files.get(location);
+            String contents = valid(location) ? files.get(ResourceLocations.normal(location)) : null;
             if (contents == null) {
                 throw new FileNotFoundException(location);
             }
@@ -114,6 +115,41 @@ class ModelCheckTest {
         assertEquals(List.of("W model t:car/car.obj: control group '" + name + "' is longer than 32 characters"
                 + " and is dropped: its switches can't be worked, its lights stay off (an LINVERT one on)"),
                 check("{ \"obj\": \"car/car.obj\" }", pack));
+    }
+
+    /**
+     * A location that starts with a colon is Minecraft's ({@code
+     * ResourceLocation.tryParse}), and so are the libraries and textures the
+     * model loader finds next to its OBJ: the check named them {@code
+     * :car/car.mtl}, a file the game never looks for under that name.
+     */
+    @Test
+    void aLocationWithAnEmptyNamespaceIsMinecrafts() {
+        assertEquals("minecraft", ModelCheck.namespace(":car/car.obj"));
+        assertEquals("minecraft", ModelCheck.namespace("car/car.obj"));
+        assertEquals("t", ModelCheck.namespace("t:car/car.obj"));
+        assertEquals("car/car.obj", ModelCheck.path(":car/car.obj"));
+        assertEquals("b:c", ModelCheck.path("a:b:c"));
+        Pack pack = new Pack().with("minecraft:car/car.obj", "mtllib car.mtl\n" + QUAD + "o BODY\nusemtl body\nf 1 2 3\n");
+        assertEquals(List.of("E model :car/car.obj: material library minecraft:car/car.mtl not found",
+                "E model :car/car.obj draws nothing: no face has a textured material"),
+                check("{ \"obj\": \":car/car.obj\" }", pack));
+        pack.with("minecraft:car/car.mtl", "newmtl body\nmap_Kd body.png\n").with("minecraft:car/body.png", "png");
+        assertEquals(List.of(), check("{ \"obj\": \":car/car.obj\", \"liveries\": { \"red\": \"red\" } }",
+                pack.with("minecraft:car/red/body.png", "png")));
+    }
+
+    /** What Minecraft takes for a location: the rule the tests' packs answer {@code valid} by. */
+    @Test
+    void aLocationIsValidAsMinecraftTakesIt() {
+        for (String taken : List.of("t:car/car.obj", "car/car.obj", ":car/car.obj", "t:", ":", "", "my-pack.v2:a_b/c-d.e",
+                "t:../car.obj", "t:a//b")) {
+            assertEquals(true, ResourceLocations.valid(taken), taken);
+        }
+        for (String refused : List.of("T:car.obj", "t:Car.obj", "t:car.obj:x", "a b:c", "t:my car.obj", "t:вагон.obj",
+                "t/x:car.obj", "t:car\\car.obj")) {
+            assertEquals(false, ResourceLocations.valid(refused), refused);
+        }
     }
 
     @Test
@@ -204,6 +240,83 @@ class ModelCheckTest {
         pack.with("t:car/car.obj", markers + "o THROTTLE_1_KNOB\nusemtl knob\nf 1 2 3\n");
         assertEquals(List.of("W model t:car/car.obj: faces with no texture (map_Kd) aren't drawn, material(s) knob"),
                 check("{ \"obj\": \"car/car.obj\" }", pack));
+    }
+
+    /** The findings of a declaration, after checking that the problems are their lines with their severity. */
+    private static List<ModelFinding> findings(String decl, Pack pack) {
+        WagonModelDecl parsed = WagonModelDecl.parse("t", JsonParser.parseString(decl).getAsJsonObject());
+        List<ModelFinding> findings = ModelCheck.findings(parsed, pack);
+        assertEquals(findings.stream().map(f -> new PackProblem(f.severity(), ORIGIN.pack(), ORIGIN.file(), f.text()))
+                .toList(), ModelCheck.check(parsed, ORIGIN, pack));
+        return findings;
+    }
+
+    /** {@code finding} is of {@code code}, with these params (name, value, … in this order) and this line. */
+    private static void assertFinding(ModelFinding finding, ModelFinding.Code code, String text, Object... params) {
+        assertEquals(code, finding.code(), finding.text());
+        List<Object> actual = new ArrayList<>();
+        finding.params().forEach((name, value) -> {
+            actual.add(name);
+            actual.add(value);
+        });
+        assertEquals(List.of(params), actual, finding.text());
+        assertEquals(text, finding.text());
+    }
+
+    /**
+     * What the check finds is data before it is a line: a code the editor
+     * words and links by, and the names and numbers the line is made of —
+     * the line itself made of those alone, word for word as ever.
+     */
+    @Test
+    void eachFindingIsItsCodeAndTheParamsOfItsLine() {
+        Pack noTexture = good();
+        noTexture.files.remove("t:tex/body.png");
+        List<ModelFinding> found = findings("""
+                { "obj": "car/car.obj", "animations": { "door2": "car/door2.anim" },
+                  "liveries": { "blue": "blue" } }""", noTexture);
+        assertEquals(3, found.size(), found.toString());
+        assertFinding(found.get(0), ModelFinding.Code.MISSING_TEXTURE,
+                "model t:car/car.obj: texture t:tex/body.png of material body not found",
+                "path", "t:car/car.obj", "texture", "t:tex/body.png", "material", "body");
+        assertFinding(found.get(1), ModelFinding.Code.MISSING_ANIMATION,
+                "animation 'door2': file t:car/door2.anim not found", "door", "door2", "path", "t:car/door2.anim");
+        assertFinding(found.get(2), ModelFinding.Code.LIVERY_REPLACES_NOTHING,
+                "livery 'blue' replaces no texture (folder blue next to the model)", "livery", "blue", "folder", "blue");
+
+        String name = "ThisSwitchNameIsFarTooLongToEverBeSentXY";
+        Pack longGroup = good().with("t:car/car.obj", "mtllib car.mtl\n" + QUAD + "o BODY\nusemtl body\nf 1 2 3\n"
+                + "o WIDGET_1_CG_" + name + "_TOGGLE\nusemtl glass\nf 1 2 3\n");
+        found = findings("{ \"obj\": \"car/car.obj\" }", longGroup);
+        assertFinding(found.get(0), ModelFinding.Code.UNTEXTURED_FACES,
+                "model t:car/car.obj: faces with no texture (map_Kd) aren't drawn, material(s) glass",
+                "path", "t:car/car.obj", "materials", "glass");
+        assertFinding(found.get(1), ModelFinding.Code.GROUP_TOO_LONG, "model t:car/car.obj: control group '" + name
+                + "' is longer than 32 characters and is dropped: its switches can't be worked, its lights stay off"
+                + " (an LINVERT one on)", "path", "t:car/car.obj", "group", name, "limit", 32);
+
+        found = findings("{ \"obj\": \"car/car.obj\" }", good().with("t:car/car.obj", QUAD + "usemtl body\nf 1 2 3 9\n"));
+        assertFinding(found.get(0), ModelFinding.Code.BAD_FACE_INDEX, "model t:car/car.obj: a face refers to a vertex,"
+                + " texture coordinate or normal that isn't there (Index 8 out of bounds for length 4); indices count"
+                + " from 1, negative ones aren't supported", "path", "t:car/car.obj",
+                "detail", "Index 8 out of bounds for length 4");
+    }
+
+    /**
+     * The codes are the editor's ({@code editor/src/ports/modelCheck.ts},
+     * {@code MODEL_CODES}; its checks say {@code model.<key>}), in the
+     * check's order, each with how bad it is.
+     */
+    @Test
+    void theCodesAreTheEditorsKeysInTheChecksOrder() {
+        List<String> keys = new ArrayList<>();
+        for (ModelFinding.Code code : ModelFinding.Code.values()) {
+            keys.add(code.key() + (code.severity() == PackProblem.Severity.ERROR ? "" : " (warning)"));
+        }
+        assertEquals(List.of("bad-path", "missing", "bad-face-index", "unreadable", "no-faces", "bad-library-path",
+                "missing-library", "unreadable-library", "bad-texture-path", "missing-texture", "draws-nothing",
+                "untextured-faces (warning)", "group-too-long (warning)", "bad-animation-path", "missing-animation",
+                "unreadable-animation", "livery-replaces-nothing (warning)"), keys);
     }
 
     @Test

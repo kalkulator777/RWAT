@@ -28,8 +28,8 @@
  */
 
 import type { LoadedModel, Link, OverlayShape, Vec3 } from '../../core/contracts';
-import { bridge } from '../../ports/floorCheck';
-import { Cut, type FloorRegion } from '../../ports/floorRegion';
+import { bridge, bridgeSides } from '../../ports/floorCheck';
+import { type FloorRegion } from '../../ports/floorRegion';
 import { box as modelBox, toObj } from '../../ports/objFrame';
 import { DOOR_SPAN_INSET, PLAYER_HALF_WIDTH } from '../../ports/riderWalk';
 import { Door, type WagonType } from '../../ports/wagonType';
@@ -134,24 +134,13 @@ export function shutFloor(type: WagonType): FloorRegion | null {
 
 /**
  * Where an open inner door's bridge meets the floor with every door between zones shut
- * (`shut`, {@link shutFloor} of the type): the pieces it touches on the near side of its
- * leaf and on the far side, as the floor check tells them apart (a piece ending at or
- * before the leaf's cut is on the near side).
+ * (`shut`, {@link shutFloor} of the type): on both sides of its leaf, one or none, by the
+ * floor check's own rule (ports/floorCheck `bridgeSides`, `FloorCheck.bridgeSides`).
  */
 export function bridgeReach(type: WagonType, index: number, shut: FloorRegion | null = shutFloor(type)): BridgeReach | null {
   const door = type.doors[index];
   if (door === undefined || !door.inner || shut === null) return null;
-  const [minX, minZ, maxX, maxZ] = bridge(door);
-  const cut = Cut.shut(door, PLAYER_HALF_WIDTH);
-  let near = false;
-  let far = false;
-  for (const piece of shut.pieces) {
-    if (!piece.touches(minX, minZ, maxX, maxZ)) continue;
-    const end = door.axis() === 0 ? piece.maxX : piece.maxZ;
-    if (end <= (door.axis() === 0 ? cut.minX : cut.minZ) + 1.0e-6) near = true;
-    else far = true;
-  }
-  return near && far ? 'both' : near || far ? 'one' : 'none';
+  return bridgeSides(door, shut).reach;
 }
 
 /** What the model moves with the doors of `type`: each leaf moved by name at the door holding its centre, each animation at the door of its id. */
