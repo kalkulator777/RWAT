@@ -3,11 +3,9 @@
  * tab in both languages, says there is no model to preview while none is open, and axe
  * finds nothing serious or critical in it.
  *
- * What it does to a model needs the 3D view and the open model wired to the preview
- * (preview/store.ts), which comes when the view (view3d/) and the model (model/) are
- * merged; then this file gets the scenario of the M3 gate: open the example pack's coach,
- * drag `salon_door`, couple an end, pick the blue livery; open the shunter, drag
- * `THROTTLE_1`, switch `FHL`, with a screenshot of the view each.
+ * What it does to a model, with the 3D view and the open model wired to it, is the M3
+ * gate's scenario (e2e/m3/): the coach's `salon_door`, a coupled end and the blue
+ * livery; the shunter's `THROTTLE_1` and `FHL`, with a screenshot of the view each.
  */
 
 import AxeBuilder from '@axe-core/playwright';
