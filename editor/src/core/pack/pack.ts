@@ -284,6 +284,17 @@ export class Pack implements OpTarget {
     return this.output(this.currentOf(path));
   }
 
+  /**
+   * The file's bytes as they were opened or last saved (what saving compares with): null
+   * for a file that was not there then. Read when first asked for.
+   */
+  async originalBytes(path: string): Promise<Uint8Array | null> {
+    const original = this.records.get(path)?.original ?? null;
+    if (original === null) return null;
+    await this.loadBase(original);
+    return original.bytes as Uint8Array;
+  }
+
   /** The file's text (UTF-8) as saving would write it. */
   async text(path: string): Promise<string> {
     return decoder.decode(await this.output(this.currentOf(path)));
@@ -567,6 +578,32 @@ export class Pack implements OpTarget {
       changes.push(current === null ? { path: prefix + path, delete: true } : { path: prefix + path, bytes: await this.output(current) });
     }
     return changes;
+  }
+
+  /**
+   * Takes `bytes` as what the file holds where the pack is saved (null: no file there),
+   * leaving what the file holds now as it is: a restored session's pack (core/session)
+   * learns what its folder holds after the saves made before the page was closed. A JSON
+   * file that reads is from then on edited from that text, as after a save; a file whose
+   * bytes or value are those bytes' is unchanged.
+   */
+  async rebase(path: string, bytes: Uint8Array | null): Promise<void> {
+    const record = this.records.get(path) ?? { original: null, current: null };
+    const base = bytes === null ? null : newBase(fileKind(path), bytes.slice());
+    record.original = base;
+    const { current } = record;
+    if (base !== null && current !== null) {
+      if (base.kind === 'json' && base.error === undefined && current.base.kind === 'json' && current.base.error === undefined) {
+        record.current = { base, value: deepEqual(current.value, base.value) ? base.value : current.value };
+      } else {
+        await this.loadBase(current.base);
+        const same = base.kind === 'json' ? deepEqual(current.value, current.base.value) : true;
+        if (same && bytesEqual(current.base.bytes as Uint8Array, base.bytes as Uint8Array)) record.current = { base, value: base.value };
+      }
+    }
+    if (record.original === null && record.current === null) this.records.delete(path);
+    else this.records.set(path, record);
+    this.changeCount++;
   }
 
   /** Every file of the pack as it stands, in path order: for a zip of the whole pack. */

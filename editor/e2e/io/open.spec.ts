@@ -53,10 +53,11 @@ async function openZip(page: Page, buffer: Buffer): Promise<void> {
   await (await chooser).setFiles({ name: 'RwatExamplePack.zip', mimeType: 'application/zip', buffer });
 }
 
-/** Clicks Save and returns the zip it downloads. */
-async function saveZip(page: Page): Promise<Buffer> {
+/** Clicks Save, then the save dialog's zip button, and returns the zip it downloads. */
+async function saveZip(page: Page, open: () => Promise<void> = () => page.getByTestId('save').click()): Promise<Buffer> {
   const download = page.waitForEvent('download');
-  await page.getByTestId('save').click();
+  await open();
+  await page.getByTestId('save-zip').click();
   const file = await download;
   expect(file.suggestedFilename()).toBe('RwatExamplePack.zip');
   return readFileSync(await file.path());
@@ -110,8 +111,8 @@ test('the zip saved is the same bytes every time, the pack unchanged byte for by
   await expect(page.getByTestId('pack-status')).toBeVisible();
 
   const first = await saveZip(page);
-  await page.keyboard.press('Control+S'); // the shortcut saves too
-  const second = first.equals(await saveZip(page));
+  // the shortcut opens the save dialog too
+  const second = first.equals(await saveZip(page, () => page.keyboard.press('Control+S')));
   expect(second).toBe(true);
 
   const entries = await new ZipReader(new BlobReader(new Blob([new Uint8Array(first)]))).getEntries();
@@ -182,6 +183,8 @@ test('a folder opened for writing through File System Access is saved back in pl
 
   const saved = page.waitForEvent('download', { timeout: 1000 }).then(() => true, () => false);
   await page.getByTestId('save').click();
+  await page.getByTestId('save-folder').click();
+  await expect(page.getByTestId('save-dialog')).toHaveCount(0);
   expect(await saved, 'a folder is saved in place, not downloaded').toBe(false);
 
   const after = await page.evaluate(async () => {

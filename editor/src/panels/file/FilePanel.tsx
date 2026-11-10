@@ -1,7 +1,11 @@
-import { openPicked, redo, savePack, undo } from '../../app/session';
+import { keeperStatus, openSaveDialog, SaveDialogs } from '../../app/save';
+import { openPicked, redo, undo } from '../../app/session';
 import { canRedo, canUndo, dirtyCount, pack } from '../../app/store';
 import { t } from '../../i18n';
 import { isFsAccessSupported, pickFolderPack, pickFsAccessPack, pickZipPack } from '../../io';
+
+/** What the Save button's tooltip says of the session kept in the browser. */
+const SESSION_TITLES = { off: 'save.session.off', idle: 'save.session.kept', pending: 'save.session.kept', saved: 'save.session.kept', error: 'save.session.error' } as const;
 
 /**
  * An arrow that turns back (undo) or, mirrored, forward (redo), drawn in the text's colour.
@@ -24,7 +28,8 @@ function TurnArrow(props: { forward?: boolean }) {
 
 /**
  * The file buttons of the top bar (editor.md §6.1): open a zip or a folder, save with
- * the count of changed files, undo and redo. Keyboard: Ctrl+Z, Ctrl+Shift+Z, Ctrl+S
+ * the count of changed files (the save dialog and the session's restore question are
+ * app/save's, drawn here), undo and redo. Keyboard: Ctrl+Z, Ctrl+Shift+Z, Ctrl+S
  * (app/session.ts `installShortcuts`). Undo and redo are arrows named by their label and
  * shortcut, so the bar keeps to one line at 1280 px in either language.
  */
@@ -44,7 +49,15 @@ export function FilePanel() {
       <button type="button" data-testid="open-folder-readonly" onClick={() => void openPicked(pickFolderPack)}>
         {t('file.openFolderReadonly')}
       </button>
-      <button type="button" data-testid="save" disabled={open === null} onClick={() => void savePack()}>
+      <button
+        type="button"
+        data-testid="save"
+        data-dirty={changes > 0}
+        data-session={keeperStatus.value}
+        title={t(SESSION_TITLES[keeperStatus.value])}
+        disabled={open === null}
+        onClick={openSaveDialog}
+      >
         {changes > 0 ? t('file.saveCount', { count: changes }) : t('file.save')}
       </button>
       <button
@@ -69,6 +82,7 @@ export function FilePanel() {
       >
         <TurnArrow forward />
       </button>
+      <SaveDialogs />
     </div>
   );
 }

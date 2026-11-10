@@ -180,6 +180,7 @@ test('a new pack, a wagon, its forms filled in, saved as a zip and opened again 
   // --- save the zip
   const download = page.waitForEvent('download');
   await page.getByTestId('save').click();
+  await page.getByTestId('save-zip').click();
   const file = await download;
   expect(file.suggestedFilename()).toBe('MyTrains.zip');
   const zip = readFileSync(await file.path());

@@ -13,6 +13,11 @@
  *   place the entry already set replaces that op instead of adding one, so a long drag
  *   stays one op per handle.
  * - A new command clears what could be redone.
+ * - The journal knows its save point ({@link Journal.markSaved}): how many commands were
+ *   applied when the pack was last saved. Undo past it and redo back to it move away from
+ *   and back onto it; a new command after an undo past it makes it unreachable (null), as
+ *   the commands that led to the saved state are gone from redo. The session's autosave
+ *   keeps it, so a restored session knows which of its states is the one saved.
  *
  * The journal knows nothing about packs: it drives an {@link OpTarget} (the pack model).
  * Selection and preview are not edits and are not journaled.
@@ -58,6 +63,7 @@ export class Journal {
   private readonly doneList: Entry[] = [];
   private readonly undoneList: Command[] = [];
   private coalescing: string | null = null;
+  private saved: number | null = 0;
   private readonly listeners = new Set<() => void>();
   private readonly depth: number;
 
@@ -93,10 +99,14 @@ export class Journal {
     if (command.ops.length === 0) return;
     const inverses = this.applyEach(command.ops);
     this.undoneList.length = 0;
+    const before = this.position;
     const last = this.doneList[this.doneList.length - 1];
     if (last !== undefined && command.coalesceKey !== undefined && command.coalesceKey === this.coalescing) {
+      // never the entry of the save point: markSaved ends the drag
       this.merge(last, command, inverses);
     } else {
+      // the saved state lay ahead, among the commands redo had: they are gone
+      if (this.saved !== null && this.saved > before) this.saved = null;
       this.doneList.push({ command: { ...command, ops: [...command.ops] }, inverse: inverses.reverse().flat() });
       const dropped = this.doneList.length > this.depth ? this.doneList.shift() : undefined;
       if (dropped !== undefined) this.committedList.push(dropped.command);
@@ -170,6 +180,34 @@ export class Journal {
   /** Ends the current drag: the next command starts an entry of its own even with the same key. */
   endCoalescing(): void {
     this.coalescing = null;
+  }
+
+  /** How many commands are applied now: the committed ones and the undoable ones. */
+  get position(): number {
+    return this.committedList.length + this.doneList.length;
+  }
+
+  /**
+   * The save point: the {@link position} the pack was last saved at (0 for a pack as
+   * opened), or null when the saved state can no longer be reached by undo and redo.
+   */
+  get savePoint(): number | null {
+    return this.saved;
+  }
+
+  /** True when the commands applied are those of the save point. */
+  get atSavePoint(): boolean {
+    return this.saved === this.position;
+  }
+
+  /**
+   * Records that the pack was saved as it stands: the save point is here. Ends the
+   * current drag, so the next command does not merge into what was saved.
+   */
+  markSaved(): void {
+    this.saved = this.position;
+    this.coalescing = null;
+    this.notify();
   }
 
   /** The commands as they stand, oldest first (see {@link JournalState}). */
