@@ -46,7 +46,20 @@ export default defineStrings({
     'tools.suggest.floor.draft.findings':
       '{count, plural, =0 {Проверка пола на черновике: находок нет} one {Проверка пола на черновике: # находка} few {Проверка пола на черновике: # находки} many {Проверка пола на черновике: # находок} other {Проверка пола на черновике: # находки}}',
     'tools.suggest.floor.draft.stale': 'Двери или модель изменились после расчёта: предложите пол заново.',
+    'tools.suggest.doors.title': 'Двери по именам',
+    'tools.suggest.doors.howto':
+      'Читает имена объектов модели по соглашению IR: DOOR_<n> — створки двери (EXTERNAL — наружная, CONNECTING — в переход, остальные — между зонами; id — группа CG_<имя> или door_<n>), WIDGET_<n> с TOGGLE и анимацией из animations модели — внутренняя дверь. Результат — черновик пунктиром; двери с id, которые у типа уже есть, не трогаются.',
+    'tools.suggest.doors.run': 'Найти двери по именам',
+    'tools.suggest.doors.draft':
+      '{count, plural, =0 {Двери не найдены} one {Найдена # дверь} few {Найдено # двери} many {Найдено # дверей} other {Найдено # двери}}; новых: {fresh}',
+    'tools.suggest.doors.none': 'В модели нет объектов DOOR_<n> размером с дверь и WIDGET_<n> с анимацией двери.',
+    'tools.suggest.doors.present': 'дверь с таким id уже есть',
+    'tools.suggest.doors.findings':
+      '{count, plural, one {Проверка пола с этими дверями: # новая находка} few {Проверка пола с этими дверями: # новые находки} many {Проверка пола с этими дверями: # новых находок} other {Проверка пола с этими дверями: # новые находки}}',
+    'tools.suggest.doors.stale': 'Модель или двери типа изменились после поиска: найдите заново.',
+    'tools.suggest.doors.accept': 'Принять: добавить {count, plural, one {# дверь} few {# двери} many {# дверей} other {# двери}}',
     'tools.suggest.cmd.floor': 'Принять предложенный пол ({count, plural, one {# зона} few {# зоны} many {# зон} other {# зоны}})',
+    'tools.suggest.cmd.doors': 'Добавить двери по именам ({count})',
   },
   en: {
     'tools.suggest.accept': 'Accept',
@@ -92,6 +105,17 @@ export default defineStrings({
     'tools.suggest.floor.draft.dropped': 'Another {area} m² was dropped: no door leads there.',
     'tools.suggest.floor.draft.findings': '{count, plural, =0 {Floor check of the draft: nothing found} one {Floor check of the draft: # finding} other {Floor check of the draft: # findings}}',
     'tools.suggest.floor.draft.stale': 'The doors or the model changed since the draft was made: suggest the floor again.',
+    'tools.suggest.doors.title': 'Doors by names',
+    'tools.suggest.doors.howto':
+      'Reads the model’s object names by the IR convention: DOOR_<n> are a door’s leaves (EXTERNAL a way in and out, CONNECTING onto the gangway, the rest between zones; the id is the CG_<name> group or door_<n>), WIDGET_<n> with TOGGLE and an animation in the model’s animations is an inner door. The result is a draft, dashed; doors whose ids the type has are left alone.',
+    'tools.suggest.doors.run': 'Find doors by names',
+    'tools.suggest.doors.draft': '{count, plural, =0 {No doors found} one {# door found} other {# doors found}}; new: {fresh}',
+    'tools.suggest.doors.none': 'The model has no DOOR_<n> objects of a door’s size and no WIDGET_<n> with a door animation.',
+    'tools.suggest.doors.present': 'a door with this id is there already',
+    'tools.suggest.doors.findings': '{count, plural, one {Floor check with these doors: # new finding} other {Floor check with these doors: # new findings}}',
+    'tools.suggest.doors.stale': 'The model or the type’s doors changed since the search: find them again.',
+    'tools.suggest.doors.accept': 'Accept: add {count, plural, one {# door} other {# doors}}',
     'tools.suggest.cmd.floor': 'Accept the suggested floor ({count, plural, one {# zone} other {# zones}})',
+    'tools.suggest.cmd.doors': 'Add doors by names ({count})',
   },
 });
