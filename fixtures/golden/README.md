@@ -1,7 +1,7 @@
 # Эталонные данные (golden)
 
 Общий вход для тестов логики, у которой есть порты (решение R9 в `docs/roadmap.md`, требования — `docs/proposals/editor.md`, 4.4–4.5):
-- эталон — Java (источник правды) или, для `json_dump` и `validate`, Python;
+- эталон — Java (источник правды) или, для `json_dump`, `validate` и `recipe_merge`, Python;
 - порты — Python-инструменты в `tools/` (только портированное) и TypeScript веб-редактора (`editor/src/ports/`).
 
 Расхождение порта с эталоном ловит тест того порта, который разошёлся.
@@ -62,13 +62,14 @@ fixtures/golden/
 ./gradlew test --tests 'com.muzhik17.trainsmod.golden.*' -Pgolden.update   # папки, где эталон — Java
 python -I tools/tests/test_golden_json_dump.py --update                     # папки, где эталон — Python
 python -I tools/tests/test_golden_validate.py --update
+python -I tools/tests/test_golden_recipe_merge.py --update
 git diff fixtures/golden      # каждое изменённое ожидание должно быть объяснимо
 ./gradlew test                # без флага всё зелёное
 python -I -m unittest discover tools/tests
 ```
 
 - С флагом раннер эталона переписывает **только `expected`** каждого случая из кода: значение раскладывается на своём месте (два пробела от отступа своего ключа, массив или объект в строку, пока влезает в 110 знаков), а остальной текст файла остаётся байт в байт — вход с числами как записаны (`2.5e1`, `1E1`), экранирование, переносы строк, `note`. Случай, чья логика упала, сохраняет своё `expected`; файл, с которым код согласен, не перезаписывается (`Golden.withExpected`, тест `GoldenUpdateTest`). Новый файл пишут сразу в этой раскладке: файл, его `cases` и каждый случай — по ключу в строке. `build.gradle` передаёт `-Pgolden.update` в JVM тестов свойством `golden.update`; другого способа нет.
-- Python (`--update` для `json_dump` и `validate`) делает то же: переписывает только `expected` в той же раскладке, остальной текст файла — как был (`golden.with_expected`, тесты `GoldenUpdateTest` в `test_golden_folders.py`); случай, чья логика упала, сохраняет своё `expected`, и обновление кончается ошибкой с его `id`.
+- Python (`--update` для `json_dump`, `validate` и `recipe_merge`) делает то же: переписывает только `expected` в той же раскладке, остальной текст файла — как был (`golden.with_expected`, тесты `GoldenUpdateTest` в `test_golden_folders.py`); случай, чья логика упала, сохраняет своё `expected`, и обновление кончается ошибкой с его `id`.
 - Без флага тест только сверяет и при расхождении называет папку, файл и `id`.
 - Изменённые эталоны коммитятся вместе с правкой кода и правкой портов (editor.md 4.4).
 - Порт, который разошёлся с эталоном, правится сам, а не через эталон. TypeScript ожидаемое не пишет никогда.
@@ -102,6 +103,7 @@ python -I -m unittest discover tools/tests
 | `model_check` | Java: `pack.ModelCheck.findings` после `WagonModelDecl.parse`; `ModelCheck.namespace`, `path` | ts (`modelCheck.ts`, M4) | `obj`, `materials`, `declaration`, `example_pack`, `locations` | декларация модели, пространство имён, файлы пака (`ns:путь` → текст) и файлы без содержимого (`present`) → находки по порядку проверки: важность и `{code, subject, index, params, text}`; место (`location`) → `{valid, namespace, path}` |
 | `json_dump` | Python: `ir2rwat.dump` | ts | `dump` | JSON текстом (`json`) или файл пака-примера (`value`) → текст файла |
 | `validate` | Python: `validate_pack.py` | ts | `issues`, `suggestion` | документ и схема → находки (указатель RFC 6901, важность, текст); ключ и известные ключи → подсказка |
+| `recipe_merge` | Python: `ir2rwat.Converter` (`prepare`, `convert_stock`, `add_names`; `deep_merge`, `layer`, `without_comments`, `edit_doors`) | ts (`editor/src/ir/recipe/merge.ts`, M6) | `merge` | категория IR, выведенное (имя, тип, двери модели, область пассажиров IR, модель с анимациями и звуками дверей, группы света), зоны от генератора пола, запись рецепта и файл типа → тип и модель как записаны, lang типа, предупреждения конвертера об оверрайде |
 
 Сводка осей шарниров всех маркеров MVP — не здесь, а в `src/test/resources/fixtures/mvp_pivot_axes.json` (тест `PivotAxisTest`): в ней имена объектов MVP. Здесь только синтетические случаи и пак-пример.
 
@@ -150,6 +152,13 @@ python -I -m unittest discover tools/tests
   - Имена объектов: пробелом считаются символы до U+0020 (как `String.trim`). Неразрывный пробел — часть имени.
   - Имена материалов: случаи только с ASCII-пробелами. На прочих пробелах Unicode Java и Python расходятся: `Character.isWhitespace` против `str.split`.
 - **`json_dump`.** Числа — как их пишет Python: `100.0` остаётся `100.0`, `1e2` — `100.0`, `-0` — `0`, `1e16` — `1e+16`, `1e-5` — `1e-05` (JS пишет `10000000000000000` и `0.00001`); целые за 2^53 — точно. Порту нужно читать JSON без потерь: `JSON.parse` склеивает `100.0` и `100`.
+- **Слияние оверрайда (`recipe_merge`).**
+  - Вход — не IR-пак, а слой «выведено» данными: `derived` (`name`, `type`, `doors`, `interior`, `model`, `lights`), `category` и `floor` (зоны, которые генератор даёт для опций `floor` оверрайда, или `null`). Что конвертер выводит из геометрии и определения IR, — дело конвертера (редактор спрашивает его через Pyodide); тут проверяется то, что поверх этого делают обе стороны.
+  - Раннер Python запускает **настоящий `Converter`**: во временной папке лежат рецепт, файл типа (`override`) и минимальный IR zip, собранный из случая, а подменены только функции, которые выводят из геометрии и определения IR (`parse_obj`, `derive_type`, `model_doors`, `derive_interior`, `derive_handbrake`, `light_groups`, `floorgen.generate`). Слияние, подстановка пола и дверей, запись модели и lang — настоящие. Порту сверять нечего, кроме результата: `{type, model, lang, warnings}`.
+  - Кадр — `obj`, допуск 0. Порядок ключей важен, как в словаре Python: слитый ключ стоит на месте, новый — в конце; в модели `obj`, `animations`, `liveries`, `handbrake`, `sounds`. Ключ вида `"1"` объект JavaScript выставил бы вперёд: id дверей, групп света и языков такими не бывают.
+  - Ключи на `_` — комментарии на любой глубине файла и записи рецепта, до слияния. `null` внутри `type` и `model` удаляет ключ; у `type.doors`, `type.interior` и у секции целиком (`type`, `model`, `name`, `lights`, `floor`, `sway`) он значит «не задано»; файл типа ложится поверх записи рецепта слоем, где побеждает значение сверху, в том числе `null` (`docs/proposals/pack-capabilities.md`, раздел 11).
+  - Двери ищутся по id без учёта регистра. Нет `interior` (ни сгенерированного, ни своего, ни области IR) — в тип не попадают двери (кроме `type.doors` списком), а анимации и звуки дверей выпадают из модели; предупреждения нет.
+  - `warnings` — слова конвертера дословно (`car: "lights" names …`), только про оверрайд; жалобы генератора пола в них нет (его подменяет случай).
 - **`validate`.** Указатель — RFC 6901, `""` — весь документ. Ajv формулирует находки иначе: порт сверяет места и важность, текст — справочно; подсказку к незнакомому ключу — по `suggestion`.
 
 ## Чего нет и почему
