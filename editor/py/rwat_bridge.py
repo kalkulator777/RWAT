@@ -13,6 +13,9 @@ Every answer is JSON text: {"ok": true, "value": ...} or {"ok": false, "error":
 {"kind": "python", "type", "message", "text", "traceback"}} — a Python exception as a structure, its
 `text` as the converter words it for an author (ir2rwat.describe), its traceback for
 debugging.
+
+One state is kept between calls: the Converter `derive` made, for `floor_for`, until
+the next `derive` or `close`.
 """
 
 import contextlib
@@ -136,8 +139,79 @@ def rewrite_references(raw, keyword, moved, out):
     return True
 
 
+class NoRecipe(Exception):
+    """floor_for before derive (or after close, or in a worker started anew)."""
+
+
+# the Converter derive made, kept for floor_for until the next derive or close
+SESSION = {}
+
+
+def close():
+    """Forgets the recipe derive opened, its source zips closed."""
+    converter = SESSION.pop("converter", None)
+    for source in getattr(converter, "sources", []):
+        source.zip.close()
+    gc.collect()
+    return None
+
+
+def derive(recipe, log=None):
+    """The derived layer of every stock type the recipe converts (Converter.derived),
+    before any override: a Converter of the recipe with its overrides left out converts
+    in memory (nothing written), so the ids are the ones the conversion writes; then
+    each type's layer. What it printed goes to `log`; the warnings and errors are the
+    conversion's. The Converter stays for floor_for until the next derive or close."""
+    close()
+    printed = Lines(log)
+    with contextlib.redirect_stdout(printed), contextlib.redirect_stderr(printed):
+        converter = ir2rwat.Converter(recipe)
+        SESSION["converter"] = converter
+        converter.overrides, converter.override_origin = {}, {}
+        converter.convert()
+        warnings, errors = list(converter.warnings), list(converter.errors)
+        derived, failed = {}, {}
+        for type_id, *_ in converter.stock:
+            try:
+                derived[type_id] = converter.derived(type_id)
+            except Exception as problem:  # the conversion took another source's definition of the id
+                failed[type_id] = ir2rwat.describe(problem)
+        del converter.warnings[len(warnings):], converter.errors[len(errors):]
+    return {"derived": derived, "failed": failed, "warnings": warnings, "errors": errors, "log": printed.finish()}
+
+
+def floor_for(type_id, override):
+    """The floor the converter generates for a type of the recipe derive opened, with
+    `override` as its per-type override (the inline one and the file layered): plan
+    with it in place — the generator's options, the doors it ends up with, IR's
+    passenger area — and taken out again. The zones, or None where the converter
+    writes none (the generator doesn't run for the type, or refuses the options:
+    `problem` says why, as the converter does)."""
+    converter = SESSION.get("converter")
+    if converter is None:
+        raise NoRecipe("no recipe derived: derive it first")
+    warnings, errors = len(converter.warnings), len(converter.errors)
+    converter.overrides[type_id] = ir2rwat.without_comments(override or {})
+    try:
+        with contextlib.redirect_stdout(Lines()):
+            plan = converter.plan(type_id)
+    finally:
+        del converter.overrides[type_id]
+        del converter.warnings[warnings:], converter.errors[errors:]
+    floor = plan["floor"]
+    return {
+        "interior": None if floor is None else floor.interior,
+        "levels": [] if floor is None else [floorgen.y_to_obj(level) for level in floor.levels],
+        "notes": [] if floor is None else floor.notes,
+        "problem": plan["floor_problem"],
+    }
+
+
 FUNCTIONS = {
     "convert": convert,
+    "derive": derive,
+    "floor_for": floor_for,
+    "close": close,
     "model_doors": model_doors,
     "suggest_floor": suggest_floor,
     "rewrite_references": rewrite_references,
@@ -155,10 +229,10 @@ def failure(problem):
 
 
 def call(name, arguments, log=None):
-    """FUNCTIONS[name](**arguments), arguments and answer JSON text; `log` goes to convert."""
+    """FUNCTIONS[name](**arguments), arguments and answer JSON text; `log` goes to convert and derive."""
     try:
         kwargs = json.loads(arguments)
-        if name == "convert":
+        if name in ("convert", "derive"):
             kwargs["log"] = log
         value = FUNCTIONS[name](**kwargs)
         return json.dumps({"ok": True, "value": value}, ensure_ascii=False, allow_nan=False)

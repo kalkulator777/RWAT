@@ -6,6 +6,8 @@
  *   file by file and as the `--zip` bytes, with the same exit status and warnings;
  * - `suggest_floor` on the example pack's coach at a given level gives floorgen's zones;
  * - `model_doors` and `rewrite_references` give what the converter's functions give;
+ * - `derive` and `floorFor`, merged with each type's override by ./recipe/merge.ts, give
+ *   the type, model and names the full conversion writes;
  * - failures (a bad recipe, a source that is no zip, a floor the generator can't take, a
  *   request the bridge can't follow) come as structures.
  *
@@ -20,6 +22,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { EXAMPLE_PACK } from '../testing/repo.node';
 import type { ConvertRequest, ConvertResult, Failure, Outcome, PythonApi } from './bridge';
 import { resolvePath } from './python';
+import { effectiveOverride, floorRuns, mergeOverride } from './recipe/merge';
 import {
   COACH_OBJ,
   havePython,
@@ -261,7 +264,7 @@ describe.skipIf(!havePython)('model_doors and rewrite_references = the converter
   it('finds the doors the converter finds', async () => {
     const ours = value(await api.modelDoors(COACH_OBJ, ['DOORA']));
     const theirs = runPythonJson(
-      'import ir2rwat, json\nprint(json.dumps(ir2rwat.model_doors(ir2rwat.parse_obj(sys.stdin.buffer.read() if False else open(sys.argv[1], "rb").read())[3], {"doora"})))',
+      'import ir2rwat, json\nprint(json.dumps(ir2rwat.model_doors(ir2rwat.parse_obj(open(sys.argv[1], "rb").read())[3], {"doora"})))',
       [await diskFile('coach.obj', COACH_OBJ)],
     );
     expect(ours).toEqual(theirs);
@@ -278,6 +281,69 @@ describe.skipIf(!havePython)('model_doors and rewrite_references = the converter
     ) as number[];
     expect(ours).toEqual(new Uint8Array(theirs));
     expect(value(await api.rewriteReferences(mtl, 'map_Kd', {}))).toBeNull();
+  });
+});
+
+describe('derive and floorFor, merged by ./recipe/merge.ts = the conversion', () => {
+  /** Overrides that touch every layer: inline under the file, type, doors by id, floor, name, sway, model. */
+  const inline = { hopper: { type: { max_speed_kmh: 70 } }, test_coach: { type: { mass_t: 33 } } };
+  const files: Record<string, unknown> = {
+    ...irOverrides(),
+    test_coach: { _why: 'a comment', name: { ru_ru: 'Тестовый вагон' }, floor: { clearance: 0.05 }, sway: 1.5, type: { doors: { door_3: null } } },
+    loco: { model: { sounds: { idle: null } }, name: { en_us: 'Shunter' } },
+  };
+
+  it('gives, per type, what the full conversion writes', async () => {
+    const input = await syntheticInput();
+    const recipe = irRecipe({ overrides: inline });
+    const sources = request(input, 'files').sources;
+    const started = performance.now();
+    const layers = value(await api.derive({ recipe, recipeName: 'test.json', sources }));
+    const deriveMs = performance.now() - started;
+    const full = value(await api.convert({ recipe, recipeName: 'test.json', overrides: files, sources, output: 'files' }));
+    const written = new Map(full.pack?.kind === 'files' ? full.pack.files.map((f) => [f.path, new TextDecoder().decode(f.bytes)]) : []);
+    const lang = (language: string) => JSON.parse(written.get(`assets/tp/lang/${language}.json`) ?? '{}') as Record<string, string>;
+
+    expect(Object.keys(layers.derived)).toEqual(full.report.stock.map((s) => s.id));
+    expect(layers.failed).toEqual({});
+    let floorMs = 0;
+    for (const [id, derived] of Object.entries(layers.derived)) {
+      const override = effectiveOverride(inline[id as keyof typeof inline], files[id]);
+      const asked = performance.now();
+      const floor = floorRuns(derived.category, override) ? value(await api.floorFor(id, override)).interior : null;
+      floorMs += performance.now() - asked;
+      const merged = mergeOverride({ derived, floor, inline: inline[id as keyof typeof inline], override: files[id], namespace: 'tp', id });
+      expect(merged.type, id).toEqual(JSON.parse(written.get(`data/tp/wagon_types/${id}.json`)!));
+      expect(merged.model, id).toEqual(JSON.parse(written.get(`assets/tp/wagon_models/${id}.json`)!));
+      for (const [language, entries] of Object.entries(merged.lang)) {
+        const theirs = Object.fromEntries(Object.entries(lang(language)).filter(([key]) => key.endsWith(`.tp.${id}`) || key.includes(`.tp.${id}.`)));
+        expect(entries, `${id} ${language}`).toEqual(theirs);
+      }
+      for (const warning of merged.warnings) expect(full.report.warnings).toContain(warning);
+    }
+    console.info(`derive, synthetic pack: ${deriveMs.toFixed(0)} ms; floorFor of the coach: ${floorMs.toFixed(0)} ms`);
+    // the derived model has the animation of every door the IR definition animates
+    expect(Object.keys(layers.derived.test_coach!.model.animations as object)).toEqual(['doora']);
+  }, 60_000);
+
+  it('says why there is no generated floor, and fails as NoRecipe once closed', async () => {
+    const input = await syntheticInput();
+    value(await api.derive({ recipe: irRecipe(), sources: request(input, 'zip').sources }));
+    const refused = value(await api.floorFor('test_coach', { floor: { clearance: 'wide' } }));
+    expect(refused.interior).toBeNull();
+    expect(refused.problem).toContain('"floor".clearance must be a number');
+    const generated = value(await api.floorFor('test_coach', {}));
+    expect(Array.isArray(generated.interior)).toBe(true);
+    expect(generated.problem).toBeNull();
+    expect(value(await api.floorFor('loco', {})).interior).toBeNull(); // the generator doesn't run for a locomotive without "floor"
+    value(await api.closeDerived());
+    expect(failure(await api.floorFor('test_coach', {}))).toMatchObject({ kind: 'python', type: 'NoRecipe' });
+  }, 60_000);
+
+  it('fails as the converter refuses a bad recipe', async () => {
+    const error = failure(await api.derive({ recipe: { ...irRecipe(), sources: [] }, sources: {} }));
+    expect(error).toMatchObject({ kind: 'python', type: 'ConversionError' });
+    expect(error.message).toContain('"sources" is empty');
   });
 });
 

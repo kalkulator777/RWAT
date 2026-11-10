@@ -3,6 +3,9 @@
  * with its per-type files and the two IR zips converts to the pack `python3 -I
  * tools/ir2rwat.py packs/mvp.json` writes, file by file, and the test prints how long it
  * took and how much memory it used (docs/proposals/editor.md M6: MVP once, measured).
+ * Then the layers: `derive` once, and every type's override merged on its derived layer
+ * by ./recipe/merge.ts (with `floorFor` where the generator runs) is the type and model
+ * declaration that conversion wrote.
  *
  * It takes minutes (about 30 s in CPython, several times that in wasm, and the reference
  * run besides), so it runs only when asked: `RWAT_MVP=1 npx vitest run src/ir/python.mvp`.
@@ -14,8 +17,10 @@ import { existsSync } from 'node:fs';
 import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import { describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '../testing/repo.node';
+import { effectiveOverride, floorRuns, mergeOverride } from './recipe/merge';
 import { havePython, nodePython, readFolder, runTool } from './testing.node';
 
 const RECIPE = join(REPO_ROOT, 'packs', 'mvp.json');
@@ -77,6 +82,40 @@ describe('MVP through Pyodide', () => {
     } finally {
       await rm(scratch, { recursive: true, force: true });
     }
+
+    // the layers: derive once, then each type merged by the port with its floor asked for = what was written
+    const recipeBytes = new Uint8Array(await readFile(RECIPE));
+    const deriveStarted = performance.now();
+    const layers = await api.derive({ recipe: recipeBytes, recipeName: 'mvp.json', sources });
+    if (!layers.ok) throw new Error(`${layers.error.type}: ${layers.error.message}\n${layers.error.traceback}`);
+    const deriveMs = performance.now() - deriveStarted;
+    const written = new Map(files.map((f) => [f.path, new TextDecoder().decode(f.bytes)]));
+    const inline = (JSON.parse(new TextDecoder().decode(recipeBytes)) as { overrides?: Record<string, unknown> }).overrides ?? {};
+    const parsed = Object.fromEntries(Object.entries(overrides).map(([id, bytes]) => [id, JSON.parse(new TextDecoder().decode(bytes)) as unknown]));
+    let floors = 0;
+    let floorMs = 0;
+    const wrong: string[] = [];
+    for (const [id, derived] of Object.entries(layers.value.derived)) {
+      const override = effectiveOverride(inline[id], parsed[id]);
+      let floor: unknown = null;
+      if (floorRuns(derived.category, override)) {
+        const asked = performance.now();
+        const generated = await api.floorFor(id, override);
+        floorMs += performance.now() - asked;
+        floors++;
+        if (!generated.ok) throw new Error(`${id}: ${generated.error.message}`);
+        floor = generated.value.interior;
+      }
+      const merged = mergeOverride({ derived, floor, inline: inline[id], override: parsed[id], namespace: 'mvp', id });
+      if (!isDeepStrictEqual(merged.type, JSON.parse(written.get(`data/mvp/wagon_types/${id}.json`) ?? 'null'))) wrong.push(`${id} type`);
+      if (!isDeepStrictEqual(merged.model, JSON.parse(written.get(`assets/mvp/wagon_models/${id}.json`) ?? 'null'))) wrong.push(`${id} model`);
+    }
+    console.info(
+      `MVP layers: derive ${(deriveMs / 1000).toFixed(1)} s for ${Object.keys(layers.value.derived).length} types; ` +
+        `floorFor ${floors} types, ${(floorMs / 1000).toFixed(1)} s in all; wasm heap ${((await api.memory()) / MB).toFixed(0)} MiB`,
+    );
+    expect(Object.keys(layers.value.derived)).toEqual(result.report.stock.map((s) => s.id));
+    expect(wrong).toEqual([]);
   }, 30 * 60_000);
 
   it.skipIf(present && havePython && asked)('is skipped: needs packs/mvp.json with its zips, python3, and RWAT_MVP=1 (minutes long)', () => {

@@ -19,6 +19,9 @@ function fakeApi(overrides: Partial<PythonApi> = {}): PythonApi {
   return {
     start: () => ok({ pyodide: '0', python: '3', loadMs: 1 }),
     convert: () => ok({ exitCode: 0, report: { refusal: null, warnings: [], errors: [], stock: [], rails: [], log: [] }, pack: null }),
+    derive: () => ok({ derived: {}, failed: {}, warnings: [], errors: [], log: [] }),
+    floorFor: () => ok({ interior: null, levels: [], notes: [], problem: null }),
+    closeDerived: () => ok(null),
     modelDoors: () => ok([]),
     suggestFloor: () => ok(FLOOR),
     rewriteReferences: () => ok(null),

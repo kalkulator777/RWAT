@@ -14,6 +14,10 @@
  *   call starts a new worker, Pyodide from the browser's cache.
  * - **Errors** come as {@link BridgeError}: a Python exception with its type, message,
  *   the converter's wording and the traceback (for debugging), not a string.
+ * - **Layers of a recipe** (2.6): {@link PythonBridge.derive} gives what the converter
+ *   derives for every type before any override, {@link PythonBridge.floorFor} the floor it
+ *   generates for a type with an override; ./recipe/merge.ts `mergeOverride` puts the
+ *   override on top as the converter does, so an edit needs no new conversion.
  * - **Big inputs**: an IR zip given as a `Blob` (a `File` the author picked) is mounted
  *   in the worker (WORKERFS) and read by Python in place, never copied whole into
  *   memory. Results come back as transferred buffers.
@@ -24,6 +28,7 @@
 
 import { releaseProxy, wrap, proxy, type Remote } from 'comlink';
 import type { Problem } from '../core/contracts';
+import type { Derived } from './recipe/merge';
 
 /** The folder of Pyodide next to the page and its files' sizes (vite.config.ts `define`). */
 declare const __RWAT_PYODIDE__: { dir: string; files: Record<string, number> };
@@ -122,6 +127,35 @@ export interface ConvertRequest {
   output: 'zip' | 'files';
 }
 
+/** What to derive: the recipe and its source zips (its per-type files play no part in the derived layer). */
+export type DeriveRequest = Pick<ConvertRequest, 'recipe' | 'recipeName' | 'sources'>;
+
+/**
+ * The derived layer of every stock type a recipe converts (`Converter.derived`): what an
+ * override lands on, for ./recipe/merge.ts `mergeOverride`.
+ */
+export interface DeriveResult {
+  /** By type id, in the order of the conversion. */
+  derived: Record<string, Derived>;
+  /** Types converted whose layer could not be told, by id: why, as the converter words it. */
+  failed: Record<string, string>;
+  /** The conversion's, without the overrides. */
+  warnings: string[];
+  errors: string[];
+  log: string[];
+}
+
+/** The floor the converter generates for a type with an override (`floorFor`). */
+export interface GeneratedFloor {
+  /** The zones (`MergeInput.floor`), or null where the converter writes none. */
+  interior: unknown;
+  /** The floor heights used (OBJ y). */
+  levels: number[];
+  notes: string[];
+  /** Why there is no generated floor, as the converter says it; null when there is one. */
+  problem: string | null;
+}
+
 /** How far the loading of Pyodide is. */
 export interface LoadProgress {
   /** idle → download → start (the interpreter and the tools) → ready. */
@@ -166,6 +200,9 @@ export type Outcome<T> = { ok: true; value: T } | { ok: false; error: Failure };
 export interface PythonApi {
   start(options: StartOptions, onProgress?: (progress: LoadProgress) => void): Promise<Outcome<RuntimeInfo>>;
   convert(request: ConvertRequest, onLog?: (line: string) => void): Promise<Outcome<ConvertResult>>;
+  derive(request: DeriveRequest, onLog?: (line: string) => void): Promise<Outcome<DeriveResult>>;
+  floorFor(typeId: string, override: unknown): Promise<Outcome<GeneratedFloor>>;
+  closeDerived(): Promise<Outcome<null>>;
   modelDoors(obj: Uint8Array, animated: string[]): Promise<Outcome<PackDoor[]>>;
   suggestFloor(obj: Uint8Array, options: unknown, doors: readonly unknown[]): Promise<Outcome<FloorSuggestion>>;
   rewriteReferences(raw: Uint8Array, keyword: string, moved: Record<string, string>): Promise<Outcome<Uint8Array | null>>;
@@ -283,6 +320,32 @@ export class PythonBridge {
   convert(request: ConvertRequest, call: CallOptions & { onLog?: (line: string) => void } = {}): Promise<ConvertResult> {
     const onLog = call.onLog;
     return this.call(call.signal, (api) => (onLog === undefined ? api.convert(request) : api.convert(request, proxy(onLog))));
+  }
+
+  /**
+   * The derived layer of every stock type the recipe converts (`Converter.derived`, before
+   * any override), for ./recipe/merge.ts `mergeOverride`: the converter runs once on the
+   * recipe without its overrides, nothing written. The recipe stays open in the worker for
+   * {@link floorFor} until the next `derive` or {@link closeDerived} (a cancel closes it too).
+   */
+  derive(request: DeriveRequest, call: CallOptions & { onLog?: (line: string) => void } = {}): Promise<DeriveResult> {
+    const onLog = call.onLog;
+    return this.call(call.signal, (api) => (onLog === undefined ? api.derive(request) : api.derive(request, proxy(onLog))));
+  }
+
+  /**
+   * The floor the converter generates for a type of the recipe {@link derive} opened, with
+   * `override` as its override (./recipe/merge.ts `effectiveOverride`): the generator's
+   * options and the doors the type ends up with are the override's. Its `interior` is
+   * `MergeInput.floor`. Fails with type `NoRecipe` when no recipe is open.
+   */
+  floorFor(typeId: string, override: unknown, call: CallOptions = {}): Promise<GeneratedFloor> {
+    return this.call(call.signal, (api) => api.floorFor(typeId, override));
+  }
+
+  /** Forgets the recipe {@link derive} opened (its zips, unmounted). */
+  async closeDerived(): Promise<void> {
+    if (this.worker !== null) await this.call(undefined, (api) => api.closeDerived());
   }
 
   /** `ir2rwat.model_doors` on an OBJ: its doors as the pack writes them; `animated` — the control groups an animation moves. */
