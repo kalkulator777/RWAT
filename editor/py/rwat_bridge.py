@@ -14,8 +14,8 @@ Every answer is JSON text: {"ok": true, "value": ...} or {"ok": false, "error":
 `text` as the converter words it for an author (ir2rwat.describe), its traceback for
 debugging.
 
-One state is kept between calls: the Converter `derive` made, for `floor_for`, until
-the next `derive` or `close`.
+One state is kept between calls: the Converter `derive` made, for `floor_for` and
+`model_files`, until the next `derive` or `close`.
 """
 
 import contextlib
@@ -207,10 +207,44 @@ def floor_for(type_id, override):
     }
 
 
+def model_files(type_id, out):
+    """The files of a type's model as the conversion copies them — the OBJ, its MTLs and
+    their textures, the liveries, the door animations, the sounds — found by the
+    converter itself (Converter.derived: Source.find in any case, parse_mtl, the
+    livery folders), for the editor to read out of the source zip. Each: its path in
+    the pack, the index of its source in the recipe's "sources", the zip's own entry
+    name, and, where the converter rewrites a path in it (a renamed texture or MTL),
+    the name of a file in `out` holding the bytes it writes instead. Sorted by path."""
+    converter = SESSION.get("converter")
+    if converter is None:
+        raise NoRecipe("no recipe derived: derive it first")
+    files, warnings, errors = converter.files, len(converter.warnings), len(converter.errors)
+    converter.files = {}
+    try:
+        with contextlib.redirect_stdout(Lines()):
+            converter.derived(type_id)
+        copied = converter.files
+    finally:
+        converter.files = files
+        del converter.warnings[warnings:], converter.errors[errors:]
+    os.makedirs(out, exist_ok=True)
+    listed = []
+    for number, (path, asset) in enumerate(sorted(copied.items())):
+        data = None
+        if asset.data is not None:
+            data = str(number)
+            with open(os.path.join(out, data), "wb") as file:
+                file.write(asset.data)
+        listed.append({"path": path, "source": converter.sources.index(asset.source),
+                       "entry": asset.source.entries[asset.name], "data": data})
+    return listed
+
+
 FUNCTIONS = {
     "convert": convert,
     "derive": derive,
     "floor_for": floor_for,
+    "model_files": model_files,
     "close": close,
     "model_doors": model_doors,
     "suggest_floor": suggest_floor,

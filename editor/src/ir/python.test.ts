@@ -7,7 +7,8 @@
  * - `suggest_floor` on the example pack's coach at a given level gives floorgen's zones;
  * - `model_doors` and `rewrite_references` give what the converter's functions give;
  * - `derive` and `floorFor`, merged with each type's override by ./recipe/merge.ts, give
- *   the type, model and names the full conversion writes;
+ *   the type, model and names the full conversion writes; `modelFiles` names the zip
+ *   entries (or the rewritten bytes) of the files the conversion writes for a model;
  * - failures (a bad recipe, a source that is no zip, a floor the generator can't take, a
  *   request the bridge can't follow) come as structures.
  *
@@ -19,6 +20,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { openZipSource } from '../io';
 import { EXAMPLE_PACK } from '../testing/repo.node';
 import type { ConvertRequest, ConvertResult, Failure, Outcome, PythonApi } from './bridge';
 import { resolvePath } from './python';
@@ -338,6 +340,44 @@ describe('derive and floorFor, merged by ./recipe/merge.ts = the conversion', ()
     expect(value(await api.floorFor('loco', {})).interior).toBeNull(); // the generator doesn't run for a locomotive without "floor"
     value(await api.closeDerived());
     expect(failure(await api.floorFor('test_coach', {}))).toMatchObject({ kind: 'python', type: 'NoRecipe' });
+  }, 60_000);
+
+  it('names the zip entries of a type\'s model: read out of the zips, they are the files the conversion writes', async () => {
+    const input = await syntheticInput();
+    const sources = request(input, 'files').sources;
+    const zips = [input.first, input.second];
+    value(await api.derive({ recipe: irRecipe(), recipeName: 'test.json', sources }));
+    const full = value(await api.convert({ recipe: irRecipe(), recipeName: 'test.json', overrides: input.overrides, sources, output: 'files' }));
+    const written = new Map(full.pack?.kind === 'files' ? full.pack.files.map((f) => [f.path, f.bytes]) : []);
+    const unzip = async (zip: Uint8Array, entry: string): Promise<Uint8Array> => {
+      const source = await openZipSource(zip, 'source.zip');
+      return source.read(entry);
+    };
+    for (const id of ['test_coach', 'loco']) {
+      const files = value(await api.modelFiles(id));
+      expect(files.length, id).toBeGreaterThan(1);
+      for (const file of files) {
+        const bytes = file.bytes ?? (await unzip(zips[file.source]!, file.entry));
+        expect(bytes, `${id} ${file.path}`).toEqual(written.get(file.path));
+      }
+    }
+    const coach = value(await api.modelFiles('test_coach'));
+    expect(coach.map((f) => f.path)).toEqual([
+      'assets/tp/stock/rolling_stock/passenger/test_coach/anim/doora.anim',
+      'assets/tp/stock/rolling_stock/passenger/test_coach/coach_mats.mtl',
+      'assets/tp/stock/rolling_stock/passenger/test_coach/glass.png',
+      'assets/tp/stock/rolling_stock/passenger/test_coach/l_red/body.png',
+      'assets/tp/stock/rolling_stock/passenger/test_coach/test_coach.obj',
+      'assets/tp/stock/sounds/coach/hum.ogg',
+      'assets/tp/stock/textures/coach/body.png',
+    ]);
+    // the OBJ and the MTL name renamed files: their bytes are the converter's, the rest the zip's entries as they are
+    expect(coach.filter((f) => f.bytes !== null).map((f) => f.path.split('/').pop())).toEqual(['coach_mats.mtl', 'test_coach.obj']);
+    expect(coach.find((f) => f.path.endsWith('glass.png'))).toMatchObject({ source: 0, entry: 'assets/immersiverailroading/models/rolling_stock/passenger/Test_Coach/Glass.PNG', bytes: null });
+    // the session's state is as it was: the floor of the coach is still there, nothing warned twice
+    expect(value(await api.floorFor('test_coach', {})).problem).toBeNull();
+    value(await api.closeDerived());
+    expect(failure(await api.modelFiles('test_coach'))).toMatchObject({ kind: 'python', type: 'NoRecipe' });
   }, 60_000);
 
   it('fails as the converter refuses a bad recipe', async () => {

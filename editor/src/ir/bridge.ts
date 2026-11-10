@@ -18,6 +18,8 @@
  *   derives for every type before any override, {@link PythonBridge.floorFor} the floor it
  *   generates for a type with an override; ./recipe/merge.ts `mergeOverride` puts the
  *   override on top as the converter does, so an edit needs no new conversion.
+ *   {@link PythonBridge.modelFiles} names the zip entries a type's model is made of, for
+ *   the 3D view to read out of the zips.
  * - **Big inputs**: an IR zip given as a `Blob` (a `File` the author picked) is mounted
  *   in the worker (WORKERFS) and read by Python in place, never copied whole into
  *   memory. Results come back as transferred buffers.
@@ -156,6 +158,23 @@ export interface GeneratedFloor {
   problem: string | null;
 }
 
+/**
+ * A file of a type's model as the conversion copies it (`modelFiles`): the OBJ, its MTLs
+ * and textures, the liveries, the door animations and sounds, found by the converter
+ * (`Source.find` in any case, `parse_mtl`). The editor reads it out of the source zip
+ * itself — TypeScript never looks for an IR path.
+ */
+export interface ModelFile {
+  /** Its path in the converted pack (`assets/<ns>/<root>/…`): where the model's declaration finds it. */
+  path: string;
+  /** Its source: the index in the recipe's `sources`. */
+  source: number;
+  /** The zip's own name of the entry (a wrapper folder and the zip's letter case kept). */
+  entry: string;
+  /** The bytes the converter writes instead of the entry's (a path in it rewritten: a renamed texture or MTL); null — the entry as it is. */
+  bytes: Uint8Array | null;
+}
+
 /** How far the loading of Pyodide is. */
 export interface LoadProgress {
   /** idle → download → start (the interpreter and the tools) → ready. */
@@ -202,6 +221,7 @@ export interface PythonApi {
   convert(request: ConvertRequest, onLog?: (line: string) => void): Promise<Outcome<ConvertResult>>;
   derive(request: DeriveRequest, onLog?: (line: string) => void): Promise<Outcome<DeriveResult>>;
   floorFor(typeId: string, override: unknown): Promise<Outcome<GeneratedFloor>>;
+  modelFiles(typeId: string): Promise<Outcome<ModelFile[]>>;
   closeDerived(): Promise<Outcome<null>>;
   modelDoors(obj: Uint8Array, animated: string[]): Promise<Outcome<PackDoor[]>>;
   suggestFloor(obj: Uint8Array, options: unknown, doors: readonly unknown[]): Promise<Outcome<FloorSuggestion>>;
@@ -341,6 +361,15 @@ export class PythonBridge {
    */
   floorFor(typeId: string, override: unknown, call: CallOptions = {}): Promise<GeneratedFloor> {
     return this.call(call.signal, (api) => api.floorFor(typeId, override));
+  }
+
+  /**
+   * The files of a type's model, of the recipe {@link derive} opened, as the conversion
+   * copies them ({@link ModelFile}): where each lands in the pack and which entry of which
+   * source zip it is. Fails with type `NoRecipe` when no recipe is open.
+   */
+  modelFiles(typeId: string, call: CallOptions = {}): Promise<ModelFile[]> {
+    return this.call(call.signal, (api) => api.modelFiles(typeId));
   }
 
   /** Forgets the recipe {@link derive} opened (its zips, unmounted). */

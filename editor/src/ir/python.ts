@@ -14,9 +14,9 @@
  *   one (a `File` is read in place, never copied whole into memory), else the bytes in
  *   memory (Node). The pack is written to `/work/out/`. `/work/` is emptied after every
  *   conversion, the mounts taken down. `derive` lays out its recipe the same way in
- *   `/session/`, which stays — the converter keeps reading the zips for `floorFor` —
- *   until the next `derive` or `closeDerived`. The other calls write their input to
- *   `/rwat/in/`.
+ *   `/session/`, which stays — the converter keeps reading the zips for `floorFor` and
+ *   `modelFiles` — until the next `derive` or `closeDerived`. The other calls write their
+ *   input (and `modelFiles` the bytes the converter rewrites) to `/rwat/in/`.
  * - **Answers.** Every call answers an {@link Outcome}: a Python exception or a request
  *   the bridge can't follow is a {@link Failure}, never a thrown error. Bytes go back
  *   marked for transfer (`comlink.transfer`).
@@ -36,6 +36,7 @@ import type {
   Failure,
   GeneratedFloor,
   LoadProgress,
+  ModelFile,
   Outcome,
   PackFile,
   PythonApi,
@@ -375,6 +376,17 @@ export function createPythonApi(load: PyodideLoader): PythonApi {
       } catch (error) {
         return { ok: false, error: bridgeFailure(error) };
       }
+    },
+
+    modelFiles(typeId) {
+      return withInput({}, async () => {
+        const out = `${INPUT}/model`;
+        const answer = await python<{ path: string; source: number; entry: string; data: string | null }[]>('model_files', { type_id: typeId, out });
+        if (!answer.ok) return answer;
+        const fs = fileSystem((await boot(lastOptions, () => {})).pyodide);
+        const files: ModelFile[] = answer.value.map(({ path, source, entry, data }) => ({ path, source, entry, bytes: data === null ? null : fs.readFile(`${out}/${data}`) }));
+        return transfer({ ok: true, value: files }, files.flatMap((file) => (file.bytes === null ? [] : [file.bytes.buffer as ArrayBuffer])));
+      });
     },
 
     async closeDerived() {
