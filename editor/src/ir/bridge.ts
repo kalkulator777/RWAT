@@ -226,6 +226,8 @@ export interface PythonApi {
   modelDoors(obj: Uint8Array, animated: string[]): Promise<Outcome<PackDoor[]>>;
   suggestFloor(obj: Uint8Array, options: unknown, doors: readonly unknown[]): Promise<Outcome<FloorSuggestion>>;
   rewriteReferences(raw: Uint8Array, keyword: string, moved: Record<string, string>): Promise<Outcome<Uint8Array | null>>;
+  resourceParts(parts: string[]): Promise<Outcome<string[]>>;
+  relink(links: [string, string, string][]): Promise<Outcome<(string | null)[]>>;
   /** The size of Pyodide's memory (the wasm heap), bytes; 0 before it is loaded. */
   memory(): Promise<number>;
 }
@@ -395,6 +397,20 @@ export class PythonBridge {
   /** `ir2rwat.rewrite_references`: the file with every `<keyword> <path>` line `moved` maps rewritten; null if nothing moves. */
   rewriteReferences(raw: Uint8Array, keyword: string, moved: Record<string, string>, call: CallOptions = {}): Promise<Uint8Array | null> {
     return this.call(call.signal, (api) => api.rewriteReferences(raw, keyword, moved));
+  }
+
+  /** `ir2rwat.resource_part` of each path part: what the converter renames a part to (lower case, `a-z 0-9 _ . -`). */
+  resourceParts(parts: readonly string[], call: CallOptions = {}): Promise<string[]> {
+    return this.call(call.signal, (api) => api.resourceParts([...parts]));
+  }
+
+  /**
+   * `ir2rwat.relink` of each `[folder, written, destination]` (paths in the pack): null where
+   * the path as a model file writes it, from its folder, still leads to the destination,
+   * else the path that does.
+   */
+  relink(links: readonly (readonly [string, string, string])[], call: CallOptions = {}): Promise<(string | null)[]> {
+    return this.call(call.signal, (api) => api.relink(links.map(([folder, written, destination]) => [folder, written, destination])));
   }
 
   /** The size of Pyodide's memory, bytes (0 when not loaded). */

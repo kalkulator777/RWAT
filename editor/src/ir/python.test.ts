@@ -5,7 +5,8 @@
  * - a synthetic IR pack (./testing.node.ts, our own bytes) converts to the same pack,
  *   file by file and as the `--zip` bytes, with the same exit status and warnings;
  * - `suggest_floor` on the example pack's coach at a given level gives floorgen's zones;
- * - `model_doors` and `rewrite_references` give what the converter's functions give;
+ * - `model_doors`, `rewrite_references`, `resource_parts` and `relink` give what the
+ *   converter's functions give;
  * - `derive` and `floorFor`, merged with each type's override by ./recipe/merge.ts, give
  *   the type, model and names the full conversion writes; `modelFiles` names the zip
  *   entries (or the rewritten bytes) of the files the conversion writes for a model;
@@ -262,7 +263,7 @@ describe('suggest_floor failures come as structures', () => {
   });
 });
 
-describe.skipIf(!havePython)('model_doors and rewrite_references = the converter\'s', () => {
+describe.skipIf(!havePython)('model_doors, rewrite_references, resource_parts and relink = the converter\'s', () => {
   it('finds the doors the converter finds', async () => {
     const ours = value(await api.modelDoors(COACH_OBJ, ['DOORA']));
     const theirs = runPythonJson(
@@ -271,6 +272,22 @@ describe.skipIf(!havePython)('model_doors and rewrite_references = the converter
     );
     expect(ours).toEqual(theirs);
     expect(ours.map((d) => d.id).sort()).toEqual(['DoorA', 'door_1', 'door_3'].sort());
+  });
+
+  it('renames path parts and relinks paths as the converter does', async () => {
+    const parts = ['Test Coach.obj', 'L_Red', 'Glass.PNG', 'ünï cödé', 'ok_name-1.png', ''];
+    expect(value(await api.resourceParts(parts))).toEqual(
+      runPythonJson('import ir2rwat, json\nprint(json.dumps([ir2rwat.resource_part(p) for p in json.loads(sys.argv[1])]))', [JSON.stringify(parts)]),
+    );
+    const links: [string, string, string][] = [
+      ['assets/tp/stock/car', 'Body.png', 'assets/tp/stock/car/body.png'],
+      ['assets/tp/stock/car', 'body.png', 'assets/tp/stock/car/body.png'],
+      ['assets/tp/stock/car', '../../../../textures/Coach/Body.png', 'assets/tp/stock/textures/coach/body.png'],
+      ['assets/tp/stock/car', 'sub\\x.png', 'assets/tp/stock/car/sub/x.png'],
+    ];
+    expect(value(await api.relink(links))).toEqual(
+      runPythonJson('import ir2rwat, json\nprint(json.dumps([ir2rwat.relink(*l) for l in json.loads(sys.argv[1])]))', [JSON.stringify(links)]),
+    );
   });
 
   it('rewrites the lines the converter rewrites, and says when nothing moves', async () => {

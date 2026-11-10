@@ -426,6 +426,22 @@ export function createPythonApi(load: PyodideLoader): PythonApi {
       });
     },
 
+    async resourceParts(parts) {
+      try {
+        return await python<string[]>('resource_parts', { parts });
+      } catch (error) {
+        return { ok: false, error: bridgeFailure(error) };
+      }
+    },
+
+    async relink(links) {
+      try {
+        return await python<(string | null)[]>('relink', { links });
+      } catch (error) {
+        return { ok: false, error: bridgeFailure(error) };
+      }
+    },
+
     async memory() {
       if (running === null) return 0;
       const { pyodide } = await running;

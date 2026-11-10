@@ -22,6 +22,8 @@ function fakeApi(overrides: Partial<PythonApi> = {}): PythonApi {
     derive: () => ok({ derived: {}, failed: {}, warnings: [], errors: [], log: [] }),
     floorFor: () => ok({ interior: null, levels: [], notes: [], problem: null }),
     modelFiles: () => ok([]),
+    resourceParts: (parts) => ok(parts),
+    relink: (links) => ok(links.map(() => null)),
     closeDerived: () => ok(null),
     modelDoors: () => ok([]),
     suggestFloor: () => ok(FLOOR),

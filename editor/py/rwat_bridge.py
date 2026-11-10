@@ -139,6 +139,17 @@ def rewrite_references(raw, keyword, moved, out):
     return True
 
 
+def resource_parts(parts):
+    """ir2rwat.resource_part of each path part: how the converter renames a part a resource path can't hold."""
+    return [ir2rwat.resource_part(part) for part in parts]
+
+
+def relink(links):
+    """ir2rwat.relink of each [folder, written, destination]: None where the path as written still
+    leads to the destination, else the path that does."""
+    return [ir2rwat.relink(folder, written, destination) for folder, written, destination in links]
+
+
 class NoRecipe(Exception):
     """floor_for before derive (or after close, or in a worker started anew)."""
 
@@ -249,6 +260,8 @@ FUNCTIONS = {
     "model_doors": model_doors,
     "suggest_floor": suggest_floor,
     "rewrite_references": rewrite_references,
+    "resource_parts": resource_parts,
+    "relink": relink,
 }
 
 
