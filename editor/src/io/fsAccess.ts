@@ -157,9 +157,9 @@ export class FsAccessSource implements PackSource {
     return this.canWrite;
   }
 
-  /** The sink that writes changes into this folder. */
-  sink(): FsAccessSink {
-    return new FsAccessSink(this.handle);
+  /** The sink that writes changes into this folder; `observe` hears of every file written or deleted, as it is. */
+  sink(observe?: WriteObserver): FsAccessSink {
+    return new FsAccessSink(this.handle, observe);
   }
 }
 
@@ -269,20 +269,45 @@ function isMissing(error: unknown): boolean {
   return name === 'NotFoundError' || name === 'TypeMismatchError';
 }
 
+/** Hears of each file a sink has written or deleted, right after it is done: what a write that fails halfway did (app/save). */
+export type WriteObserver = (step: { path: string; action: 'write' | 'delete' }) => void;
+
 /**
  * Writes changes into a folder in place, file by file (docs/proposals/editor.md §3.6):
  * deletions first, then the files with `pack.mcmeta` last, then the folders the
  * deletions left empty are removed. Asks for write permission when it is not granted
  * and rejects with `permission-denied` when it stays so. A path that is not a path inside the
- * pack, or twice in a batch, rejects the whole batch before anything is written.
+ * pack, or twice in a batch, rejects the whole batch before anything is written. A write
+ * that fails rejects at that file: the files before it are written (`observe` names
+ * them), the rest are not; writing the same changes again is safe.
  */
 export class FsAccessSink implements PackSink {
-  constructor(private readonly root: FsDirectoryHandle) {}
+  constructor(
+    private readonly root: FsDirectoryHandle,
+    private readonly observe?: WriteObserver,
+  ) {}
 
   async write(changes: FileChange[]): Promise<void> {
     if (changes.length === 0) return;
     planChanges(changes); // a bad batch is refused before the browser asks for anything
     if ((await ensurePermission(this.root, 'readwrite')) !== 'granted') throw denied(this.root, 'readwrite');
-    await applyChanges(new FolderHandleBackend(this.root), changes);
+    const folder = new FolderHandleBackend(this.root);
+    const observe = this.observe;
+    const backend: FolderBackend =
+      observe === undefined
+        ? folder
+        : {
+            writeFile: async (path, bytes) => {
+              await folder.writeFile(path, bytes);
+              observe({ path, action: 'write' });
+            },
+            removeFile: async (path) => {
+              const removed = await folder.removeFile(path);
+              observe({ path, action: 'delete' });
+              return removed;
+            },
+            removeFolderIfEmpty: (path) => folder.removeFolderIfEmpty(path),
+          };
+    await applyChanges(backend, changes);
   }
 }

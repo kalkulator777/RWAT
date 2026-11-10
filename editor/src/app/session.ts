@@ -10,11 +10,13 @@ import type { Command } from '../core/contracts';
 import { Journal } from '../core/journal';
 import { Pack, PackError } from '../core/pack';
 import { createSchema, fetchSchemaFiles } from '../core/schema';
-import { describeIoError, downloadBytes, FsAccessSource, PackIoError, ZipSink, zipFileName, type PackSource } from '../io';
+import { describeIoError, downloadBytes, PackIoError, type PackSource } from '../io';
+import { sessionOpened } from './save/keep';
+import { FolderSaveError, saveTarget, saveToFolder, saveToZip, type DeliverZip } from './save/save';
+import { openSaveDialog, saveReport } from './save/state';
 import { failure, journal, pack, revision, schema, schemaError, selection } from './store';
 
-/** Hands a zip of the pack to the user under a name. */
-export type DeliverZip = (zip: Uint8Array, fileName: string) => void | Promise<void>;
+export type { DeliverZip };
 
 /** The default delivery: a browser download. */
 export const downloadZip: DeliverZip = (zip, fileName) => {
@@ -22,28 +24,48 @@ export const downloadZip: DeliverZip = (zip, fileName) => {
 };
 
 function fail(error: unknown): void {
-  if (error instanceof PackIoError) failure.value = describeIoError(error);
+  if (error instanceof FolderSaveError) {
+    const { report } = error;
+    failure.value =
+      error.cause instanceof PackIoError && error.cause.code === 'permission-denied'
+        ? describeIoError(error.cause)
+        : {
+            key: 'save.error.partial',
+            params: { written: report.written.length + report.deleted.length, left: report.pending.length + (report.failed === null ? 0 : 1), detail: report.detail },
+          };
+  } else if (error instanceof PackIoError) failure.value = describeIoError(error);
   else if (error instanceof PackError && (error.code === 'not-a-pack' || error.code === 'several-packs')) {
     failure.value = { key: `app.error.${error.code}`, params: { detail: error.message } };
   }
   else failure.value = { key: 'app.error.unknown', params: { detail: error instanceof Error ? error.message : String(error) } };
 }
 
-/** Opens the pack in a source; the previous pack is replaced. A failure goes to `failure` and leaves the open pack as it was. */
+/** Makes the pack and its journal the open ones (opened, or restored from the session); the previous pack is replaced. */
+export function showPack(opened: Pack, edits: Journal): void {
+  edits.subscribe(() => {
+    revision.value++;
+  });
+  batch(() => {
+    pack.value = opened;
+    journal.value = edits;
+    selection.value = [];
+    failure.value = null;
+    saveReport.value = null;
+    revision.value++;
+  });
+}
+
+/**
+ * Opens the pack in a source; the previous pack is replaced, and its session in the
+ * browser with it (app/save/keep.ts). A failure goes to `failure` and leaves the open pack
+ * as it was.
+ */
 export async function openSource(source: PackSource): Promise<boolean> {
   try {
     const opened = await Pack.open(source);
     const edits = new Journal(opened);
-    edits.subscribe(() => {
-      revision.value++;
-    });
-    batch(() => {
-      pack.value = opened;
-      journal.value = edits;
-      selection.value = [];
-      failure.value = null;
-      revision.value++;
-    });
+    showPack(opened, edits);
+    void sessionOpened(opened, edits);
     return true;
   } catch (error) {
     fail(error);
@@ -65,25 +87,27 @@ export async function openPicked(pick: () => Promise<PackSource | null>): Promis
 }
 
 /**
- * Saves the pack: into its own folder when it was opened for writing there (only the
- * changed files), otherwise as a zip of the whole pack handed to `deliver`.
+ * Saves the pack (app/save/save.ts): into its own folder when it was opened for writing
+ * there (only the changed files), otherwise — or when `target` is `zip` — as a zip of the
+ * whole pack handed to `deliver`. Returns whether it saved; a failure is in `failure`, and
+ * for a folder written part way also in `saveReport`.
  */
-export async function savePack(deliver: DeliverZip = downloadZip): Promise<void> {
+export async function savePack(deliver: DeliverZip = downloadZip, target?: 'folder' | 'zip'): Promise<boolean> {
   const open = pack.value;
-  if (open === null) return;
+  if (open === null) return false;
   failure.value = null;
+  saveReport.value = null;
+  let saved = false;
   try {
-    const { source } = open;
-    if (source instanceof FsAccessSource && source.writable) {
-      await open.save(source.sink(), { inSource: true });
-    } else {
-      const name = zipFileName(source.name);
-      await open.save(new ZipSink(null, (zip) => deliver(zip, name)), { whole: true });
-    }
+    if ((target ?? saveTarget(open)) === 'folder') await saveToFolder(open, journal.value);
+    else await saveToZip(open, journal.value, deliver);
+    saved = true;
   } catch (error) {
+    if (error instanceof FolderSaveError) saveReport.value = error.report;
     fail(error);
   }
   revision.value++;
+  return saved;
 }
 
 /**
@@ -145,7 +169,7 @@ function isTyping(target: EventTarget | null): boolean {
   return element?.isContentEditable === true || ['INPUT', 'TEXTAREA', 'SELECT'].includes(element?.tagName ?? '');
 }
 
-/** Ctrl+Z undoes, Ctrl+Shift+Z and Ctrl+Y redo, Ctrl+S saves (⌘ on a Mac); text fields keep their own undo. Returns the function that removes the listener. */
+/** Ctrl+Z undoes, Ctrl+Shift+Z and Ctrl+Y redo, Ctrl+S opens the save dialog (⌘ on a Mac); text fields keep their own undo. Returns the function that removes the listener. */
 export function installShortcuts(target: EventTarget = document): () => void {
   const onKey = (event: Event): void => {
     const key = event as KeyboardEvent;
@@ -157,7 +181,7 @@ export function installShortcuts(target: EventTarget = document): () => void {
     } else if (name === 'y' && !key.shiftKey) {
       redo();
     } else if (name === 's' && !key.shiftKey) {
-      void savePack();
+      if (pack.value !== null) openSaveDialog();
     } else {
       return;
     }

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'preact/hooks';
+import { RenameTypeButton } from '../../app/save';
 import { dispatch } from '../../app/session';
 import { findings, pack, revision, schema, selection } from '../../app/store';
 import type { Link } from '../../core/contracts';
@@ -126,6 +127,7 @@ export function InspectorPanel() {
       <header class="inspector-head">
         <h2 class="inspector-title">{heading}</h2>
         <p class="inspector-file">{file}</p>
+        {(declaration?.kind === 'wagon_type' || declaration?.kind === 'wagon_model') && <RenameTypeButton id={id} />}
         {open.readOnly && <p class="inspector-note">{t('inspector.readOnly')}</p>}
       </header>
       {body}
