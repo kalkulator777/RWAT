@@ -835,6 +835,12 @@ def model_doors(boxes, animated):
     return [floorgen.box_to_obj(door) for door in doors]
 
 
+def animated_groups(source, ir):
+    """The control groups (lower case) of an IR definition's animations whose .anim the source has."""
+    return {a.get("control_group", "").lower() for a in ir.get("animations", [])
+            if source.exists(ir_location_to_zip(a["animatrix"]))}
+
+
 def edit_doors(doors, edits, warn):
     """A per-type "doors" object over the derived doors (SPEC §9.8): each key
     is a door id (any case) — an object edits that door (deep-merged, so
@@ -1370,15 +1376,30 @@ class Converter:
         All in the OBJ frame, as the pack and the per-type file are. The one
         place both the converter and tools/objinfo.py --doors read the doors
         from."""
-        animated = {a.get("control_group", "").lower() for a in ir.get("animations", [])
-                    if source.exists(ir_location_to_zip(a["animatrix"]))}
-        in_model = model_doors(boxes, animated)
+        in_model = model_doors(boxes, animated_groups(source, ir))
         edits = type_json.pop("doors") if isinstance(type_json.get("doors"), dict) else None
         if isinstance(type_json.get("doors"), list):
             doors = type_json["doors"]
         else:
             doors = edit_doors(in_model, edits or {}, lambda m: self.warn(f"{type_id}: {m}"))
         return in_model, doors
+
+    def derived(self, type_id):
+        """What the converter derives for a stock type before any override — the layer
+        an override lands on (editor/src/ir/recipe/merge.ts `Derived`, golden
+        recipe_merge): the IR category and name, the type from IR's definition
+        (derive_type), the doors the model carries (model_doors), IR's passenger area
+        (derive_interior), the model declaration with every door animation and door
+        sound of the definition (model_declaration; convert_stock keeps those of the
+        doors the type ends up with), the model's light groups. Its files are copied as
+        convert_stock copies them."""
+        source, category, entry = self.find_stock(type_id)
+        ir = lenient_json(source.read(entry))
+        obj_name, obj_destination, _, extent, boxes = self.copy_model(source, ir_location_to_zip(ir["model"]), type_id)
+        model, _, _ = self.model_declaration(source, category, ir, obj_name, obj_destination, boxes, None, type_id)
+        return {"category": category, "name": ir.get("name", type_id), "type": derive_type(category, ir, extent, boxes),
+                "doors": model_doors(boxes, animated_groups(source, ir)), "interior": derive_interior(category, ir),
+                "model": model, "lights": list(light_groups(boxes))}
 
     def doors_of(self, type_id):
         """(the doors the model carries, the doors the type gets) of a stock type, as the converter derives them."""
@@ -1448,8 +1469,6 @@ class Converter:
         ir = lenient_json(source.read(entry))
         obj_zip = ir_location_to_zip(ir["model"])
         obj_name, obj_destination, objects, extent, boxes = self.copy_model(source, obj_zip, type_id)
-        obj_folder = posixpath.dirname(obj_name)
-        here = posixpath.dirname(obj_destination)
         for group in groups_too_long(objects):
             self.warn(f"{type_id}: control group '{group}' is longer than {MAX_GROUP_LENGTH} characters and the "
                       f"engine drops it: its switches can't be worked, its lights stay off (an LINVERT one on)")
@@ -1458,6 +1477,41 @@ class Converter:
         overrides, type_json = plan["overrides"], plan["type_json"]
         door_ids = {door["id"].lower() for door in type_json.get("doors", [])}
 
+        model_json, liveries, ir_animations = self.model_declaration(source, category, ir, obj_name, obj_destination,
+                                                                     boxes, door_ids, type_id)
+        sway = overrides.get("sway")
+        if sway is not None:  # the body's rocking, on top of the client setting (SPEC §10.2)
+            if isinstance(sway, (int, float)) and not isinstance(sway, bool) and 0 <= sway <= 3:
+                model_json["sway"] = sway
+            else:
+                self.warn(f"{type_id}: \"sway\" must be a number from 0 to 3, left out")
+        model_json = deep_merge(model_json, overrides.get("model") or {})
+
+        if self.geometry is not None:
+            self.write_geometry(source, plan, type_id, category, ir_animations)
+        self.generated[f"data/{self.namespace}/wagon_types/{type_id}.json"] = dump(type_json)
+        self.generated[f"assets/{self.namespace}/wagon_models/{type_id}.json"] = dump(model_json)
+        name = ir.get("name", type_id)
+        self.langs["en_us"][f"wagon.{self.namespace}.{type_id}"] = name
+        self.add_names(type_id, overrides, boxes)
+        self.stock.append((type_id, source.label, category, name, len(liveries)))
+        walk = ""
+        if "interior" in type_json:
+            doors = type_json.get("doors", [])
+            zones = type_json["interior"]
+            walk = (f"  walk: {len(zones) if isinstance(zones, list) else 1} zone(s), {len(doors)} door(s)"
+                    f" ({sum(1 for d in doors if d.get('connecting'))} gangway)")
+        print(f"  {self.namespace}:{type_id:28} {category:11} {type_json['length']:7.3f} m "
+              f"{type_json['mass_t']:7.1f} t  liveries={len(liveries):2}  {name}{walk}")
+
+    def model_declaration(self, source, category, ir, obj_name, obj_destination, boxes, door_ids, type_id):
+        """(the model declaration before the per-type file's "sway" and "model", its
+        liveries, every IR animation: control group → the objects it moves) of a stock
+        type whose model is copied (copy_model): the OBJ, the door animations and door
+        sounds of `door_ids` (lower case; None: of every animation the definition has),
+        the liveries, the handbrake, the sounds — their files copied."""
+        obj_folder = posixpath.dirname(obj_name)
+        here = posixpath.dirname(obj_destination)
         liveries = {}
         livery_names = {}  # livery id → the IR name it came from
         for livery, folder in ir.get("tex_variants", {}).items():
@@ -1483,7 +1537,7 @@ class Converter:
             anim_name = source.find(anim_zip)
             if anim_name is not None:
                 ir_animations[group] = [o for o in anim_objects(source.read(anim_name)) if o in boxes]
-            if group.lower() not in door_ids:
+            if door_ids is not None and group.lower() not in door_ids:
                 continue  # only doors the type declares are driven (SPEC §6.3)
             if anim_name is not None:
                 animations[group.lower()] = self.model_location(self.copy(source, anim_name))
@@ -1501,30 +1555,7 @@ class Converter:
         sounds = self.convert_sounds(source, category, ir, door_ids, type_id)
         if sounds:
             model_json["sounds"] = sounds
-        sway = overrides.get("sway")
-        if sway is not None:  # the body's rocking, on top of the client setting (SPEC §10.2)
-            if isinstance(sway, (int, float)) and not isinstance(sway, bool) and 0 <= sway <= 3:
-                model_json["sway"] = sway
-            else:
-                self.warn(f"{type_id}: \"sway\" must be a number from 0 to 3, left out")
-        model_json = deep_merge(model_json, overrides.get("model") or {})
-
-        if self.geometry is not None:
-            self.write_geometry(source, plan, type_id, category, ir_animations)
-        self.generated[f"data/{self.namespace}/wagon_types/{type_id}.json"] = dump(type_json)
-        self.generated[f"assets/{self.namespace}/wagon_models/{type_id}.json"] = dump(model_json)
-        name = ir.get("name", type_id)
-        self.langs["en_us"][f"wagon.{self.namespace}.{type_id}"] = name
-        self.add_names(type_id, overrides, boxes)
-        self.stock.append((type_id, source.label, category, name, len(liveries)))
-        walk = ""
-        if "interior" in type_json:
-            doors = type_json.get("doors", [])
-            zones = type_json["interior"]
-            walk = (f"  walk: {len(zones) if isinstance(zones, list) else 1} zone(s), {len(doors)} door(s)"
-                    f" ({sum(1 for d in doors if d.get('connecting'))} gangway)")
-        print(f"  {self.namespace}:{type_id:28} {category:11} {type_json['length']:7.3f} m "
-              f"{type_json['mass_t']:7.1f} t  liveries={len(liveries):2}  {name}{walk}")
+        return model_json, liveries, ir_animations
 
     def copy_sound(self, source, ref, type_id):
         """An IR sound reference ("sounds/x.ogg", "immersiverailroading:sounds/x.ogg") →
@@ -1592,7 +1623,7 @@ class Converter:
         for animation in ir.get("animations", []):
             group = animation.get("control_group", "").lower()
             start = (animation.get("sound") or {}).get("start")
-            if group in door_ids and start:
+            if (door_ids is None or group in door_ids) and start:
                 converted = self.copy_sound(source, start, type_id)
                 if converted is not None:
                     doors[group] = converted
