@@ -7,9 +7,11 @@
  * findings (M1), and the findings as the panels show them, checked with a delay (M2); the
  * open wagon and its model (M3). The preview's state is the preview's own
  * (preview/store). Signals only; what changes them is ./session.ts and ./openModel.ts.
+ * The IR session (2b) keeps its own state (app/ir); here is only what the top bar's undo,
+ * redo and save act on in 2b ({@link irWork}).
  */
 
-import { computed, signal } from '@preact/signals';
+import { computed, signal, type ReadonlySignal } from '@preact/signals';
 import { liveFindings } from '../checks/live';
 import { checkPack } from '../checks/pack';
 import type { Link, Problem } from '../core/contracts';
@@ -104,12 +106,34 @@ export const dirtyCount = computed(() => {
   return pack.value?.dirtyPaths().length ?? 0;
 });
 
-export const canUndo = computed(() => {
+/**
+ * The IR session's part of the top bar's work while one is open (2b; app/ir sets it): its
+ * journal, which undo, redo and their keys act on in 2b, and its save dialog (Ctrl+S).
+ * Its {@link IrWork.revision} grows with every change of the session.
+ */
+export interface IrWork {
+  readonly journal: Journal;
+  readonly revision: ReadonlySignal<number>;
+  openSave(): void;
+}
+
+export const irWork = signal<IrWork | null>(null);
+
+/** The journal undo and redo act on: the open pack's in 2a, the IR session's in 2b. */
+export const activeJournal = computed<Journal | null>(() => (mode.value === '2b' ? (irWork.value?.journal ?? null) : journal.value));
+
+/** Reads what tells a change of the active journal: the pack's revision, or the IR session's. */
+function activeRevision(): void {
   void revision.value;
-  return journal.value?.canUndo ?? false;
+  void irWork.value?.revision.value;
+}
+
+export const canUndo = computed(() => {
+  activeRevision();
+  return activeJournal.value?.canUndo ?? false;
 });
 
 export const canRedo = computed(() => {
-  void revision.value;
-  return journal.value?.canRedo ?? false;
+  activeRevision();
+  return activeJournal.value?.canRedo ?? false;
 });

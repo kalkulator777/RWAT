@@ -126,6 +126,30 @@ describe('PythonBridge', () => {
     expect(workers[1]?.stopped).toBe(0);
   });
 
+  it('cancels only its own worker: work on a bridge of its own goes on', async () => {
+    // the page's bridge (the suggestions) and the IR session's own: one is cancelled, the other's call ends
+    const page = spawner((n) => fakeApi(n === 0 ? { suggestFloor: never } : {}));
+    let finish: (() => void) | undefined;
+    const own = spawner(() =>
+      fakeApi({ derive: () => new Promise((resolve) => (finish = () => resolve({ ok: true, value: { derived: {}, failed: {}, warnings: [], errors: [], log: ['done'] } }))) }),
+    );
+    const pageBridge = new PythonBridge(page.spawn, () => ({}));
+    const session = new PythonBridge(own.spawn, () => ({}));
+    const floor = pageBridge.suggestFloor(new Uint8Array(), {}, []);
+    const derived = session.derive({ recipe: {}, sources: {} });
+    await Promise.all([pageBridge.start(), session.start()]);
+    pageBridge.cancel();
+    await expect(floor).rejects.toMatchObject({ kind: 'cancelled' });
+    finish?.();
+    await expect(derived).resolves.toMatchObject({ log: ['done'] });
+    expect(own.workers.map((w) => w.stopped)).toEqual([0]);
+    // and the other way round
+    const again = pageBridge.modelDoors(new Uint8Array(), []);
+    session.cancel();
+    await expect(again).resolves.toEqual([]);
+    expect(own.workers[0]?.stopped).toBe(1);
+  });
+
   it('fails at once on a signal already aborted, starting nothing', async () => {
     const { spawn, workers } = spawner();
     const bridge = new PythonBridge(spawn, () => ({}));

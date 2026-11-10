@@ -12,6 +12,13 @@
  *   SharedArrayBuffer, which needs cross-origin isolation GitHub Pages can't give): every
  *   call under way fails with a {@link BridgeError} of kind `cancelled`, and the next
  *   call starts a new worker, Pyodide from the browser's cache.
+ * - **A bridge of its own** (`new PythonBridge()`) is a worker of its own: work that
+ *   another's cancel must not stop takes one. The page's bridge ({@link pythonBridge}) is
+ *   the suggestions' (tools/suggest); the IR session (app/ir) keeps the recipe it derived
+ *   in a bridge of its own, and a full conversion runs in another, stopped when it ends —
+ *   so cancelling a suggested floor leaves an import alone, and a cancelled conversion
+ *   leaves the session's derived recipe as it was (*decision of A6.3*: two Pyodide
+ *   instances for a while, rather than calls of one worker cancelled for another's sake).
  * - **Errors** come as {@link BridgeError}: a Python exception with its type, message,
  *   the converter's wording and the traceback (for debugging), not a string.
  * - **Layers of a recipe** (2.6): {@link PythonBridge.derive} gives what the converter

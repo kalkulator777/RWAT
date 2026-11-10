@@ -14,7 +14,7 @@ import { describeIoError, downloadBytes, PackIoError, type PackSource } from '..
 import { sessionOpened } from './save/keep';
 import { FolderSaveError, saveTarget, saveToFolder, saveToZip, type DeliverZip } from './save/save';
 import { openSaveDialog, saveReport } from './save/state';
-import { failure, journal, pack, revision, schema, schemaError, selection } from './store';
+import { activeJournal, failure, irWork, journal, mode, pack, revision, schema, schemaError, selection } from './store';
 
 export type { DeliverZip };
 
@@ -142,12 +142,13 @@ export async function run(command: Command): Promise<boolean> {
   }
 }
 
+/** Undoes the last command of the mode's journal: the open pack's (2a), the IR session's (2b). */
 export function undo(): void {
-  journal.value?.undo();
+  activeJournal.value?.undo();
 }
 
 export function redo(): void {
-  journal.value?.redo();
+  activeJournal.value?.redo();
 }
 
 /** Fetches the schema files from the site (`base` is the folder `schema/` as a URL) and builds the checks. */
@@ -169,7 +170,11 @@ function isTyping(target: EventTarget | null): boolean {
   return element?.isContentEditable === true || ['INPUT', 'TEXTAREA', 'SELECT'].includes(element?.tagName ?? '');
 }
 
-/** Ctrl+Z undoes, Ctrl+Shift+Z and Ctrl+Y redo, Ctrl+S opens the save dialog (⌘ on a Mac); text fields keep their own undo. Returns the function that removes the listener. */
+/**
+ * Ctrl+Z undoes, Ctrl+Shift+Z and Ctrl+Y redo, Ctrl+S opens the save dialog (⌘ on a Mac) —
+ * of the open pack in 2a, of the IR session in 2b; text fields keep their own undo.
+ * Returns the function that removes the listener.
+ */
 export function installShortcuts(target: EventTarget = document): () => void {
   const onKey = (event: Event): void => {
     const key = event as KeyboardEvent;
@@ -181,7 +186,8 @@ export function installShortcuts(target: EventTarget = document): () => void {
     } else if (name === 'y' && !key.shiftKey) {
       redo();
     } else if (name === 's' && !key.shiftKey) {
-      if (pack.value !== null) openSaveDialog();
+      if (mode.value === '2b') irWork.value?.openSave();
+      else if (pack.value !== null) openSaveDialog();
     } else {
       return;
     }
