@@ -86,7 +86,7 @@ function geometry(file: string, type: Record<string, unknown>, out: Problem[]): 
 }
 
 /** The door ids of a type, lower-cased (the model's keys are matched without case); null when the type gives none to match. */
-function doorIds(type: unknown): string[] | null {
+export function doorIds(type: unknown): string[] | null {
   if (!isJsonObject(type)) return null;
   const doors = type.doors;
   if (doors === undefined) return [];
