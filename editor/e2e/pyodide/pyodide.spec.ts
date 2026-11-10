@@ -135,3 +135,32 @@ test('cancelling stops the worker: the call fails as cancelled, the next one sta
   expect(outcome.zones).toBeGreaterThan(0);
 });
 
+test.describe('with the service worker', () => {
+  test.use({ serviceWorkers: 'allow' });
+
+  test('Pyodide used once on the first visit loads offline afterwards', async ({ page, context }) => {
+    test.setTimeout(120_000);
+    await page.addInitScript(() => {
+      (window as { __RWAT_E2E__?: boolean }).__RWAT_E2E__ = true;
+    });
+    const doors = () =>
+      page.evaluate(async () => {
+        const bridge = (window as unknown as { __rwatPython: Bridge }).__rwatPython;
+        const obj = 'o DOOR_1_EXTERNAL\nv 0 0 0\nv 1 0 0\nv 1 2 0\nv 0 2 0\nf 1 2 3 4\n';
+        return (await bridge.modelDoors(new TextEncoder().encode(obj), [])).length;
+      });
+    await page.goto('./');
+    await page.waitForFunction(() => (window as { __rwatPython?: unknown }).__rwatPython !== undefined);
+    // the first visit's page is the service worker's at once, so what it fetches is cached as fetched
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null, undefined, { timeout: 20_000 });
+    expect(await doors()).toBeGreaterThanOrEqual(0);
+    const cached = await page.evaluate(async () => (await (await caches.open('rwat-pyodide')).keys()).map((r) => r.url.split('/').pop()).sort());
+    expect(cached).toEqual(['pyodide-lock.json', 'pyodide.asm.mjs', 'pyodide.asm.wasm', 'pyodide.mjs', 'python_stdlib.zip']);
+
+    await context.setOffline(true);
+    await page.reload();
+    await page.waitForFunction(() => (window as { __rwatPython?: unknown }).__rwatPython !== undefined);
+    expect(await doors()).toBeGreaterThanOrEqual(0);
+    await context.setOffline(false);
+  });
+});

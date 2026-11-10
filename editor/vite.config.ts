@@ -170,6 +170,11 @@ export default defineConfig({
         // 2 MiB default silently, and a skipped chunk would break the offline editor.
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         cleanupOutdatedCaches: true,
+        // The first service worker takes the page it is installed from at once, so that
+        // Pyodide used on the first visit is cached as it is fetched, not only from the
+        // next visit on. A new version still waits for the notice (registerType 'prompt'):
+        // it activates only when the user reloads from it.
+        clientsClaim: true,
         navigateFallback: 'index.html',
         runtimeCaching: [
           {
