@@ -1,0 +1,786 @@
+{
+  "description": "A stock type's override over what tools/ir2rwat.py derives (the reference; editor/src/ir/recipe/merge.ts the port): input.category - the IR category; input.derived - the IR name, the derived type, the model's doors, IR's passenger area, the model declaration with every door animation and door sound, the model's light groups; input.floor - what the floor generator gives for the override's floor options (null: none); input.inline - the recipe's own overrides.<id>; input.override - the per-type file. expected: the type and model declarations written, the type's lang entries, the converter's warnings about the override. Places in the OBJ frame, as the pack writes them.",
+  "frame": "obj",
+  "tolerance": 0,
+  "cases": [
+    {
+      "id": "no-override",
+      "note": "no per-type file: the derived type with the generated floor and the model's doors; every door's animation and sound stays",
+      "input": {"category": "passenger", "derived": {"name": "Test Coach", "type": {"length": 20.0, "bogies": [7.0, -7.0], "mass_t": 40.0, "max_speed_kmh": 120, "brakes": {"system": "passenger"}}, "doors": [{"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]}, {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}], "interior": {"min": [-5.0, 0.9, -1.4], "max": [5.0, 3.4, 1.4]}, "model": {"obj": "stock/car/car.obj", "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"}, "liveries": {"red": "red"}, "handbrake": ["WIDGET_5"], "sounds": {"horn": "stock/sounds/horn.ogg", "clack": "stock/sounds/clack.ogg", "doors": {"door_1": "stock/sounds/door.ogg"}}}, "lights": ["FBL", "IL"]}, "floor": [{"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]}, {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}]},
+      "expected": {
+        "type": {
+          "length": 20.0,
+          "bogies": [7.0, -7.0],
+          "mass_t": 40.0,
+          "max_speed_kmh": 120,
+          "brakes": {"system": "passenger"},
+          "interior": [
+            {"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]},
+            {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}
+          ],
+          "doors": [
+            {"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]},
+            {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}
+          ]
+        },
+        "model": {
+          "obj": "stock/car/car.obj",
+          "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"},
+          "liveries": {"red": "red"},
+          "handbrake": ["WIDGET_5"],
+          "sounds": {
+            "horn": "stock/sounds/horn.ogg",
+            "clack": "stock/sounds/clack.ogg",
+            "doors": {"door_1": "stock/sounds/door.ogg"}
+          }
+        },
+        "lang": {"en_us": {"wagon.ns.car": "Test Coach"}},
+        "warnings": []
+      }
+    },
+    {
+      "id": "freight-without-a-floor",
+      "note": "a freight car without floor: no interior, so no doors in the type, and no door animation or door sound in the model",
+      "input": {"category": "freight", "derived": {"name": "Test Hopper", "type": {"length": 20.0, "bogies": [7.0, -7.0], "mass_t": 40.0, "max_speed_kmh": 120, "brakes": {"system": "freight"}}, "doors": [{"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]}, {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}], "interior": null, "model": {"obj": "stock/car/car.obj", "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"}, "liveries": {"red": "red"}, "handbrake": ["WIDGET_5"], "sounds": {"horn": "stock/sounds/horn.ogg", "clack": "stock/sounds/clack.ogg", "doors": {"door_1": "stock/sounds/door.ogg"}}}, "lights": ["FBL", "IL"]}, "floor": null},
+      "expected": {
+        "type": {
+          "length": 20.0,
+          "bogies": [7.0, -7.0],
+          "mass_t": 40.0,
+          "max_speed_kmh": 120,
+          "brakes": {"system": "freight"}
+        },
+        "model": {
+          "obj": "stock/car/car.obj",
+          "liveries": {"red": "red"},
+          "handbrake": ["WIDGET_5"],
+          "sounds": {"horn": "stock/sounds/horn.ogg", "clack": "stock/sounds/clack.ogg"}
+        },
+        "lang": {"en_us": {"wagon.ns.car": "Test Hopper"}},
+        "warnings": []
+      }
+    },
+    {
+      "id": "scalars-set-and-removed",
+      "note": "a number set, one removed by null, an object merged key by key",
+      "input": {"category": "passenger", "derived": {"name": "Test Coach", "type": {"length": 20.0, "bogies": [7.0, -7.0], "mass_t": 40.0, "max_speed_kmh": 120, "brakes": {"system": "passenger"}}, "doors": [{"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]}, {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}], "interior": {"min": [-5.0, 0.9, -1.4], "max": [5.0, 3.4, 1.4]}, "model": {"obj": "stock/car/car.obj", "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"}, "liveries": {"red": "red"}, "handbrake": ["WIDGET_5"], "sounds": {"horn": "stock/sounds/horn.ogg", "clack": "stock/sounds/clack.ogg", "doors": {"door_1": "stock/sounds/door.ogg"}}}, "lights": ["FBL", "IL"]}, "floor": [{"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]}, {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}], "override": {"type": {"mass_t": 42.5, "max_speed_kmh": null, "brakes": {"parking_kn": 25.0}}}},
+      "expected": {
+        "type": {
+          "length": 20.0,
+          "bogies": [7.0, -7.0],
+          "mass_t": 42.5,
+          "brakes": {"system": "passenger", "parking_kn": 25.0},
+          "interior": [
+            {"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]},
+            {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}
+          ],
+          "doors": [
+            {"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]},
+            {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}
+          ]
+        },
+        "model": {
+          "obj": "stock/car/car.obj",
+          "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"},
+          "liveries": {"red": "red"},
+          "handbrake": ["WIDGET_5"],
+          "sounds": {
+            "horn": "stock/sounds/horn.ogg",
+            "clack": "stock/sounds/clack.ogg",
+            "doors": {"door_1": "stock/sounds/door.ogg"}
+          }
+        },
+        "lang": {"en_us": {"wagon.ns.car": "Test Coach"}},
+        "warnings": []
+      }
+    },
+    {
+      "id": "comments-at-every-depth",
+      "note": "_ keys are comments at any depth: in the file, in type, in brakes, in a doors object, in name; none reaches the pack",
+      "input": {"category": "passenger", "derived": {"name": "Test Coach", "type": {"length": 20.0, "bogies": [7.0, -7.0], "mass_t": 40.0, "max_speed_kmh": 120, "brakes": {"system": "passenger"}}, "doors": [{"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]}, {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}], "interior": {"min": [-5.0, 0.9, -1.4], "max": [5.0, 3.4, 1.4]}, "model": {"obj": "stock/car/car.obj", "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"}, "liveries": {"red": "red"}, "handbrake": ["WIDGET_5"], "sounds": {"horn": "stock/sounds/horn.ogg", "clack": "stock/sounds/clack.ogg", "doors": {"door_1": "stock/sounds/door.ogg"}}}, "lights": ["FBL", "IL"]}, "floor": [{"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]}, {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}], "override": {"_about": "why", "name": {"_n": "x", "ru_ru": "Вагон"}, "type": {"_why": "IR is light", "mass_t": 41.0, "brakes": {"_c": 1, "parking_kn": 20.0}, "doors": {"_note": "a comment, no door", "DOOR_1": {"_c": "x", "connecting": true}}}}},
+      "expected": {
+        "type": {
+          "length": 20.0,
+          "bogies": [7.0, -7.0],
+          "mass_t": 41.0,
+          "max_speed_kmh": 120,
+          "brakes": {"system": "passenger", "parking_kn": 20.0},
+          "interior": [
+            {"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]},
+            {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}
+          ],
+          "doors": [
+            {"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45], "connecting": true},
+            {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}
+          ]
+        },
+        "model": {
+          "obj": "stock/car/car.obj",
+          "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"},
+          "liveries": {"red": "red"},
+          "handbrake": ["WIDGET_5"],
+          "sounds": {
+            "horn": "stock/sounds/horn.ogg",
+            "clack": "stock/sounds/clack.ogg",
+            "doors": {"door_1": "stock/sounds/door.ogg"}
+          }
+        },
+        "lang": {"en_us": {"wagon.ns.car": "Test Coach"}, "ru_ru": {"wagon.ns.car": "Вагон"}},
+        "warnings": []
+      }
+    },
+    {
+      "id": "doors-edited-by-id",
+      "note": "doors as an object: an edit by id in any case, a flag removed by null, a door the model hasn't added at the end",
+      "input": {"category": "passenger", "derived": {"name": "Test Coach", "type": {"length": 20.0, "bogies": [7.0, -7.0], "mass_t": 40.0, "max_speed_kmh": 120, "brakes": {"system": "passenger"}}, "doors": [{"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]}, {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}], "interior": {"min": [-5.0, 0.9, -1.4], "max": [5.0, 3.4, 1.4]}, "model": {"obj": "stock/car/car.obj", "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"}, "liveries": {"red": "red"}, "handbrake": ["WIDGET_5"], "sounds": {"horn": "stock/sounds/horn.ogg", "clack": "stock/sounds/clack.ogg", "doors": {"door_1": "stock/sounds/door.ogg"}}}, "lights": ["FBL", "IL"]}, "floor": [{"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]}, {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}], "override": {"type": {"doors": {"door_1": {"connecting": true}, "DOOR_3": {"inner": null}, "Gangway": {"min": [2.0, 0.9, 1.35], "max": [3.0, 3.0, 1.45]}}}}},
+      "expected": {
+        "type": {
+          "length": 20.0,
+          "bogies": [7.0, -7.0],
+          "mass_t": 40.0,
+          "max_speed_kmh": 120,
+          "brakes": {"system": "passenger"},
+          "interior": [
+            {"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]},
+            {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}
+          ],
+          "doors": [
+            {"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45], "connecting": true},
+            {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35]},
+            {"id": "Gangway", "min": [2.0, 0.9, 1.35], "max": [3.0, 3.0, 1.45]}
+          ]
+        },
+        "model": {
+          "obj": "stock/car/car.obj",
+          "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"},
+          "liveries": {"red": "red"},
+          "handbrake": ["WIDGET_5"],
+          "sounds": {
+            "horn": "stock/sounds/horn.ogg",
+            "clack": "stock/sounds/clack.ogg",
+            "doors": {"door_1": "stock/sounds/door.ogg"}
+          }
+        },
+        "lang": {"en_us": {"wagon.ns.car": "Test Coach"}},
+        "warnings": []
+      }
+    },
+    {
+      "id": "doors-removed-by-null",
+      "note": "a derived door removed by null takes its animation and its sound with it; a null for no door is a warning",
+      "input": {"category": "passenger", "derived": {"name": "Test Coach", "type": {"length": 20.0, "bogies": [7.0, -7.0], "mass_t": 40.0, "max_speed_kmh": 120, "brakes": {"system": "passenger"}}, "doors": [{"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]}, {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}], "interior": {"min": [-5.0, 0.9, -1.4], "max": [5.0, 3.4, 1.4]}, "model": {"obj": "stock/car/car.obj", "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"}, "liveries": {"red": "red"}, "handbrake": ["WIDGET_5"], "sounds": {"horn": "stock/sounds/horn.ogg", "clack": "stock/sounds/clack.ogg", "doors": {"door_1": "stock/sounds/door.ogg"}}}, "lights": ["FBL", "IL"]}, "floor": [{"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]}, {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}], "override": {"type": {"doors": {"DOOR_1": null, "ghost": null}}}},
+      "expected": {
+        "type": {
+          "length": 20.0,
+          "bogies": [7.0, -7.0],
+          "mass_t": 40.0,
+          "max_speed_kmh": 120,
+          "brakes": {"system": "passenger"},
+          "interior": [
+            {"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]},
+            {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}
+          ],
+          "doors": [{"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}]
+        },
+        "model": {
+          "obj": "stock/car/car.obj",
+          "animations": {"door_3": "stock/car/door3.anim"},
+          "liveries": {"red": "red"},
+          "handbrake": ["WIDGET_5"],
+          "sounds": {"horn": "stock/sounds/horn.ogg", "clack": "stock/sounds/clack.ogg"}
+        },
+        "lang": {"en_us": {"wagon.ns.car": "Test Coach"}},
+        "warnings": ["car: \"doors\" removes ghost, which isn't a derived door"]
+      }
+    },
+    {
+      "id": "doors-as-a-list",
+      "note": "a list replaces the derived doors: a door the list drops loses its animation",
+      "input": {"category": "passenger", "derived": {"name": "Test Coach", "type": {"length": 20.0, "bogies": [7.0, -7.0], "mass_t": 40.0, "max_speed_kmh": 120, "brakes": {"system": "passenger"}}, "doors": [{"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]}, {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}], "interior": {"min": [-5.0, 0.9, -1.4], "max": [5.0, 3.4, 1.4]}, "model": {"obj": "stock/car/car.obj", "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"}, "liveries": {"red": "red"}, "handbrake": ["WIDGET_5"], "sounds": {"horn": "stock/sounds/horn.ogg", "clack": "stock/sounds/clack.ogg", "doors": {"door_1": "stock/sounds/door.ogg"}}}, "lights": ["FBL", "IL"]}, "floor": [{"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]}, {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}], "override": {"type": {"doors": [{"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35]}, {"min": [2.0, 0.9, 1.35], "max": [3.0, 3.0, 1.45], "id": "Gangway"}]}}},
+      "expected": {
+        "type": {
+          "length": 20.0,
+          "bogies": [7.0, -7.0],
+          "mass_t": 40.0,
+          "max_speed_kmh": 120,
+          "brakes": {"system": "passenger"},
+          "doors": [
+            {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35]},
+            {"min": [2.0, 0.9, 1.35], "max": [3.0, 3.0, 1.45], "id": "Gangway"}
+          ],
+          "interior": [
+            {"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]},
+            {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}
+          ]
+        },
+        "model": {
+          "obj": "stock/car/car.obj",
+          "animations": {"door_3": "stock/car/door3.anim"},
+          "liveries": {"red": "red"},
+          "handbrake": ["WIDGET_5"],
+          "sounds": {"horn": "stock/sounds/horn.ogg", "clack": "stock/sounds/clack.ogg"}
+        },
+        "lang": {"en_us": {"wagon.ns.car": "Test Coach"}},
+        "warnings": []
+      }
+    },
+    {
+      "id": "doors-an-empty-list",
+      "note": "an empty list turns the doors off",
+      "input": {"category": "passenger", "derived": {"name": "Test Coach", "type": {"length": 20.0, "bogies": [7.0, -7.0], "mass_t": 40.0, "max_speed_kmh": 120, "brakes": {"system": "passenger"}}, "doors": [{"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]}, {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}], "interior": {"min": [-5.0, 0.9, -1.4], "max": [5.0, 3.4, 1.4]}, "model": {"obj": "stock/car/car.obj", "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"}, "liveries": {"red": "red"}, "handbrake": ["WIDGET_5"], "sounds": {"horn": "stock/sounds/horn.ogg", "clack": "stock/sounds/clack.ogg", "doors": {"door_1": "stock/sounds/door.ogg"}}}, "lights": ["FBL", "IL"]}, "floor": [{"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]}, {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}], "override": {"type": {"doors": []}}},
+      "expected": {
+        "type": {
+          "length": 20.0,
+          "bogies": [7.0, -7.0],
+          "mass_t": 40.0,
+          "max_speed_kmh": 120,
+          "brakes": {"system": "passenger"},
+          "doors": [],
+          "interior": [
+            {"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]},
+            {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}
+          ]
+        },
+        "model": {
+          "obj": "stock/car/car.obj",
+          "liveries": {"red": "red"},
+          "handbrake": ["WIDGET_5"],
+          "sounds": {"horn": "stock/sounds/horn.ogg", "clack": "stock/sounds/clack.ogg"}
+        },
+        "lang": {"en_us": {"wagon.ns.car": "Test Coach"}},
+        "warnings": []
+      }
+    },
+    {
+      "id": "doors-null-is-no-change",
+      "note": "doors: null removes the key before the doors are worked out: the derived doors stay",
+      "input": {"category": "passenger", "derived": {"name": "Test Coach", "type": {"length": 20.0, "bogies": [7.0, -7.0], "mass_t": 40.0, "max_speed_kmh": 120, "brakes": {"system": "passenger"}}, "doors": [{"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]}, {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}], "interior": {"min": [-5.0, 0.9, -1.4], "max": [5.0, 3.4, 1.4]}, "model": {"obj": "stock/car/car.obj", "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"}, "liveries": {"red": "red"}, "handbrake": ["WIDGET_5"], "sounds": {"horn": "stock/sounds/horn.ogg", "clack": "stock/sounds/clack.ogg", "doors": {"door_1": "stock/sounds/door.ogg"}}}, "lights": ["FBL", "IL"]}, "floor": [{"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]}, {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}], "override": {"type": {"doors": null}}},
+      "expected": {
+        "type": {
+          "length": 20.0,
+          "bogies": [7.0, -7.0],
+          "mass_t": 40.0,
+          "max_speed_kmh": 120,
+          "brakes": {"system": "passenger"},
+          "interior": [
+            {"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]},
+            {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}
+          ],
+          "doors": [
+            {"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]},
+            {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}
+          ]
+        },
+        "model": {
+          "obj": "stock/car/car.obj",
+          "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"},
+          "liveries": {"red": "red"},
+          "handbrake": ["WIDGET_5"],
+          "sounds": {
+            "horn": "stock/sounds/horn.ogg",
+            "clack": "stock/sounds/clack.ogg",
+            "doors": {"door_1": "stock/sounds/door.ogg"}
+          }
+        },
+        "lang": {"en_us": {"wagon.ns.car": "Test Coach"}},
+        "warnings": []
+      }
+    },
+    {
+      "id": "door-renamed-by-its-edit",
+      "note": "an edit may give a door another id: the animation of the old id goes",
+      "input": {"category": "passenger", "derived": {"name": "Test Coach", "type": {"length": 20.0, "bogies": [7.0, -7.0], "mass_t": 40.0, "max_speed_kmh": 120, "brakes": {"system": "passenger"}}, "doors": [{"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]}, {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}], "interior": {"min": [-5.0, 0.9, -1.4], "max": [5.0, 3.4, 1.4]}, "model": {"obj": "stock/car/car.obj", "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"}, "liveries": {"red": "red"}, "handbrake": ["WIDGET_5"], "sounds": {"horn": "stock/sounds/horn.ogg", "clack": "stock/sounds/clack.ogg", "doors": {"door_1": "stock/sounds/door.ogg"}}}, "lights": ["FBL", "IL"]}, "floor": [{"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]}, {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}], "override": {"type": {"doors": {"DOOR_1": {"id": "Front"}}}}},
+      "expected": {
+        "type": {
+          "length": 20.0,
+          "bogies": [7.0, -7.0],
+          "mass_t": 40.0,
+          "max_speed_kmh": 120,
+          "brakes": {"system": "passenger"},
+          "interior": [
+            {"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]},
+            {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}
+          ],
+          "doors": [
+            {"id": "Front", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]},
+            {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}
+          ]
+        },
+        "model": {
+          "obj": "stock/car/car.obj",
+          "animations": {"door_3": "stock/car/door3.anim"},
+          "liveries": {"red": "red"},
+          "handbrake": ["WIDGET_5"],
+          "sounds": {"horn": "stock/sounds/horn.ogg", "clack": "stock/sounds/clack.ogg"}
+        },
+        "lang": {"en_us": {"wagon.ns.car": "Test Coach"}},
+        "warnings": []
+      }
+    },
+    {
+      "id": "interior-by-hand",
+      "note": "the file's own interior wins over the generated floor",
+      "input": {"category": "passenger", "derived": {"name": "Test Coach", "type": {"length": 20.0, "bogies": [7.0, -7.0], "mass_t": 40.0, "max_speed_kmh": 120, "brakes": {"system": "passenger"}}, "doors": [{"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]}, {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}], "interior": {"min": [-5.0, 0.9, -1.4], "max": [5.0, 3.4, 1.4]}, "model": {"obj": "stock/car/car.obj", "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"}, "liveries": {"red": "red"}, "handbrake": ["WIDGET_5"], "sounds": {"horn": "stock/sounds/horn.ogg", "clack": "stock/sounds/clack.ogg", "doors": {"door_1": "stock/sounds/door.ogg"}}}, "lights": ["FBL", "IL"]}, "floor": [{"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]}, {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}], "override": {"type": {"interior": [{"min": [-4.0, 1.0, -1.0], "max": [4.0, 3.5, 1.0]}]}}},
+      "expected": {
+        "type": {
+          "length": 20.0,
+          "bogies": [7.0, -7.0],
+          "mass_t": 40.0,
+          "max_speed_kmh": 120,
+          "brakes": {"system": "passenger"},
+          "interior": [{"min": [-4.0, 1.0, -1.0], "max": [4.0, 3.5, 1.0]}],
+          "doors": [
+            {"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]},
+            {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}
+          ]
+        },
+        "model": {
+          "obj": "stock/car/car.obj",
+          "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"},
+          "liveries": {"red": "red"},
+          "handbrake": ["WIDGET_5"],
+          "sounds": {
+            "horn": "stock/sounds/horn.ogg",
+            "clack": "stock/sounds/clack.ogg",
+            "doors": {"door_1": "stock/sounds/door.ogg"}
+          }
+        },
+        "lang": {"en_us": {"wagon.ns.car": "Test Coach"}},
+        "warnings": []
+      }
+    },
+    {
+      "id": "interior-null-is-no-change",
+      "note": "interior: null removes the key before the floor is put in: the generated floor stays",
+      "input": {"category": "passenger", "derived": {"name": "Test Coach", "type": {"length": 20.0, "bogies": [7.0, -7.0], "mass_t": 40.0, "max_speed_kmh": 120, "brakes": {"system": "passenger"}}, "doors": [{"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]}, {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}], "interior": {"min": [-5.0, 0.9, -1.4], "max": [5.0, 3.4, 1.4]}, "model": {"obj": "stock/car/car.obj", "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"}, "liveries": {"red": "red"}, "handbrake": ["WIDGET_5"], "sounds": {"horn": "stock/sounds/horn.ogg", "clack": "stock/sounds/clack.ogg", "doors": {"door_1": "stock/sounds/door.ogg"}}}, "lights": ["FBL", "IL"]}, "floor": [{"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]}, {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}], "override": {"type": {"interior": null}}},
+      "expected": {
+        "type": {
+          "length": 20.0,
+          "bogies": [7.0, -7.0],
+          "mass_t": 40.0,
+          "max_speed_kmh": 120,
+          "brakes": {"system": "passenger"},
+          "interior": [
+            {"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]},
+            {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}
+          ],
+          "doors": [
+            {"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]},
+            {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}
+          ]
+        },
+        "model": {
+          "obj": "stock/car/car.obj",
+          "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"},
+          "liveries": {"red": "red"},
+          "handbrake": ["WIDGET_5"],
+          "sounds": {
+            "horn": "stock/sounds/horn.ogg",
+            "clack": "stock/sounds/clack.ogg",
+            "doors": {"door_1": "stock/sounds/door.ogg"}
+          }
+        },
+        "lang": {"en_us": {"wagon.ns.car": "Test Coach"}},
+        "warnings": []
+      }
+    },
+    {
+      "id": "floor-false",
+      "note": "floor false: no generator, IR's passenger area is the floor",
+      "input": {"category": "passenger", "derived": {"name": "Test Coach", "type": {"length": 20.0, "bogies": [7.0, -7.0], "mass_t": 40.0, "max_speed_kmh": 120, "brakes": {"system": "passenger"}}, "doors": [{"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]}, {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}], "interior": {"min": [-5.0, 0.9, -1.4], "max": [5.0, 3.4, 1.4]}, "model": {"obj": "stock/car/car.obj", "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"}, "liveries": {"red": "red"}, "handbrake": ["WIDGET_5"], "sounds": {"horn": "stock/sounds/horn.ogg", "clack": "stock/sounds/clack.ogg", "doors": {"door_1": "stock/sounds/door.ogg"}}}, "lights": ["FBL", "IL"]}, "floor": null, "override": {"floor": false}},
+      "expected": {
+        "type": {
+          "length": 20.0,
+          "bogies": [7.0, -7.0],
+          "mass_t": 40.0,
+          "max_speed_kmh": 120,
+          "brakes": {"system": "passenger"},
+          "interior": {"min": [-5.0, 0.9, -1.4], "max": [5.0, 3.4, 1.4]},
+          "doors": [
+            {"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]},
+            {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}
+          ]
+        },
+        "model": {
+          "obj": "stock/car/car.obj",
+          "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"},
+          "liveries": {"red": "red"},
+          "handbrake": ["WIDGET_5"],
+          "sounds": {
+            "horn": "stock/sounds/horn.ogg",
+            "clack": "stock/sounds/clack.ogg",
+            "doors": {"door_1": "stock/sounds/door.ogg"}
+          }
+        },
+        "lang": {"en_us": {"wagon.ns.car": "Test Coach"}},
+        "warnings": []
+      }
+    },
+    {
+      "id": "floor-invalid",
+      "note": "floor options the generator refuses: IR's passenger area is the floor",
+      "input": {"category": "passenger", "derived": {"name": "Test Coach", "type": {"length": 20.0, "bogies": [7.0, -7.0], "mass_t": 40.0, "max_speed_kmh": 120, "brakes": {"system": "passenger"}}, "doors": [{"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]}, {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}], "interior": {"min": [-5.0, 0.9, -1.4], "max": [5.0, 3.4, 1.4]}, "model": {"obj": "stock/car/car.obj", "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"}, "liveries": {"red": "red"}, "handbrake": ["WIDGET_5"], "sounds": {"horn": "stock/sounds/horn.ogg", "clack": "stock/sounds/clack.ogg", "doors": {"door_1": "stock/sounds/door.ogg"}}}, "lights": ["FBL", "IL"]}, "floor": null, "override": {"floor": {"cell": 5}}},
+      "expected": {
+        "type": {
+          "length": 20.0,
+          "bogies": [7.0, -7.0],
+          "mass_t": 40.0,
+          "max_speed_kmh": 120,
+          "brakes": {"system": "passenger"},
+          "interior": {"min": [-5.0, 0.9, -1.4], "max": [5.0, 3.4, 1.4]},
+          "doors": [
+            {"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]},
+            {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}
+          ]
+        },
+        "model": {
+          "obj": "stock/car/car.obj",
+          "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"},
+          "liveries": {"red": "red"},
+          "handbrake": ["WIDGET_5"],
+          "sounds": {
+            "horn": "stock/sounds/horn.ogg",
+            "clack": "stock/sounds/clack.ogg",
+            "doors": {"door_1": "stock/sounds/door.ogg"}
+          }
+        },
+        "lang": {"en_us": {"wagon.ns.car": "Test Coach"}},
+        "warnings": []
+      }
+    },
+    {
+      "id": "floor-turns-the-generator-on",
+      "note": "a freight car whose file has floor: the generator runs and its floor comes with the doors",
+      "input": {"category": "freight", "derived": {"name": "Test Hopper", "type": {"length": 20.0, "bogies": [7.0, -7.0], "mass_t": 40.0, "max_speed_kmh": 120, "brakes": {"system": "freight"}}, "doors": [{"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]}, {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}], "interior": null, "model": {"obj": "stock/car/car.obj", "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"}, "liveries": {"red": "red"}, "handbrake": ["WIDGET_5"], "sounds": {"horn": "stock/sounds/horn.ogg", "clack": "stock/sounds/clack.ogg", "doors": {"door_1": "stock/sounds/door.ogg"}}}, "lights": ["FBL", "IL"]}, "floor": [{"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]}, {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}], "override": {"floor": {"level": 0.9}}},
+      "expected": {
+        "type": {
+          "length": 20.0,
+          "bogies": [7.0, -7.0],
+          "mass_t": 40.0,
+          "max_speed_kmh": 120,
+          "brakes": {"system": "freight"},
+          "interior": [
+            {"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]},
+            {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}
+          ],
+          "doors": [
+            {"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]},
+            {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}
+          ]
+        },
+        "model": {
+          "obj": "stock/car/car.obj",
+          "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"},
+          "liveries": {"red": "red"},
+          "handbrake": ["WIDGET_5"],
+          "sounds": {
+            "horn": "stock/sounds/horn.ogg",
+            "clack": "stock/sounds/clack.ogg",
+            "doors": {"door_1": "stock/sounds/door.ogg"}
+          }
+        },
+        "lang": {"en_us": {"wagon.ns.car": "Test Hopper"}},
+        "warnings": []
+      }
+    },
+    {
+      "id": "floor-failed-on-a-freight-car",
+      "note": "the generator runs but gives no floor, and the freight car has no IR area: no interior",
+      "input": {"category": "freight", "derived": {"name": "Test Hopper", "type": {"length": 20.0, "bogies": [7.0, -7.0], "mass_t": 40.0, "max_speed_kmh": 120, "brakes": {"system": "freight"}}, "doors": [{"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]}, {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}], "interior": null, "model": {"obj": "stock/car/car.obj", "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"}, "liveries": {"red": "red"}, "handbrake": ["WIDGET_5"], "sounds": {"horn": "stock/sounds/horn.ogg", "clack": "stock/sounds/clack.ogg", "doors": {"door_1": "stock/sounds/door.ogg"}}}, "lights": ["FBL", "IL"]}, "floor": null, "override": {"floor": {}}},
+      "expected": {
+        "type": {
+          "length": 20.0,
+          "bogies": [7.0, -7.0],
+          "mass_t": 40.0,
+          "max_speed_kmh": 120,
+          "brakes": {"system": "freight"}
+        },
+        "model": {
+          "obj": "stock/car/car.obj",
+          "liveries": {"red": "red"},
+          "handbrake": ["WIDGET_5"],
+          "sounds": {"horn": "stock/sounds/horn.ogg", "clack": "stock/sounds/clack.ogg"}
+        },
+        "lang": {"en_us": {"wagon.ns.car": "Test Hopper"}},
+        "warnings": []
+      }
+    },
+    {
+      "id": "names-and-lights",
+      "note": "name and lights go to the lang files; en_us replaces the IR name; a group the model hasn't is a warning",
+      "input": {"category": "passenger", "derived": {"name": "Test Coach", "type": {"length": 20.0, "bogies": [7.0, -7.0], "mass_t": 40.0, "max_speed_kmh": 120, "brakes": {"system": "passenger"}}, "doors": [{"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]}, {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}], "interior": {"min": [-5.0, 0.9, -1.4], "max": [5.0, 3.4, 1.4]}, "model": {"obj": "stock/car/car.obj", "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"}, "liveries": {"red": "red"}, "handbrake": ["WIDGET_5"], "sounds": {"horn": "stock/sounds/horn.ogg", "clack": "stock/sounds/clack.ogg", "doors": {"door_1": "stock/sounds/door.ogg"}}}, "lights": ["FBL", "IL"]}, "floor": [{"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]}, {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}], "override": {"name": {"en_us": "Coach", "ru_ru": "Вагон"}, "lights": {"IL": {"en_us": "Car light", "ru_ru": "Свет в вагоне"}, "XX": {"en_us": "No such"}}}},
+      "expected": {
+        "type": {
+          "length": 20.0,
+          "bogies": [7.0, -7.0],
+          "mass_t": 40.0,
+          "max_speed_kmh": 120,
+          "brakes": {"system": "passenger"},
+          "interior": [
+            {"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]},
+            {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}
+          ],
+          "doors": [
+            {"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]},
+            {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}
+          ]
+        },
+        "model": {
+          "obj": "stock/car/car.obj",
+          "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"},
+          "liveries": {"red": "red"},
+          "handbrake": ["WIDGET_5"],
+          "sounds": {
+            "horn": "stock/sounds/horn.ogg",
+            "clack": "stock/sounds/clack.ogg",
+            "doors": {"door_1": "stock/sounds/door.ogg"}
+          }
+        },
+        "lang": {
+          "en_us": {"wagon.ns.car": "Coach", "light.ns.car.IL": "Car light", "light.ns.car.XX": "No such"},
+          "ru_ru": {"wagon.ns.car": "Вагон", "light.ns.car.IL": "Свет в вагоне"}
+        },
+        "warnings": ["car: \"lights\" names XX, which isn't a light group of the model (FBL, IL)"]
+      }
+    },
+    {
+      "id": "sway-set",
+      "note": "sway goes to the model, after the derived keys",
+      "input": {"category": "passenger", "derived": {"name": "Test Coach", "type": {"length": 20.0, "bogies": [7.0, -7.0], "mass_t": 40.0, "max_speed_kmh": 120, "brakes": {"system": "passenger"}}, "doors": [{"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]}, {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}], "interior": {"min": [-5.0, 0.9, -1.4], "max": [5.0, 3.4, 1.4]}, "model": {"obj": "stock/car/car.obj", "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"}, "liveries": {"red": "red"}, "handbrake": ["WIDGET_5"], "sounds": {"horn": "stock/sounds/horn.ogg", "clack": "stock/sounds/clack.ogg", "doors": {"door_1": "stock/sounds/door.ogg"}}}, "lights": ["FBL", "IL"]}, "floor": [{"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]}, {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}], "override": {"sway": 1.5}},
+      "expected": {
+        "type": {
+          "length": 20.0,
+          "bogies": [7.0, -7.0],
+          "mass_t": 40.0,
+          "max_speed_kmh": 120,
+          "brakes": {"system": "passenger"},
+          "interior": [
+            {"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]},
+            {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}
+          ],
+          "doors": [
+            {"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]},
+            {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}
+          ]
+        },
+        "model": {
+          "obj": "stock/car/car.obj",
+          "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"},
+          "liveries": {"red": "red"},
+          "handbrake": ["WIDGET_5"],
+          "sounds": {
+            "horn": "stock/sounds/horn.ogg",
+            "clack": "stock/sounds/clack.ogg",
+            "doors": {"door_1": "stock/sounds/door.ogg"}
+          },
+          "sway": 1.5
+        },
+        "lang": {"en_us": {"wagon.ns.car": "Test Coach"}},
+        "warnings": []
+      }
+    },
+    {
+      "id": "sway-out-of-range",
+      "note": "a sway out of 0..3 is left out with a warning",
+      "input": {"category": "passenger", "derived": {"name": "Test Coach", "type": {"length": 20.0, "bogies": [7.0, -7.0], "mass_t": 40.0, "max_speed_kmh": 120, "brakes": {"system": "passenger"}}, "doors": [{"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]}, {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}], "interior": {"min": [-5.0, 0.9, -1.4], "max": [5.0, 3.4, 1.4]}, "model": {"obj": "stock/car/car.obj", "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"}, "liveries": {"red": "red"}, "handbrake": ["WIDGET_5"], "sounds": {"horn": "stock/sounds/horn.ogg", "clack": "stock/sounds/clack.ogg", "doors": {"door_1": "stock/sounds/door.ogg"}}}, "lights": ["FBL", "IL"]}, "floor": [{"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]}, {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}], "override": {"sway": 5}},
+      "expected": {
+        "type": {
+          "length": 20.0,
+          "bogies": [7.0, -7.0],
+          "mass_t": 40.0,
+          "max_speed_kmh": 120,
+          "brakes": {"system": "passenger"},
+          "interior": [
+            {"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]},
+            {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}
+          ],
+          "doors": [
+            {"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]},
+            {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}
+          ]
+        },
+        "model": {
+          "obj": "stock/car/car.obj",
+          "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"},
+          "liveries": {"red": "red"},
+          "handbrake": ["WIDGET_5"],
+          "sounds": {
+            "horn": "stock/sounds/horn.ogg",
+            "clack": "stock/sounds/clack.ogg",
+            "doors": {"door_1": "stock/sounds/door.ogg"}
+          }
+        },
+        "lang": {"en_us": {"wagon.ns.car": "Test Coach"}},
+        "warnings": ["car: \"sway\" must be a number from 0 to 3, left out"]
+      }
+    },
+    {
+      "id": "sway-under-model-sway",
+      "note": "the model's own sway is merged last and wins",
+      "input": {"category": "passenger", "derived": {"name": "Test Coach", "type": {"length": 20.0, "bogies": [7.0, -7.0], "mass_t": 40.0, "max_speed_kmh": 120, "brakes": {"system": "passenger"}}, "doors": [{"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]}, {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}], "interior": {"min": [-5.0, 0.9, -1.4], "max": [5.0, 3.4, 1.4]}, "model": {"obj": "stock/car/car.obj", "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"}, "liveries": {"red": "red"}, "handbrake": ["WIDGET_5"], "sounds": {"horn": "stock/sounds/horn.ogg", "clack": "stock/sounds/clack.ogg", "doors": {"door_1": "stock/sounds/door.ogg"}}}, "lights": ["FBL", "IL"]}, "floor": [{"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]}, {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}], "override": {"sway": 2, "model": {"sway": 0.5}}},
+      "expected": {
+        "type": {
+          "length": 20.0,
+          "bogies": [7.0, -7.0],
+          "mass_t": 40.0,
+          "max_speed_kmh": 120,
+          "brakes": {"system": "passenger"},
+          "interior": [
+            {"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]},
+            {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}
+          ],
+          "doors": [
+            {"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]},
+            {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}
+          ]
+        },
+        "model": {
+          "obj": "stock/car/car.obj",
+          "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"},
+          "liveries": {"red": "red"},
+          "handbrake": ["WIDGET_5"],
+          "sounds": {
+            "horn": "stock/sounds/horn.ogg",
+            "clack": "stock/sounds/clack.ogg",
+            "doors": {"door_1": "stock/sounds/door.ogg"}
+          },
+          "sway": 0.5
+        },
+        "lang": {"en_us": {"wagon.ns.car": "Test Coach"}},
+        "warnings": []
+      }
+    },
+    {
+      "id": "model-patched",
+      "note": "model fields merged: a livery added, the handbrake removed, one sound removed, one door sound changed",
+      "input": {"category": "passenger", "derived": {"name": "Test Coach", "type": {"length": 20.0, "bogies": [7.0, -7.0], "mass_t": 40.0, "max_speed_kmh": 120, "brakes": {"system": "passenger"}}, "doors": [{"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]}, {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}], "interior": {"min": [-5.0, 0.9, -1.4], "max": [5.0, 3.4, 1.4]}, "model": {"obj": "stock/car/car.obj", "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"}, "liveries": {"red": "red"}, "handbrake": ["WIDGET_5"], "sounds": {"horn": "stock/sounds/horn.ogg", "clack": "stock/sounds/clack.ogg", "doors": {"door_1": "stock/sounds/door.ogg"}}}, "lights": ["FBL", "IL"]}, "floor": [{"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]}, {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}], "override": {"model": {"liveries": {"blue": "stock/car/blue"}, "handbrake": null, "sounds": {"horn": null, "doors": {"door_1": "stock/sounds/other.ogg"}}}}},
+      "expected": {
+        "type": {
+          "length": 20.0,
+          "bogies": [7.0, -7.0],
+          "mass_t": 40.0,
+          "max_speed_kmh": 120,
+          "brakes": {"system": "passenger"},
+          "interior": [
+            {"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]},
+            {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}
+          ],
+          "doors": [
+            {"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]},
+            {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}
+          ]
+        },
+        "model": {
+          "obj": "stock/car/car.obj",
+          "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"},
+          "liveries": {"red": "red", "blue": "stock/car/blue"},
+          "sounds": {"clack": "stock/sounds/clack.ogg", "doors": {"door_1": "stock/sounds/other.ogg"}}
+        },
+        "lang": {"en_us": {"wagon.ns.car": "Test Coach"}},
+        "warnings": []
+      }
+    },
+    {
+      "id": "inline-under-the-file",
+      "note": "the recipe's inline override under the per-type file: objects merge, a null of the file wins and removes",
+      "input": {"category": "passenger", "derived": {"name": "Test Coach", "type": {"length": 20.0, "bogies": [7.0, -7.0], "mass_t": 40.0, "max_speed_kmh": 120, "brakes": {"system": "passenger"}}, "doors": [{"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]}, {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}], "interior": {"min": [-5.0, 0.9, -1.4], "max": [5.0, 3.4, 1.4]}, "model": {"obj": "stock/car/car.obj", "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"}, "liveries": {"red": "red"}, "handbrake": ["WIDGET_5"], "sounds": {"horn": "stock/sounds/horn.ogg", "clack": "stock/sounds/clack.ogg", "doors": {"door_1": "stock/sounds/door.ogg"}}}, "lights": ["FBL", "IL"]}, "floor": [{"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]}, {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}], "inline": {"name": {"ru_ru": "Старое"}, "type": {"mass_t": 30.0, "max_speed_kmh": 100, "brakes": {"parking_kn": 10.0}}}, "override": {"name": {"en_us": "New"}, "type": {"max_speed_kmh": null, "brakes": {"train_kn": 100.0}}}},
+      "expected": {
+        "type": {
+          "length": 20.0,
+          "bogies": [7.0, -7.0],
+          "mass_t": 30.0,
+          "brakes": {"system": "passenger", "parking_kn": 10.0, "train_kn": 100.0},
+          "interior": [
+            {"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]},
+            {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}
+          ],
+          "doors": [
+            {"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]},
+            {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}
+          ]
+        },
+        "model": {
+          "obj": "stock/car/car.obj",
+          "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"},
+          "liveries": {"red": "red"},
+          "handbrake": ["WIDGET_5"],
+          "sounds": {
+            "horn": "stock/sounds/horn.ogg",
+            "clack": "stock/sounds/clack.ogg",
+            "doors": {"door_1": "stock/sounds/door.ogg"}
+          }
+        },
+        "lang": {"en_us": {"wagon.ns.car": "New"}, "ru_ru": {"wagon.ns.car": "Старое"}},
+        "warnings": []
+      }
+    },
+    {
+      "id": "whole-sections-null",
+      "note": "type, model, name, lights, floor and sway null are as if not given",
+      "input": {"category": "passenger", "derived": {"name": "Test Coach", "type": {"length": 20.0, "bogies": [7.0, -7.0], "mass_t": 40.0, "max_speed_kmh": 120, "brakes": {"system": "passenger"}}, "doors": [{"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]}, {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}], "interior": {"min": [-5.0, 0.9, -1.4], "max": [5.0, 3.4, 1.4]}, "model": {"obj": "stock/car/car.obj", "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"}, "liveries": {"red": "red"}, "handbrake": ["WIDGET_5"], "sounds": {"horn": "stock/sounds/horn.ogg", "clack": "stock/sounds/clack.ogg", "doors": {"door_1": "stock/sounds/door.ogg"}}}, "lights": ["FBL", "IL"]}, "floor": [{"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]}, {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}], "override": {"type": null, "model": null, "name": null, "lights": null, "floor": null, "sway": null}},
+      "expected": {
+        "type": {
+          "length": 20.0,
+          "bogies": [7.0, -7.0],
+          "mass_t": 40.0,
+          "max_speed_kmh": 120,
+          "brakes": {"system": "passenger"},
+          "interior": [
+            {"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]},
+            {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}
+          ],
+          "doors": [
+            {"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]},
+            {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}
+          ]
+        },
+        "model": {
+          "obj": "stock/car/car.obj",
+          "animations": {"door_1": "stock/car/door1.anim", "door_3": "stock/car/door3.anim"},
+          "liveries": {"red": "red"},
+          "handbrake": ["WIDGET_5"],
+          "sounds": {
+            "horn": "stock/sounds/horn.ogg",
+            "clack": "stock/sounds/clack.ogg",
+            "doors": {"door_1": "stock/sounds/door.ogg"}
+          }
+        },
+        "lang": {"en_us": {"wagon.ns.car": "Test Coach"}},
+        "warnings": []
+      }
+    },
+    {
+      "id": "locomotive-cab-and-floor",
+      "note": "a locomotive: its cab seats from the file, a floor turned on, the derived traction partly replaced",
+      "input": {"category": "locomotives", "derived": {"name": "Test Loco", "type": {"length": 14.0, "bogies": [4.5, -4.5], "mass_t": 80.0, "traction": {"power_kw": 745.7, "max_tractive_effort_kn": 259.0}, "cab": {}, "brakes": {"system": "passenger"}}, "doors": [{"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]}, {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}], "interior": null, "model": {"obj": "stock/car/car.obj", "sounds": {"idle": {"start": "stock/sounds/start.ogg", "main": "stock/sounds/idle.ogg"}, "horn": "stock/sounds/horn.ogg", "controls": {"WIDGET_2": {"move": "stock/sounds/lever.ogg"}}}}, "lights": ["FBL", "IL"]}, "floor": [{"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]}, {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}], "override": {"floor": {"level": 1.0}, "type": {"traction": {"power_kw": 800.0}, "cab": {"seats": [{"at": [4.0, 2.0, -1.0]}]}}}},
+      "expected": {
+        "type": {
+          "length": 14.0,
+          "bogies": [4.5, -4.5],
+          "mass_t": 80.0,
+          "traction": {"power_kw": 800.0, "max_tractive_effort_kn": 259.0},
+          "cab": {"seats": [{"at": [4.0, 2.0, -1.0]}]},
+          "brakes": {"system": "passenger"},
+          "interior": [
+            {"min": [-5.0, 0.9, -1.4], "max": [4.0, 3.4, 1.4]},
+            {"min": [4.0, 1.2, -1.0], "max": [5.0, 3.7, 1.0]}
+          ],
+          "doors": [
+            {"id": "DOOR_1", "min": [-1.0, 0.9, 1.35], "max": [0.0, 3.0, 1.45]},
+            {"id": "DOOR_3", "min": [-4.0, 0.9, -1.45], "max": [-3.0, 3.0, -1.35], "inner": true}
+          ]
+        },
+        "model": {
+          "obj": "stock/car/car.obj",
+          "sounds": {
+            "idle": {"start": "stock/sounds/start.ogg", "main": "stock/sounds/idle.ogg"},
+            "horn": "stock/sounds/horn.ogg",
+            "controls": {"WIDGET_2": {"move": "stock/sounds/lever.ogg"}}
+          }
+        },
+        "lang": {"en_us": {"wagon.ns.car": "Test Loco"}},
+        "warnings": []
+      }
+    }
+  ]
+}
