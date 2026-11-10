@@ -158,6 +158,46 @@ describe('the journal', () => {
     expect(calls).toBe(3);
   });
 
+  it('knows its save point: undo past it leaves it, redo comes back, a new command after an undo loses it', async () => {
+    const pack = await open();
+    const journal = new Journal(pack, { depth: 2 });
+    const set = (value: number): void => journal.dispatch(command(`set ${value}`, { op: 'set', file: TYPE, at: '/length', value }));
+    expect([journal.savePoint, journal.atSavePoint]).toEqual([0, true]);
+    set(1);
+    set(2);
+    set(3);
+    expect(journal.position).toBe(3);
+    expect(journal.atSavePoint).toBe(false);
+    let calls = 0;
+    journal.subscribe(() => calls++);
+    journal.markSaved();
+    expect(calls).toBe(1);
+    expect([journal.savePoint, journal.atSavePoint]).toEqual([3, true]);
+    journal.undo();
+    expect([journal.savePoint, journal.atSavePoint]).toEqual([3, false]);
+    journal.redo();
+    expect(journal.atSavePoint).toBe(true);
+    set(4);
+    journal.undo();
+    expect(journal.atSavePoint).toBe(true);
+    journal.undo();
+    set(5);
+    expect([journal.savePoint, journal.position, journal.atSavePoint]).toEqual([null, 3, false]);
+  });
+
+  it('starts a new entry for a drag after it was saved, so the saved entry stays as saved', async () => {
+    const pack = await open();
+    const journal = new Journal(pack);
+    const drag = (value: number): void => journal.dispatch({ label: 'drag', coalesceKey: 'k', ops: [{ op: 'set', file: TYPE, at: '/length', value }] });
+    drag(1);
+    journal.markSaved();
+    drag(2);
+    expect([journal.savePoint, journal.position]).toEqual([1, 2]);
+    journal.undo();
+    expect(journal.atSavePoint).toBe(true);
+    expect((pack.json(TYPE) as { length: number }).length).toBe(1);
+  });
+
   it('rolls back an undo that fails halfway', () => {
     const log: string[] = [];
     const target: OpTarget = {
