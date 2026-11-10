@@ -1,0 +1,42 @@
+/*
+ * The three states of a field in a form over layers (./context.ts `FormLayers`, 2b): the
+ * converter's derived value in grey, a value of the override marked by a bar on the left,
+ * a removed one struck through. Colour is never the only sign: every state has its badge.
+ */
+
+.field-layer-derived > .field-control .field-input,
+.field-layer-derived > .field-control .field-select,
+.field-layer-derived > .field-body .field-input {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.field-layer-set {
+  border-left: 3px solid var(--accent);
+  padding-left: 6px;
+}
+
+.field-layer-removed {
+  border-left: 3px dashed var(--danger);
+  padding-left: 6px;
+}
+
+.field-layer-removed > .field-head .field-name {
+  text-decoration: line-through;
+}
+
+.badge-layer-set {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.badge-layer-removed {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.field-derived {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}

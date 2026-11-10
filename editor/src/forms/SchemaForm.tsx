@@ -12,7 +12,7 @@ import type { Pack } from '../core/pack';
 import type { Schema, SchemaKind } from '../core/schema';
 import { lang, pairText, schemaText, t } from '../i18n';
 import { problemMessage } from '../checks/messages';
-import type { FormContext } from './context';
+import type { FormContext, FormLayers } from './context';
 import { Field } from './Field';
 
 export interface SchemaFormProps {
@@ -29,6 +29,8 @@ export interface SchemaFormProps {
   readOnly?: boolean;
   /** Spatial markup as a summary rather than fields (the inspector until M4). */
   spatialNote?: boolean;
+  /** A form over layers (./context.ts `FormLayers`, 2b): `value` is the result, each field derived, set or removed. */
+  layers?: FormLayers;
   onCommand(command: Command): void;
 }
 
@@ -81,6 +83,7 @@ export function formContext(props: SchemaFormProps): FormContext {
     spatialNote: props.spatialNote === true,
     frameName: (id) => frameNameOf(schema, id),
     commit: (ops: Op[], label: string, field: string) => props.onCommand({ label, labelParams: { field }, ops }),
+    ...(props.layers === undefined ? {} : { layers: props.layers }),
   };
 }
 

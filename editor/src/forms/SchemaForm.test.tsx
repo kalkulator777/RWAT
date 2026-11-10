@@ -8,10 +8,13 @@ import type { Command } from '../core/contracts';
 import { Journal } from '../core/journal';
 import { Pack } from '../core/pack';
 import { MemorySource, readTree } from '../core/pack/testing.node';
+import { formatPointer, getAt, isJsonObject, parsePointer, removeIn, setIn } from '../core/json';
 import { createSchema, type SchemaKind } from '../core/schema';
 import { readSchemaFiles } from '../core/schema/files.node';
 import { setLang } from '../i18n';
+import { canRemove, deepMerge, fieldState } from '../ir/recipe';
 import { EXAMPLE_PACK, REPO_SCHEMA_DIR } from '../testing/repo.node';
+import type { FormLayers } from './context';
 import { SchemaForm } from './SchemaForm';
 
 const COACH = 'data/rwat_example/wagon_types/coach.json';
@@ -236,5 +239,126 @@ describe('a form built from the schema', () => {
     const view = render(<Form file={COACH} kind="wagon_type" readOnly />).container;
     expect(input(view, '/mass_t').disabled).toBe(true);
     expect(view.querySelector('.field-action')).toBeNull();
+  });
+});
+
+describe('a form over layers (an override on top of what the converter derives)', () => {
+  /** What the converter derives, in the shape of an override. */
+  const DERIVED = { type: { length: 20, bogies: [7, -7], mass_t: 40, max_speed_kmh: 120, brakes: { system: 'passenger' } }, model: { obj: 'stock/car/car.obj', sway: 1 } };
+  const top = signal<Record<string, unknown>>({});
+  const calls: string[] = [];
+
+  /** The objects on the way to a place, made where the override has none. */
+  function fill(value: Record<string, unknown>, pointer: string): Record<string, unknown> {
+    const segments = parsePointer(pointer);
+    let root: unknown = value;
+    for (let i = 1; i < segments.length; i++) {
+      const place = segments.slice(0, i);
+      if (!isJsonObject(getAt(root, formatPointer(place)))) root = setIn(root, place, {}).root;
+    }
+    return root as Record<string, unknown>;
+  }
+
+  /** The layers: the override is {@link top}; what the pack gets is the derived value with it merged on top. */
+  const layers: FormLayers = {
+    view: (pointer) => ({ state: fieldState(top.value, pointer).state, derived: getAt(DERIVED, pointer) }),
+    canRemove: (pointer) => canRemove(pointer),
+    set: (pointer, value) => {
+      calls.push(`set ${pointer} ${JSON.stringify(value)}`);
+      top.value = setIn(fill(top.value, pointer), parsePointer(pointer), value).root as Record<string, unknown>;
+    },
+    reset: (pointer) => {
+      calls.push(`reset ${pointer}`);
+      top.value = getAt(top.value, pointer) === undefined ? top.value : (removeIn(top.value, parsePointer(pointer)).root as Record<string, unknown>);
+    },
+    remove: (pointer) => {
+      calls.push(`remove ${pointer}`);
+      top.value = setIn(fill(top.value, pointer), parsePointer(pointer), null).root as Record<string, unknown>;
+    },
+  };
+
+  function Layered() {
+    const section = (key: 'type' | 'model'): Record<string, unknown> => (isJsonObject(top.value[key]) ? (top.value[key]) : {});
+    const merged = { type: deepMerge(DERIVED.type, section('type')), model: deepMerge(DERIVED.model, section('model')) };
+    return <SchemaForm file="packs/r/car.json" kind="recipe_override" value={merged} schema={schema} problems={[]} layers={layers} spatialNote onCommand={() => calls.push('command')} />;
+  }
+
+  beforeEach(() => {
+    top.value = {};
+    calls.length = 0;
+  });
+
+  const state = (container: Element, pointer: string): string | undefined => field(container, pointer).dataset.layer;
+  const badge = (container: Element, pointer: string): string | null | undefined => field(container, pointer).querySelector('.badge-layer')?.textContent;
+  const button = (container: Element, pointer: string, action: string): HTMLElement | null => field(container, pointer).querySelector<HTMLElement>(`.field-head [data-action="${action}"]`);
+
+  it('shows what the pack gets, each field derived, set or removed, and the derived value under one that hides it', async () => {
+    top.value = { type: { mass_t: 33, max_speed_kmh: null } };
+    const { container } = render(<Layered />);
+    expect(input(container, '/type/length').value).toBe('20');
+    expect(state(container, '/type/length')).toBe('derived');
+    expect(badge(container, '/type/length')).toBe('derived');
+    expect(input(container, '/type/mass_t').value).toBe('33');
+    expect(state(container, '/type/mass_t')).toBe('set');
+    expect(badge(container, '/type/mass_t')).toBe('in the override');
+    expect(field(container, '/type/mass_t').querySelector('.field-derived')?.textContent).toBe('Derived by the converter: 40 tonne');
+    expect(input(container, '/type/max_speed_kmh').value).toBe('');
+    expect(state(container, '/type/max_speed_kmh')).toBe('removed');
+    expect(badge(container, '/type/max_speed_kmh')).toBe('removed (null)');
+    // nothing derived and nothing on top: no badge, the engine's value as in a pack's form
+    expect(state(container, '/type/aliases')).toBe('derived');
+    expect(badge(container, '/type/aliases')).toBeUndefined();
+    // the type's engine values are figured from what the pack gets
+    expect(input(container, '/type/brakes/train_kn').placeholder).toBe('33');
+    setLang('ru');
+    await waitFor(() => expect(badge(container, '/type/max_speed_kmh')).toBe('удалено (null)'));
+    expect(badge(container, '/type/length')).toBe('выведено');
+  });
+
+  it('puts an edit on top and offers the way back, never as ops of the file', async () => {
+    const { container } = render(<Layered />);
+    type(input(container, '/type/mass_t'), '50');
+    expect(calls).toEqual(['set /type/mass_t 50']);
+    await waitFor(() => expect(state(container, '/type/mass_t')).toBe('set'));
+    fireEvent.click(button(container, '/type/mass_t', 'reset') as HTMLElement);
+    expect(calls.at(-1)).toBe('reset /type/mass_t');
+    await waitFor(() => expect(state(container, '/type/mass_t')).toBe('derived'));
+    expect(input(container, '/type/mass_t').value).toBe('40');
+    // clearing a field is a reset, not "the engine's value"
+    type(input(container, '/type/mass_t'), '45');
+    await waitFor(() => expect(input(container, '/type/mass_t').value).toBe('45'));
+    type(input(container, '/type/mass_t'), '');
+    expect(calls.at(-1)).toBe('reset /type/mass_t');
+    expect(calls).not.toContain('command');
+  });
+
+  it('removes a derived field where null removes it, and brings it back', async () => {
+    const { container } = render(<Layered />);
+    fireEvent.click(button(container, '/type/max_speed_kmh', 'remove') as HTMLElement);
+    expect(calls).toEqual(['remove /type/max_speed_kmh']);
+    await waitFor(() => expect(state(container, '/type/max_speed_kmh')).toBe('removed'));
+    expect(button(container, '/type/max_speed_kmh', 'remove')).toBeNull();
+    fireEvent.click(button(container, '/type/max_speed_kmh', 'reset') as HTMLElement);
+    await waitFor(() => expect(state(container, '/type/max_speed_kmh')).toBe('derived'));
+    // no "remove" where the converter reads null as "not given": a whole section; nor where nothing is derived
+    expect(container.querySelector('[data-pointer="/type"] > legend [data-action="remove"]')).toBeNull();
+    expect(button(container, '/type/aliases', 'remove')).toBeNull();
+  });
+
+  it('puts a list on top whole: an element typed into, one added, one removed', async () => {
+    const { container } = render(<Layered />);
+    const boxes = () => field(container, '/type/bogies').querySelectorAll<HTMLInputElement>('input');
+    type(boxes()[1] as HTMLInputElement, '-6.5');
+    expect(calls).toEqual(['set /type/bogies/1 -6.5']);
+    calls.length = 0;
+    top.value = { type: { bogies: [7, -6.5] } };
+    await waitFor(() => expect(boxes()[1]?.value).toBe('-6.5'));
+    // the elements have no state of their own: the list is one value on top
+    expect(state(container, '/type/bogies')).toBe('set');
+    expect(field(container, '/type/bogies/0').dataset.layer).toBeUndefined();
+    type(boxes()[2] as HTMLInputElement, '0');
+    expect(calls).toEqual(['set /type/bogies [7,-6.5,0]']);
+    fireEvent.click(field(container, '/type/bogies').querySelector('.field-remove') as HTMLElement);
+    expect(calls.at(-1)).toBe('set /type/bogies [-6.5,0]');
   });
 });

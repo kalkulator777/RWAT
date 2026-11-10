@@ -44,6 +44,15 @@ describe("the engine's value of an empty field", () => {
     expect(engineDefault('wagon_model', '/bogies', {})).toBeUndefined();
   });
 
+  it('figures the type section of a conversion override as a wagon type', () => {
+    const override = { type: { mass_t: 50, brakes: { system: 'passenger' }, cab: {} } };
+    expect(engineDefault('recipe_override', '/type/brakes/train_kn', override)).toBeCloseTo(50, 9);
+    expect(engineDefault('recipe_override', '/type/resistance/a', override)).toBeCloseTo(550, 9);
+    expect(engineDefault('recipe_override', '/type/brakes/apply_s', { type: {} })).toBe(4);
+    expect(engineDefault('recipe_override', '/model/sway', override)).toBeUndefined();
+    expect(engineDefault('recipe_override', '/type/brakes/apply_s', {})).toBeUndefined();
+  });
+
   it('figures the brakes that do not depend on the brake system with an unknown one', () => {
     const type = { mass_t: 10, brakes: { system: 'magnetic' }, cab: {} };
     expect(engineDefault('wagon_type', '/brakes/independent_kn', type)).toBeCloseTo(7, 9);

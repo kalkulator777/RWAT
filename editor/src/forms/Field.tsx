@@ -12,6 +12,14 @@
  * figured, ./engineDefaults.ts), and the findings that point at it. An edit is a command of
  * the journal (`ctx.commit`); clearing a field removes its key, so the engine's value
  * applies again — an explicit 0 is not an empty field.
+ *
+ * A form over layers (`ctx.layers`, ./context.ts `FormLayers`; 2b: an IR type's override
+ * on top of what the converter derives) shows what the pack gets, and every field says
+ * which of three states it is in: derived (the converter's value, in grey), set in the
+ * override (marked, with "back to derived") or removed (`null`, offered only where the
+ * converter drops what it derived for a null). Its edits go to the layer, not into the
+ * file as ops: clearing a field resets it, a list is put on top whole, and the per-field
+ * reset buttons give way to the layer's own.
  */
 
 import type { ComponentChildren } from 'preact';
@@ -19,11 +27,12 @@ import { useState } from 'preact/hooks';
 import { fitsType, isSpatial, variantOf } from '../checks/fields';
 import { problemMessage } from '../checks/messages';
 import type { Op, Problem } from '../core/contracts';
-import { childPointer, getAt, isJsonObject } from '../core/json';
+import { childPointer, formatPointer, getAt, isJsonObject, parsePointer } from '../core/json';
 import type { FieldDescriptor } from '../core/schema';
 import { formatNumber, formatQuantity, lang, pairText, t } from '../i18n';
-import type { FormContext } from './context';
+import type { FormContext, LayerState } from './context';
 import { engineDefault } from './engineDefaults';
+import './layers.css';
 import { blankOf, looseText, numberText, parseLoose, parseNumber, removeOps, renameKeyOps, setOps } from './values';
 
 interface FieldProps {
@@ -60,12 +69,80 @@ function commitOps(ctx: FormContext, ops: Op[], label: string, at: string): void
   if (ops.length > 0) ctx.commit(ops, label, fieldName(at));
 }
 
-function set(ctx: FormContext, at: string, value: unknown): void {
-  commitOps(ctx, setOps(ctx.file, ctx.root, at, value), 'forms.command.set', at);
+/** Puts a value at the field: a set of the file, or onto the layer on top in a layered form. */
+function set(ctx: FormContext, at: string, value: unknown, label = 'forms.command.set'): void {
+  if (ctx.layers !== undefined) ctx.layers.set(at, value);
+  else commitOps(ctx, setOps(ctx.file, ctx.root, at, value), label, at);
 }
 
+/** Clears the field: its key out of the file (the engine's value applies), or in a layered form back to the derived value. */
 function clear(ctx: FormContext, at: string): void {
-  commitOps(ctx, removeOps(ctx.file, ctx.root, at), 'forms.command.remove', at);
+  if (ctx.layers !== undefined) ctx.layers.reset(at);
+  else commitOps(ctx, removeOps(ctx.file, ctx.root, at), 'forms.command.remove', at);
+}
+
+/** Adds an element at the end of a list (`list` is the field's value now, undefined: none yet); a layered form puts the whole list on top. */
+function append(ctx: FormContext, at: string, list: unknown, value: unknown): void {
+  if (!Array.isArray(list)) set(ctx, at, [value]);
+  else if (ctx.layers !== undefined) ctx.layers.set(at, [...(list as unknown[]), value]);
+  else commitOps(ctx, [{ op: 'insert', file: ctx.file, at: childPointer(at, '-'), value }], 'forms.command.add', at);
+}
+
+/** Removes element `index` of a list: its place out of the file, or in a layered form the list without it put on top. */
+function removeItem(ctx: FormContext, at: string, list: readonly unknown[], index: number): void {
+  if (ctx.layers !== undefined) ctx.layers.set(at, list.filter((_, i) => i !== index));
+  else clear(ctx, childPointer(at, index));
+}
+
+/** The field's place in the layers of a layered form; null in a plain one. */
+function layerOf(ctx: FormContext, at: string): { state: LayerState; derived: unknown; canRemove: boolean } | null {
+  const layers = ctx.layers;
+  if (layers === undefined || at === '') return null;
+  const segments = parsePointer(at);
+  if (Array.isArray(getAt(ctx.root, formatPointer(segments.slice(0, -1))))) return null; // a list is one value on top: its elements have no state of their own
+  const { state, derived } = layers.view(at);
+  return { state, derived, canRemove: layers.canRemove(at) };
+}
+
+/** A derived value as the note under a field says it: a number with its unit, a flag in words, anything else as JSON. */
+function derivedText(value: unknown, unit: string): string {
+  if (typeof value === 'number') return formatQuantity(value, unit);
+  if (typeof value === 'boolean') return t(value ? 'forms.true' : 'forms.false');
+  if (typeof value === 'string') return value;
+  return JSON.stringify(value);
+}
+
+/**
+ * What a layered form says of a field: a badge of its state (the derived one only where
+ * there is a derived value, and not on a group, whose fields have their own), the derived
+ * value when the layer on top hides it, and the buttons that move the field between its
+ * states — back to the derived value, and `null` where that removes it.
+ */
+function layerParts(layer: NonNullable<ReturnType<typeof layerOf>>, at: string, ctx: FormContext, label: string, unit: string, group: boolean) {
+  const { state, derived } = layer;
+  const shown = state !== 'derived' || (!group && derived !== undefined);
+  const badge = shown ? (
+    <span class={`field-badge badge-layer badge-layer-${state}`} data-layer={state} title={t(`forms.layer.${state}.hint`)}>
+      {t(`forms.layer.${state}`)}
+    </span>
+  ) : null;
+  const buttons =
+    ctx.readOnly ? null : (
+      <>
+        {state !== 'derived' && (
+          <button type="button" class="field-action" data-action="reset" aria-label={t('forms.layer.reset.label', { field: label })} onClick={() => ctx.layers?.reset(at)}>
+            {t(state === 'removed' ? 'forms.layer.restore' : 'forms.layer.reset')}
+          </button>
+        )}
+        {state !== 'removed' && layer.canRemove && derived !== undefined && (
+          <button type="button" class="field-action" data-action="remove" aria-label={t('forms.layer.remove.label', { field: label })} onClick={() => ctx.layers?.remove(at)}>
+            {t('forms.layer.remove')}
+          </button>
+        )}
+      </>
+    );
+  const note = state !== 'derived' && derived !== undefined && !group ? <p class="field-derived">{t('forms.layer.derivedValue', { value: derivedText(derived, unit) })}</p> : null;
+  return { badge, buttons, note };
 }
 
 /** The findings at the field, or at it and anything inside it. */
@@ -161,6 +238,8 @@ function FieldShell(props: ShellProps) {
   const severity = problems.some((p) => p.severity === 'error') ? 'error' : problems.some((p) => p.severity === 'warning') ? 'warning' : null;
   const help = pairText(d.description, lang.value);
   const fallback = defaultLine(d, at, ctx);
+  const layer = layerOf(ctx, at);
+  const parts = layer === null ? null : layerParts(layer, at, ctx, label, unitOf(d), props.group === true);
   const head = (
     <>
       <span class="field-name">{label}</span>
@@ -170,11 +249,22 @@ function FieldShell(props: ShellProps) {
         </abbr>
       )}
       <Badges d={d} ctx={ctx} />
+      {parts?.badge}
     </>
   );
+  const actions =
+    parts === null ? (
+      props.actions
+    ) : (
+      <>
+        {parts.buttons}
+        {props.actions}
+      </>
+    );
   const notes = (
     <div class="field-notes" id={`${id}-notes`}>
       {props.note}
+      {parts?.note}
       {fallback !== undefined && <p class="field-default">{fallback}</p>}
       {d.status && (
         <p class="field-status-note">{sentence(pairText(d.status.note, lang.value) || pairText(d.status.meaning, lang.value) || '')}</p>
@@ -184,13 +274,13 @@ function FieldShell(props: ShellProps) {
       {help !== undefined && <p class="field-help">{help}</p>}
     </div>
   );
-  const classes = `field field-${d.shape}${severity ? ` field-has-${severity}` : ''}`;
+  const classes = `field field-${d.shape}${severity ? ` field-has-${severity}` : ''}${layer === null ? '' : ` field-layer-${layer.state}`}`;
   if (props.group === true) {
     return (
-      <fieldset class={`${classes} field-group`} data-pointer={at} aria-describedby={`${id}-notes`}>
+      <fieldset class={`${classes} field-group`} data-pointer={at} data-layer={layer?.state} aria-describedby={`${id}-notes`}>
         <legend class="field-head">
           {head}
-          {props.actions}
+          {actions}
         </legend>
         {notes}
         <div class="field-body">{props.children}</div>
@@ -198,10 +288,10 @@ function FieldShell(props: ShellProps) {
     );
   }
   return (
-    <div class={classes} data-pointer={at}>
+    <div class={classes} data-pointer={at} data-layer={layer?.state}>
       <div class="field-head">
         <label for={id}>{head}</label>
-        {props.actions}
+        {actions}
       </div>
       <div class="field-control">{props.children}</div>
       {notes}
@@ -376,7 +466,7 @@ function BooleanField(props: FieldProps) {
   const value = getAt(ctx.root, at);
   const effective = typeof value === 'boolean' ? value : d.hasDefault && d.default === true;
   const reset =
-    value !== undefined && !ctx.readOnly ? (
+    value !== undefined && !ctx.readOnly && ctx.layers === undefined ? (
       <button type="button" class="field-action" aria-label={t('forms.reset.label', { field: label })} onClick={() => clear(ctx, at)}>
         {t('forms.reset')}
       </button>
@@ -425,7 +515,7 @@ function TupleField(props: FieldProps & { size: number }) {
   const whole = list !== null && list.length === size;
   const unit = unitOf(d) || unitOf(items);
   const clearButton =
-    value !== undefined && !ctx.readOnly && props.bare !== true ? (
+    value !== undefined && !ctx.readOnly && props.bare !== true && ctx.layers === undefined ? (
       <button type="button" class="field-action" aria-label={t('forms.reset.label', { field: label })} onClick={() => clear(ctx, at)}>
         {t('forms.reset')}
       </button>
@@ -491,7 +581,7 @@ function ScalarListField(props: FieldProps) {
                 invalid={hasErrors(ctx, itemAt)}
                 onCommit={(text) => {
                   if (text.trim() === '') {
-                    clear(ctx, itemAt);
+                    removeItem(ctx, at, list, i);
                     return null;
                   }
                   const parsed = parseScalar(items, text);
@@ -501,7 +591,7 @@ function ScalarListField(props: FieldProps) {
                 }}
               />
               {!ctx.readOnly && (
-                <button type="button" class="field-remove" aria-label={t('forms.list.remove', { field: label, index: i })} onClick={() => clear(ctx, itemAt)}>
+                <button type="button" class="field-remove" aria-label={t('forms.list.remove', { field: label, index: i })} onClick={() => removeItem(ctx, at, list, i)}>
                   ×
                 </button>
               )}
@@ -523,8 +613,7 @@ function ScalarListField(props: FieldProps) {
                 if (text.trim() === '') return null;
                 const parsed = parseScalar(items, text);
                 if ('error' in parsed) return parsed.error;
-                if (Array.isArray(value)) commitOps(ctx, [{ op: 'insert', file: ctx.file, at: childPointer(at, '-'), value: parsed.value }], 'forms.command.add', at);
-                else set(ctx, at, [parsed.value]);
+                append(ctx, at, value, parsed.value);
                 return null;
               }}
             />
@@ -549,7 +638,7 @@ function ObjectListField(props: FieldProps) {
         <div key={i} class="field-entry">
           <Field d={items} at={childPointer(at, i)} ctx={ctx} label={t('forms.list.item', { field: label, index: i })} />
           {!ctx.readOnly && (
-            <button type="button" class="field-remove" aria-label={t('forms.list.remove', { field: label, index: i })} onClick={() => clear(ctx, childPointer(at, i))}>
+            <button type="button" class="field-remove" aria-label={t('forms.list.remove', { field: label, index: i })} onClick={() => removeItem(ctx, at, list, i)}>
               ×
             </button>
           )}
@@ -560,9 +649,7 @@ function ObjectListField(props: FieldProps) {
           type="button"
           class="field-action"
           onClick={() => {
-            const blank = blankOf(items.types);
-            if (Array.isArray(value)) commitOps(ctx, [{ op: 'insert', file: ctx.file, at: childPointer(at, '-'), value: blank }], 'forms.command.add', at);
-            else set(ctx, at, [blank]);
+            append(ctx, at, value, blankOf(items.types));
           }}
         >
           {t('forms.list.addItem', { field: label })}
@@ -597,14 +684,15 @@ function DictField(props: FieldProps) {
     setError(null);
     setNewKey('');
     setNewValue('');
-    commitOps(ctx, setOps(ctx.file, ctx.root, childPointer(at, key), item), 'forms.command.add', at);
+    if (ctx.layers !== undefined) ctx.layers.set(childPointer(at, key), item);
+    else commitOps(ctx, setOps(ctx.file, ctx.root, childPointer(at, key), item), 'forms.command.add', at);
   };
   return (
     <FieldShell {...props} id={id} group>
       {keys.map((key) => (
         <div key={key} class="field-entry">
           <Field d={values} at={childPointer(at, key)} ctx={ctx} label={key} />
-          {!ctx.readOnly && (
+          {!ctx.readOnly && ctx.layers === undefined && (
             <button type="button" class="field-remove" aria-label={t('forms.dict.remove', { key })} onClick={() => clear(ctx, childPointer(at, key))}>
               ×
             </button>
@@ -671,7 +759,7 @@ function UnknownKeys({ d, at, ctx, value }: { d: FieldDescriptor; at: string; ct
             <li key={key} data-pointer={place}>
               <code>{key}</code>
               <ProblemList list={findings} ctx={ctx} />
-              {!ctx.readOnly && nearest !== undefined && !Object.hasOwn(value, nearest) && (
+              {!ctx.readOnly && ctx.layers === undefined && nearest !== undefined && !Object.hasOwn(value, nearest) && (
                 <button type="button" class="field-action" onClick={() => commitOps(ctx, renameKeyOps(ctx.file, ctx.root, at, key, nearest), 'forms.command.rename', place)}>
                   {t('forms.unknown.rename', { key, nearest })}
                 </button>
@@ -708,7 +796,7 @@ function ObjectField(props: FieldProps) {
     <button type="button" class="field-action" onClick={() => set(ctx, at, {})}>
       {t('forms.section.add', { field: label })}
     </button>
-  ) : d.required ? null : (
+  ) : d.required || ctx.layers !== undefined ? null : (
     <button type="button" class="field-action" onClick={() => clear(ctx, at)}>
       {t('forms.section.remove', { field: label })}
     </button>

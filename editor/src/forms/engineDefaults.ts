@@ -8,6 +8,8 @@
  * named in the file (the default one when it names none), a cab when the `cab` section is
  * there. Unlike the parser, the form figures what it can from a file that does not load
  * yet: the brakes that do not depend on the brake system are shown with an unknown one.
+ * The `type` section of a conversion override is figured as a wagon type: a form over
+ * layers (2b) shows the type the pack gets there.
  */
 
 import type { JsonPointer } from '../core/contracts';
@@ -48,6 +50,8 @@ const WAGON_TYPE_CONSTANT: Record<JsonPointer, (type: Record<string, unknown>) =
  * editor can figure (no mass yet, an unknown brake system, a default that needs the model).
  */
 export function engineDefault(kind: SchemaKind, at: JsonPointer, root: unknown): number | undefined {
+  // a conversion override's `type` is a wagon type (a form over layers shows the merged one there)
+  if (kind === 'recipe_override') return isJsonObject(root) && at.startsWith('/type/') ? engineDefault('wagon_type', at.slice('/type'.length), root.type) : undefined;
   if (kind !== 'wagon_type' || !isJsonObject(root)) return undefined;
   const constant = WAGON_TYPE_CONSTANT[at];
   if (constant !== undefined) return constant(root);
@@ -64,5 +68,5 @@ export const FIGURED_DEFAULTS: Readonly<Record<SchemaKind, readonly JsonPointer[
   rail_model: [],
   pack_mcmeta_rwat: [],
   recipe: [],
-  recipe_override: [],
+  recipe_override: [...Object.keys(WAGON_TYPE), ...Object.keys(WAGON_TYPE_CONSTANT)].map((at) => `/type${at}`),
 };

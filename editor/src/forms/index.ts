@@ -4,7 +4,7 @@
  * journal's commands.
  */
 
-export type { FormContext } from './context';
+export type { FormContext, FormLayers, LayerState } from './context';
 export { engineDefault, FIGURED_DEFAULTS } from './engineDefaults';
 export { Field, fieldId } from './Field';
 export { formContext, problemsByField, SchemaForm, type SchemaFormProps } from './SchemaForm';
