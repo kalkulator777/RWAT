@@ -1,0 +1,102 @@
+/* The save dialog, the restore question and the rename dialog (app/save). */
+
+.save-dialog {
+  width: min(56em, calc(100vw - 32px));
+}
+
+.save-list-title {
+  margin: 4px 0 0;
+  font-size: 13px;
+}
+
+.save-changes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 50vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.save-change + .save-change {
+  border-top: 1px solid var(--border);
+}
+
+.save-change-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 8px;
+}
+
+.save-status {
+  flex: none;
+  min-width: 6em;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.save-status-new {
+  color: var(--accent);
+}
+
+.save-status-deleted {
+  color: var(--danger);
+}
+
+.save-path {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.save-lines {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.save-diff {
+  margin: 0 8px 8px;
+  padding: 6px 8px;
+  max-height: 40vh;
+  overflow: auto;
+  background: var(--surface-sunken);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre;
+}
+
+/* added and removed lines are told by their mark (+ or −) as well as by the colour */
+.save-diff-add {
+  color: var(--accent);
+}
+
+.save-diff-del {
+  color: var(--danger);
+}
+
+.save-diff-skip,
+.save-diff-same {
+  color: var(--text-muted);
+}
+
+.save-report ul,
+.save-changed-files {
+  margin: 0;
+  padding-left: 18px;
+  overflow-wrap: anywhere;
+}
+
+.save-report p {
+  margin: 0 0 4px;
+}
+
+.inspector-rename {
+  align-self: flex-start;
+}
