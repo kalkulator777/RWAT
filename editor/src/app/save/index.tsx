@@ -2,7 +2,7 @@
  * Saving and the session (editor.md §2.5 steps 3–4, §3.6, M5): the save dialog with the
  * list of changes, writing into the folder or a zip, the save point in the window's title
  * and the warning when a tab with unsaved work closes, the session kept in IndexedDB and
- * offered for restoring at start.
+ * offered for restoring at start, and renaming a wagon with its old id kept in `aliases`.
  */
 
 import { effect } from '@preact/signals';
@@ -15,6 +15,7 @@ import { SaveDialog } from './SaveDialog';
 import { saveDialogOpen } from './state';
 import './save.css';
 
+export { RenameTypeButton } from './RenameType';
 export { keeperStatus, openSaveDialog, saveDialogOpen } from './state';
 
 /** The window's title: a mark while there are unsaved changes, the pack's name, the editor's. */

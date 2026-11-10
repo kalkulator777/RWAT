@@ -10,7 +10,7 @@ import { FakeDirectory } from '../../io/testPack.node';
 import { EXAMPLE_PACK } from '../../testing/repo.node';
 import { installShortcuts, openSource } from '../session';
 import { failure, journal, pack, revision, schema, selection } from '../store';
-import { SaveDialogs, startSave, windowTitle } from '.';
+import { RenameTypeButton, SaveDialogs, startSave, windowTitle } from '.';
 import { sessionSettled, useSessionStore } from './keep';
 import { SaveDialog } from './SaveDialog';
 import { restoreState, saveDialogOpen, saveReport } from './state';
@@ -197,5 +197,20 @@ describe('the page around saving', () => {
     expect(screen.getByTestId('restore-dialog').textContent).toContain('open the same zip “Big.zip”');
     fireEvent.click(screen.getByTestId('restore-discard'));
     await waitFor(() => expect(restoreState.value).toBeNull());
+  });
+
+  it('renames a wagon from its button: one command, the selection on the new file', async () => {
+    await openSource(new MemorySource(files, 'RwatExamplePack'));
+    render(<RenameTypeButton id="rwat_example:coach" />);
+    fireEvent.click(screen.getByTestId('rename-wagon'));
+    const input = await screen.findByLabelText('New id');
+    fireEvent.input(input, { target: { value: 'other:coach' } });
+    fireEvent.click(screen.getByTestId('rename-submit'));
+    expect((await screen.findByTestId('rename-errors')).textContent).toContain('does not change the namespace');
+    fireEvent.input(input, { target: { value: 'rwat_example:car' } });
+    fireEvent.click(screen.getByTestId('rename-submit'));
+    await waitFor(() => expect(selection.value).toEqual([{ kind: 'file', file: 'data/rwat_example/wagon_types/car.json' }]));
+    expect(journal.value?.state().done).toHaveLength(1);
+    expect(screen.queryByTestId('rename-dialog')).toBeNull();
   });
 });

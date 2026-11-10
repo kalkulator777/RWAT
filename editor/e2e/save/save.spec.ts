@@ -10,7 +10,8 @@
  *   real dialog, and an OPFS handle is a real `FileSystemDirectoryHandle`, written through
  *   `createWritable` like a folder on disk. Only the changed file is written; after a
  *   reload a saved session is not offered, an unsaved one is. Restoring from the handle
- *   itself is not driven here (see the test).
+ *   itself is not driven here (see the test);
+ * - a wagon renamed through the inspector and undone.
  */
 
 import { createHash } from 'node:crypto';
@@ -244,4 +245,24 @@ test('a folder: only the changed file written in place; after a reload the sessi
   await expect(page.getByTestId('restore-dialog')).toHaveCount(0);
   expect(await folderText(page, COACH)).toContain('"mass_t": 45.0,');
   expect(errors).toEqual([]);
+});
+
+test('a wagon renamed: one step, the old id in aliases, undone to the files as they were', async ({ page }) => {
+  await page.goto('./');
+  await openPack(page);
+  await page.getByTestId('tree').locator(`[data-file="${COACH}"]`).first().click();
+  await page.getByTestId('rename-wagon').click();
+  const dialog = page.getByTestId('rename-dialog');
+  await dialog.getByLabel('New id').fill('rwat_example:car');
+  await dialog.getByTestId('rename-submit').click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByTestId('inspector')).toHaveAttribute('data-file', 'data/rwat_example/wagon_types/car.json');
+  await expect(page.locator('[data-stock="rwat_example:car"]')).toBeVisible();
+  await expect(page.getByTestId('inspector').locator('[data-pointer="/aliases/0"] input').first()).toHaveValue('rwat_example:coach');
+  await page.getByTestId('save').click();
+  await expect(page.getByTestId('save-dialog').locator('[data-path]')).toHaveCount(6);
+  await page.getByTestId('save-close').click();
+  await page.getByTestId('undo').click();
+  await expect(page.locator('[data-stock="rwat_example:coach"]')).toBeVisible();
+  await expect(page.getByTestId('save')).toHaveText('Save');
 });
