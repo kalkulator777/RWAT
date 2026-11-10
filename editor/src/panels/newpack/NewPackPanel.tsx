@@ -6,7 +6,7 @@ import { dirtyCount, pack, schema, selection } from '../../app/store';
 import { MCMETA, typePath } from '../../core/pack';
 import { t } from '../../i18n';
 import { NAME_LANGS } from '../names/model';
-import { addWagonCommand, checkNewPack, modelFolder, newPackSource, packNamespaces, type NewPackInput, type PickedFile, type WizardError } from './model';
+import { addFilesCommand, addWagonCommand, checkNewPack, modelFolder, newPackSource, packNamespaces, type NewPackInput, type PickedFile, type WizardError } from './model';
 
 /** The namespace the last new pack was made with: the wagon dialog offers it while the pack has no files under it yet. */
 const lastNamespace = signal('');
@@ -184,24 +184,7 @@ function AddWagonDialog({ onClose }: { onClose: () => void }) {
       </datalist>
       <Input name="id" label={t('newpack.wagon.id')} hint={t('newpack.wagon.idHint')} value={id} onInput={setId} mono />
       <Input name="folder" label={t('newpack.wagon.folder')} hint={t('newpack.wagon.folderHint', { folder: modelFolder({ folder: '', id: id || '<id>' }) })} value={folder} onInput={setFolder} mono />
-      <div class="dialog-field">
-        <label class="dialog-label" for="newpack-files">
-          {t('newpack.wagon.files')}
-        </label>
-        <input
-          id="newpack-files"
-          type="file"
-          name="files"
-          class="dialog-input"
-          accept=".obj,.mtl,.png,.anim,.ogg"
-          multiple
-          aria-describedby="newpack-files-hint"
-          onChange={(event) => setFiles([...(event.currentTarget.files ?? [])])}
-        />
-        <span class="dialog-hint" id="newpack-files-hint">
-          {t('newpack.wagon.filesHint')}
-        </span>
-      </div>
+      <FilesInput label={t('newpack.wagon.files')} hint={t('newpack.wagon.filesHint')} accept=".obj,.mtl,.png,.anim,.ogg" onPick={setFiles} />
       <fieldset class="dialog-group">
         <legend>{t('newpack.wagon.required')}</legend>
         <Input name="length" label={t('newpack.wagon.length')} value={numbers.length} onInput={number('length')} mono />
@@ -220,24 +203,82 @@ function AddWagonDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
+/** A file input that takes several files; `accept` narrows the browser's picker. */
+function FilesInput(props: { label: string; hint: string; accept?: string; onPick: (files: File[]) => void }) {
+  return (
+    <div class="dialog-field">
+      <label class="dialog-label" for="newpack-files">
+        {props.label}
+      </label>
+      <input
+        id="newpack-files"
+        type="file"
+        name="files"
+        class="dialog-input"
+        accept={props.accept}
+        multiple
+        aria-describedby="newpack-files-hint"
+        onChange={(event) => props.onPick([...(event.currentTarget.files ?? [])])}
+      />
+      <span class="dialog-hint" id="newpack-files-hint">
+        {props.hint}
+      </span>
+    </div>
+  );
+}
+
+function AddFilesDialog({ onClose }: { onClose: () => void }) {
+  const open = pack.value;
+  const namespaces = open === null ? [] : packNamespaces(open);
+  const namespace = namespaces[0] ?? lastNamespace.value;
+  const [folder, setFolder] = useState(namespace === '' ? '' : `assets/${namespace}/`);
+  const [files, setFiles] = useState<File[]>([]);
+  const [errors, setErrors] = useState<WizardError[]>([]);
+  const [busy, setBusy] = useState(false);
+  const add = async (): Promise<void> => {
+    if (open === null) return;
+    setBusy(true);
+    const result = addFilesCommand(open, { folder, files: await readPicked(files) });
+    if ('errors' in result) {
+      setBusy(false);
+      return setErrors(result.errors);
+    }
+    const done = await run(result.command);
+    setBusy(false);
+    if (done) onClose();
+  };
+  return (
+    <Dialog title={t('newpack.files.title')} testId="add-files-dialog" onClose={onClose} onSubmit={() => void add()} submit={t('newpack.files.add')} busy={busy}>
+      <Input name="folder" label={t('newpack.files.folder')} hint={t('newpack.files.folderHint')} value={folder} onInput={setFolder} mono />
+      <FilesInput label={t('newpack.files.files')} hint={t('newpack.files.filesHint')} onPick={setFiles} />
+      <Errors list={errors} />
+    </Dialog>
+  );
+}
+
 /**
- * "New pack" and "Add wagon" in the top bar (editor.md §2.1, steps 1–2): a dialog each.
- * A new pack replaces the open one (unsaved changes are warned about); a wagon is added
- * to the open pack as one command, so undo takes it back.
+ * "New pack", "Add wagon" and "Add files" in the top bar (editor.md §2.1, steps 1–2): a
+ * dialog each. A new pack replaces the open one (unsaved changes are warned about); a
+ * wagon and files are added to the open pack as one command each, so undo takes it back.
  */
 export function NewPackPanel() {
-  const [dialog, setDialog] = useState<'pack' | 'wagon' | null>(null);
+  const [dialog, setDialog] = useState<'pack' | 'wagon' | 'files' | null>(null);
   const open = pack.value;
+  const closed = open === null || open.readOnly;
   return (
     <div class="file-actions">
       <button type="button" data-testid="new-pack" onClick={() => setDialog('pack')}>
         {t('newpack.newPack')}
       </button>
-      <button type="button" data-testid="add-wagon" disabled={open === null || open.readOnly} onClick={() => setDialog('wagon')}>
+      <button type="button" data-testid="add-wagon" disabled={closed} onClick={() => setDialog('wagon')}>
         {t('newpack.addWagon')}
+      </button>
+      <button type="button" data-testid="add-files" disabled={closed} onClick={() => setDialog('files')}>
+        {t('newpack.addFiles')}
       </button>
       {dialog === 'pack' && <NewPackDialog onClose={() => setDialog(null)} />}
       {dialog === 'wagon' && <AddWagonDialog onClose={() => setDialog(null)} />}
+      {dialog === 'files' && <AddFilesDialog onClose={() => setDialog(null)} />}
     </div>
   );
 }

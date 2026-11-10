@@ -12,12 +12,16 @@
  *   its required fields, the model `assets/<ns>/wagon_models/<id>.json` naming the OBJ,
  *   and its names if given. A file name Minecraft would not load (capitals, spaces) is
  *   refused with the list of such files, as is anything that is there already.
+ * - **Files added** to a folder of the pack — textures shared by several models
+ *   (`assets/<ns>/stock/common/`), a livery's folder beside an OBJ, the pack's `README.md`,
+ *   `LICENSE.txt` and `pack.png` at its root — are one command too, refused the same way.
  */
 
 import { isBadResourcePath } from '../../checks/loader';
 import type { Command, FileEntry, Op, PackSource } from '../../core/contracts';
 import { dumpBytes } from '../../core/json';
 import { MCMETA, SUPPORTED_FORMAT, modelPath, putJson, typePath, wagonNameKey, type Pack } from '../../core/pack';
+import { packPathProblem } from '../../core/paths';
 import type { Schema } from '../../core/schema';
 import { parseNumber } from '../../forms/values';
 import { nameOps } from '../names/model';
@@ -145,6 +149,20 @@ export function packNamespaces(pack: Pack): string[] {
   return [...found].sort();
 }
 
+/**
+ * The pack paths of files put into `base` (a folder of the pack, '' for its root) by their
+ * names; what is wrong with them goes into `errors`: names Minecraft would not load under
+ * `assets/` and `data/` (capitals, spaces), files the pack has already.
+ */
+function placedPaths(pack: Pack, base: string, files: readonly PickedFile[], errors: WizardError[]): string[] {
+  const paths = files.map((file) => (base === '' ? file.name : `${base}/${file.name}`));
+  const badNames = paths.filter(isBadResourcePath);
+  if (badNames.length > 0) errors.push({ key: 'newpack.error.fileNames', params: { files: badNames.join(', ') } });
+  const taken = paths.filter((path) => pack.has(path));
+  if (taken.length > 0) errors.push({ key: 'newpack.error.filesTaken', params: { files: taken.join(', ') } });
+  return paths;
+}
+
 /** The command that adds the wagon, or why it cannot be added. */
 export function addWagonCommand(pack: Pack, input: AddWagonInput, schema: Schema): { command: Command } | { errors: WizardError[] } {
   const errors: WizardError[] = [];
@@ -158,11 +176,7 @@ export function addWagonCommand(pack: Pack, input: AddWagonInput, schema: Schema
   if (folder.split('/').some((part) => part === '' || part === '.' || part === '..')) errors.push({ key: 'newpack.error.folder', params: { folder } });
   const objs = input.files.filter((file) => file.name.toLowerCase().endsWith('.obj'));
   if (objs.length !== 1) errors.push({ key: 'newpack.error.obj', params: { count: objs.length } });
-  const paths = input.files.map((file) => `assets/${namespace}/${folder}/${file.name}`);
-  const badNames = paths.filter(isBadResourcePath);
-  if (badNames.length > 0) errors.push({ key: 'newpack.error.fileNames', params: { files: badNames.join(', ') } });
-  const taken = paths.filter((path) => pack.has(path));
-  if (taken.length > 0) errors.push({ key: 'newpack.error.filesTaken', params: { files: taken.join(', ') } });
+  const paths = placedPaths(pack, `assets/${namespace}/${folder}`, input.files, errors);
 
   const number = (text: string, field: string, check: (n: number) => boolean): number => {
     const parsed = parseNumber(text);
@@ -186,4 +200,27 @@ export function addWagonCommand(pack: Pack, input: AddWagonInput, schema: Schema
     if (text.trim() !== '') ops.push(...nameOps(pack, key, namespace, lang, text.trim()));
   }
   return { command: { label: 'newpack.command.addWagon', labelParams: { id }, ops } };
+}
+
+export interface AddFilesInput {
+  /** The folder of the pack the files go into, from its root: `assets/<ns>/stock/common`; empty for the root itself. */
+  folder: string;
+  files: readonly PickedFile[];
+}
+
+/** The folder the input names, without slashes at its ends ('' for the pack's root). */
+export function filesFolder(input: Pick<AddFilesInput, 'folder'>): string {
+  return input.folder.trim().replace(/^\/+|\/+$/g, '');
+}
+
+/** The command that puts the files into the folder, or why they cannot be added. */
+export function addFilesCommand(pack: Pack, input: AddFilesInput): { command: Command } | { errors: WizardError[] } {
+  const errors: WizardError[] = [];
+  const folder = filesFolder(input);
+  if (folder !== '' && packPathProblem(folder) !== null) errors.push({ key: 'newpack.error.folder', params: { folder } });
+  if (input.files.length === 0) errors.push({ key: 'newpack.error.noFiles' });
+  const paths = placedPaths(pack, folder, input.files, errors);
+  if (errors.length > 0) return { errors };
+  const ops: Op[] = input.files.map((file, i) => ({ op: 'putFile', file: paths[i] as string, bytes: file.bytes }));
+  return { command: { label: 'newpack.command.addFiles', labelParams: { count: ops.length, folder: folder === '' ? '/' : folder }, ops } };
 }

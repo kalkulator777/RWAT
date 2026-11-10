@@ -4,7 +4,7 @@ import { Journal } from '../../core/journal';
 import { Pack } from '../../core/pack';
 import { createSchema } from '../../core/schema';
 import { readSchemaFiles } from '../../core/schema/files.node';
-import { addWagonCommand, checkNewPack, newPackMeta, newPackSource, type AddWagonInput, type NewPackInput } from './model';
+import { addFilesCommand, addWagonCommand, checkNewPack, newPackMeta, newPackSource, type AddWagonInput, type NewPackInput } from './model';
 
 const schema = createSchema(readSchemaFiles());
 const encoder = new TextEncoder();
@@ -112,5 +112,40 @@ describe('a new wagon', () => {
     });
     expect(addWagonCommand(pack, { ...WAGON, files: [] }, schema)).toEqual({ errors: [{ key: 'newpack.error.obj', params: { count: 0 } }] });
     expect(addWagonCommand(pack, { ...WAGON, folder: 'a/../b' }, schema)).toEqual({ errors: [{ key: 'newpack.error.folder', params: { folder: 'a/../b' } }] });
+  });
+});
+
+describe('files added', () => {
+  const png = { name: 'steel.png', bytes: new Uint8Array([137, 80, 78, 71]) };
+
+  it('are one command putting them into a folder of the pack or its root; undo takes them back', async () => {
+    const pack = await Pack.open(newPackSource(PACK));
+    const journal = new Journal(pack);
+    const shared = addFilesCommand(pack, { folder: ' /assets/my_trains/stock/common/ ', files: [png, { name: 'wheel.png', bytes: new Uint8Array([1]) }] });
+    if (!('command' in shared)) throw new Error(JSON.stringify(shared.errors));
+    expect(shared.command).toMatchObject({ label: 'newpack.command.addFiles', labelParams: { count: 2, folder: 'assets/my_trains/stock/common' } });
+    await journal.run(shared.command);
+    const root = addFilesCommand(pack, { folder: '', files: [{ name: 'README.md', bytes: encoder.encode('# Mine\n') }, { name: 'LICENSE.txt', bytes: encoder.encode('CC0\n') }] });
+    if (!('command' in root)) throw new Error(JSON.stringify(root.errors));
+    expect(root.command.labelParams).toEqual({ count: 2, folder: '/' });
+    await journal.run(root.command);
+    expect(pack.paths()).toEqual(['LICENSE.txt', 'README.md', 'assets/my_trains/stock/common/steel.png', 'assets/my_trains/stock/common/wheel.png', 'pack.mcmeta']);
+    expect([...(await pack.bytes('assets/my_trains/stock/common/steel.png'))]).toEqual([137, 80, 78, 71]);
+    expect(await pack.text('README.md')).toBe('# Mine\n');
+    journal.undo();
+    journal.undo();
+    expect(pack.paths()).toEqual(['pack.mcmeta']);
+  });
+
+  it('refuses no files, a folder out of the pack, names Minecraft will not load under assets/, files that are there', async () => {
+    const pack = await Pack.open(newPackSource(PACK));
+    expect(addFilesCommand(pack, { folder: 'assets/my_trains', files: [] })).toEqual({ errors: [{ key: 'newpack.error.noFiles' }] });
+    expect(addFilesCommand(pack, { folder: 'assets/../x', files: [png] })).toEqual({ errors: [{ key: 'newpack.error.folder', params: { folder: 'assets/../x' } }] });
+    expect(addFilesCommand(pack, { folder: 'assets/my_trains/Stock', files: [png] })).toEqual({
+      errors: [{ key: 'newpack.error.fileNames', params: { files: 'assets/my_trains/Stock/steel.png' } }],
+    });
+    expect(addFilesCommand(pack, { folder: '', files: [{ name: 'pack.mcmeta', bytes: new Uint8Array() }] })).toEqual({
+      errors: [{ key: 'newpack.error.filesTaken', params: { files: 'pack.mcmeta' } }],
+    });
   });
 });

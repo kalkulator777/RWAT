@@ -116,4 +116,41 @@ describe('the wizard', () => {
     fireEvent.click(wagon.querySelector('.dialog-buttons button') as HTMLElement);
     await waitFor(() => expect(screen.queryByTestId('add-wagon-dialog')).toBeNull());
   });
+
+  it('adds files to a folder of the pack in one command, and to its root', async () => {
+    expect(screen.getByTestId('add-files').hasAttribute('disabled')).toBe(true);
+    fireEvent.click(screen.getByTestId('new-pack'));
+    const dialog = await screen.findByTestId('new-pack-dialog');
+    fill(dialog, 'name', 'P');
+    fill(dialog, 'namespace', 'p');
+    fireEvent.submit(dialog.querySelector('form') as HTMLFormElement);
+    await waitFor(() => expect(pack.value).not.toBeNull());
+
+    const pick = async (folder: string | null, files: File[]): Promise<HTMLElement> => {
+      fireEvent.click(screen.getByTestId('add-files'));
+      const box = await screen.findByTestId('add-files-dialog');
+      if (folder !== null) fill(box, 'folder', folder);
+      const picker = box.querySelector('input[type="file"]') as HTMLInputElement;
+      expect(picker.hasAttribute('accept')).toBe(false);
+      Object.defineProperty(picker, 'files', { value: files, configurable: true });
+      fireEvent.change(picker);
+      fireEvent.submit(box.querySelector('form') as HTMLFormElement);
+      return box;
+    };
+    // the folder starts at the pack's namespace
+    const box = await pick(null, [new File(['x'], 'Steel.png')]);
+    await waitFor(() => expect(box.querySelector('[role="alert"]')?.textContent).toContain('assets/p/Steel.png'));
+    fill(box, 'folder', 'assets/p/stock/common');
+    const picker = box.querySelector('input[type="file"]') as HTMLInputElement;
+    Object.defineProperty(picker, 'files', { value: [new File(['x'], 'steel.png'), new File(['y'], 'wheel.png')], configurable: true });
+    fireEvent.change(picker);
+    fireEvent.submit(box.querySelector('form') as HTMLFormElement);
+    await waitFor(() => expect(screen.queryByTestId('add-files-dialog')).toBeNull());
+    expect(journal.value?.state().done.map((command) => command.labelParams)).toEqual([{ count: 2, folder: 'assets/p/stock/common' }]);
+
+    await pick('', [new File(['# P\n'], 'README.md')]);
+    await waitFor(() => expect(screen.queryByTestId('add-files-dialog')).toBeNull());
+    expect(pack.value?.paths()).toEqual(['README.md', 'assets/p/stock/common/steel.png', 'assets/p/stock/common/wheel.png', 'pack.mcmeta']);
+    expect(await pack.value?.text('README.md')).toBe('# P\n');
+  });
 });
