@@ -22,11 +22,12 @@ export {
   type FsDirectoryHandle,
   type FsMode,
   type FsPermission,
+  type WriteObserver,
 } from './fsAccess';
 export { MemoryPack, type MemoryFiles } from './memory';
 export { comparePaths, isPackPath, normalizeEntryName, packPathProblem } from '../core/paths';
 export { pickFiles, pickFolderPack, pickZipPack } from './pickers';
-export { buildZip, openZipSource, ZipSink, type ZipFile, type ZipInput } from './zip';
+export { buildZip, openZipSource, zipInputOf, ZipSink, type ZipFile, type ZipInput } from './zip';
 
 /** Every file of a source, read: path → bytes (for tests and for copying a pack). */
 export async function readAll(source: PackSource): Promise<Map<string, Uint8Array>> {

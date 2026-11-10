@@ -32,6 +32,8 @@ class ZipPackSource implements PackSource {
   constructor(
     readonly name: string,
     private readonly entries: ReadonlyMap<string, ZipJsFile>,
+    /** What the zip was opened from: the session keeps it to open the zip again (core/session). */
+    readonly input: ZipInput,
   ) {}
 
   list(): Promise<FileEntry[]> {
@@ -102,7 +104,12 @@ export async function openZipSource(input: ZipInput, name: string): Promise<Pack
   if (encrypted.length > 0) {
     throw new PackIoError('unsupported', `${name} has encrypted entries: ${pathsSummary(encrypted)}`, encrypted);
   }
-  return new ZipPackSource(name, entries);
+  return new ZipPackSource(name, entries, input);
+}
+
+/** The file or bytes a zip source was opened from (`openZipSource`); null for any other source. */
+export function zipInputOf(source: PackSource): ZipInput | null {
+  return source instanceof ZipPackSource ? source.input : null;
 }
 
 // ---------------------------------------------------------------- writing
