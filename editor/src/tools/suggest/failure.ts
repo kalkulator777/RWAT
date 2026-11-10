@@ -6,7 +6,7 @@
  */
 
 import { t } from '../../i18n';
-import { BridgeError } from '../../ir/bridge';
+import type { BridgeError } from '../../ir/bridge';
 
 /** A failure as the interface shows it. */
 export interface Said {
@@ -22,13 +22,15 @@ export interface Said {
  * @param known the sentence for a failure of the Python code the caller knows how to put in words, or null
  */
 export function explain(error: unknown, known: (error: BridgeError) => string | null = () => null): Said | null {
-  if (error instanceof BridgeError) {
-    if (error.kind === 'cancelled') return null;
-    if (error.kind === 'python') {
-      const sentence = known(error);
-      return sentence === null ? { text: t('tools.suggest.err.python', { type: error.type }), detail: error.text } : { text: sentence, detail: error.text };
+  // by its name, not its class: the bridge's module is imported with the first call, not with this one
+  if (error instanceof Error && error.name === 'BridgeError') {
+    const failure = error as BridgeError;
+    if (failure.kind === 'cancelled') return null;
+    if (failure.kind === 'python') {
+      const sentence = known(failure);
+      return sentence === null ? { text: t('tools.suggest.err.python', { type: failure.type }), detail: failure.text } : { text: sentence, detail: failure.text };
     }
-    return { text: t('tools.suggest.err.worker'), detail: error.message };
+    return { text: t('tools.suggest.err.worker'), detail: failure.message };
   }
   return { text: t('tools.suggest.err.other'), detail: error instanceof Error ? error.message : String(error) };
 }
