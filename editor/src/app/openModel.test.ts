@@ -6,6 +6,7 @@
  * does not; another pack closes it.
  */
 
+import { signal } from '@preact/signals';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { failedModel } from '../checks/model/problems';
 import type { Command, Link } from '../core/contracts';
@@ -222,6 +223,40 @@ describe('the open model', () => {
     expect(findings.value).toContain(modelProblems.value[0]);
     expect(rig.view.shown).toEqual([]);
     expect(openModel.value).toBeNull();
+  });
+
+  it('lets the view be while it is off, and shows the open wagon again once on (the IR mode in between)', async () => {
+    const active = signal(true);
+    const view = recordingView();
+    const preview = new PreviewController({ every: () => () => undefined });
+    preview.view.value = view;
+    const stop = connectModel({ loader: new ModelLoader(createModelApi((_bytes, path) => Promise.resolve(fakeBitmap(path)))), view, preview, delayMs: 0, active });
+    stops.push(stop, () => preview.dispose());
+    await openExample();
+    select({ kind: 'file', file: COACH_MODEL });
+    await vi.waitFor(() => expect(view.shown).toHaveLength(1));
+    const coach = view.shown[0]!;
+
+    active.value = false;
+    // another mode shows its own model: this wiring says nothing, whatever the selection does
+    view.show(null);
+    select({ kind: 'file', file: SHUNTER_MODEL });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(view.shown).toEqual([coach, null]);
+
+    select({ kind: 'file', file: COACH_MODEL });
+    active.value = true;
+    await vi.waitFor(() => expect(view.shown).toHaveLength(3));
+    expect(view.shown[2]).toBe(coach); // the same model, from the loader's memory, shown anew
+    expect(openModel.value).toBe(coach);
+    expect(preview.subject.value?.model).toBe(coach);
+
+    // back with no wagon to show: the view is emptied of the other mode's model
+    active.value = false;
+    view.show(coach);
+    pack.value = null;
+    active.value = true;
+    await vi.waitFor(() => expect(view.shown.at(-1)).toBeNull());
   });
 
   it('closes when another pack opens, which opens its only wagon at once; and follows nothing once stopped', async () => {

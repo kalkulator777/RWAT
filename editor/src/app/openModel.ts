@@ -16,12 +16,14 @@
  * - A model that can't be read comes empty with its finding (model/build); a worker that
  *   fails is one finding too, the one "Check all models" makes of it (checks/model
  *   `failedModel`).
+ * - In the IR mode (2b) the wiring is off (`active`): app/ir shows the IR type's model in
+ *   the same view and preview, and back in 2a the open wagon's model is shown again.
  *
  * The rules are the modules': what a wagon is (core/pack `stock`), what a type is
  * (ports/wagonType), the guides' frame (view3d/frame). This only wires them.
  */
 
-import { batch, effect, untracked } from '@preact/signals';
+import { batch, effect, untracked, type ReadonlySignal } from '@preact/signals';
 import { failedModel } from '../checks/model/problems';
 import type { Link, LoadedModel, ViewApi } from '../core/contracts';
 import type { Pack, StockEntry } from '../core/pack';
@@ -52,6 +54,12 @@ export interface ModelWiring {
   preview: { load(subject: PreviewSubject | null): void };
   /** How long after an edit the model is read again, ms. */
   delayMs?: number;
+  /**
+   * While false the wiring lets the view, the preview and the open model's signals be (the
+   * IR mode shows its own there, app/ir); once true again it shows the open wagon's model
+   * anew. Always on when left out.
+   */
+  active?: ReadonlySignal<boolean>;
 }
 
 /** The wagon (`namespace:id`) the links point at: through its type's or model's file or a field of them, or one of its objects; null when they point at none. */
@@ -94,10 +102,13 @@ export function connectModel(wiring: ModelWiring): () => void {
   let generation = 0;
   /** The model shown, and the type JSON it was shown with. */
   let shown: { model: LoadedModel; typeKey: string } | null = null;
+  /** True after a pause: what the view shows is another's, so the next answer is shown, or the view emptied, whatever was shown before. */
+  let stale = false;
 
   const closeModel = (): void => {
-    if (shown !== null) {
+    if (shown !== null || stale) {
       shown = null;
+      stale = false;
       view.show(null);
       view.setFrame(null);
       preview.load(null);
@@ -111,6 +122,8 @@ export function connectModel(wiring: ModelWiring): () => void {
 
   const show = (model: LoadedModel, entry: StockEntry, typeJson: unknown, typeKey: string, files: ModelFiles): void => {
     const type = entry.type === null ? null : loadWagonType(entry.id, typeJson).type;
+    if (stale) shown = null;
+    stale = false;
     if (shown === null || shown.model !== model || shown.typeKey !== typeKey) {
       if (shown?.model !== model) view.show(model);
       view.setFrame(type === null ? null : wagonFrame(type));
@@ -175,11 +188,21 @@ export function connectModel(wiring: ModelWiring): () => void {
     }
   };
 
+  /** Lets the view be: nothing under way is shown, and the model is shown anew when the wiring is on again. */
+  const pause = (): void => {
+    clearTimeout(timer);
+    timer = undefined;
+    generation++;
+    stale = true;
+    lastRevision = -1;
+  };
+
   const stop = effect(() => {
+    const on = wiring.active?.value ?? true;
     const rev = revision.value;
     const open = pack.value;
     const links = selection.value;
-    untracked(() => follow(open, links, rev));
+    untracked(() => (on ? follow(open, links, rev) : pause()));
   });
 
   return () => {
