@@ -4,7 +4,9 @@
  * from the top, the side and the front, their ids, flags, groups, numbers and order in the
  * inspector, and over them what the engine makes of each — its wall and way out, its inner
  * face, where a rider walks through it, an inner door's bridge, the leaves it moves — by
- * the ports of the engine's rules, after every edit.
+ * the ports of the engine's rules, after every edit. «Двери по именам» asks the converter
+ * for the doors the model's object names say, as a draft to take or leave
+ * (tools/suggest/doors.ts).
  */
 
 import { h } from 'preact';
