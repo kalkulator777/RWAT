@@ -244,6 +244,20 @@ export class RecipeWorkspace implements OpTarget {
     return this.pack.status(path);
   }
 
+  /** The file's bytes as opened or last saved (what saving compares with, the save dialog's "before"); null for a file there was not then. */
+  originalBytes(path: string): Promise<Uint8Array | null> {
+    return this.pack.originalBytes(path);
+  }
+
+  /**
+   * Takes every file as never saved: a recipe the editor made (the IR import's wizard) is
+   * in no folder yet, so its first save writes each of its files as new. Call it before
+   * the first edit.
+   */
+  async markUnsaved(): Promise<void> {
+    for (const path of this.paths()) await this.pack.rebase(path, null);
+  }
+
   /** The files saving would write or delete, in path order. */
   dirtyPaths(): string[] {
     return this.pack.dirtyPaths();

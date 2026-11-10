@@ -77,6 +77,22 @@ describe('opening a recipe', () => {
     expect(o.workspace.dirtyPaths()).toEqual([]);
     expect(await o.workspace.changes()).toEqual([]);
   });
+
+  it('gives a file as last saved, and takes a recipe the editor made as never saved', async () => {
+    const o = await openRecipe({ [RECIPE]: recipe(), 'packs/r/a.json': '{"sway": 1}\n' });
+    await o.run(setField(o.workspace, 'a', '/sway', 2));
+    expect(decoder.decode((await o.workspace.originalBytes('packs/r/a.json')) ?? new Uint8Array())).toBe('{"sway": 1}\n');
+    expect(await o.workspace.originalBytes('packs/r/b.json')).toBeNull();
+    const made = await openRecipe({ [RECIPE]: recipe() });
+    await made.workspace.markUnsaved();
+    expect(made.workspace.status(RECIPE)).toBe('new');
+    expect(made.workspace.dirtyPaths()).toEqual([RECIPE]);
+    expect(await made.workspace.originalBytes(RECIPE)).toBeNull();
+    const sink = new MemorySink();
+    await made.workspace.save(sink);
+    expect([...sink.files.keys()]).toEqual([RECIPE]);
+    expect(made.workspace.dirtyPaths()).toEqual([]);
+  });
 });
 
 const mvp = mvpFiles();
