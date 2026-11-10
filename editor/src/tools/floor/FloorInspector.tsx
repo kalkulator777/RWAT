@@ -2,7 +2,8 @@
  * The floor tool's section of the inspector (docs/proposals/editor.md §2.3, §6.3): all the
  * view's gestures by keyboard — the zones in their order (zone 0 is where the floor check's
  * walk starts) to select, move up and down, remove and add; the selected zone's six numbers
- * and its height from a click on the model; which doors stand open in the drawing; what
+ * and its height from a click on the model; the floor generator's suggestion (tools/suggest:
+ * «Предложить пол», a draft to accept or reject); which doors stand open in the drawing; what
  * edges snap to; what the floor check finds now, in the interface's words, each finding
  * selecting what it is about and turning on its tool, as the checks tab does (a door's
  * finding: the doors tool; a chair's: the chairs tool); the legend of the layers.
@@ -19,6 +20,7 @@ import { DOOR_STATES } from './analysis';
 import type { ToolSubject } from '../registry';
 import type { FloorTool } from './session';
 import type { Snapping } from '../common/snap';
+import { SuggestFloorSection } from '../suggest/SuggestFloor';
 import { selectedZones, type ZoneBox } from './zones';
 import '../common/section.css';
 
@@ -258,6 +260,7 @@ export function FloorInspector({ tool }: { tool: FloorTool }) {
       {subject.type === null && <p class="tool-note tool-warning">{t('tools.floor.noType')}</p>}
       <DoorsChoice tool={tool} />
       <ZoneList tool={tool} zones={picture.zones} chosen={chosen} readOnly={subject.readOnly} />
+      <SuggestFloorSection suggest={tool.suggest} subject={subject} />
       {index !== undefined && zone !== null && <ZoneNumbers tool={tool} index={index} zone={zone} readOnly={subject.readOnly} />}
       <Findings tool={tool} subject={subject} />
       <p class="tool-note" data-testid="floor-stats">

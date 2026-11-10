@@ -1,0 +1,117 @@
+/*
+ * The suggestions (src/tools/suggest): the floor and the doors by names in the tools'
+ * sections of the inspector, the renaming of bad paths in the checks tab. The tools' common
+ * look (../common/section.css) does the rest.
+ */
+
+.suggest-progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.suggest-progress progress {
+  width: 10em;
+}
+
+.suggest-progress .tool-button {
+  margin-top: 0;
+}
+
+.suggest-chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.suggest-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 2px 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.suggest-chip button {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.suggest-chip button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.suggest-details {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px 6px;
+}
+
+.suggest-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.suggest-draft {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-left: 3px dashed var(--text-muted);
+  padding-left: 8px;
+}
+
+.suggest-draft ul,
+.suggest-repair ul {
+  margin: 0;
+  padding-left: 1.2em;
+  font-size: 12px;
+}
+
+.suggest-found-present {
+  color: var(--text-muted);
+}
+
+.suggest-error {
+  color: var(--text);
+}
+
+.suggest-error pre {
+  margin: 2px 0 0;
+  white-space: pre-wrap;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.suggest-repair {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.suggest-repair-plan {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.suggest-repair code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
