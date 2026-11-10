@@ -1,0 +1,221 @@
+/* The sounds tab (panels/sounds): a section for each key of `sounds`. The form fields in it are the forms' own (app/styles.css). */
+
+.sounds {
+  padding: 6px 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sounds-intro,
+.sounds-what,
+.sounds-carry,
+.sounds-note,
+.sounds-absent,
+.sounds-effective {
+  margin: 0;
+}
+
+.sounds-intro,
+.sounds-carry,
+.sounds-note {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.sounds-note-warning {
+  color: var(--warning);
+}
+
+.sounds-section {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sounds-section[data-state='unset'] {
+  background: var(--surface-sunken);
+}
+
+.sounds-heading {
+  margin: 0;
+  font-size: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.sounds-state {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.sounds-effective {
+  list-style: none;
+  padding: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.sounds-absent {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.sounds-refs,
+.sounds-door,
+.sounds-control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sounds-control {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px 8px;
+  margin: 0;
+}
+
+.sounds-ref {
+  display: grid;
+  grid-template-columns: minmax(9em, 14em) minmax(12em, 1fr) minmax(8em, 14em) 2.6em 6.5em;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.sounds-ref-label {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.sounds-ref-note {
+  grid-column: 2 / -1;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.sounds-ref[data-kind='file'][data-present='false'] .sounds-ref-note {
+  color: var(--danger);
+}
+
+.sounds-ref input,
+.sounds-ref select,
+.sounds-add input,
+.sounds-add select {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 6px;
+  min-width: 0;
+}
+
+.sounds-ref button,
+.sounds-add button,
+.sounds-to-object,
+.sounds-loop-button,
+.sounds-remove {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.sounds-ref button:disabled,
+.sounds-add button:disabled,
+.sounds-to-object:disabled,
+.sounds-remove:disabled {
+  cursor: default;
+  color: var(--text-muted);
+}
+
+.sounds-to-object,
+.sounds-control > .sounds-remove {
+  align-self: flex-start;
+}
+
+.sounds-listen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.sounds-slider {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sounds-slider input[type='range'] {
+  width: 14em;
+}
+
+.sounds-readout {
+  font-variant-numeric: tabular-nums;
+}
+
+.sounds-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sounds-verdict {
+  margin: 0 0 4px;
+}
+
+.sounds-verdict-silent,
+.sounds-verdict-unknown,
+.sounds-verdict-shadowed {
+  color: var(--warning);
+}
+
+.sounds-problems {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sounds-problem-error {
+  color: var(--danger);
+}
+
+.sounds-problem-warning {
+  color: var(--warning);
+}
+
+.sounds-problem-info {
+  color: var(--text-muted);
+}
+
+.sounds-error {
+  margin: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--danger);
+  border-radius: 4px;
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.sounds-ranges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 24px;
+}
+
+.sounds-ranges .field {
+  margin: 0;
+}
