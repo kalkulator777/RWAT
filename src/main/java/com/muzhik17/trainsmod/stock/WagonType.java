@@ -1,6 +1,8 @@
 package com.muzhik17.trainsmod.stock;
 
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Declaration of one rolling-stock type (SPEC §5.1): the data that makes a
@@ -13,6 +15,9 @@ import java.util.List;
  * is the presence of a {@link Traction} section, {@link #drivable()} the
  * presence of a {@link Cab}. A locomotive has both; a cab car only the cab; an
  * EMU motor car only traction; freight stock neither.
+ *
+ * <p>Ported: {@code editor/src/ports/wagonType.ts}; golden:
+ * {@code fixtures/golden/wagon_type/}.
  *
  * @param id           namespaced type id, e.g. {@code rwat:chme3}
  * @param length       over buffers/couplers, blocks
@@ -173,7 +178,8 @@ public record WagonType(
      * A driver's chair (SPEC §9) in the <b>model's local frame</b>: the point
      * on top of the cushion a seated driver sits on, and which way they face
      * ({@code yaw} degrees, 0 = model +Z forward, +90 = towards −X, the
-     * entity yaw sense).
+     * entity yaw sense). A pack gives the point in the OBJ frame and the
+     * parser turns it ({@link ObjFrame}); the yaw is the same in both.
      */
     public record Seat(double x, double y, double z, float yaw) {
 
@@ -230,7 +236,8 @@ public record WagonType(
     /**
      * The walkable floor (SPEC v1.5-б, §9.1): one or more axis-aligned
      * <b>zones</b> in the <b>model's local frame</b> (+Z forward, +Y up, as the
-     * renderer uses). A rider boards as a passenger and walks the zones in
+     * renderer uses; a pack writes them in the OBJ frame and the parser turns
+     * them, {@link ObjFrame}). A rider boards as a passenger and walks the zones in
      * local coordinates, the body pose carrying them along for free. A
      * passenger car is one zone (the saloon); a locomotive is its cab plus the
      * walkways and end platforms of the frame. Each zone's {@code minY} is the
@@ -238,7 +245,8 @@ public record WagonType(
      * §9.8): a rider stands wherever their body fits inside it, so zones that
      * touch join without overlapping and a gap of any width between them is
      * a wall ({@link FloorRegion}). Doors between zones ({@link Door#inner})
-     * bridge such a gap while open.
+     * bridge such a gap while open; shut, one is wall even where the zones
+     * on its two sides touch ({@link #region(double, List, int)}).
      */
     public static final class Interior {
 
@@ -265,11 +273,19 @@ public record WagonType(
 
         private static final double EPS = 1.0e-9;
 
+        /** Sets of shut doors' cuts kept at most: a car has a few inner doors, a test more. */
+        private static final int MAX_SHUT = 64;
+
         private final List<Zone> zones;
         /** Where a centre fits, for the last margin asked (in practice always the player's). */
         private volatile FloorRegion region;
+        /** Where a centre fits with shut doors cut out, per margin and set of cuts. */
+        private final Map<Shut, FloorRegion> shut = new ConcurrentHashMap<>();
         /** This floor turned 180° (a flipped wagon), made once. */
         private volatile Interior mirror;
+
+        private record Shut(double margin, List<FloorRegion.Cut> cuts) {
+        }
 
         public Interior(List<Zone> zones) {
             if (zones.isEmpty()) {
@@ -295,6 +311,39 @@ public record WagonType(
             if (r == null || r.margin() != margin) {
                 r = FloorRegion.of(zones, margin);
                 region = r;
+            }
+            return r;
+        }
+
+        /**
+         * Where a rider centred there fits with the doors between zones that
+         * are shut standing across the floor (SPEC §9.1): {@link #region(double)}
+         * less each shut inner door's {@link FloorRegion.Cut#shut cut}, so a
+         * shut door is wall even where the zones on its two sides touch or
+         * overlap in its doorway. Made once per set of shut doors.
+         *
+         * @param doors    the type's doors, in the frame of this floor
+         * @param openMask bit {@code i} set = door {@code i} open
+         */
+        public FloorRegion region(double margin, List<Door> doors, int openMask) {
+            List<FloorRegion.Cut> cuts = new java.util.ArrayList<>();
+            for (int i = 0; i < doors.size(); i++) {
+                Door door = doors.get(i);
+                if (door.inner() && !door.open(openMask, i)) {
+                    cuts.add(FloorRegion.Cut.shut(door, margin));
+                }
+            }
+            if (cuts.isEmpty()) {
+                return region(margin);
+            }
+            Shut key = new Shut(margin, cuts);
+            FloorRegion r = shut.get(key);
+            if (r == null) {
+                if (shut.size() >= MAX_SHUT) {
+                    shut.clear();
+                }
+                r = FloorRegion.of(zones, margin, cuts);
+                shut.put(key, r);
             }
             return r;
         }
@@ -337,7 +386,20 @@ public record WagonType(
          * fits anywhere gives the nearest zone's midline rather than throwing.
          */
         public org.joml.Vector3d clampFeet(org.joml.Vector3d local, double margin) {
-            double[] at = region(margin).nearest(local.x, local.z);
+            return clampFeet(local, region(margin));
+        }
+
+        /**
+         * {@link #clampFeet(org.joml.Vector3d, double)} with the shut doors
+         * between zones standing across the floor ({@link #region(double, List, int)}).
+         */
+        public org.joml.Vector3d clampFeet(org.joml.Vector3d local, double margin, List<Door> doors, int openMask) {
+            return clampFeet(local, region(margin, doors, openMask));
+        }
+
+        private org.joml.Vector3d clampFeet(org.joml.Vector3d local, FloorRegion region) {
+            double margin = region.margin();
+            double[] at = region.nearest(local.x, local.z);
             if (at != null) {
                 double floor = floorUnder(at[0], at[1]);
                 return new org.joml.Vector3d(at[0], Double.isNaN(floor) ? floorY() : floor, at[1]);
@@ -424,7 +486,8 @@ public record WagonType(
     /**
      * One doorway (SPEC v1.5, doors): the door leaf's box in the <b>model's
      * local frame</b> (+Z forward, +Y up), as measured from the asset's
-     * {@code DOOR_n} object. The box is thin along the wall it sits in — that
+     * {@code DOOR_n} object — a pack writes it in the OBJ frame and the
+     * parser turns it ({@link ObjFrame}). The box is thin along the wall it sits in — that
      * thinnest horizontal extent is the wall normal ({@link #axis}), and the
      * side of the body centre it lies on is the outward direction
      * ({@link #outward}). Closed, the door is part of the hull wall; open, the
@@ -446,11 +509,18 @@ public record WagonType(
      * @param group doors of one group open and close together, null = on its
      *              own: IR works all doors of a control group at once (an
      *              EMU's left side, DR1's {@code DL}), and one IR animation may
-     *              swing the leaves of several doorways
+     *              swing the leaves of several doorways. Names match case
+     *              aside, as control groups do ({@link #doorsWorkedBy}); an
+     *              empty name is no group, so the server's parse and the
+     *              client's sync read the same door
      */
     public record Door(String id, double minX, double minY, double minZ,
             double maxX, double maxY, double maxZ, boolean inner, boolean fixed,
             boolean connecting, String group) {
+
+        public Door {
+            group = group == null || group.isEmpty() ? null : group;
+        }
 
         /** An ordinary hull door (every declaration before §9.1). */
         public Door(String id, double minX, double minY, double minZ,
@@ -471,9 +541,9 @@ public record WagonType(
             this(id, minX, minY, minZ, maxX, maxY, maxZ, inner, fixed, connecting, null);
         }
 
-        /** True if this door opens and closes together with {@code other} (same group). */
+        /** True if this door opens and closes together with {@code other} (same group, case aside). */
         public boolean groupedWith(Door other) {
-            return group != null && group.equals(other.group);
+            return group != null && group.equalsIgnoreCase(other.group);
         }
 
         /** True for a way in from outside: neither between zones nor onto a gangway. */
@@ -573,6 +643,43 @@ public record WagonType(
         for (int i = 0; i < doors.size() && i < 32; i++) {
             Door d = doors.get(i);
             if (!d.fixed() && (group.equalsIgnoreCase(d.id()) || group.equalsIgnoreCase(d.group()))) {
+                bits |= 1 << i;
+            }
+        }
+        return bits;
+    }
+
+    /**
+     * The doors that open and close with door {@code index}, as open-door
+     * bits: it and the doors of its {@code group}, case aside (SPEC §9.5: IR
+     * works a control group's doors together). Only doors with a leaf: a
+     * {@code fixed} doorway is always open and never moves, so it takes no bit
+     * even in a group with a door that does, and an animation named after it
+     * never plays. 0 for a fixed door and for an index outside the first 32.
+     */
+    public int doorsOpenedWith(int index) {
+        if (index < 0 || index >= doors.size() || index >= 32 || doors.get(index).fixed()) {
+            return 0;
+        }
+        Door door = doors.get(index);
+        int bits = 0;
+        for (int i = 0; i < doors.size() && i < 32; i++) {
+            Door d = doors.get(i);
+            if (!d.fixed() && (i == index || d.groupedWith(door))) {
+                bits |= 1 << i;
+            }
+        }
+        return bits;
+    }
+
+    /**
+     * The doors with a leaf, as open-door bits (the first 32): the only doors
+     * an open bit is kept for — a {@code fixed} doorway is open without one.
+     */
+    public int leafDoors() {
+        int bits = 0;
+        for (int i = 0; i < doors.size() && i < 32; i++) {
+            if (!doors.get(i).fixed()) {
                 bits |= 1 << i;
             }
         }

@@ -1,0 +1,225 @@
+/*
+ * A markup tool's section of the inspector (src/tools/ToolBar.tsx `ToolSection`, and the
+ * sections of the zones and doors tools): its notes, rows, lists of shapes, boxes of numbers
+ * and switches, findings and legend. Colours are the shell's (app/styles.css); the legend's
+ * swatches are the view's overlay styles.
+ */
+
+.tool-section {
+  margin: 0 0 14px;
+  padding: 0 0 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tool-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.tool-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.tool-warning {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.tool-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.tool-label,
+.tool-heading {
+  font-weight: 600;
+  font-size: 13px;
+  margin: 0;
+}
+
+.tool-list {
+  list-style: none;
+  margin: 4px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tool-item {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.tool-item-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  align-items: baseline;
+  text-align: left;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.tool-item-name[aria-pressed='true'] {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.tool-item-name:focus-visible,
+.tool-icon:focus-visible,
+.tool-finding:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.tool-item-index {
+  font-weight: 600;
+}
+
+.tool-item-summary {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.tool-item-flag {
+  font-size: 11px;
+  padding: 0 4px;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+}
+
+.tool-item-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.tool-icon {
+  min-width: 26px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.tool-icon:disabled,
+.tool-finding:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.tool-box {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px 8px;
+  margin: 0;
+}
+
+.tool-box legend {
+  font-weight: 600;
+  padding: 0 4px;
+}
+
+.tool-grid {
+  display: grid;
+  grid-template-columns: auto repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.tool-axis {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.tool-grid .field-input-wrap {
+  min-width: 0;
+}
+
+.tool-grid .field-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.tool-button {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.tool-button[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.tool-finding-list {
+  list-style: none;
+  margin: 4px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tool-finding {
+  width: 100%;
+  text-align: left;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.tool-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tool-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+  font-size: 12px;
+}
+
+.tool-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tool-swatch {
+  width: 14px;
+  height: 10px;
+  border-radius: 2px;
+  flex: none;
+}

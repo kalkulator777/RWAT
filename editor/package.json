@@ -1,0 +1,48 @@
+{
+  "name": "rwat-pack-editor",
+  "version": "0.0.0",
+  "private": true,
+  "description": "RWAT pack editor: a static site that opens, checks and saves RWAT packs and IR conversion recipes.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "tsc -b && eslint --max-warnings 0 .",
+    "test": "vitest run --coverage",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "@preact/signals": "2.11.3",
+    "@zip.js/zip.js": "2.24.0",
+    "ajv": "8.20.0",
+    "ajv-i18n": "4.2.0",
+    "comlink": "4.4.2",
+    "idb-keyval": "6.3.0",
+    "jsonc-parser": "3.3.1",
+    "preact": "10.29.8",
+    "pyodide": "314.0.7",
+    "three": "0.186.1",
+    "three-mesh-bvh": "0.9.16"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.64.1",
+    "@testing-library/preact": "3.2.4",
+    "@types/node": "22.20.5",
+    "@types/three": "0.186.0",
+    "@vitest/coverage-v8": "4.1.12",
+    "eslint": "10.13.0",
+    "happy-dom": "21.0.3",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.2",
+    "vite": "8.3.4",
+    "vite-plugin-pwa": "2.0.0",
+    "vitest": "4.1.12"
+  }
+}

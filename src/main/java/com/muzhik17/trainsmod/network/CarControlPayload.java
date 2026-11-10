@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
+import com.muzhik17.trainsmod.convention.GroupName;
 
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -17,8 +18,9 @@ import net.minecraft.resources.ResourceLocation;
  * train ({@code wagonId} −1, doors only). Left and right are the driver's —
  * the server reads them from the cab they drive from. The lights are the
  * car's own groups ({@code groups}: its model's cabin-lamp groups, which only
- * the client knows). The server checks the sender drives this train, at the
- * controls.
+ * the client knows; one that doesn't fit the wire, {@link GroupName}, is left
+ * out rather than cut the sender off). The server checks the sender drives
+ * this train, at the controls.
  */
 public record CarControlPayload(int consistId, int wagonId, Target target, boolean on, List<String> groups)
         implements CustomPacketPayload {
@@ -44,7 +46,7 @@ public record CarControlPayload(int consistId, int wagonId, Target target, boole
             StreamCodec.of(CarControlPayload::write, CarControlPayload::read);
 
     public CarControlPayload {
-        groups = List.copyOf(groups);
+        groups = groups.stream().filter(GroupName::fits).toList();
     }
 
     private static void write(FriendlyByteBuf buf, CarControlPayload payload) {

@@ -1,0 +1,181 @@
+{
+  "description": "Integer.parseInt(text) — how ObjLoader reads a face's indices (and ModelCheck words a refused one): an optional sign, then decimal digits, any Unicode decimal digit of the BMP as Character.digit takes it, and nothing else (no blanks, no exponent, no underscores); past the int range a refusal. input.int (the text); expected: the int, or null where Java throws NumberFormatException.",
+  "frame": "none",
+  "tolerance": 0,
+  "cases": [
+    {
+      "id": "int-0-digits",
+      "note": "plain digits",
+      "input": {"int": "12"},
+      "expected": 12
+    },
+    {
+      "id": "int-1-a-plus-sign",
+      "note": "a plus sign is taken",
+      "input": {"int": "+7"},
+      "expected": 7
+    },
+    {
+      "id": "int-2-a-minus-sign",
+      "note": "a minus sign",
+      "input": {"int": "-3"},
+      "expected": -3
+    },
+    {
+      "id": "int-3-leading-zeros",
+      "note": "leading zeros are digits like any",
+      "input": {"int": "007"},
+      "expected": 7
+    },
+    {
+      "id": "int-4-zero",
+      "note": "zero",
+      "input": {"int": "0"},
+      "expected": 0
+    },
+    {
+      "id": "int-5-minus-zero",
+      "note": "minus zero is the int 0",
+      "input": {"int": "-0"},
+      "expected": 0
+    },
+    {
+      "id": "int-6-the-largest",
+      "note": "the largest int",
+      "input": {"int": "2147483647"},
+      "expected": 2147483647
+    },
+    {
+      "id": "int-7-the-smallest",
+      "note": "the smallest int: its magnitude is one past the largest",
+      "input": {"int": "-2147483648"},
+      "expected": -2147483648
+    },
+    {
+      "id": "int-8-one-past-the-largest",
+      "note": "one past the largest: refused, not wrapped",
+      "input": {"int": "2147483648"},
+      "expected": null
+    },
+    {
+      "id": "int-9-one-below-the-smallest",
+      "note": "one below the smallest: refused",
+      "input": {"int": "-2147483649"},
+      "expected": null
+    },
+    {
+      "id": "int-10-eleven-digits",
+      "note": "eleven digits: refused (ObjectRole.number makes such a number Integer.MAX_VALUE itself)",
+      "input": {"int": "99999999999"},
+      "expected": null
+    },
+    {
+      "id": "int-11-empty",
+      "note": "nothing: refused",
+      "input": {"int": ""},
+      "expected": null
+    },
+    {
+      "id": "int-12-a-sign-alone",
+      "note": "a sign alone: refused",
+      "input": {"int": "+"},
+      "expected": null
+    },
+    {
+      "id": "int-13-a-minus-alone",
+      "note": "a minus alone: refused",
+      "input": {"int": "-"},
+      "expected": null
+    },
+    {
+      "id": "int-14-two-signs",
+      "note": "two signs: refused",
+      "input": {"int": "+-1"},
+      "expected": null
+    },
+    {
+      "id": "int-15-a-decimal-point",
+      "note": "a decimal point: refused (JS parseInt reads 1)",
+      "input": {"int": "1.0"},
+      "expected": null
+    },
+    {
+      "id": "int-16-a-blank-before",
+      "note": "a blank before: refused (Java does not trim here)",
+      "input": {"int": " 1"},
+      "expected": null
+    },
+    {
+      "id": "int-17-a-blank-after",
+      "note": "a blank after: refused",
+      "input": {"int": "1 "},
+      "expected": null
+    },
+    {
+      "id": "int-18-an-exponent",
+      "note": "an exponent: refused (JS parseInt reads 1)",
+      "input": {"int": "1e2"},
+      "expected": null
+    },
+    {
+      "id": "int-19-hexadecimal",
+      "note": "a hexadecimal prefix: refused (JS Number reads 16)",
+      "input": {"int": "0x10"},
+      "expected": null
+    },
+    {
+      "id": "int-20-underscores",
+      "note": "an underscore: refused",
+      "input": {"int": "1_000"},
+      "expected": null
+    },
+    {
+      "id": "int-21-arabic-indic-digits",
+      "note": "Arabic-Indic digits are decimal digits to Character.digit",
+      "input": {"int": "١٢"},
+      "expected": 12
+    },
+    {
+      "id": "int-22-a-full-width-digit",
+      "note": "a full-width digit too",
+      "input": {"int": "３"},
+      "expected": 3
+    },
+    {
+      "id": "int-23-devanagari",
+      "note": "Devanagari nine",
+      "input": {"int": "९"},
+      "expected": 9
+    },
+    {
+      "id": "int-24-mixed-scripts",
+      "note": "digits of two scripts in one number",
+      "input": {"int": "1٢"},
+      "expected": 12
+    },
+    {
+      "id": "int-25-a-superscript",
+      "note": "a superscript two is no decimal digit: refused",
+      "input": {"int": "²"},
+      "expected": null
+    },
+    {
+      "id": "int-26-beyond-the-bmp",
+      "note": "a mathematical digit zero beyond the BMP is two chars, neither a digit: refused",
+      "input": {"int": "𝟎"},
+      "expected": null
+    },
+    {
+      "id": "int-27-a-roman-numeral",
+      "note": "a Roman numeral is a number but no decimal digit: refused",
+      "input": {"int": "Ⅷ"},
+      "expected": null
+    },
+    {
+      "id": "int-28-nan",
+      "note": "NaN: refused",
+      "input": {"int": "NaN"},
+      "expected": null
+    }
+  ]
+}

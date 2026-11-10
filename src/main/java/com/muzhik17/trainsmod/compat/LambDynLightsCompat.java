@@ -14,6 +14,7 @@ import org.joml.Vector3d;
 
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.client.ClientConsists;
+import com.muzhik17.trainsmod.client.render.HeadlightBeam;
 import com.muzhik17.trainsmod.client.render.model.StockModel;
 import com.muzhik17.trainsmod.client.render.model.StockModels;
 import com.muzhik17.trainsmod.consist.WagonEntity;
@@ -42,10 +43,12 @@ import net.neoforged.neoforge.common.NeoForge;
 public final class LambDynLightsCompat {
 
     private static final String API = "dev.lambdaurora.lambdynlights.api.";
-    /** Light of a cabin lamp, and of a headlight's beam. */
+    /**
+     * Light of a cabin lamp, and of a headlight's beam — down the track as far
+     * as the beam drawn ({@link HeadlightBeam#LENGTH}).
+     */
     private static final int CABIN_LUMINANCE = 12;
     private static final int BEAM_LUMINANCE = 15;
-    private static final double BEAM_LENGTH = 12.0;
     /** Wagons farther than this from the player light nothing (LDL's own range is short). */
     private static final double RANGE = 96.0;
     /** A light that moved less than this isn't re-sent (no needless chunk rebuilds). */
@@ -140,7 +143,12 @@ public final class LambDynLightsCompat {
         LIGHTS.clear();
     }
 
-    /** A wagon's lit lamps and beams in world space, or null if it is dark. */
+    /**
+     * A wagon's lit lamps and beams in world space, or null if it is dark — a
+     * lamp shines as its faces glow ({@code convention.ModelParts#lit}): of no
+     * light group with none of the groups on, an {@code LINVERT} one while its
+     * group is off.
+     */
     private static Shape shape(WagonEntity wagon) {
         ConsistComposition.Slot slot = ClientConsists.slot(wagon.getConsistId(), wagon.getWagonIndex());
         StockModel model = slot == null ? null : StockModels.model(slot.type().id());
@@ -148,26 +156,23 @@ public final class LambDynLightsCompat {
             return null;
         }
         long litMask = model.litMask(wagon::controlValue);
-        if (litMask == 0L) {
-            return null;
-        }
         Vector3d body = new Vector3d(wagon.getX(), wagon.getY(), wagon.getZ());
         double flip = slot.flipped() ? -1.0 : 1.0;
         List<double[]> points = new ArrayList<>();
         for (StockModel.Lamp lamp : model.lamps()) {
-            if (StockModel.tagLit(StockModel.tag(lamp.group(), false, false, false), litMask)) {
+            if (lamp.lit(litMask)) {
                 Vector3d w = PoseMath.localToWorld(body, wagon.getYRot(), wagon.getXRot(),
                         new Vector3d(lamp.x() * flip, lamp.y(), lamp.z() * flip));
                 points.add(new double[]{w.x, w.y, w.z, w.x, w.y, w.z, CABIN_LUMINANCE});
             }
         }
         for (StockModel.Headlight lamp : model.headlights()) {
-            if (StockModel.tagLit(StockModel.tag(lamp.group(), false, false, false), litMask)) {
+            if (lamp.lit(litMask)) {
                 Vector3d a = PoseMath.localToWorld(body, wagon.getYRot(), wagon.getXRot(),
                         new Vector3d(lamp.x() * flip, lamp.y(), lamp.z() * flip));
                 Vector3d b = PoseMath.localToWorld(body, wagon.getYRot(), wagon.getXRot(),
                         new Vector3d(lamp.x() * flip, lamp.y() - 1.0,
-                                (lamp.z() + lamp.dirZ() * BEAM_LENGTH) * flip));
+                                (lamp.z() + lamp.dirZ() * HeadlightBeam.LENGTH) * flip));
                 points.add(new double[]{a.x, a.y, a.z, b.x, b.y, b.z, BEAM_LUMINANCE});
             }
         }

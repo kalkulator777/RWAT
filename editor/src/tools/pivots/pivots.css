@@ -1,0 +1,142 @@
+/*
+ * The hinges tool's section of the inspector (src/tools/pivots/PivotsInspector.tsx).
+ * Colours are the shell's (app/styles.css); the swatches are the view's overlay styles.
+ */
+
+.pivots-tool {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.pivots-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.pivots-heading {
+  font-weight: 600;
+  font-size: 13px;
+  margin: 0;
+}
+
+.pivots-list,
+.pivots-objects,
+.pivots-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+}
+
+.pivots-list {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.pivots-objects {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.pivots-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pivots-control,
+.pivots-object,
+.pivots-button {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  align-items: baseline;
+  text-align: left;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.pivots-control {
+  width: 100%;
+}
+
+.pivots-control[aria-pressed='true'] {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.pivots-control:focus-visible,
+.pivots-object:focus-visible,
+.pivots-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.pivots-button {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+.pivots-button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.pivots-key {
+  font-weight: 600;
+}
+
+.pivots-summary {
+  color: var(--text-muted);
+}
+
+.pivots-chosen {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px 8px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pivots-chosen legend {
+  font-weight: 600;
+  padding: 0 4px;
+}
+
+.pivots-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.pivots-facts dt {
+  color: var(--text-muted);
+}
+
+.pivots-facts dd {
+  margin: 0;
+  font-family: var(--font-mono);
+}
+
+.pivots-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 10px;
+  border-radius: 2px;
+  flex: none;
+}

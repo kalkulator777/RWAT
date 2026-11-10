@@ -19,8 +19,10 @@ import net.minecraft.resources.ResourceLocation;
  * gets fog by distance from the world origin: track sections far from 0,0
  * drown in sky-coloured fog regardless of where the camera is. The terrain
  * shader (RENDERTYPE_CUTOUT) computes fog from {@code Position + ChunkOffset},
- * and the renderer passes {@code ChunkOffset = −camera} — true camera-relative
- * fog for world-absolute vertices, exactly how vanilla chunks do it. Trade-off:
+ * and the renderer keeps each region's vertices relative to the region's
+ * corner and passes {@code ChunkOffset = corner − camera} — true
+ * camera-relative fog, and positions precise however far from the world's
+ * origin, exactly how vanilla chunk sections do it. Trade-off:
  * the terrain shader ignores normals, so directional diffuse is baked into the
  * vertex colour at build time.
  *

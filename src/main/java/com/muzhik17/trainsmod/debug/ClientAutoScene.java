@@ -36,6 +36,12 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * of the cab and from the walkway toward the cab, in spectator mode with the
  * HUD hidden — 4000 blocks east of the player, away from the save's own
  * rails. Quits the game at the end.
+ *
+ * <p>Some scenes keep a class of their own, on the same property: {@code
+ * access} — who may touch a wagon — is {@link AccessScene}; {@code railperf},
+ * {@code railedge} and {@code railfar} — the rail renderer — are {@link RailRenderScene};
+ * {@code depot} — the wagon renderer under load — is {@link DepotScene};
+ * {@code ride} is {@link RideScene}, and there are others.
  */
 @EventBusSubscriber(modid = RailsWheelsAndTrains.MODID, value = Dist.CLIENT)
 public final class ClientAutoScene {
@@ -403,8 +409,9 @@ public final class ClientAutoScene {
      * The handbrake wheel and the brake gauges (SPEC §5.3), on the M62 — its
      * cab wheel is MVP's {@code WIDGET} labelled "Hand Brake". Meant for the
      * realistic profile (no auto handbrakes): the new loco stands braked, the
-     * wheel shows it; a click on it (its payload) releases the handbrake and
-     * the wheel winds off; a full train brake fills the gauge over seconds.
+     * wheel shows it; a click on it (its payload, sent aboard the loco: the
+     * wheel is turned from aboard its car) releases the handbrake and the
+     * wheel winds off; a full train brake fills the gauge over seconds.
      */
     private static void handbrake(Minecraft mc) {
         if (ticks >= 180 && ticks < 240) {
@@ -447,7 +454,8 @@ public final class ClientAutoScene {
                 reportWheel(mc, "placed");
                 shot(mc, "rwat-handbrake-set.png");
             }
-            // what a click on the wheel sends
+            // what a click on the wheel sends — from aboard: the server turns no wheel for an outsider
+            case 193 -> command(mc, "ride @s mount @e[type=railswheelsandtrains:wagon,sort=nearest,limit=1]");
             case 195 -> {
                 WagonEntity wagon = wagon(mc);
                 if (wagon != null) {
@@ -461,7 +469,6 @@ public final class ClientAutoScene {
                 shot(mc, "rwat-handbrake-released.png");
                 command(mc, "rwat handle train_brake 8");
             }
-            case 237 -> command(mc, "ride @s mount @e[type=railswheelsandtrains:wagon,sort=nearest,limit=1]");
             case 240, 260, 280, 320 -> reportGauge(mc);
             // the panel's pressure bar under the brake lamps, still filling behind the handle
             case 250 -> {
@@ -593,7 +600,7 @@ public final class ClientAutoScene {
         if (readout == null) {
             return null;
         }
-        int height = com.muzhik17.trainsmod.client.gui.DriverPanel.height(readout);
+        int height = com.muzhik17.trainsmod.client.gui.DriverPanel.height(mc.font, readout);
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < com.muzhik17.trainsmod.client.gui.DriverPanel.WIDTH; x++) {
                 var target = com.muzhik17.trainsmod.client.gui.DriverPanel.targetAt(mc.font,

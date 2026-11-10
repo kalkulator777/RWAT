@@ -17,12 +17,45 @@ import java.util.Map;
  * {@code ../../common/}). Colours, specular and the rest are ignored: the
  * stock renders flat-lit textures, vertex colour white.
  *
+ * <p>A material's name is the whole rest of its line, spaces included
+ * ({@link #materialName}), in the MTL's {@code newmtl} and in the OBJ's
+ * {@code usemtl} alike ({@link ObjLoader}): that is how Blender reads and
+ * writes them, and the two files must agree or the material finds no texture.
+ *
  * <p>No MC imports — paths are plain strings, unit-tested; turning them into
  * resource locations is the loader's job.
+ *
+ * <p>Ported: {@code editor/src/ports/mtl.ts}, {@code tools/ir2rwat.py}
+ * ({@code material_name}, {@code parse_mtl}); golden:
+ * {@code fixtures/golden/mtl/}.
  */
 public final class MtlParser {
 
     private MtlParser() {
+    }
+
+    /**
+     * The material a {@code newmtl} or {@code usemtl} line names: everything
+     * after the keyword and the whitespace behind it, trimmed, with the
+     * spaces inside kept ({@code usemtl Dark Wood} is {@code Dark Wood}).
+     * Blender, which writes the names of its materials as they are, reads
+     * both keywords so (current importer: the rest of the line, trimmed),
+     * and so does the converter's port of this rule ({@code ir2rwat.material_name}).
+     * The first-word reading the OBJ loader once had made {@code Dark} of it,
+     * while the MTL entry stayed {@code Dark Wood}: no texture. The old
+     * Wavefront text says names hold no blanks; for those names every reading
+     * is the same.
+     *
+     * @return the name, or null if the line isn't a {@code keyword} line or names nothing
+     */
+    public static String materialName(String line, String keyword) {
+        String trimmed = line.trim();
+        if (!trimmed.startsWith(keyword) || trimmed.length() == keyword.length()
+                || !Character.isWhitespace(trimmed.charAt(keyword.length()))) {
+            return null;
+        }
+        String name = trimmed.substring(keyword.length()).trim();
+        return name.isEmpty() ? null : name;
     }
 
     /** Material → {@code map_Kd} path; materials without a diffuse map are absent. */
@@ -33,8 +66,9 @@ public final class MtlParser {
         String line;
         while ((line = reader.readLine()) != null) {
             line = line.trim();
-            if (line.startsWith("newmtl ")) {
-                material = line.substring("newmtl ".length()).trim();
+            String named = materialName(line, "newmtl");
+            if (named != null) {
+                material = named;
             } else if (line.startsWith("map_Kd ") && material != null) {
                 // options (-s, -o, …) aren't used by the assets; the path is the last token run
                 maps.put(material, line.substring("map_Kd ".length()).trim());

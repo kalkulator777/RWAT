@@ -180,7 +180,7 @@ public final class ClientRide {
         return wrapped;
     }
 
-    /** Drop everything (logout). */
+    /** Drop everything (logout / level change). */
     public static void clearAll() {
         RIDES.clear();
     }

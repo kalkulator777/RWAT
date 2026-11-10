@@ -1,0 +1,61 @@
+{
+  "description": "From the OBJ frame (the pack's: front -X, Y up, +Z the left side) to the engine's model frame (+Z forward, X across, the railhead at y 0.40625): stock.ObjFrame.point and box. input: point_obj [x, y, z] or box_obj {min, max}; expected: {model: the same shape}.",
+  "frame": "model",
+  "tolerance": 1e-09,
+  "cases": [
+    {
+      "id": "point-the-origin",
+      "note": "point: the origin",
+      "input": {"point_obj": [0.0, 0.0, 0.0]},
+      "expected": {"model": [0.0, 0.43625, 0.0]}
+    },
+    {
+      "id": "point-the-treads-bottom-is-at-the-railhead",
+      "note": "point: the tread's bottom is at the railhead",
+      "input": {"point_obj": [0.0, -0.03, 0.0]},
+      "expected": {"model": [0.0, 0.40625, 0.0]}
+    },
+    {
+      "id": "point-a-chair",
+      "note": "point: a chair",
+      "input": {"point_obj": [-8.75, 1.9, 0.6]},
+      "expected": {"model": [0.6, 2.3362499999999997, 8.75]}
+    },
+    {
+      "id": "point-the-front-left",
+      "note": "point: the front, left",
+      "input": {"point_obj": [-12.5, 2.311, 1.4375]},
+      "expected": {"model": [1.4375, 2.74725, 12.5]}
+    },
+    {
+      "id": "point-the-rear-right",
+      "note": "point: the rear, right",
+      "input": {"point_obj": [9.0, 0.0, -1.7]},
+      "expected": {"model": [-1.7, 0.43625, -9.0]}
+    },
+    {
+      "id": "box-the-platzkarts-vestibule-door",
+      "note": "box: the platzkart's vestibule door",
+      "input": {"box_obj": {"min": [10.781, 1.37475, 0.344], "max": [10.844, 3.62475, 1.031]}},
+      "expected": {"model": {"min": [0.344, 1.811, -10.844], "max": [1.031, 4.061, -10.781]}}
+    },
+    {
+      "id": "box-a-floor-zone",
+      "note": "box: a floor zone",
+      "input": {"box_obj": {"min": [-4.0, 0.56375, -1.0], "max": [4.0, 2.56375, 1.0]}},
+      "expected": {"model": {"min": [-1.0, 1.0, -4.0], "max": [1.0, 3.0, 4.0]}}
+    },
+    {
+      "id": "box-across-the-origin",
+      "note": "box: across the origin",
+      "input": {"box_obj": {"min": [-1.0, -0.5, -0.25], "max": [2.0, 0.5, 0.75]}},
+      "expected": {"model": {"min": [-0.25, -0.06374999999999997, -2.0], "max": [0.75, 0.93625, 1.0]}}
+    },
+    {
+      "id": "box-flat",
+      "note": "box: flat",
+      "input": {"box_obj": {"min": [-5.0, 0.9, -1.4], "max": [5.0, 0.9, 1.4]}},
+      "expected": {"model": {"min": [-1.4, 1.3362500000000002, -5.0], "max": [1.4, 1.3362500000000002, 5.0]}}
+    }
+  ]
+}

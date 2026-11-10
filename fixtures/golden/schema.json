@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kalkulator777.github.io/RWAT/fixtures/golden/schema.json",
+  "title": "RWAT golden case file",
+  "description": "A file of cases of fixtures/golden/<folder>/ (fixtures/golden/README.md): one piece of logic the engine, the converter and the editor share, each case an input and what the reference makes of it. A folder's ports.json follows #/$defs/ports.",
+  "type": "object",
+  "required": ["description", "frame", "tolerance", "cases"],
+  "additionalProperties": false,
+  "properties": {
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "What logic the file holds (the reference's class and method), what its inputs hold and what its expected."
+    },
+    "frame": {
+      "enum": ["obj", "model", "none"],
+      "description": "The frame the expected's places are in: obj (the pack's, as Blender shows the model), model (the engine's, stock.ObjFrame), none (no places). Markup in an input is always in the OBJ frame; a question asked of a result (a point to test) is in the frame of the expected."
+    },
+    "tolerance": {
+      "type": "number",
+      "minimum": 0,
+      "description": "How far a port's number may be from the expected, absolute. The reference compares exactly."
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/case"}
+    }
+  },
+  "$defs": {
+    "case": {
+      "type": "object",
+      "required": ["id", "note", "expected"],
+      "additionalProperties": false,
+      "anyOf": [{"required": ["input"]}, {"required": ["input_file"]}],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "description": "Stable, unique in its folder: the name of the case in the reports of every port."
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What the case is there for."
+        },
+        "input": {
+          "description": "The input as the engine reads it: text of an OBJ, MTL or .anim as a string, object names as strings, a type as the pack's JSON (OBJ frame)."
+        },
+        "input_file": {
+          "description": "Files of the example pack the input is read from, by their path from the repository root: a string is the whole input, an object puts each file under its key of input. A .json file is read as JSON, any other as its text (UTF-8).",
+          "oneOf": [
+            {"$ref": "#/$defs/packFile"},
+            {"type": "object", "additionalProperties": {"$ref": "#/$defs/packFile"}}
+          ]
+        },
+        "expected": {
+          "description": "What the reference makes of the input; written by the reference (its update flag), never by hand. NaN and the infinities as the strings NaN, Infinity, -Infinity."
+        }
+      }
+    },
+    "packFile": {
+      "type": "string",
+      "pattern": "^run/rwat_packs/RwatExamplePack/[^\\\\]+$",
+      "not": {"pattern": "\\.\\."},
+      "description": "A file of the example pack (CC0): the only files a case may read; nothing of MVP."
+    },
+    "finding": {
+      "type": "object",
+      "description": "What the engine tells a pack author, as the editor shows it (FloorCheck, ModelCheck, the type reader): code, the subject and its index (-1: none), the params the text is made of, the text. Fields the engine doesn't give (yet) are null.",
+      "required": ["code", "subject", "index", "params", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "code": {"type": ["string", "null"]},
+        "subject": {"type": ["string", "null"]},
+        "index": {"type": ["integer", "null"]},
+        "params": {"type": "object"},
+        "text": {"type": "string"}
+      }
+    },
+    "ports": {
+      "type": "object",
+      "description": "fixtures/golden/<folder>/ports.json: who writes the expected (reference) and who checks against it (ports); the meta-test of each suite checks that every folder naming its language is read by its runner.",
+      "required": ["reference", "ports"],
+      "additionalProperties": false,
+      "properties": {
+        "reference": {"enum": ["java", "python"]},
+        "ports": {
+          "type": "array",
+          "items": {"enum": ["java", "python", "ts"]}
+        }
+      }
+    }
+  }
+}

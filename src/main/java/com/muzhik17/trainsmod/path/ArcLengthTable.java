@@ -12,6 +12,12 @@ import org.joml.Vector3d;
  * <p>Built once per segment by sampling the curve at {@code samples + 1}
  * points and accumulating chord lengths; lookups interpolate linearly between
  * samples. Pure math, no MC imports (SPEC principle #4).
+ *
+ * <p>A curve that has no finite length — a point that is NaN or infinite, or
+ * coordinates so large the distances overflow — has no table: the constructor
+ * refuses it. Without that check the NaN length surfaced much later, as the
+ * exception {@link Math#clamp(double, double, double)} throws for a NaN bound
+ * in {@link #tForS}, wherever the first train happened to sample the curve.
  */
 public final class ArcLengthTable {
 
@@ -21,6 +27,10 @@ public final class ArcLengthTable {
     /** cumulative[i] = arc length from t=0 to t=i/samples; cumulative[0] = 0. */
     private final double[] cumulative;
 
+    /**
+     * @throws IllegalArgumentException if {@code samples < 1} or the curve's
+     *         length is not finite
+     */
     public ArcLengthTable(DoubleFunction<Vector3d> curve, int samples) {
         if (samples < 1) {
             throw new IllegalArgumentException("samples must be >= 1");
@@ -31,6 +41,9 @@ public final class ArcLengthTable {
             Vector3d current = curve.apply((double) i / samples);
             cumulative[i] = cumulative[i - 1] + previous.distance(current);
             previous = current;
+        }
+        if (!Double.isFinite(cumulative[samples])) {
+            throw new IllegalArgumentException("the curve has no finite length (a point of it is NaN or infinite)");
         }
     }
 

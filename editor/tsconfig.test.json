@@ -1,0 +1,10 @@
+{
+  "$comment": "Vitest: the unit tests next to the code, the replay tests and the Node-only helpers they use (*.node.ts).",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["vite/client", "vite-plugin-pwa/client", "node"],
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.test.tsbuildinfo"
+  },
+  "include": ["src", "test"]
+}

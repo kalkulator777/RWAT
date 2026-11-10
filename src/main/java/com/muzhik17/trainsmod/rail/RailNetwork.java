@@ -5,7 +5,6 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -19,6 +18,7 @@ import org.joml.Vector3f;
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.ServerConfig;
 import com.muzhik17.trainsmod.network.RailGraphSyncPayload;
+import com.muzhik17.trainsmod.network.RailSwitchesPayload;
 import com.muzhik17.trainsmod.path.BedClearing;
 import com.muzhik17.trainsmod.path.BedRaster;
 import com.muzhik17.trainsmod.path.HermiteSegment;
@@ -30,7 +30,9 @@ import com.muzhik17.trainsmod.path.TileFootprint;
 import com.muzhik17.trainsmod.path.TrackSweep;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.SectionPos;
 import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -45,6 +47,8 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.neoforged.neoforge.common.CommonHooks;
+import net.neoforged.neoforge.common.util.BlockSnapshot;
+import net.neoforged.neoforge.event.EventHooks;
 import net.neoforged.neoforge.event.level.BlockEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -61,8 +65,10 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * segments and their neighbours at the shared nodes), taking out what is no
  * longer under any rail and laying what now is.
  *
- * <p>{@code revision} increments on every edit — consists and clients use it
- * to know when to rebuild their materialized paths.
+ * <p>{@code revision} increments on every edit and every switch thrown —
+ * consists use it to know when to re-walk their routes and rebuild their
+ * materialized paths. (Clients count the changes they receive instead,
+ * {@code ClientRailGraph.generation()}: the revision is per dimension.)
  */
 public final class RailNetwork extends SavedData {
 
@@ -78,8 +84,8 @@ public final class RailNetwork extends SavedData {
      * bed) toggles the node's switch selection.
      */
     private final Map<BlockPos, Integer> switchStands = new LinkedHashMap<>();
-    /** Last polled power per stand, for rising-edge detection. Transient. */
-    private final Map<BlockPos, Boolean> standPowered = new LinkedHashMap<>();
+    /** The stands' redstone, for the rising edge. Transient. */
+    private final SwitchStandPoll<BlockPos> standPoll = new SwitchStandPoll<>();
     private int revision = 1;
 
     public static RailNetwork get(ServerLevel level) {
@@ -123,7 +129,12 @@ public final class RailNetwork extends SavedData {
      * everything in the loading gauge over the new segments, so a train
      * fits through a hill ({@link #gaugeCells}). If something there can't go — unbreakable, a
      * container, or not the player's to break — nothing is built or changed,
-     * the player is told where, and null is returned.
+     * the player is told where, and null is returned. So it is if a single
+     * cell of bed the build changes — of the new segments or of the
+     * neighbours it re-lays, anywhere along them — is one the player may not
+     * place or break in ({@link #changes}, region and spawn protection), and
+     * if the graph refuses a segment ({@link RailGraph#refusal}: both ends on
+     * one node, too short once snapped, or a duplicate of an existing one).
      */
     public List<RailSegment> build(ServerLevel level, ServerPlayer player, List<SegmentSpec> specs,
             RailSegment.Look look, Collection<BlockPos> consumed) {
@@ -139,6 +150,13 @@ public final class RailNetwork extends SavedData {
         for (SegmentSpec spec : specs) {
             RailSegment segment = graph.createSegment(spec.a(), spec.dirA(), spec.forceA(),
                     spec.b(), spec.dirB(), spec.forceB());
+            if (segment == null) {
+                RailGraph.Refusal refusal = graph.refusal(spec.a(), spec.dirA(), spec.forceA(),
+                        spec.b(), spec.dirB(), spec.forceB());
+                unbuild(created);
+                reportRefused(player, refusal, spec);
+                return null;
+            }
             graph.setSegmentLook(segment.id(), look);
             created.add(segment.id());
         }
@@ -149,19 +167,20 @@ public final class RailNetwork extends SavedData {
         BedLayout layout = layout(stale, relaid);
         ServerConfig.Gauge gauge = ServerConfig.clearedGauge();
         Set<BlockPos> gaugeCells = gauge == null ? Set.of() : gaugeCells(created, gauge, layout);
-        BedClearing.Plan clearing = planClearing(level, player, layout, new HashSet<>(consumed), gaugeCells);
+        BedClearing.Plan clearing = planClearing(level, player, layout, new HashSet<>(consumed), gaugeCells,
+                changes(level, layout, Set.of(), true));
         if (clearing.refused()) {
-            for (int i = created.size() - 1; i >= 0; i--) {
-                graph.removeSegment(created.get(i));
-            }
+            unbuild(created);
             reportBlocked(level, player, clearing.blocked());
             return null;
         }
-        for (BlockPos marker : consumed) {
-            level.removeBlock(marker, false);
-        }
-        clearWay(level, player, clearing.removed());
-        layBed(level, layout);
+        withoutCapture(level, () -> {
+            for (BlockPos marker : consumed) {
+                level.removeBlock(marker, false);
+            }
+            clearWay(level, player, clearing.removed());
+            layBed(level, layout);
+        });
         List<RailSegment> built = new ArrayList<>();
         for (int id : created) {
             built.add(graph.segment(id));
@@ -176,38 +195,82 @@ public final class RailNetwork extends SavedData {
         return built;
     }
 
+    /** Take a refused build's segments back out of the graph, newest first; their new nodes go with them. */
+    private void unbuild(List<Integer> created) {
+        for (int i = created.size() - 1; i >= 0; i--) {
+            graph.removeSegment(created.get(i));
+        }
+    }
+
+    /** Tell the player why the graph refused a segment of the build ({@link RailGraph#refusal}). */
+    private void reportRefused(ServerPlayer player, RailGraph.Refusal refusal, SegmentSpec spec) {
+        Component message = switch (refusal) {
+            case SAME_NODE -> {
+                Vector3d node = graph.nodeNear(spec.a()).position();
+                yield Component.translatable("message.railswheelsandtrains.rail.refused.same_node",
+                        (int) Math.floor(node.x), (int) Math.floor(node.y), (int) Math.floor(node.z));
+            }
+            case TOO_SHORT -> Component.translatable("message.railswheelsandtrains.rail.refused.too_short",
+                    (int) RailGraph.MIN_SEGMENT_LENGTH);
+            case DUPLICATE -> Component.translatable("message.railswheelsandtrains.rail.refused.duplicate");
+        };
+        player.displayClientMessage(message, false);
+    }
+
+    /**
+     * What a repaint came to ({@link #restyleStructureAt}): {@link RailEdit#NOTHING}
+     * if the cell is no track (0 segments), else the structure's segment
+     * count with {@link RailEdit#DONE}, {@link RailEdit#RELAID} or
+     * {@link RailEdit#REFUSED}.
+     */
+    public record Repaint(RailEdit edit, int segments) {
+    }
+
     /**
      * Redraw the structure whose bed occupies {@code cell} in {@code look}'s
      * rail style and bed material (the whole click-built structure, like
      * demolition), on behalf of {@code player}: the bed is re-laid under the
      * new style's tile, in the new material, clearing its way as a build does.
-     * Returns the structure's segment count; 0 if the cell is no track, −1 if
-     * the way can't be cleared (the player is told where; nothing changed).
+     * The player must be allowed to break in every cell of the structure's
+     * bed, all along it, and to place in the cells the new bed adds — one
+     * protected cell, and nothing is repainted (refused: they are told where;
+     * nothing changed). In the look the structure already has, the bed is
+     * laid out again all the same — that closes its holes and clears what got
+     * in its way (SPEC §2.2) — but the graph is as it was: no revision,
+     * nothing sent ({@link RailEdit#RELAID}).
      */
-    public int restyleStructureAt(ServerLevel level, ServerPlayer player, BlockPos cell,
+    public Repaint restyleStructureAt(ServerLevel level, ServerPlayer player, BlockPos cell,
             RailSegment.Look look) {
         RailSegment hit = segmentContaining(cell);
         if (hit == null) {
-            return 0;
+            return new Repaint(RailEdit.NOTHING, 0);
         }
         List<RailSegment> structure = graph.structureOf(hit);
-        Set<BlockPos> stale = laidBefore(structure);
+        RailEdit done = look.ofAll(structure) ? RailEdit.RELAID : RailEdit.DONE;
+        Set<BlockPos> own = bedOf(structure);
+        Set<BlockPos> stale = new LinkedHashSet<>(own);
+        stale.addAll(legacyStrips(structure));
         for (RailSegment segment : structure) {
             graph.setSegmentLook(segment.id(), look);
         }
         BedLayout layout = layout(stale, current(structure));
-        BedClearing.Plan clearing = planClearing(level, player, layout, Set.of(), Set.of());
+        BedClearing.Plan clearing = planClearing(level, player, layout, Set.of(), Set.of(),
+                changes(level, layout, own, true));
         if (clearing.refused()) {
             for (RailSegment segment : structure) {
                 graph.setSegmentLook(segment.id(), segment.look());
             }
             reportBlocked(level, player, clearing.blocked());
-            return -1;
+            return new Repaint(RailEdit.REFUSED, structure.size());
         }
-        clearWay(level, player, clearing.removed());
-        layBed(level, layout);
-        markChanged(level);
-        return structure.size();
+        withoutCapture(level, () -> {
+            clearWay(level, player, clearing.removed());
+            layBed(level, layout);
+        });
+        if (done.changesGraph()) {
+            markChanged(level);
+        }
+        return new Repaint(done, structure.size());
     }
 
     /**
@@ -268,28 +331,55 @@ public final class RailNetwork extends SavedData {
 
     /**
      * Remove the structure whose bed occupies {@code cell} (one click built it,
-     * one break removes it — a switch loses all its legs at once), or null if
-     * the cell belongs to no segment. Exact membership test against each
-     * segment's own {@link #bedCells}, no distance heuristics; at a shared
-     * joint cell the first matching segment wins.
+     * one break removes it — a switch loses all its legs at once) on behalf of
+     * {@code player}, who broke that cell; null if the cell belongs to no
+     * segment, or if the player may not break in some other cell of the
+     * structure's bed (region or spawn protection, anywhere along it: one
+     * broken block must not take down track elsewhere that is not theirs to
+     * touch) — then nothing changes and they are told where. Exact membership
+     * test against each segment's own {@link #bedCells}, no distance
+     * heuristics; at a shared joint cell the first matching segment wins.
      */
-    public RailSegment removeSegmentContaining(ServerLevel level, BlockPos cell) {
+    public RailSegment removeSegmentContaining(ServerLevel level, ServerPlayer player, BlockPos cell) {
         RailSegment segment = segmentContaining(cell);
-        if (segment != null) {
-            removeStructure(level, segment);
+        if (segment == null) {
+            return null;
         }
+        List<RailSegment> doomed = graph.structureOf(segment);
+        Set<BlockPos> own = bedOf(doomed);
+        // the broken cell has been through the break event already
+        Set<BedRaster.Cell> lifted = new LinkedHashSet<>();
+        for (BlockPos pos : own) {
+            if (!pos.equals(cell) && isBed(level.getBlockState(pos))) {
+                lifted.add(cell(pos));
+            }
+        }
+        BedClearing.Plan check = BedClearing.plan(List.of(), List.of(), c -> BedClearing.Occupant.EMPTY,
+                new BedClearing.Changes(lifted, List.of()),
+                c -> mayBreak(level, player, pos(c)), c -> mayPlace(level, player, pos(c)));
+        if (check.refused()) {
+            reportBlocked(level, player, check.blocked());
+            return null;
+        }
+        removeStructure(level, doomed, own);
         return segment;
     }
 
-    /**
-     * Remove a segment's whole structure (SPEC §2.2: segments built by one
-     * click are one element) and its bed — except the cells still under the
-     * surviving segments, so demolishing one track at a joint or a flat
-     * crossing doesn't bite holes into the neighbour's bed. The neighbours'
-     * beds are re-laid: an end left open grows its overhang.
-     */
+    /** Remove a segment's whole structure ({@link #removeStructure(ServerLevel, List, Set)}). */
     private void removeStructure(ServerLevel level, RailSegment segment) {
         List<RailSegment> doomed = graph.structureOf(segment);
+        removeStructure(level, doomed, bedOf(doomed));
+    }
+
+    /**
+     * Remove a whole structure (SPEC §2.2: segments built by one click are
+     * one element), {@code doomedBed} being its bed ({@link #bedOf}), and the
+     * bed — except the cells still under the surviving segments, so
+     * demolishing one track at a joint or a flat crossing doesn't bite holes
+     * into the neighbour's bed. The neighbours' beds are re-laid into free
+     * cells: an end left open grows its overhang.
+     */
+    private void removeStructure(ServerLevel level, List<RailSegment> doomed, Set<BlockPos> doomedBed) {
         Set<Integer> doomedIds = new HashSet<>();
         Set<Integer> doomedNodes = new HashSet<>();
         for (RailSegment member : doomed) {
@@ -305,7 +395,8 @@ public final class RailNetwork extends SavedData {
                 }
             }
         }
-        Set<BlockPos> stale = laidBefore(doomed);
+        Set<BlockPos> stale = new LinkedHashSet<>(doomedBed);
+        stale.addAll(legacyStrips(doomed));
         stale.addAll(laidBefore(neighbours));
         for (RailSegment member : doomed) {
             graph.removeSegment(member.id());
@@ -340,33 +431,73 @@ public final class RailNetwork extends SavedData {
      * edge of a signal into the stand cell — or into the cell below it, so a
      * lever on the track bed works — advances the node's switch selection by
      * one (SPEC §2.2 v1: cycle through the diverging legs). Stands whose node
-     * is gone (the junction was demolished) are pruned on the way.
+     * is gone (the junction was demolished) are pruned on the way. A stand
+     * whose chunk doesn't tick is passed over unread, so the poll neither
+     * loads chunks nor keeps them ({@link SwitchStandPoll}, {@link #standLive}).
+     * A throw changes the
+     * routes, so the revision moves on, but no track: the players in the
+     * dimension get the new selections alone ({@link RailSwitchesPayload}),
+     * not the whole graph.
      */
     public void tickSwitches(ServerLevel level) {
-        boolean changed = false;
-        for (Iterator<Map.Entry<BlockPos, Integer>> it = switchStands.entrySet().iterator();
-                it.hasNext(); ) {
-            Map.Entry<BlockPos, Integer> stand = it.next();
-            BlockPos pos = stand.getKey();
-            if (graph.node(stand.getValue()) == null) {
-                it.remove();
-                standPowered.remove(pos);
-                setDirty();
-                continue;
-            }
-            boolean powered = level.hasNeighborSignal(pos) || level.hasNeighborSignal(pos.below());
-            Boolean was = standPowered.put(pos, powered);
-            if (was != null && !was && powered) {
-                graph.setSwitchSelection(stand.getValue(),
-                        graph.switchSelection(stand.getValue()) + 1);
-                level.playSound(null, pos, SoundEvents.PISTON_CONTRACT,
-                        SoundSource.BLOCKS, 0.4F, 0.6F);
-                changed = true;
+        int stands = switchStands.size();
+        List<BlockPos> risen = standPoll.poll(switchStands, node -> graph.node(node) != null,
+                new SwitchStandPoll.Signals<>() {
+                    @Override
+                    public boolean live(BlockPos stand) {
+                        return standLive(level, stand);
+                    }
+
+                    @Override
+                    public boolean powered(BlockPos stand) {
+                        return level.hasNeighborSignal(stand) || level.hasNeighborSignal(stand.below());
+                    }
+                });
+        if (switchStands.size() != stands) {
+            setDirty();
+        }
+        if (risen.isEmpty()) {
+            return;
+        }
+        List<Integer> nodes = new ArrayList<>(risen.size());
+        for (BlockPos stand : risen) {
+            nodes.add(switchStands.get(stand));
+            level.playSound(null, stand, SoundEvents.PISTON_CONTRACT, SoundSource.BLOCKS, 0.4F, 0.6F);
+        }
+        Map<Integer, Integer> thrown = graph.throwSwitches(nodes);
+        // the routes follow the switches: consists re-walk theirs on the new revision
+        revision++;
+        setDirty();
+        PacketDistributor.sendToPlayersInDimension(level, RailSwitchesPayload.of(thrown));
+    }
+
+    /**
+     * Whether a stand's redstone is live ({@link SwitchStandPoll.Signals#live}):
+     * its chunk is in block-ticking range — a player's simulation distance,
+     * a forced chunk; the ticket a block read adds is not one of those — and
+     * every block its signal is read from is loaded: its six neighbours and
+     * those of the cell below ({@link #tickSwitches}), one block around it in
+     * x and z, so up to four chunks. A stand within a block of a chunk border
+     * at the very edge of the loaded area is therefore not polled until the
+     * player comes a chunk nearer — accepted: that is where redstone stops
+     * ticking anyway.
+     */
+    private static boolean standLive(ServerLevel level, BlockPos stand) {
+        if (!level.shouldTickBlocksAt(stand)) {
+            return false;
+        }
+        int minX = SectionPos.blockToSectionCoord(stand.getX() - 1);
+        int maxX = SectionPos.blockToSectionCoord(stand.getX() + 1);
+        int minZ = SectionPos.blockToSectionCoord(stand.getZ() - 1);
+        int maxZ = SectionPos.blockToSectionCoord(stand.getZ() + 1);
+        for (int x = minX; x <= maxX; x++) {
+            for (int z = minZ; z <= maxZ; z++) {
+                if (!level.hasChunk(x, z)) {
+                    return false;
+                }
             }
         }
-        if (changed) {
-            markChanged(level);
-        }
+        return true;
     }
 
     // --- rail markers (SPEC §2.2 UX): the server-side registry of placed marker blocks ---
@@ -386,39 +517,47 @@ public final class RailNetwork extends SavedData {
 
     /**
      * Up to {@code count} markers of one kind nearest to {@code from}
-     * (excluding {@code from} itself), nearest first; {@code switchMarkers}
-     * selects {@link RailSwitchMarkerBlock} vs plain {@link RailMarkerBlock}.
+     * (excluding {@code from} itself), nearest first, that {@code player} may
+     * take: a build consumes them, so a marker the player may not break where
+     * it stands ({@link #mayBreak} — someone else's, in their region) is
+     * passed over, as if it weren't there. {@code switchMarkers} selects
+     * {@link RailSwitchMarkerBlock} vs plain {@link RailMarkerBlock}.
      * Entries whose block is gone (e.g. removed without the hook firing) are
-     * pruned on the way — the world is re-checked, the registry is just an
-     * index so connecting doesn't scan blocks.
+     * pruned as they come up — the world is re-checked, the registry is just
+     * an index so connecting doesn't scan blocks. The registry holds the
+     * markers of the whole dimension, and reading a block loads its chunk:
+     * so the distance comes first, and of the markers in range only the
+     * nearest are read, until enough are found.
      */
-    public List<BlockPos> nearestMarkers(ServerLevel level, BlockPos from, double maxDist,
+    public List<BlockPos> nearestMarkers(ServerLevel level, ServerPlayer player, BlockPos from, double maxDist,
             boolean switchMarkers, int count) {
         record Found(BlockPos pos, double distSq) {
         }
-        List<Found> found = new ArrayList<>();
+        List<Found> inRange = new ArrayList<>();
         double maxDistSq = maxDist * maxDist;
-        for (Iterator<BlockPos> it = markers.keySet().iterator(); it.hasNext(); ) {
-            BlockPos pos = it.next();
-            if (pos.equals(from)) {
-                continue;
+        for (BlockPos pos : markers.keySet()) {
+            double distSq = pos.distSqr(from);
+            if (distSq <= maxDistSq && !pos.equals(from)) {
+                inRange.add(new Found(pos, distSq));
             }
-            Block block = level.getBlockState(pos).getBlock();
+        }
+        inRange.sort(Comparator.comparingDouble(Found::distSq));
+        List<BlockPos> usable = new ArrayList<>();
+        for (Found marker : inRange) {
+            if (usable.size() == count) {
+                break;
+            }
+            Block block = level.getBlockState(marker.pos()).getBlock();
             if (!(block instanceof RailMarkerBlock)) {
-                it.remove(); // stale entry
+                markers.remove(marker.pos()); // stale entry
                 setDirty();
                 continue;
             }
-            if (block instanceof RailSwitchMarkerBlock != switchMarkers) {
-                continue;
-            }
-            double distSq = pos.distSqr(from);
-            if (distSq <= maxDistSq) {
-                found.add(new Found(pos, distSq));
+            if (block instanceof RailSwitchMarkerBlock == switchMarkers && mayBreak(level, player, marker.pos())) {
+                usable.add(marker.pos());
             }
         }
-        found.sort(Comparator.comparingDouble(Found::distSq));
-        return found.stream().limit(count).map(Found::pos).toList();
+        return usable;
     }
 
     // --- track bed blocks (SPEC §2.2, 0.3) ---
@@ -449,14 +588,34 @@ public final class RailNetwork extends SavedData {
      * so re-laying them also clears what a world built back then left.
      */
     private Set<BlockPos> laidBefore(Collection<RailSegment> segments) {
+        Set<BlockPos> cells = bedOf(segments);
+        cells.addAll(legacyStrips(segments));
+        return cells;
+    }
+
+    /** The segments' bed as it is now, every cell of it ({@link #bedCells}). */
+    private Set<BlockPos> bedOf(Collection<RailSegment> segments) {
         Set<BlockPos> cells = new LinkedHashSet<>();
         for (RailSegment segment : segments) {
             cells.addAll(bedCells(segment).keySet());
+        }
+        return cells;
+    }
+
+    /** The strip older versions laid under the segments ({@link BedRaster#legacyStrip}). */
+    private Set<BlockPos> legacyStrips(Collection<RailSegment> segments) {
+        Set<BlockPos> cells = new LinkedHashSet<>();
+        for (RailSegment segment : segments) {
             for (BedRaster.Cell cell : BedRaster.legacyStrip(new HermiteSegmentPath(graph.hermite(segment)))) {
-                cells.add(new BlockPos(cell.x(), cell.y(), cell.z()));
+                cells.add(pos(cell));
             }
         }
         return cells;
+    }
+
+    /** Whether the bed of some segment holds {@code cell} — the cell is still wanted as track bed. */
+    public boolean isTrackBed(BlockPos cell) {
+        return segmentContaining(cell) != null;
     }
 
     /**
@@ -552,9 +711,33 @@ public final class RailNetwork extends SavedData {
         for (Map.Entry<BlockPos, Bed> cell : layout.wanted().entrySet()) {
             BlockState existing = level.getBlockState(cell.getKey());
             BlockState laid = cell.getValue().state();
-            if (existing != laid && (existing.isAir() || existing.canBeReplaced() || isBed(existing))) {
+            if (existing != laid && isFree(existing)) {
                 level.setBlock(cell.getKey(), laid, Block.UPDATE_ALL);
             }
+        }
+    }
+
+    /** Whether the bed may go into a cell holding {@code state} without breaking anything: air, replaceable or bed. */
+    private static boolean isFree(BlockState state) {
+        return state.isAir() || state.canBeReplaced() || isBed(state);
+    }
+
+    /**
+     * Run a player's edit of the world with NeoForge's block snapshot capture
+     * off. The rails item is used inside it ({@code CommonHooks.onPlaceItemIntoWorld}):
+     * every block a build changed would be held back from clients and
+     * neighbours until the item returns and then posted as one
+     * {@link BlockEvent.EntityMultiPlaceEvent} — a handler cancelling that
+     * would put the blocks back while the graph keeps the track. The edit
+     * has asked about every cell it changes already ({@link #planClearing}).
+     */
+    private static void withoutCapture(ServerLevel level, Runnable edit) {
+        boolean capturing = level.captureBlockSnapshots;
+        level.captureBlockSnapshots = false;
+        try {
+            edit.run();
+        } finally {
+            level.captureBlockSnapshots = capturing;
         }
     }
 
@@ -568,13 +751,16 @@ public final class RailNetwork extends SavedData {
      * ({@link BedClearing}): obstacles in the bed and above it — its
      * headroom, and the {@code gauge} cells if the build clears the loading
      * gauge — are to be broken, plants above it removed; unbreakable blocks,
-     * containers and blocks the player may not break there refuse.
+     * containers and blocks the player may not break there refuse, and so
+     * does any of the bed's own {@code changes} the player may not make there.
      * {@code consumed} cells (the build's own markers, removed by it) count
      * as empty. Nothing changes yet — the protection check posts a
-     * {@link BlockEvent.BreakEvent} per block to be broken, as a pickaxe would.
+     * {@link BlockEvent.BreakEvent} per block to be broken or bed to be taken
+     * out, as a pickaxe would, and a {@link BlockEvent.EntityPlaceEvent} per
+     * cell the bed merely comes into: one pass, every cell asked once.
      */
     private BedClearing.Plan planClearing(ServerLevel level, ServerPlayer player, BedLayout layout,
-            Set<BlockPos> consumed, Set<BlockPos> gauge) {
+            Set<BlockPos> consumed, Set<BlockPos> gauge, BedClearing.Changes changes) {
         Set<BedRaster.Cell> bed = new LinkedHashSet<>();
         layout.wanted().keySet().forEach(pos -> bed.add(cell(pos)));
         Set<BedRaster.Cell> above = new LinkedHashSet<>();
@@ -586,7 +772,41 @@ public final class RailNetwork extends SavedData {
                     return consumed.contains(pos) ? BedClearing.Occupant.EMPTY
                             : occupant(level, pos, level.getBlockState(pos));
                 },
-                cell -> mayBreak(level, player, pos(cell)));
+                changes,
+                cell -> mayBreak(level, player, pos(cell)),
+                cell -> mayPlace(level, player, pos(cell)));
+    }
+
+    /**
+     * The changes a layout makes to the bed itself, for the permission check
+     * ({@link BedClearing.Changes}): lifted — the stale cells no segment
+     * wants any more that hold bed, and all of {@code own} that does (the
+     * structure a player repaints or demolishes); laid — the wanted cells
+     * whose block changes. {@code clears}: the edit clears its way, so every
+     * such cell gets its bed (or the edit is refused); without clearing only
+     * the free ones do ({@link #layBed}).
+     */
+    private static BedClearing.Changes changes(ServerLevel level, BedLayout layout, Set<BlockPos> own,
+            boolean clears) {
+        Set<BedRaster.Cell> lifted = new LinkedHashSet<>();
+        for (BlockPos pos : own) {
+            if (isBed(level.getBlockState(pos))) {
+                lifted.add(cell(pos));
+            }
+        }
+        for (BlockPos pos : layout.stale()) {
+            if (!layout.wanted().containsKey(pos) && isBed(level.getBlockState(pos))) {
+                lifted.add(cell(pos));
+            }
+        }
+        List<BedRaster.Cell> laid = new ArrayList<>();
+        for (Map.Entry<BlockPos, Bed> wanted : layout.wanted().entrySet()) {
+            BlockState existing = level.getBlockState(wanted.getKey());
+            if (existing != wanted.getValue().state() && (clears || isFree(existing))) {
+                laid.add(cell(wanted.getKey()));
+            }
+        }
+        return new BedClearing.Changes(lifted, laid);
     }
 
     /**
@@ -648,6 +868,20 @@ public final class RailNetwork extends SavedData {
     }
 
     /**
+     * Whether {@code player} may place a block at {@code pos}: the world lets
+     * them act there and no handler cancels the
+     * {@link BlockEvent.EntityPlaceEvent} (region protection). Asked before
+     * anything is placed, so the event carries the block there now, placed
+     * against the one below — protection goes by where, not by what.
+     */
+    private static boolean mayPlace(ServerLevel level, ServerPlayer player, BlockPos pos) {
+        if (!level.mayInteract(player, pos)) {
+            return false;
+        }
+        return !EventHooks.onBlockPlace(player, BlockSnapshot.create(level.dimension(), level, pos), Direction.UP);
+    }
+
+    /**
      * Break what the plan removes: no drops in any game mode (SPEC §2.2 — a
      * free drill by the user's decision). A waterlogged block leaves its
      * water. Up to {@link #BREAK_EFFECTS} blocks, spread over the way, show
@@ -666,19 +900,23 @@ public final class RailNetwork extends SavedData {
     }
 
     /**
-     * Tell the player why the way can't be cleared, at the blocking block —
-     * and mark it with a burst of red dust.
+     * Tell the player why the way can't be cleared or the bed not changed, at
+     * the blocking block — and mark it with a burst of red dust.
      */
     private static void reportBlocked(ServerLevel level, ServerPlayer player, BedClearing.Blocked blocked) {
         BlockPos pos = pos(blocked.cell());
-        BlockState state = level.getBlockState(pos);
-        String key = switch (blocked.reason()) {
-            case UNBREAKABLE -> "message.railswheelsandtrains.rail.blocked.unbreakable";
-            case CONTAINER -> "message.railswheelsandtrains.rail.blocked.container";
-            case PROTECTED -> "message.railswheelsandtrains.rail.blocked.protected";
+        Component name = level.getBlockState(pos).getBlock().getName();
+        Component message = switch (blocked.reason()) {
+            case UNBREAKABLE -> Component.translatable("message.railswheelsandtrains.rail.blocked.unbreakable",
+                    name, pos.getX(), pos.getY(), pos.getZ());
+            case CONTAINER -> Component.translatable("message.railswheelsandtrains.rail.blocked.container",
+                    name, pos.getX(), pos.getY(), pos.getZ());
+            case PROTECTED -> Component.translatable("message.railswheelsandtrains.rail.blocked.protected",
+                    name, pos.getX(), pos.getY(), pos.getZ());
+            case PROTECTED_BED -> Component.translatable("message.railswheelsandtrains.rail.blocked.protected_bed",
+                    pos.getX(), pos.getY(), pos.getZ());
         };
-        player.displayClientMessage(Component.translatable(key, state.getBlock().getName(),
-                pos.getX(), pos.getY(), pos.getZ()), false);
+        player.displayClientMessage(message, false);
         DustParticleOptions dust = new DustParticleOptions(new Vector3f(1.0F, 0.15F, 0.1F), 1.5F);
         for (int corner = 0; corner < 8; corner++) {
             level.sendParticles(player, dust, true,
@@ -883,32 +1121,57 @@ public final class RailNetwork extends SavedData {
         }
         tag.put("Switches", switchList);
         tag.putInt("Revision", revision);
+        // the id counters: ids of demolished track are never handed out again
+        tag.putInt("NextNode", graph.nextNodeId());
+        tag.putInt("NextSegment", graph.nextSegmentId());
+        tag.putInt("NextGroup", graph.nextGroupId());
         return tag;
     }
 
+    /**
+     * Read the graph back. Damaged records — a segment whose node is gone, a
+     * zero or non-numeric tangent, a curve with no length ({@link RailGraph#restoreNode},
+     * {@link RailGraph#restoreSegment}) — are skipped with an error in the log
+     * saying which and why, and the rest of the graph loads: one bad record
+     * must not take the world down with it. A consist whose route ran over a
+     * skipped segment finds it gone, as after a demolition, and is stranded
+     * where it stands ({@code Consist#resolvePath}). Nothing is marked dirty
+     * for it: the file keeps what it had until the next real edit.
+     */
     private static RailNetwork load(CompoundTag tag, HolderLookup.Provider registries) {
         RailNetwork network = new RailNetwork();
+        RailGraph graph = network.graph;
+        int skipped = 0;
         for (Tag entry : tag.getList("Nodes", Tag.TAG_COMPOUND)) {
             CompoundTag nodeTag = (CompoundTag) entry;
-            network.graph.putNode(new RailNode(nodeTag.getInt("Id"),
-                    new Vector3d(nodeTag.getDouble("X"), nodeTag.getDouble("Y"), nodeTag.getDouble("Z")),
-                    new Vector3d(nodeTag.getDouble("DX"), nodeTag.getDouble("DY"), nodeTag.getDouble("DZ"))));
+            int id = nodeTag.getInt("Id");
+            String problem = graph.restoreNode(id, vector(nodeTag, "X", "Y", "Z"),
+                    vector(nodeTag, "DX", "DY", "DZ"));
+            if (problem != null) {
+                skipped++;
+                RailsWheelsAndTrains.LOGGER.error("Rail network: skipping node {} of the saved graph: {}",
+                        id, problem);
+            }
         }
         for (Tag entry : tag.getList("Segments", Tag.TAG_COMPOUND)) {
             CompoundTag segmentTag = (CompoundTag) entry;
-            Vector3d dirA = segmentTag.contains("DAX")
-                    ? new Vector3d(segmentTag.getDouble("DAX"), segmentTag.getDouble("DAY"),
-                            segmentTag.getDouble("DAZ"))
-                    : null;
-            Vector3d dirB = segmentTag.contains("DBX")
-                    ? new Vector3d(segmentTag.getDouble("DBX"), segmentTag.getDouble("DBY"),
-                            segmentTag.getDouble("DBZ"))
-                    : null;
-            network.graph.putSegment(new RailSegment(segmentTag.getInt("Id"),
+            int id = segmentTag.getInt("Id");
+            Vector3d dirA = segmentTag.contains("DAX") ? vector(segmentTag, "DAX", "DAY", "DAZ") : null;
+            Vector3d dirB = segmentTag.contains("DBX") ? vector(segmentTag, "DBX", "DBY", "DBZ") : null;
+            String problem = graph.restoreSegment(new RailSegment(id,
                     segmentTag.getInt("A"), segmentTag.getInt("SA"),
                     segmentTag.getInt("B"), segmentTag.getInt("SB"), dirA, dirB,
                     segmentTag.getInt("Group"), segmentTag.getString("Style"),
                     segmentTag.getString("Bed")));
+            if (problem != null) {
+                skipped++;
+                RailsWheelsAndTrains.LOGGER.error("Rail network: skipping segment {} of the saved graph: {}",
+                        id, problem);
+            }
+        }
+        for (int id : graph.dropOrphanNodes()) {
+            RailsWheelsAndTrains.LOGGER.error("Rail network: dropping node {} of the saved graph:"
+                    + " every segment on it was skipped", id);
         }
         for (Tag entry : tag.getList("Markers", Tag.TAG_COMPOUND)) {
             CompoundTag markerTag = (CompoundTag) entry;
@@ -922,9 +1185,31 @@ public final class RailNetwork extends SavedData {
         }
         for (Tag entry : tag.getList("Switches", Tag.TAG_COMPOUND)) {
             CompoundTag switchTag = (CompoundTag) entry;
-            network.graph.setSwitchSelection(switchTag.getInt("Node"), switchTag.getInt("Sel"));
+            String problem = graph.restoreSwitchSelection(switchTag.getInt("Node"), switchTag.getInt("Sel"));
+            if (problem != null) {
+                RailsWheelsAndTrains.LOGGER.warn("Rail network: skipping a switch setting of the saved graph: {}",
+                        problem);
+            }
         }
         network.revision = Math.max(1, tag.getInt("Revision"));
+        graph.restoreNextIds(tag.getInt("NextNode"), tag.getInt("NextSegment"), tag.getInt("NextGroup"));
+        if (skipped > 0) {
+            RailsWheelsAndTrains.LOGGER.error("Rail network: {} damaged record(s) of the saved graph were skipped;"
+                    + " trains that ran over them stand where they are", skipped);
+        }
         return network;
+    }
+
+    /**
+     * A vector of three number tags; a component that is missing or no number
+     * reads as NaN, so the graph refuses the vector ({@code getDouble} would
+     * make it a quiet 0 and a zero tangent).
+     */
+    private static Vector3d vector(CompoundTag tag, String x, String y, String z) {
+        return new Vector3d(number(tag, x), number(tag, y), number(tag, z));
+    }
+
+    private static double number(CompoundTag tag, String key) {
+        return tag.contains(key, Tag.TAG_ANY_NUMERIC) ? tag.getDouble(key) : Double.NaN;
     }
 }

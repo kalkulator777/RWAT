@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
 import com.muzhik17.trainsmod.client.render.model.WagonModelDecl;
+import com.muzhik17.trainsmod.convention.ObjectRole;
 
 /** A wagon's sounds as its model declaration names them (SPEC §10), and the Ogg facts read from the files. */
 class SoundSetTest {
@@ -75,6 +76,66 @@ class SoundSetTest {
         assertTrue(SoundSet.NONE.files().isEmpty());
     }
 
+    /**
+     * A cab control of a kind is the first the pack declares, the same on
+     * every run (the maps used to lose the order, and with it which of
+     * {@code _1}/{@code _2} a notch played).
+     */
+    @Test
+    void controlsAndDoorsKeepTheDeclaredOrder() {
+        SoundSet sounds = parse("""
+                {
+                  "controls": { "WIDGET_9": { "move": "w.ogg" }, "WIDGET_8": { "move": "w.ogg" },
+                                "WIDGET_7": { "move": "w.ogg" }, "WIDGET_6": { "move": "w.ogg" },
+                                "WIDGET_5": { "move": "w.ogg" }, "WIDGET_4": { "move": "w.ogg" },
+                                "THROTTLE_2": { "move": "t2.ogg" }, "THROTTLE_1": { "move": "t1.ogg" },
+                                "IND_BRAKE_1": { "engage": "ind.ogg" } },
+                  "doors": { "d9": "d.ogg", "d8": "d.ogg", "d7": "d.ogg", "d6": "d.ogg", "d5": "d.ogg",
+                             "d4": "d.ogg", "d3": "d.ogg", "d2": "d.ogg", "d1": "d.ogg", "d0": "d.ogg" }
+                }""");
+        assertEquals(List.of("WIDGET_9", "WIDGET_8", "WIDGET_7", "WIDGET_6", "WIDGET_5", "WIDGET_4",
+                "THROTTLE_2", "THROTTLE_1", "IND_BRAKE_1"), List.copyOf(sounds.controls().keySet()));
+        assertEquals(List.of("d9", "d8", "d7", "d6", "d5", "d4", "d3", "d2", "d1", "d0"),
+                List.copyOf(sounds.doors().keySet()));
+        assertEquals("mvp:t2.ogg", sounds.control(ObjectRole.Kind.THROTTLE).move());
+        assertEquals("mvp:ind.ogg", sounds.control(ObjectRole.Kind.INDEPENDENT_BRAKE).engage());
+        assertNull(sounds.control(ObjectRole.Kind.REVERSER));
+    }
+
+    /**
+     * A control's sound is found by the kind its key names, as an object's name
+     * is read, not by the key's first letters: {@code THROTTLE_BRAKE_1}
+     * (declared first) used to play on the throttle because it starts with
+     * {@code THROTTLE_}.
+     */
+    @Test
+    void aControlIsFoundByItsKindNotItsPrefix() {
+        SoundSet sounds = parse("""
+                {
+                  "controls": { "THROTTLE_BRAKE_1": { "move": "combined.ogg" },
+                                "GAUGE_THROTTLE_1": { "move": "gauge.ogg" },
+                                "IND_BRAKE_2": { "move": "ind.ogg" },
+                                "THROTTLE_1": { "move": "throttle.ogg" },
+                                "MY_LEVER": { "move": "mine.ogg" },
+                                "TRAIN_BRAKE_1": { "move": "brake.ogg" } }
+                }""");
+        assertEquals("mvp:throttle.ogg", sounds.control(ObjectRole.Kind.THROTTLE).move());
+        assertEquals("mvp:combined.ogg", sounds.control(ObjectRole.Kind.THROTTLE_BRAKE).move());
+        assertEquals("mvp:gauge.ogg", sounds.control(ObjectRole.Kind.GAUGE_THROTTLE).move());
+        assertEquals("mvp:ind.ogg", sounds.control(ObjectRole.Kind.INDEPENDENT_BRAKE).move());
+        assertEquals("mvp:brake.ogg", sounds.control(ObjectRole.Kind.TRAIN_BRAKE).move());
+        assertNull(sounds.control(ObjectRole.Kind.REVERSER));
+
+        // a combined handle alone gives the throttle no sound
+        assertNull(parse("{ \"controls\": { \"THROTTLE_BRAKE_1\": { \"move\": \"c.ogg\" } } }")
+                .control(ObjectRole.Kind.THROTTLE));
+        // both spellings of the independent brake, and a Blender copy suffix, are that kind
+        assertEquals("mvp:i.ogg", parse("{ \"controls\": { \"INDEPENDENT_BRAKE_1\": { \"move\": \"i.ogg\" } } }")
+                .control(ObjectRole.Kind.INDEPENDENT_BRAKE).move());
+        assertEquals("mvp:i.ogg", parse("{ \"controls\": { \"ind_brake_1.001\": { \"move\": \"i.ogg\" } } }")
+                .control(ObjectRole.Kind.INDEPENDENT_BRAKE).move());
+    }
+
     @Test
     void aDeclarationWithoutSoundsHasNone() {
         WagonModelDecl decl = WagonModelDecl.parse("mvp",
@@ -87,6 +148,39 @@ class SoundSetTest {
         assertThrows(JsonSyntaxException.class, () -> parse("{ \"horn\": { \"start\": \"a.ogg\" } }"));
         assertThrows(JsonSyntaxException.class,
                 () -> parse("{ \"idle\": { \"main\": \"a.ogg\", \"pitch\": [1.0] } }"));
+    }
+
+    /** Fix list D4: every level of the sounds knows its keys; the pack's own names (doors, controls) aren't checked. */
+    @Test
+    void unknownKeys_warnByTheirPathInTheModel() {
+        List<String> warnings = new java.util.ArrayList<>();
+        SoundSet.parse("mvp", JsonParser.parseString("""
+                { "whistle": "w.ogg",
+                  "wheels": { "main": "w.ogg", "volum": [0, 1] },
+                  "doors": { "AnyDoor": "d.ogg" },
+                  "controls": { "THROTTLE_1": { "mvoe": "n.ogg" }, "MY_LEVER": { "move": "n.ogg" } } }""")
+                .getAsJsonObject(), warnings::add);
+        assertEquals(List.of(
+                "unknown key 'sounds.whistle' (ignored)",
+                "unknown key 'sounds.controls.THROTTLE_1.mvoe' (ignored) — did you mean 'sounds.controls.THROTTLE_1.move'?",
+                "unknown key 'sounds.wheels.volum' (ignored) — did you mean 'sounds.wheels.volume'?"), warnings);
+    }
+
+    /** A null or a wrongly typed sound is an error naming it, not a bare exception. */
+    @Test
+    void nullsAndWrongTypes_nameTheField() {
+        assertEquals("'sounds.idle' must be a sound or an object {start, main, stop, pitch, volume}, got null",
+                assertThrows(JsonSyntaxException.class, () -> parse("{ \"idle\": null }")).getMessage());
+        assertEquals("'sounds.bell' must be a string, got the number 5",
+                assertThrows(JsonSyntaxException.class, () -> parse("{ \"bell\": 5 }")).getMessage());
+        assertEquals("'sounds.doors.door1' must be a string, got null",
+                assertThrows(JsonSyntaxException.class, () -> parse("{ \"doors\": { \"door1\": null } }")).getMessage());
+        assertEquals("'sounds.idle.pitch[1]' must be a finite number, got the string \"hi\"",
+                assertThrows(JsonSyntaxException.class,
+                        () -> parse("{ \"idle\": { \"main\": \"a.ogg\", \"pitch\": [1, \"hi\"] } }")).getMessage());
+        assertEquals("'sounds.controls.THROTTLE_1' must be an object, got the string \"t.ogg\"",
+                assertThrows(JsonSyntaxException.class,
+                        () -> parse("{ \"controls\": { \"THROTTLE_1\": \"t.ogg\" } }")).getMessage());
     }
 
     /** A minimal Ogg Vorbis file: identification page, then a last page whose granule position counts the samples. */

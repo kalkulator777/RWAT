@@ -6,6 +6,8 @@ import java.util.Map;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
+import com.muzhik17.trainsmod.convention.ControlPose;
+import com.muzhik17.trainsmod.convention.ModelParts;
 import com.muzhik17.trainsmod.convention.ObjectRole;
 import com.muzhik17.trainsmod.kinematics.EdgeOutline;
 
@@ -45,13 +47,16 @@ import net.minecraft.resources.ResourceLocation;
  * <p>Light (SPEC §8): every quad's {@code tag} says how it is lit —
  * {@link #tag}; {@code lightGroups} are the model's light groups (a tag's group
  * index points here), {@code lamps} the cabin lamps that light the interior,
- * {@code headlights} the lamps that throw a flare and a beam.
+ * {@code headlights} the lamps that throw a flare and a beam. A glowing quad,
+ * a cabin lamp and a headlight shine by one rule, {@link ModelParts#lit}.
  *
  * <p>{@code liveries} are paint schemes (SPEC §6.7): livery id → which base
  * textures it replaces with which. The meshes are shared — a livery is the
  * same geometry baked against other textures.
  *
  * <p>Every loader returns this shape; the renderer doesn't know the source.
+ * What each part of the OBJ is — the roles, hinges, lamps — is
+ * {@link ModelParts}'; the loader ({@link IrStockModel}) builds the meshes by it.
  */
 public record StockModel(
         Map<ResourceLocation, Mesh> body,
@@ -67,7 +72,7 @@ public record StockModel(
         List<Headlight> headlights,
         List<Coupler> couplers) {
 
-    /** Quad tag bits (SPEC §8): low byte = light group index + 1 (0 = none). */
+    /** Quad tag bits (SPEC §8, {@link ModelParts.Light}): low byte = light group index + 1 (0 = none). */
     public static final int TAG_GROUP_MASK = 0xFF;
     /** The quad glows at full brightness while its group is lit. */
     public static final int TAG_FULLBRIGHT = 1 << 8;
@@ -82,14 +87,14 @@ public record StockModel(
                 | (interior ? TAG_INTERIOR : 0) | (linvert ? TAG_LINVERT : 0);
     }
 
-    /** True if a quad with this tag is lit given the model's lit groups. */
+    /** A quad tag of a part's light. */
+    public static int tag(ModelParts.Light light) {
+        return tag(light.group(), light.fullbright(), light.interior(), light.invert());
+    }
+
+    /** True if a quad with this tag is lit given the model's lit groups ({@link ModelParts#lit}). */
     public static boolean tagLit(int tag, long litMask) {
-        int group = tagGroup(tag);
-        if (group < 0) {
-            return true;
-        }
-        boolean on = group < 64 && (litMask >> group & 1L) != 0;
-        return on != ((tag & TAG_LINVERT) != 0);
+        return ModelParts.lit(tagGroup(tag), (tag & TAG_LINVERT) != 0, litMask);
     }
 
     /** The light group index of a tag, −1 if none. */
@@ -134,15 +139,9 @@ public record StockModel(
             return new Control(newRole, meshes, interior, pivot, axis, degrees, slide, boxMin, boxMax, outline);
         }
 
-        /** The model-space transform at animation value {@code value} (IR order: slide, then turn). */
+        /** The model-space transform at animation value {@code value} ({@link ControlPose}: slide, then turn). */
         public Matrix4f transform(float value, Matrix4f dest) {
-            dest.identity().translate(slide.x * value, slide.y * value, slide.z * value);
-            if (pivot != null && degrees != 0.0F) {
-                dest.translate(pivot)
-                        .rotate((float) Math.toRadians(value * degrees), axis)
-                        .translate(-pivot.x, -pivot.y, -pivot.z);
-            }
-            return dest;
+            return ControlPose.transform(value, slide, pivot, axis, degrees, dest);
         }
     }
 
@@ -157,16 +156,33 @@ public record StockModel(
             Vector3f pivot) {
     }
 
-    /** A cabin lamp (SPEC §8): the centre of a glowing island of its group's mesh. */
-    public record Lamp(float x, float y, float z, int group) {
+    /**
+     * A cabin lamp (SPEC §8, {@link ModelParts.Lamp}): the centre of a glowing
+     * island of its group's mesh; {@code invert}: {@code LINVERT}. The interior
+     * bake ({@code BakedStockModel}) and a rider's light ({@code CabinLight})
+     * take a lamp as lit by {@link #lit}, the one rule of every fire.
+     */
+    public record Lamp(float x, float y, float z, int group, boolean invert) {
+
+        /** True if it shines given the model's lit groups ({@link ModelParts#lit}). */
+        public boolean lit(long litMask) {
+            return ModelParts.lit(group, invert, litMask);
+        }
     }
 
     /**
-     * A headlight (SPEC §8): the centre of its lens face, which way it shines
-     * along the model ({@code dirZ} = +1 forward, −1 back), the lens radius,
-     * its colour and light group (−1 = always lit).
+     * A headlight (SPEC §8, {@link ModelParts.Headlight}): the centre of its
+     * lens face, which way it shines along the model ({@code dirZ} = +1
+     * forward, −1 back), the lens radius, its colour, light group (−1 none)
+     * and {@code LINVERT}.
      */
-    public record Headlight(float x, float y, float z, float dirZ, float radius, int rgb, int group) {
+    public record Headlight(float x, float y, float z, float dirZ, float radius, int rgb, int group,
+            boolean invert) {
+
+        /** True if it shines given the model's lit groups ({@link ModelParts#lit}). */
+        public boolean lit(long litMask) {
+            return ModelParts.lit(group, invert, litMask);
+        }
     }
 
     /** The non-spinning bogie frame plus its wheelsets. */
@@ -226,14 +242,8 @@ public record StockModel(
                 && rearBogie.meshes().isEmpty() && rearBogie.wheels().isEmpty();
     }
 
-    /** Bitmask of this model's light groups that are on, by {@link #lightGroups} index. */
+    /** Bitmask of this model's light groups that are on, by {@link #lightGroups} index ({@link ModelParts#litMask}). */
     public long litMask(java.util.function.ToDoubleFunction<String> groupValue) {
-        long mask = 0L;
-        for (int i = 0; i < lightGroups.size() && i < 64; i++) {
-            if (groupValue.applyAsDouble(lightGroups.get(i)) > 0.0) {
-                mask |= 1L << i;
-            }
-        }
-        return mask;
+        return ModelParts.litMask(lightGroups, groupValue);
     }
 }

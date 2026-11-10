@@ -1,0 +1,426 @@
+{
+  "description": "The OBJ a wagon model declaration names, read as the game reads it (pack.ModelCheck.findings after WagonModelDecl.parse; ObjLoader.loadModel): a path Minecraft refuses, a missing file, a face index out of bounds, a number Java refuses, no faces. input: namespace (the declaring file's, for unqualified paths), declaration (the wagon model's JSON), files (ns:path -> text), present (locations that are there, contents unread: textures); any other key with a colon is a file too (what input_file reads of the example pack). A location is valid as Minecraft's ResourceLocation.tryParse takes it (locations.json), its file named as Minecraft names it (:a and a are minecraft:a). expected: the findings in the check's order (pack.ModelCheck.findings), each {severity: error | warning, finding}: code (ModelFinding.Code.key, as the editor names it: missing-texture), subject and index null, params (the names and numbers its line is made of, in the line's order), text (the line).",
+  "frame": "none",
+  "tolerance": 0,
+  "cases": [
+    {
+      "id": "missing-obj",
+      "note": "the OBJ isn't there: nothing more is checked",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/gone.obj"},
+        "files": {
+          "t:car/car.obj": "mtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1/1 2/1 3/1 4/1\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "missing",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/gone.obj"},
+            "text": "model file t:car/gone.obj not found"
+          }
+        }
+      ]
+    },
+    {
+      "id": "obj-path-not-a-resource-location",
+      "note": "Minecraft takes no capitals in a resource path",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "Car/Car.obj"},
+        "files": {
+          "t:car/car.obj": "mtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1/1 2/1 3/1 4/1\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "bad-path",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:Car/Car.obj"},
+            "text": "model path 't:Car/Car.obj' is not a valid resource location"
+          }
+        }
+      ]
+    },
+    {
+      "id": "face-index-past-the-vertices",
+      "note": "a face names a fifth vertex of four: the list's index out of bounds",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj"},
+        "files": {
+          "t:car/car.obj": "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\nusemtl body\nf 1 2 3 9\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "bad-face-index",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj", "detail": "Index 8 out of bounds for length 4"},
+            "text": "model t:car/car.obj: a face refers to a vertex, texture coordinate or normal that isn't there (Index 8 out of bounds for length 4); indices count from 1, negative ones aren't supported"
+          }
+        }
+      ]
+    },
+    {
+      "id": "negative-face-index",
+      "note": "relative indices aren't supported: -1 is the list's index -2",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj"},
+        "files": {
+          "t:car/car.obj": "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\nusemtl body\nf -1 -2 -3\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "bad-face-index",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj", "detail": "Index -2 out of bounds for length 4"},
+            "text": "model t:car/car.obj: a face refers to a vertex, texture coordinate or normal that isn't there (Index -2 out of bounds for length 4); indices count from 1, negative ones aren't supported"
+          }
+        }
+      ]
+    },
+    {
+      "id": "zero-face-index",
+      "note": "indices count from 1: 0 is the list's index -1",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj"},
+        "files": {
+          "t:car/car.obj": "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\nusemtl body\nf 0 1 2\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "bad-face-index",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj", "detail": "Index -1 out of bounds for length 4"},
+            "text": "model t:car/car.obj: a face refers to a vertex, texture coordinate or normal that isn't there (Index -1 out of bounds for length 4); indices count from 1, negative ones aren't supported"
+          }
+        }
+      ]
+    },
+    {
+      "id": "texture-coordinate-index-past",
+      "note": "a corner's texture coordinate past the one there is",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj"},
+        "files": {
+          "t:car/car.obj": "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\nusemtl body\nf 1/5 2/1 3/1\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "bad-face-index",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj", "detail": "Index 4 out of bounds for length 1"},
+            "text": "model t:car/car.obj: a face refers to a vertex, texture coordinate or normal that isn't there (Index 4 out of bounds for length 1); indices count from 1, negative ones aren't supported"
+          }
+        }
+      ]
+    },
+    {
+      "id": "normal-index-without-normals",
+      "note": "a corner names a normal and the file has none",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj"},
+        "files": {
+          "t:car/car.obj": "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\nusemtl body\nf 1//1 2//1 3//1\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "bad-face-index",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj", "detail": "Index 0 out of bounds for length 0"},
+            "text": "model t:car/car.obj: a face refers to a vertex, texture coordinate or normal that isn't there (Index 0 out of bounds for length 0); indices count from 1, negative ones aren't supported"
+          }
+        }
+      ]
+    },
+    {
+      "id": "corner-names-no-vertex",
+      "note": "a corner of a slash alone splits into nothing: index 0 of an empty array",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj"},
+        "files": {
+          "t:car/car.obj": "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\nusemtl body\nf / / /\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "bad-face-index",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj", "detail": "Index 0 out of bounds for length 0"},
+            "text": "model t:car/car.obj: a face refers to a vertex, texture coordinate or normal that isn't there (Index 0 out of bounds for length 0); indices count from 1, negative ones aren't supported"
+          }
+        }
+      ]
+    },
+    {
+      "id": "corner-index-not-a-number",
+      "note": "a corner's index that is no integer is refused as a number, not an index",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj"},
+        "files": {
+          "t:car/car.obj": "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\nusemtl body\nf 1 x 3\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "unreadable",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj", "error": "java.lang.NumberFormatException: For input string: \"x\""},
+            "text": "model t:car/car.obj can't be read: java.lang.NumberFormatException: For input string: \"x\""
+          }
+        }
+      ]
+    },
+    {
+      "id": "corner-index-past-the-int-range",
+      "note": "an index of more digits than an int holds is no integer either",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj"},
+        "files": {
+          "t:car/car.obj": "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\nusemtl body\nf 1 2 99999999999\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "unreadable",
+            "subject": null,
+            "index": null,
+            "params": {
+              "path": "t:car/car.obj",
+              "error": "java.lang.NumberFormatException: For input string: \"99999999999\""
+            },
+            "text": "model t:car/car.obj can't be read: java.lang.NumberFormatException: For input string: \"99999999999\""
+          }
+        }
+      ]
+    },
+    {
+      "id": "vertex-number-not-a-number",
+      "note": "a coordinate Float.parseFloat refuses: the whole file is refused",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj"},
+        "files": {
+          "t:car/car.obj": "v 0 0 abc\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\nusemtl body\nf 1 2 3\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "unreadable",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj", "error": "java.lang.NumberFormatException: For input string: \"abc\""},
+            "text": "model t:car/car.obj can't be read: java.lang.NumberFormatException: For input string: \"abc\""
+          }
+        }
+      ]
+    },
+    {
+      "id": "vertex-short-line",
+      "note": "a vertex of two numbers: the third is read past the line's end, an index out of bounds",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj"},
+        "files": {
+          "t:car/car.obj": "v 1 2\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\nusemtl body\nf 1 2 3\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "bad-face-index",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj", "detail": "Index 3 out of bounds for length 3"},
+            "text": "model t:car/car.obj: a face refers to a vertex, texture coordinate or normal that isn't there (Index 3 out of bounds for length 3); indices count from 1, negative ones aren't supported"
+          }
+        }
+      ]
+    },
+    {
+      "id": "vertex-bad-number-before-the-end",
+      "note": "the numbers are read in order: a bad first one is refused before the missing third",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj"},
+        "files": {
+          "t:car/car.obj": "v abc 2\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\nusemtl body\nf 1 2 3\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "unreadable",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj", "error": "java.lang.NumberFormatException: For input string: \"abc\""},
+            "text": "model t:car/car.obj can't be read: java.lang.NumberFormatException: For input string: \"abc\""
+          }
+        }
+      ]
+    },
+    {
+      "id": "texture-coordinate-short-line",
+      "note": "a texture coordinate of one number",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj"},
+        "files": {
+          "t:car/car.obj": "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\nvt 0.5\nusemtl body\nf 1 2 3\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "bad-face-index",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj", "detail": "Index 2 out of bounds for length 2"},
+            "text": "model t:car/car.obj: a face refers to a vertex, texture coordinate or normal that isn't there (Index 2 out of bounds for length 2); indices count from 1, negative ones aren't supported"
+          }
+        }
+      ]
+    },
+    {
+      "id": "no-faces",
+      "note": "vertices and no face: nothing more is checked",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj"},
+        "files": {
+          "t:car/car.obj": "mtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "no-faces",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj"},
+            "text": "model t:car/car.obj has no faces"
+          }
+        }
+      ]
+    },
+    {
+      "id": "byte-order-mark-hides-the-first-line",
+      "note": "a byte-order mark is no blank to Java: the first line is no mtllib, so nothing has a texture",
+      "input": {
+        "namespace": "t",
+        "declaration": {"obj": "car/car.obj"},
+        "files": {
+          "t:car/car.obj": "\ufeffmtllib car.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\no BODY\nusemtl body\nf 1/1 2/1 3/1 4/1\n",
+          "t:car/car.mtl": "newmtl body\nmap_Kd ../tex/body.png\n",
+          "t:car/door1.anim": ""
+        },
+        "present": ["t:tex/body.png", "t:car/red/body.png"]
+      },
+      "expected": [
+        {
+          "severity": "error",
+          "finding": {
+            "code": "draws-nothing",
+            "subject": null,
+            "index": null,
+            "params": {"path": "t:car/car.obj"},
+            "text": "model t:car/car.obj draws nothing: no face has a textured material"
+          }
+        }
+      ]
+    }
+  ]
+}

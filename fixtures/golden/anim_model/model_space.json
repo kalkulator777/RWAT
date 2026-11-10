@@ -1,0 +1,144 @@
+{
+  "description": "An .anim's frames in the engine's model frame (client.render.model.IrAnim.toModelSpace with the lift ObjFrame.Y_LIFT 0.43625, as the model loader moves door leaves): not ported (editor.md 4.2: the editor's view works in the OBJ frame); the engine's record of what anim/ held before. input.text; expected: {model: {object: [16 floats row by row]}}, or {error: true}.",
+  "frame": "model",
+  "tolerance": 1e-06,
+  "cases": [
+    {
+      "id": "one-object-at-rest",
+      "note": "one object at rest",
+      "input": {"text": "O DOOR_1\nA Door1Action\nM 1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1\n"},
+      "expected": {
+        "model": {"DOOR_1": [[1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]]}
+      }
+    },
+    {
+      "id": "a-slide-along-z",
+      "note": "a slide along +Z",
+      "input": {
+        "text": "O DOOR_1\nM 1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1\nM 1,0,0,0,0,1,0,0,0,0,1,0.5,0,0,0,1\nM 1,0,0,0,0,1,0,0,0,0,1,1.0,0,0,0,1\n"
+      },
+      "expected": {
+        "model": {
+          "DOOR_1": [
+            [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+            [1.0, 0.0, 0.0, 0.5, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+            [1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+          ]
+        }
+      }
+    },
+    {
+      "id": "a-slide-along-x-and-up",
+      "note": "a slide along +X and up",
+      "input": {"text": "O LEAF\nM 1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1\nM 1,0,0,0.75,0,1,0,0.1,0,0,1,0,0,0,0,1\n"},
+      "expected": {
+        "model": {
+          "LEAF": [
+            [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+            [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.099999994, 0.0, 0.0, 1.0, -0.75, 0.0, 0.0, 0.0, 1.0]
+          ]
+        }
+      }
+    },
+    {
+      "id": "a-quarter-turn-about-y",
+      "note": "a quarter turn about Y",
+      "input": {"text": "O LEAF\nM 1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1\nM 0,0,1,0,0,1,0,0,-1,0,0,0,0,0,0,1\n"},
+      "expected": {
+        "model": {
+          "LEAF": [
+            [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+          ]
+        }
+      }
+    },
+    {
+      "id": "a-turn-about-a-hinge-off-the-origin",
+      "note": "a turn about a hinge off the origin",
+      "input": {"text": "O LEAF\nM 0,0,1,-1,0,1,0,0,-1,0,0,1,0,0,0,1\n"},
+      "expected": {"model": {"LEAF": [[0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0, -1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]]}}
+    },
+    {
+      "id": "two-objects",
+      "note": "two objects",
+      "input": {
+        "text": "O A\nM 1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1\nM 1,0,0,0,0,1,0,0,0,0,1,0.25,0,0,0,1\nO B\nM 1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1\nM 1,0,0,0,0,1,0,-0.25,0,0,1,0,0,0,0,1\n"
+      },
+      "expected": {
+        "model": {
+          "A": [
+            [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+            [1.0, 0.0, 0.0, 0.25, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+          ],
+          "B": [
+            [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+            [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, -0.25, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+          ]
+        }
+      }
+    },
+    {
+      "id": "an-object-named-again-goes-on",
+      "note": "an object named again goes on",
+      "input": {
+        "text": "O A\nM 1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1\nO B\nM 1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1\nO A\nM 1,0,0,0.5,0,1,0,0,0,0,1,0,0,0,0,1\n"
+      },
+      "expected": {
+        "model": {
+          "A": [
+            [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+            [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, -0.5, 0.0, 0.0, 0.0, 1.0]
+          ],
+          "B": [[1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]]
+        }
+      }
+    },
+    {
+      "id": "an-object-with-no-frame",
+      "note": "an object with no frame",
+      "input": {"text": "O EMPTY\nA Nothing\n"},
+      "expected": {"model": {"EMPTY": []}}
+    },
+    {
+      "id": "a-frame-before-any-object-is-dropped",
+      "note": "a frame before any object is dropped",
+      "input": {"text": "M 1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1\nO A\nM 1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1\n"},
+      "expected": {"model": {"A": [[1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]]}}
+    },
+    {
+      "id": "indented-lines-and-blanks-around-values",
+      "note": "indented lines and blanks around values",
+      "input": {"text": "  O DOOR_2  \n  M 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1  \n"},
+      "expected": {
+        "model": {"DOOR_2": [[1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]]}
+      }
+    },
+    {
+      "id": "crlf-line-ends",
+      "note": "CRLF line ends",
+      "input": {"text": "O DOOR_1\r\nM 1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1\r\n"},
+      "expected": {
+        "model": {"DOOR_1": [[1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]]}
+      }
+    },
+    {
+      "id": "nothing",
+      "note": "nothing",
+      "input": {"text": ""},
+      "expected": {"model": {}}
+    },
+    {
+      "id": "fifteen-values",
+      "note": "fifteen values",
+      "input": {"text": "O A\nM 1,0,0,0,0,1,0,0,0,0,1,0,0,0,0\n"},
+      "expected": {"error": true}
+    },
+    {
+      "id": "a-value-that-isnt-a-number",
+      "note": "a value that isn't a number",
+      "input": {"text": "O A\nM 1,0,0,0,0,1,0,0,0,0,1,x,0,0,0,1\n"},
+      "expected": {"error": true}
+    }
+  ]
+}

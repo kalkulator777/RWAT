@@ -58,6 +58,9 @@ public final class SwitchThroat {
      * MVP's and the mod's rails are at ±0.8125, the stock is calibrated to
      * it). A side's rail objects are running rails only if their railhead
      * spans this line.
+     *
+     * <p>Ported: {@code editor/src/ports/objFrame.ts} ({@code WHEEL_LINE}, the
+     * rails in the editor's view; its test reads the value from this line).
      */
     public static final double WHEEL_LINE = 0.8125;
     /** Vertices within this of a side's top count as its railhead. */

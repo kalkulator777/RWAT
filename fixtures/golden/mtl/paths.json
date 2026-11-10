@@ -1,0 +1,115 @@
+{
+  "description": "The paths of an MTL (client.render.model.MtlParser): resolve(folder, relative) joins and normalises (backslashes to slashes, . and empty segments dropped, .. pops a folder; null above the root), folderOf(path), fileNameOf(path). input: resolve [folder, relative], folder_of or file_name_of; expected: the path, or null.",
+  "frame": "none",
+  "tolerance": 0,
+  "cases": [
+    {
+      "id": "path-0-a-name-in-the-mtls-folder",
+      "note": "a name in the MTL's folder",
+      "input": {"resolve": ["models/coach", "coach_body.png"]},
+      "expected": "models/coach/coach_body.png"
+    },
+    {
+      "id": "path-1-up-a-folder",
+      "note": "up a folder",
+      "input": {"resolve": ["models/coach", "../common/steel.png"]},
+      "expected": "models/common/steel.png"
+    },
+    {
+      "id": "path-2-no-folder",
+      "note": "no folder",
+      "input": {"resolve": ["", "a.png"]},
+      "expected": "a.png"
+    },
+    {
+      "id": "path-3-backslashes-are-slashes",
+      "note": "backslashes are slashes",
+      "input": {"resolve": ["a", "..\\b\\c.png"]},
+      "expected": "b/c.png"
+    },
+    {
+      "id": "path-4-above-the-root-null",
+      "note": "above the root: null",
+      "input": {"resolve": ["a/b", "../../../x.png"]},
+      "expected": null
+    },
+    {
+      "id": "path-5-dot-segments-drop",
+      "note": "dot segments drop",
+      "input": {"resolve": ["a", "./b/./c.png"]},
+      "expected": "a/b/c.png"
+    },
+    {
+      "id": "path-6-empty-segments-drop",
+      "note": "empty segments drop",
+      "input": {"resolve": ["a", "b//c.png"]},
+      "expected": "a/b/c.png"
+    },
+    {
+      "id": "path-7-a-leading-slash-is-no-root",
+      "note": "a leading slash is no root",
+      "input": {"resolve": ["a", "/abs.png"]},
+      "expected": "a/abs.png"
+    },
+    {
+      "id": "path-8-up-to-the-root-itself-empty",
+      "note": "up to the root itself: empty",
+      "input": {"resolve": ["a", ".."]},
+      "expected": ""
+    },
+    {
+      "id": "path-9-above-an-empty-folder-null",
+      "note": "above an empty folder: null",
+      "input": {"resolve": ["", ".."]},
+      "expected": null
+    },
+    {
+      "id": "path-10-down-then-up",
+      "note": "down then up",
+      "input": {"resolve": ["a/b", "c/../../d.png"]},
+      "expected": "a/d.png"
+    },
+    {
+      "id": "path-11-the-folder-of-a-path",
+      "note": "the folder of a path",
+      "input": {"folder_of": "a/b/c.obj"},
+      "expected": "a/b"
+    },
+    {
+      "id": "path-12-a-bare-name-has-no-folder",
+      "note": "a bare name has no folder",
+      "input": {"folder_of": "c.obj"},
+      "expected": ""
+    },
+    {
+      "id": "path-13-a-trailing-slash",
+      "note": "a trailing slash",
+      "input": {"folder_of": "a/"},
+      "expected": "a"
+    },
+    {
+      "id": "path-14-a-leading-slash",
+      "note": "a leading slash",
+      "input": {"folder_of": "/c"},
+      "expected": ""
+    },
+    {
+      "id": "path-15-the-file-name-of-a-path",
+      "note": "the file name of a path",
+      "input": {"file_name_of": "a/b/c.png"},
+      "expected": "c.png"
+    },
+    {
+      "id": "path-16-a-bare-name",
+      "note": "a bare name",
+      "input": {"file_name_of": "c.png"},
+      "expected": "c.png"
+    },
+    {
+      "id": "path-17-a-trailing-slash-empty",
+      "note": "a trailing slash: empty",
+      "input": {"file_name_of": "a/b/"},
+      "expected": ""
+    }
+  ]
+}

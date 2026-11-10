@@ -27,8 +27,10 @@ import com.muzhik17.trainsmod.kinematics.FloorCheck;
  * would write — interior: the override's, else the one derived from IR's
  * passenger area; doors: the override's list, else (with a floor) the model's
  * doors, edited by id by the override's "doors" object; cab: the override's, else an empty cab for a
- * locomotive — and {@link FloorCheck} must find nothing wrong. Where the IR
- * packs are at hand, {@link PackFloorTest} checks the generated pack itself.
+ * locomotive — and {@link FloorCheck} must find nothing wrong. Digests and
+ * override files are in the OBJ frame, as the pack is: the parser turns them.
+ * Where the IR packs are at hand, {@link PackFloorTest} checks the generated
+ * pack itself.
  */
 class RecipeFloorTest {
 

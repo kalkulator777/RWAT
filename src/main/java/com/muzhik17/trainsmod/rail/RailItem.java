@@ -8,11 +8,14 @@ import org.joml.Vector3d;
 import com.muzhik17.trainsmod.RailsWheelsAndTrains;
 import com.muzhik17.trainsmod.ServerConfig;
 import com.muzhik17.trainsmod.client.ClientItemScreens;
+import com.muzhik17.trainsmod.network.SelectRailStylePayload;
+import com.muzhik17.trainsmod.path.RailGraph;
 import com.muzhik17.trainsmod.path.RailSegment;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
@@ -30,23 +33,37 @@ import net.minecraft.world.level.block.state.BlockState;
  * The rails (SPEC §2.2 UX). Clicking a plain {@link RailMarkerBlock} connects
  * it to the nearest other plain marker — a segment is built between the two
  * with tangents taken from the markers' directions, and both marker blocks are
- * consumed.
+ * consumed. Three more plain markers laid out as two crossing chords build a
+ * flat crossing instead (two independent segments, no shared node).
  *
- * <p>Clicking a {@link RailSwitchMarkerBlock} builds a junction instead: with
- * three more switch markers in range — a diamond crossing (two independent
- * segments between opposite pairs); otherwise — a Y-switch from this marker
- * (the toe) to the two nearest plain markers (the branch ends), two segments
- * sharing the toe node and its tangent. All involved markers are consumed.
+ * <p>Clicking a {@link RailSwitchMarkerBlock} builds a junction instead, by
+ * how many other switch markers are in range: three — an X-crossing through a
+ * shared centre node, or a scissors crossover if the paired chords don't
+ * cross; one — an N-crossover between two tracks; none — a Y-switch from this
+ * marker (the toe) to the two nearest plain markers (the branch ends), two
+ * segments sharing the toe node and its tangent. All involved markers are
+ * consumed. Only markers the player may break count as in range — someone
+ * else's, in their region, is passed over ({@link RailNetwork#nearestMarkers}).
  *
  * <p>Right-clicking into the air opens the rail style picker (SPEC §6.10):
  * the chosen style and bed material (SPEC §2.2) are stored on the stack, and
- * every segment this item builds is drawn in that style on that bed.
+ * every segment this item builds is drawn in that style on that bed — the
+ * server checks both again as the item is used ({@link #look}).
  * Sneak-right-clicking existing track repaints its whole structure in the
- * held style and bed.
+ * held style and bed. Builds and repaints are refused whole when any cell of
+ * bed they would change is one the player may not build in. A repaint in the
+ * look the structure already has lays its bed out again — closing holes,
+ * clearing what got in the way — without touching the graph. Every edit that
+ * lays out a structure's bed — built, repainted, re-laid or refused — puts
+ * the rails on a short cooldown ({@link RailEdit}).
  */
 public class RailItem extends Item {
 
-    private static final double MIN_SEGMENT_LENGTH = 2.0;
+    /**
+     * The markers' own distance is checked up front for a clearer message; the
+     * graph checks the snapped nodes again ({@link RailGraph#refusal}).
+     */
+    private static final double MIN_SEGMENT_LENGTH = RailGraph.MIN_SEGMENT_LENGTH;
     /**
      * Min |cos| between a flat-crossing chord and its end markers' axes: the
      * markers must face each other along the chord. 8 marker rotations put the
@@ -69,9 +86,32 @@ public class RailItem extends Item {
         return stack.getOrDefault(RailsWheelsAndTrains.RAIL_BED.get(), RailSegment.DEFAULT_BED);
     }
 
-    /** The rail style and bed a rails stack builds with. */
+    /**
+     * The rail style and bed a rails stack builds and repaints with, checked
+     * as the picker's choice is ({@code RwatNetwork}): a style that is no
+     * {@linkplain #validStyle valid id} builds the mod's own rail, a bed
+     * material this server doesn't know the default gravel. The picker
+     * stores nothing else, but a creative player can write any string into
+     * the stack — and the look goes into the segments, the save and every
+     * client's copy of the graph.
+     */
     public static RailSegment.Look look(ItemStack stack) {
-        return new RailSegment.Look(style(stack), bed(stack));
+        String style = style(stack);
+        BedMaterial bed = BedMaterial.byId(bed(stack));
+        return new RailSegment.Look(validStyle(style) ? style : RailSegment.DEFAULT_STYLE,
+                bed == null ? RailSegment.DEFAULT_BED : bed.key());
+    }
+
+    /**
+     * Whether a rail style id may go into a segment: {@code ""} (the mod's own
+     * rail) or a well-formed resource location no longer than the picker may
+     * send ({@link SelectRailStylePayload#MAX_LENGTH}). Whether the style
+     * exists is not asked: styles are client resources (SPEC §6.10), and a
+     * client without it draws the standard rail.
+     */
+    public static boolean validStyle(String style) {
+        return style.isEmpty()
+                || style.length() <= SelectRailStylePayload.MAX_LENGTH && ResourceLocation.tryParse(style) != null;
     }
 
     @Override
@@ -84,13 +124,17 @@ public class RailItem extends Item {
         BlockState state = context.getLevel().getBlockState(context.getClickedPos());
         if (player.isSecondaryUseActive() && state.getBlock() instanceof TrackBedBlock) {
             if (context.getLevel() instanceof ServerLevel level && player instanceof ServerPlayer builder) {
-                int restyled = RailNetwork.get(level)
+                RailNetwork.Repaint repaint = RailNetwork.get(level)
                         .restyleStructureAt(level, builder, context.getClickedPos(), look);
-                if (restyled > 0) {
+                if (repaint.edit() == RailEdit.DONE) {
                     player.displayClientMessage(Component.translatable(
-                            "message.railswheelsandtrains.rail.restyled", restyled,
+                            "message.railswheelsandtrains.rail.restyled", repaint.segments(),
                             styleName(look.style()), BedMaterial.of(look.bed()).displayName()), true);
+                } else if (repaint.edit() == RailEdit.RELAID) {
+                    player.displayClientMessage(Component.translatable(
+                            "message.railswheelsandtrains.rail.relaid", repaint.segments()), true);
                 }
+                rest(builder, repaint.edit());
             }
             return InteractionResult.sidedSuccess(context.getLevel().isClientSide);
         }
@@ -104,12 +148,25 @@ public class RailItem extends Item {
         if (!(context.getLevel() instanceof ServerLevel level) || !(player instanceof ServerPlayer builder)) {
             return InteractionResult.SUCCESS;
         }
-        if (state.getBlock() instanceof RailSwitchMarkerBlock) {
-            buildJunction(level, builder, look, context.getClickedPos(), state);
-        } else {
-            buildPlainSegment(level, builder, look, context.getClickedPos(), state);
-        }
+        rest(builder, state.getBlock() instanceof RailSwitchMarkerBlock
+                ? buildJunction(level, builder, look, context.getClickedPos(), state)
+                : buildPlainSegment(level, builder, look, context.getClickedPos(), state));
         return InteractionResult.CONSUME;
+    }
+
+    /**
+     * Put the rails in {@code player}'s hands on cooldown after an edit that
+     * laid out a structure's bed, done or refused ({@link RailEdit#cooldownTicks}):
+     * meanwhile the server doesn't call the item at all, and the client greys
+     * its slot. A click into the air doesn't open the style picker then
+     * either — vanilla asks the cooldown before {@link #use}; a second is
+     * short enough to leave it so.
+     */
+    private void rest(ServerPlayer player, RailEdit edit) {
+        int ticks = edit.cooldownTicks();
+        if (ticks > 0) {
+            player.getCooldowns().addCooldown(this, ticks);
+        }
     }
 
     /**
@@ -121,18 +178,21 @@ public class RailItem extends Item {
      * so plain markers build it. The geometry test is the gate — stray
      * markers elsewhere in range must not block (or trigger) the crossing.
      */
-    private static void buildPlainSegment(ServerLevel level, ServerPlayer player, RailSegment.Look look,
+    private static RailEdit buildPlainSegment(ServerLevel level, ServerPlayer player, RailSegment.Look look,
             BlockPos posA, BlockState stateA) {
         RailNetwork network = RailNetwork.get(level);
         Vector3d dirA = RailMarkerBlock.direction(stateA.getValue(RailMarkerBlock.ROTATION));
-        List<BlockPos> nearest = network.nearestMarkers(level, posA, ServerConfig.maxMarkerDistance(), false, 3);
+        List<BlockPos> nearest = network.nearestMarkers(level, player, posA,
+                ServerConfig.maxMarkerDistance(), false, 3);
         if (nearest.isEmpty()) {
             player.displayClientMessage(Component.literal(
                     "Rails: no second marker within " + ServerConfig.maxMarkerDistance() + " blocks."), true);
-            return;
+            return RailEdit.NOTHING;
         }
-        if (nearest.size() == 3 && buildFlatCrossing(level, player, look, network, posA, dirA, nearest)) {
-            return;
+        RailEdit crossing = nearest.size() == 3
+                ? buildFlatCrossing(level, player, look, network, posA, dirA, nearest) : null;
+        if (crossing != null) {
+            return crossing;
         }
         BlockPos posB = nearest.get(0);
 
@@ -145,7 +205,7 @@ public class RailItem extends Item {
         if (length < MIN_SEGMENT_LENGTH) {
             player.displayClientMessage(Component.literal(
                     "Rails: markers too close (min " + (int) MIN_SEGMENT_LENGTH + " blocks)."), true);
-            return;
+            return RailEdit.NOTHING;
         }
 
         Vector3d dirB = markerDirection(level, posB);
@@ -154,10 +214,11 @@ public class RailItem extends Item {
         List<RailSegment> built = network.build(level, player,
                 List.of(new RailNetwork.SegmentSpec(a, dirA, b, dirB)), look, List.of(posA, posB));
         if (built == null) {
-            return; // something in the way can't be broken — the player was told where
+            return RailEdit.REFUSED; // something in the way can't be broken — the player was told where
         }
         player.displayClientMessage(Component.literal(String.format(
                 "Track segment #%d built (%.1f blocks).", built.get(0).id(), length)), true);
+        return RailEdit.DONE;
     }
 
     /**
@@ -165,11 +226,11 @@ public class RailItem extends Item {
      * builders do (clicked with the best-aligned, the rest together) and, if
      * the paired chords cross strictly between the markers and every marker
      * faces along its chord ({@link #FACING_MIN}), build the two independent
-     * segments (no shared node — nothing to switch). Returns false when the
+     * segments (no shared node — nothing to switch). Returns null when the
      * layout is not a crossing, so the caller falls back to the plain
      * nearest-pair build.
      */
-    private static boolean buildFlatCrossing(ServerLevel level, ServerPlayer player, RailSegment.Look look,
+    private static RailEdit buildFlatCrossing(ServerLevel level, ServerPlayer player, RailSegment.Look look,
             RailNetwork network, BlockPos posA, Vector3d dirA, List<BlockPos> others) {
         Vector3d a = cellCentre(posA);
         BlockPos posB = bestAligned(others, a, dirA);
@@ -183,10 +244,10 @@ public class RailItem extends Item {
 
         double[] tu = chordCrossing(a, b, c, d);
         if (tu == null) {
-            return false;
+            return null;
         }
         if (a.distance(b) < MIN_SEGMENT_LENGTH || c.distance(d) < MIN_SEGMENT_LENGTH) {
-            return false;
+            return null;
         }
         Vector3d dirB = markerDirection(level, posB);
         Vector3d dirC = markerDirection(level, posC);
@@ -197,18 +258,19 @@ public class RailItem extends Item {
         Vector3d cd = new Vector3d(d.x - c.x, 0.0, d.z - c.z).normalize();
         if (Math.abs(ab.dot(dirA)) < FACING_MIN || Math.abs(ab.dot(dirB)) < FACING_MIN
                 || Math.abs(cd.dot(dirC)) < FACING_MIN || Math.abs(cd.dot(dirD)) < FACING_MIN) {
-            return false;
+            return null;
         }
 
         List<RailSegment> built = network.build(level, player, List.of(
                 new RailNetwork.SegmentSpec(a, dirA, b, dirB),
                 new RailNetwork.SegmentSpec(c, dirC, d, dirD)), look, List.of(posA, posB, posC, posD));
-        if (built != null) {
-            player.displayClientMessage(Component.literal(String.format(
-                    "Flat crossing built: segments #%d and #%d (independent paths, no switch).",
-                    built.get(0).id(), built.get(1).id())), true);
+        if (built == null) {
+            return RailEdit.REFUSED;
         }
-        return true;
+        player.displayClientMessage(Component.literal(String.format(
+                "Flat crossing built: segments #%d and #%d (independent paths, no switch).",
+                built.get(0).id(), built.get(1).id())), true);
+        return RailEdit.DONE;
     }
 
     /**
@@ -237,34 +299,34 @@ public class RailItem extends Item {
      * N-crossover (a diagonal between two parallel tracks), none → Y-switch
      * to the two nearest plain markers.
      */
-    private static void buildJunction(ServerLevel level, ServerPlayer player, RailSegment.Look look,
+    private static RailEdit buildJunction(ServerLevel level, ServerPlayer player, RailSegment.Look look,
             BlockPos posA, BlockState stateA) {
         RailNetwork network = RailNetwork.get(level);
         Vector3d a = cellCentre(posA);
         Vector3d dirA = RailMarkerBlock.direction(stateA.getValue(RailMarkerBlock.ROTATION));
 
-        List<BlockPos> switchMates = network.nearestMarkers(level, posA, ServerConfig.maxMarkerDistance(), true, 3);
+        List<BlockPos> switchMates = network.nearestMarkers(level, player, posA,
+                ServerConfig.maxMarkerDistance(), true, 3);
         if (switchMates.size() == 3) {
-            buildCrossing(level, player, look, network, posA, a, dirA, switchMates);
-            return;
+            return buildCrossing(level, player, look, network, posA, a, dirA, switchMates);
         }
         if (switchMates.size() == 1) {
-            buildCrossover(level, player, look, network, posA, a, dirA, switchMates.get(0));
-            return;
+            return buildCrossover(level, player, look, network, posA, a, dirA, switchMates.get(0));
         }
         if (switchMates.size() == 2) {
             player.displayClientMessage(Component.literal(
                     "Switch: 2 other switch markers in range is ambiguous — use 1 (N-crossover)"
                             + " or 3 (X-crossing)."), true);
-            return;
+            return RailEdit.NOTHING;
         }
 
-        List<BlockPos> branches = network.nearestMarkers(level, posA, ServerConfig.maxMarkerDistance(), false, 2);
+        List<BlockPos> branches = network.nearestMarkers(level, player, posA,
+                ServerConfig.maxMarkerDistance(), false, 2);
         if (branches.size() < 2) {
             player.displayClientMessage(Component.literal(
                     "Switch: needs two rail markers (branch ends) in range — or more"
                             + " switch markers (1 → N-crossover, 3 → X-crossing)."), true);
-            return;
+            return RailEdit.NOTHING;
         }
         BlockPos posB = branches.get(0);
         BlockPos posC = branches.get(1);
@@ -273,7 +335,7 @@ public class RailItem extends Item {
         if (a.distance(b) < MIN_SEGMENT_LENGTH || a.distance(c) < MIN_SEGMENT_LENGTH) {
             player.displayClientMessage(Component.literal(
                     "Switch: a branch marker is too close (min " + (int) MIN_SEGMENT_LENGTH + " blocks)."), true);
-            return;
+            return RailEdit.NOTHING;
         }
         Vector3d dirB = markerDirection(level, posB);
         Vector3d dirC = markerDirection(level, posC);
@@ -284,12 +346,13 @@ public class RailItem extends Item {
                 new RailNetwork.SegmentSpec(a, dirA, b, dirB),
                 new RailNetwork.SegmentSpec(a, dirA, c, dirC)), look, List.of(posA, posB, posC));
         if (built == null) {
-            return;
+            return RailEdit.REFUSED;
         }
         network.registerSwitchStand(posA, a);
         player.displayClientMessage(Component.literal(String.format(
                 "Switch built: segments #%d (%.1f blocks) and #%d (%.1f blocks).",
                 built.get(0).id(), a.distance(b), built.get(1).id(), a.distance(c))), true);
+        return RailEdit.DONE;
     }
 
     /**
@@ -304,16 +367,16 @@ public class RailItem extends Item {
      * marker is matched to the junction it lies most along (max |cos| between
      * the junction's axis and the chord to the marker).
      */
-    private static void buildCrossover(ServerLevel level, ServerPlayer player, RailSegment.Look look, RailNetwork network,
+    private static RailEdit buildCrossover(ServerLevel level, ServerPlayer player, RailSegment.Look look, RailNetwork network,
             BlockPos posA, Vector3d a, Vector3d dirA, BlockPos posC) {
         Vector3d c = cellCentre(posC);
         Vector3d dirC = markerDirection(level, posC);
 
-        List<BlockPos> plains = network.nearestMarkers(level, posA, ServerConfig.maxMarkerDistance(), false, 8);
+        List<BlockPos> plains = network.nearestMarkers(level, player, posA, ServerConfig.maxMarkerDistance(), false, 8);
         if (plains.size() < 2) {
             player.displayClientMessage(Component.literal(
                     "Crossover: needs two rail markers (the tracks' continuations) in range."), true);
-            return;
+            return RailEdit.NOTHING;
         }
         BlockPos posB = bestAligned(plains, a, dirA);
         List<BlockPos> rest = new ArrayList<>(plains);
@@ -326,7 +389,7 @@ public class RailItem extends Item {
                 || a.distance(c) < MIN_SEGMENT_LENGTH) {
             player.displayClientMessage(Component.literal(
                     "Crossover: markers are too close (min " + (int) MIN_SEGMENT_LENGTH + " blocks)."), true);
-            return;
+            return RailEdit.NOTHING;
         }
         Vector3d dirB = markerDirection(level, posB);
         Vector3d dirD = markerDirection(level, posD);
@@ -338,13 +401,14 @@ public class RailItem extends Item {
                 new RailNetwork.SegmentSpec(c, dirC, d, dirD),
                 new RailNetwork.SegmentSpec(a, dirA, c, dirC)), look, List.of(posA, posB, posC, posD));
         if (built == null) {
-            return;
+            return RailEdit.REFUSED;
         }
         network.registerSwitchStand(posA, a);
         network.registerSwitchStand(posC, c);
         player.displayClientMessage(Component.literal(String.format(
                 "Crossover built: through legs #%d and #%d, diagonal #%d (%.1f blocks).",
                 built.get(0).id(), built.get(1).id(), built.get(2).id(), a.distance(c))), true);
+        return RailEdit.DONE;
     }
 
     /** The marker whose chord from {@code from} lies most along {@code axis} (max |cos|). */
@@ -386,7 +450,7 @@ public class RailItem extends Item {
      * path's tangent axis; the second path's segments carry their own axis
      * as a per-end override.
      */
-    private static void buildCrossing(ServerLevel level, ServerPlayer player, RailSegment.Look look, RailNetwork network,
+    private static RailEdit buildCrossing(ServerLevel level, ServerPlayer player, RailSegment.Look look, RailNetwork network,
             BlockPos posA, Vector3d a, Vector3d dirA, List<BlockPos> others) {
         int partner = 0;
         double bestAlign = -1.0;
@@ -423,15 +487,14 @@ public class RailItem extends Item {
             crosses = t > 0.0 && t < 1.0 && u > 0.0 && u < 1.0;
         }
         if (!crosses) {
-            buildScissors(level, player, look, network, posA, posB, posC, posD);
-            return;
+            return buildScissors(level, player, look, network, posA, posB, posC, posD);
         }
         double y1 = a.y + t * (b.y - a.y);
         double y2 = c.y + u * (d.y - c.y);
         if (Math.abs(y1 - y2) > 1.0) {
             player.displayClientMessage(Component.literal(
                     "Crossing: the paths cross at different heights — use plain markers for a flyover."), true);
-            return;
+            return RailEdit.NOTHING;
         }
         Vector3d m = new Vector3d(a.x + t * (b.x - a.x), (y1 + y2) / 2.0, a.z + t * (b.z - a.z));
         if (a.distance(m) < MIN_SEGMENT_LENGTH || b.distance(m) < MIN_SEGMENT_LENGTH
@@ -439,7 +502,7 @@ public class RailItem extends Item {
             player.displayClientMessage(Component.literal(
                     "Crossing: a marker is too close to the crossing point (min "
                             + (int) MIN_SEGMENT_LENGTH + " blocks)."), true);
-            return;
+            return RailEdit.NOTHING;
         }
         Vector3d axis1 = new Vector3d(b).sub(a).normalize();
         Vector3d axis2 = new Vector3d(d).sub(c).normalize();
@@ -456,11 +519,12 @@ public class RailItem extends Item {
                 new RailNetwork.SegmentSpec(m, axis2, true, d, dirD, false)),
                 look, List.of(posA, posB, posC, posD));
         if (built == null) {
-            return;
+            return RailEdit.REFUSED;
         }
         player.displayClientMessage(Component.literal(String.format(
                 "Crossing switch built: 4 segments through the centre node (%.0f, %.0f, %.0f).",
                 m.x, m.y, m.z)), true);
+        return RailEdit.DONE;
     }
 
     /**
@@ -474,7 +538,7 @@ public class RailItem extends Item {
      * junction nodes carry their track's axis — later track extensions snap
      * on smoothly and each node is a 3-way switch.
      */
-    private static void buildScissors(ServerLevel level, ServerPlayer player, RailSegment.Look look, RailNetwork network,
+    private static RailEdit buildScissors(ServerLevel level, ServerPlayer player, RailSegment.Look look, RailNetwork network,
             BlockPos posA, BlockPos posB, BlockPos posC, BlockPos posD) {
         Vector3d a = cellCentre(posA);
         Vector3d b = cellCentre(posB);
@@ -486,7 +550,7 @@ public class RailItem extends Item {
         if (u1.lengthSquared() < 1.0e-6) {
             player.displayClientMessage(Component.literal(
                     "Crossover: track markers coincide — rearrange them."), true);
-            return;
+            return RailEdit.NOTHING;
         }
         u1.normalize();
         double offC = Math.abs((c.x - a.x) * u1.z - (c.z - a.z) * u1.x);
@@ -494,7 +558,7 @@ public class RailItem extends Item {
         if (offC < 1.5 || offD < 1.5) {
             player.displayClientMessage(Component.literal(
                     "Crossover: the two tracks are too close together (need ≥ 1.5 blocks apart)."), true);
-            return;
+            return RailEdit.NOTHING;
         }
 
         // diagonals connect opposite ends so they cross: A (start of track 1)
@@ -511,7 +575,7 @@ public class RailItem extends Item {
                 || b.distance(nearA) < MIN_SEGMENT_LENGTH) {
             player.displayClientMessage(Component.literal(
                     "Crossover: markers are too close (min " + (int) MIN_SEGMENT_LENGTH + " blocks)."), true);
-            return;
+            return RailEdit.NOTHING;
         }
 
         Vector3d dirA = markerDirection(level, posA);
@@ -529,7 +593,7 @@ public class RailItem extends Item {
                 new RailNetwork.SegmentSpec(a, dirA, farFromA, dirFarFromA),
                 new RailNetwork.SegmentSpec(b, dirB, nearA, dirNearA)), look, List.of(posA, posB, posC, posD));
         if (built == null) {
-            return;
+            return RailEdit.REFUSED;
         }
         network.registerSwitchStand(posA, a);
         network.registerSwitchStand(posB, b);
@@ -537,6 +601,7 @@ public class RailItem extends Item {
         network.registerSwitchStand(posD, d);
         player.displayClientMessage(Component.literal(
                 "Scissors crossover built: 2 through legs + 2 crossing diagonals."), true);
+        return RailEdit.DONE;
     }
 
     /** Right-click into the air: the rail style and bed picker (SPEC §6.10, §2.2). */

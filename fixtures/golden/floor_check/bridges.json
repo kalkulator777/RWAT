@@ -1,0 +1,133 @@
+{
+  "description": "A type as the pack writes it (OBJ frame) -> where each inner door's bridge meets the floor, as the floor check finds it (FloorCheck.bridgeSides): for each door in order, the pieces of the floor with every door between zones shut (FloorRegion by Interior.region(0.3, doors, 0), model frame, Z order: floor_region's pieces) that the door's bridge (FloorCheck.bridge: its span less 0.1 at each end, 0.6 past its faces) touches before its leaf (a piece ending at or short of the leaf's cut along the door's axis, -X or -Z of the model frame) and behind it, and on how many sides it reaches the floor: both, one or none (BridgeSides.Reach.key); null for a hull or gangway door. The rule of INNER_DOOR_NO_FLOOR (none) and INNER_DOOR_FLOOR_ROUND (both sides one floor), and of the editor's doors tool, which shows a bridge reaching the floor on one side only. input.bridges_of: the type; expected: the list, or null if the type has no floor.",
+  "frame": "none",
+  "tolerance": 0,
+  "cases": [
+    {
+      "id": "bridges-the-floor-runs-through-a-shut-door",
+      "note": "the zones on the two sides overlap in the doorway: the bridge reaches a part on each side",
+      "input": {"bridges_of": {"length": 25.0, "bogies": [8.5, -8.5], "mass_t": 50.0, "interior": [{"min": [-9.25, 1.37375, 0.35], "max": [10.78, 3.87375, 1.0]}, {"min": [-7.55, 1.37375, -0.65], "max": [-6.78, 3.87375, 0.375]}], "doors": [{"id": "DoorKupe", "min": [-7.5, 1.37375, 0.375], "max": [-6.875, 3.46375, 0.5], "inner": true}]}},
+      "expected": [{"before": [6, 8, 10], "behind": [5, 7, 9, 11, 12], "reach": "both"}]
+    },
+    {
+      "id": "bridges-the-zones-parted-at-the-shut-door",
+      "note": "the zones parted at the leaf: a part on each side, as a door between rooms should",
+      "input": {"bridges_of": {"length": 25.0, "bogies": [8.5, -8.5], "mass_t": 50.0, "interior": [{"min": [-9.25, 1.37375, 0.5], "max": [10.78, 3.87375, 1.15]}, {"min": [-7.55, 1.37375, -0.65], "max": [-6.78, 3.87375, 0.375]}], "doors": [{"id": "DoorKupe", "min": [-7.5, 1.37375, 0.375], "max": [-6.875, 3.46375, 0.5], "inner": true}]}},
+      "expected": [{"before": [4, 6, 8], "behind": [3, 5, 7, 9, 10], "reach": "both"}]
+    },
+    {
+      "id": "bridges-the-floor-runs-round-a-door",
+      "note": "one zone runs round the leaf: both sides, of one floor (INNER_DOOR_FLOOR_ROUND)",
+      "input": {"bridges_of": {"length": 25.0, "bogies": [8.5, -8.5], "mass_t": 50.0, "interior": [{"min": [-10.0, 1.37375, -1.0], "max": [0.0, 3.87375, 1.0]}], "doors": [{"id": "door", "min": [-5.05, 1.37375, -0.4], "max": [-4.95, 3.46375, 0.4], "inner": true}]}},
+      "expected": [{"before": [1, 2], "behind": [5, 6], "reach": "both"}]
+    },
+    {
+      "id": "bridges-an-inner-door-on-no-floor",
+      "note": "a door beyond the floor's end: its bridge reaches nothing (INNER_DOOR_NO_FLOOR)",
+      "input": {"bridges_of": {"length": 25.0, "bogies": [8.5, -8.5], "mass_t": 50.0, "interior": [{"min": [-5.0, 1.37375, -1.0], "max": [0.0, 3.87375, 1.0]}], "doors": [{"id": "far", "min": [-8.1, 1.37375, -0.4], "max": [-8.0, 3.46375, 0.4], "inner": true}]}},
+      "expected": [{"before": [], "behind": [], "reach": "none"}]
+    },
+    {
+      "id": "bridges-example-coach-salon-arch-off-the-aisle",
+      "note": "the arch moved off the aisle: its bridge reaches the floor on one side only, which the findings do not say",
+      "input": {"bridges_of": {"length": 20.0, "bogies": [7.0, -7.0], "mass_t": 42.0, "max_speed_kmh": 120, "resistance": {"c": 1.1}, "brakes": {"system": "ep", "parking_kn": 18.0}, "interior": [{"min": [-9.6, 1.15, -1.4], "max": [-7.9, 3.6, 1.4]}, {"min": [-7.8, 1.3, -0.55], "max": [7.8, 3.6, 0.55]}, {"min": [-1.2, 1.3, -1.4], "max": [1.2, 3.6, 1.4]}, {"min": [7.9, 1.15, -1.4], "max": [9.6, 3.6, 1.4]}], "doors": [{"id": "door_fl", "min": [-9.25, 1.15, 1.45], "max": [-8.25, 3.3, 1.51], "group": "DoorsL"}, {"id": "door_fr", "min": [-9.25, 1.15, -1.51], "max": [-8.25, 3.3, -1.45], "group": "DoorsR"}, {"id": "door_rl", "min": [8.25, 1.15, 1.45], "max": [9.25, 3.3, 1.51], "group": "DoorsL"}, {"id": "door_rr", "min": [8.25, 1.15, -1.51], "max": [9.25, 3.3, -1.45], "group": "DoorsR"}, {"id": "gangway_front", "min": [-9.68, 1.15, -0.45], "max": [-9.62, 3.25, 0.45], "connecting": true}, {"id": "gangway_rear", "min": [9.62, 1.15, -0.45], "max": [9.68, 3.25, 0.45], "connecting": true}, {"id": "salon_door", "min": [-7.88, 1.3, -0.45], "max": [-7.82, 3.3, 0.45], "inner": true}, {"id": "salon_arch", "min": [7.82, 1.3, 0.55], "max": [7.88, 3.3, 1.45], "inner": true, "fixed": true}], "couplers": {"front": -0.05, "rear": -0.05}}},
+      "expected": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        {"before": [12, 13], "behind": [14, 15], "reach": "both"},
+        {"before": [1, 2], "behind": [], "reach": "one"}
+      ]
+    },
+    {
+      "id": "bridges-example-coach-aisle-into-the-vestibule",
+      "note": "the aisle run through salon_door's doorway: its bridge meets the floor on both sides, four parts each (and the floor runs through it: INNER_DOOR_FLOOR_THROUGH)",
+      "input": {"bridges_of": {"length": 20.0, "bogies": [7.0, -7.0], "mass_t": 42.0, "max_speed_kmh": 120, "resistance": {"c": 1.1}, "brakes": {"system": "ep", "parking_kn": 18.0}, "interior": [{"min": [-9.6, 1.15, -1.4], "max": [-7.9, 3.6, 1.4]}, {"min": [-7.9, 1.3, -0.55], "max": [7.8, 3.6, 0.55]}, {"min": [-1.2, 1.3, -1.4], "max": [1.2, 3.6, 1.4]}, {"min": [7.9, 1.15, -1.4], "max": [9.6, 3.6, 1.4]}], "doors": [{"id": "door_fl", "min": [-9.25, 1.15, 1.45], "max": [-8.25, 3.3, 1.51], "group": "DoorsL"}, {"id": "door_fr", "min": [-9.25, 1.15, -1.51], "max": [-8.25, 3.3, -1.45], "group": "DoorsR"}, {"id": "door_rl", "min": [8.25, 1.15, 1.45], "max": [9.25, 3.3, 1.51], "group": "DoorsL"}, {"id": "door_rr", "min": [8.25, 1.15, -1.51], "max": [9.25, 3.3, -1.45], "group": "DoorsR"}, {"id": "gangway_front", "min": [-9.68, 1.15, -0.45], "max": [-9.62, 3.25, 0.45], "connecting": true}, {"id": "gangway_rear", "min": [9.62, 1.15, -0.45], "max": [9.68, 3.25, 0.45], "connecting": true}, {"id": "salon_door", "min": [-7.88, 1.3, -0.45], "max": [-7.82, 3.3, 0.45], "inner": true}, {"id": "salon_arch", "min": [7.82, 1.3, -0.45], "max": [7.88, 3.3, 0.45], "inner": true, "fixed": true}], "couplers": {"front": -0.05, "rear": -0.05}}},
+      "expected": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        {"before": [12, 13, 14, 15], "behind": [16, 17, 18, 19], "reach": "both"},
+        {"before": [1, 2], "behind": [3, 4], "reach": "both"}
+      ]
+    },
+    {
+      "id": "bridges-example-coach-salon-door-in-the-salon",
+      "note": "salon_door a block into the salon: the floor meets its bridge on both sides (and runs through it: INNER_DOOR_FLOOR_THROUGH)",
+      "input": {"bridges_of": {"length": 20.0, "bogies": [7.0, -7.0], "mass_t": 42.0, "max_speed_kmh": 120, "resistance": {"c": 1.1}, "brakes": {"system": "ep", "parking_kn": 18.0}, "interior": [{"min": [-9.6, 1.15, -1.4], "max": [-7.9, 3.6, 1.4]}, {"min": [-7.8, 1.3, -0.55], "max": [7.8, 3.6, 0.55]}, {"min": [-1.2, 1.3, -1.4], "max": [1.2, 3.6, 1.4]}, {"min": [7.9, 1.15, -1.4], "max": [9.6, 3.6, 1.4]}], "doors": [{"id": "door_fl", "min": [-9.25, 1.15, 1.45], "max": [-8.25, 3.3, 1.51], "group": "DoorsL"}, {"id": "door_fr", "min": [-9.25, 1.15, -1.51], "max": [-8.25, 3.3, -1.45], "group": "DoorsR"}, {"id": "door_rl", "min": [8.25, 1.15, 1.45], "max": [9.25, 3.3, 1.51], "group": "DoorsL"}, {"id": "door_rr", "min": [8.25, 1.15, -1.51], "max": [9.25, 3.3, -1.45], "group": "DoorsR"}, {"id": "gangway_front", "min": [-9.68, 1.15, -0.45], "max": [-9.62, 3.25, 0.45], "connecting": true}, {"id": "gangway_rear", "min": [9.62, 1.15, -0.45], "max": [9.68, 3.25, 0.45], "connecting": true}, {"id": "salon_door", "min": [-6.88, 1.3, -0.45], "max": [-6.82, 3.3, 0.45], "inner": true}, {"id": "salon_arch", "min": [7.82, 1.3, -0.45], "max": [7.88, 3.3, 0.45], "inner": true, "fixed": true}], "couplers": {"front": -0.05, "rear": -0.05}}},
+      "expected": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        {"before": [12, 13], "behind": [14, 15], "reach": "both"},
+        {"before": [1, 2], "behind": [3, 4], "reach": "both"}
+      ]
+    },
+    {
+      "id": "bridges-example-coach",
+      "note": "the example coach as it is: both inner doors reach the floor on both sides",
+      "input_file": {"bridges_of": "run/rwat_packs/RwatExamplePack/data/rwat_example/wagon_types/coach.json"},
+      "expected": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        {"before": [12, 13], "behind": [14, 15], "reach": "both"},
+        {"before": [1, 2], "behind": [3, 4], "reach": "both"}
+      ]
+    },
+    {
+      "id": "bridges-example-shunter",
+      "note": "no inner door: a null for each door",
+      "input_file": {"bridges_of": "run/rwat_packs/RwatExamplePack/data/rwat_example/wagon_types/shunter.json"},
+      "expected": [null, null]
+    },
+    {
+      "id": "bridges-example-gondola",
+      "note": "no floor at all: null",
+      "input_file": {"bridges_of": "run/rwat_packs/RwatExamplePack/data/rwat_example/wagon_types/gondola.json"},
+      "expected": null
+    },
+    {
+      "id": "bridges-a-side-wall-door-onto-one-room",
+      "note": "a door in a side wall between a corridor and a compartment the floor does not reach: one side",
+      "input": {"bridges_of": {"length": 25.0, "bogies": [8.5, -8.5], "mass_t": 50.0, "interior": [{"min": [-5.0, 1.37375, -1.0], "max": [5.0, 3.87375, 0.0]}], "doors": [{"id": "kupe", "min": [-1.0, 1.37375, 0.0], "max": [0.0, 3.46375, 0.06], "inner": true}]}},
+      "expected": [{"before": [1], "behind": [], "reach": "one"}]
+    },
+    {
+      "id": "bridges-a-side-wall-door-between-rooms",
+      "note": "the same door with the compartment's floor behind it: both sides",
+      "input": {"bridges_of": {"length": 25.0, "bogies": [8.5, -8.5], "mass_t": 50.0, "interior": [{"min": [-5.0, 1.37375, -1.0], "max": [5.0, 3.87375, 0.0]}, {"min": [-2.0, 1.37375, 0.06], "max": [1.0, 3.87375, 1.0]}], "doors": [{"id": "kupe", "min": [-1.0, 1.37375, 0.0], "max": [0.0, 3.46375, 0.06], "inner": true}]}},
+      "expected": [{"before": [6], "behind": [7], "reach": "both"}]
+    },
+    {
+      "id": "bridges-a-fixed-door",
+      "note": "an inner door that is never shut is checked for floor all the same: one side",
+      "input": {"bridges_of": {"length": 25.0, "bogies": [8.5, -8.5], "mass_t": 50.0, "interior": [{"min": [-5.0, 1.37375, -1.0], "max": [0.0, 3.87375, 1.0]}], "doors": [{"id": "arch", "min": [0.0, 1.37375, -0.4], "max": [0.06, 3.46375, 0.4], "inner": true, "fixed": true}]}},
+      "expected": [{"before": [], "behind": [0, 1], "reach": "one"}]
+    },
+    {
+      "id": "bridges-several-parts-a-side",
+      "note": "the bridge across a split floor reaches two parts on each side, each listed in order",
+      "input": {"bridges_of": {"length": 25.0, "bogies": [8.5, -8.5], "mass_t": 50.0, "interior": [{"min": [-5.0, 1.37375, -1.0], "max": [-0.3, 3.87375, -0.05]}, {"min": [-5.0, 1.37375, 0.05], "max": [-0.3, 3.87375, 1.0]}, {"min": [0.3, 1.37375, -1.0], "max": [5.0, 3.87375, -0.05]}, {"min": [0.3, 1.37375, 0.05], "max": [5.0, 3.87375, 1.0]}], "doors": [{"id": "wide", "min": [-0.3, 1.37375, -1.0], "max": [0.3, 3.46375, 1.0], "inner": true}]}},
+      "expected": [{"before": [2, 3, 4, 5], "behind": [6, 7, 8, 9], "reach": "both"}]
+    },
+    {
+      "id": "bridges-a-hull-door-and-an-inner-one",
+      "note": "a hull door has no bridge (null); the inner door after it has",
+      "input": {"bridges_of": {"length": 25.0, "bogies": [8.5, -8.5], "mass_t": 50.0, "interior": [{"min": [-5.0, 1.37375, -1.0], "max": [0.0, 3.87375, 1.0]}, {"min": [0.06, 1.37375, -1.0], "max": [5.0, 3.87375, 1.0]}], "doors": [{"id": "side", "min": [-3.0, 1.37375, 1.0], "max": [-2.0, 3.46375, 1.06]}, {"id": "middle", "min": [0.0, 1.37375, -0.4], "max": [0.06, 3.46375, 0.4], "inner": true}]}},
+      "expected": [null, {"before": [1, 2], "behind": [3, 4], "reach": "both"}]
+    }
+  ]
+}

@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 import com.muzhik17.trainsmod.stock.FloorRegion;
+import com.muzhik17.trainsmod.stock.UnionFind;
 import com.muzhik17.trainsmod.stock.WagonType;
 
 /**
@@ -14,8 +15,10 @@ import com.muzhik17.trainsmod.stock.WagonType;
  * one (SPEC §9.2, the driver's key): read off the type's own data, nothing
  * declared for it. A <b>cab</b> is a piece of walkable floor a driver's chair
  * stands at, together with every piece one walks to from there without
- * passing a door — the floor pieces of {@link FloorRegion} that touch, as
- * {@link FloorCheck} joins them. An inner door is a wall until it opens, so
+ * passing a door — the floor pieces of {@link FloorRegion} that touch, with
+ * every door between zones shut, as {@link FloorCheck} joins them. An inner
+ * door is a wall until it opens — even where the zones on its two sides
+ * touch in its doorway ({@link FloorRegion.Cut#shut}) — so
  * the ChME3's cab ends at its doors onto the walkways and the ER2's at the
  * partition onto the vestibule; a locomotive with two cabs (M62, ChS4T) has
  * two. A door leads into a cab if the floor it opens onto from inside is a
@@ -33,6 +36,9 @@ import com.muzhik17.trainsmod.stock.WagonType;
  *
  * <p>All in the <b>model</b> frame (a flipped wagon's riders are turned back
  * into it). Pure; one instance per type, made on first use.
+ *
+ * <p>Ported: {@code editor/src/ports/cabArea.ts}; golden:
+ * {@code fixtures/golden/cab_area/}.
  */
 public final class CabArea {
 
@@ -79,14 +85,11 @@ public final class CabArea {
     }
 
     private static CabArea build(WagonType type) {
-        FloorRegion region = type.interior().region(M);
+        FloorRegion region = type.interior().region(M, type.doors(), 0);
         List<FloorRegion.Piece> pieces = region.pieces();
-        int[] parent = new int[pieces.size()];
-        for (int i = 0; i < parent.length; i++) {
-            parent[i] = i;
-        }
+        int[] parent = UnionFind.of(pieces.size());
         for (int[] link : region.links()) {
-            FloorCheck.union(parent, link[0], link[1]);
+            UnionFind.union(parent, link[0], link[1]);
         }
         // each chair's cab: the floor where one stands to sit down in it, and all it joins
         List<WagonType.Seat> chairs = type.cab().seats();
@@ -99,7 +102,7 @@ public final class CabArea {
             for (int p = 0; p < pieces.size(); p++) {
                 // the floor of a cab found already, within sitting reach
                 double d = distance(pieces.get(p), chair.x(), chair.z());
-                if (d <= reach && roots.contains(FloorCheck.find(parent, p))) {
+                if (d <= reach && roots.contains(UnionFind.find(parent, p))) {
                     piece = p;
                     reach = d;
                 }
@@ -111,7 +114,7 @@ public final class CabArea {
                 cabOfChair[c] = -1;
                 continue;
             }
-            int root = FloorCheck.find(parent, piece);
+            int root = UnionFind.find(parent, piece);
             if (!roots.contains(root)) {
                 roots.add(root);
             }
@@ -119,7 +122,7 @@ public final class CabArea {
         }
         int[] cabOfPiece = new int[pieces.size()];
         for (int p = 0; p < pieces.size(); p++) {
-            cabOfPiece[p] = roots.indexOf(FloorCheck.find(parent, p));
+            cabOfPiece[p] = roots.indexOf(UnionFind.find(parent, p));
         }
         int cabDoors = 0;
         List<WagonType.Door> doors = type.doors();
@@ -135,8 +138,9 @@ public final class CabArea {
                     intoCab = cabOfPiece[p] >= 0 && pieces.get(p).touches(b[0], b[1], b[2], b[3]);
                 }
             } else {
-                int piece = FloorCheck.walkablePiece(door, region);
-                intoCab = piece >= 0 && cabOfPiece[piece] >= 0;
+                for (int piece : FloorCheck.walkablePieces(door, region)) {
+                    intoCab |= cabOfPiece[piece] >= 0;
+                }
             }
             if (intoCab) {
                 cabDoors |= 1 << d;

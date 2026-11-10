@@ -38,7 +38,8 @@ public final class RailStyleScreen extends Screen {
     private static final int CAPTION = 12;
 
     private final InteractionHand hand;
-    private final String current;
+    /** The style and bed chosen so far: the stack's at first, kept when the window is resized. */
+    private String chosenStyle;
     private BedMaterial bed;
     private PickerList<String> list;
     private Button select;
@@ -51,7 +52,7 @@ public final class RailStyleScreen extends Screen {
     public RailStyleScreen(InteractionHand hand, String current, BedMaterial bed) {
         super(Component.translatable("screen.railswheelsandtrains.rail_style"));
         this.hand = hand;
-        this.current = current;
+        this.chosenStyle = current;
         this.bed = bed;
     }
 
@@ -62,15 +63,16 @@ public final class RailStyleScreen extends Screen {
         int left = (width - total) / 2;
         int top = 32;
         int bottom = height - 40;
-        list = new PickerList<>(minecraft, left, top, listWidth, bottom - top,
-                style -> updateButtons(), this::choose);
+        list = new PickerList<>(minecraft, left, top, listWidth, bottom - top, style -> {
+                    chosenStyle = style;
+                    updateButtons();
+                }, this::choose);
         previewX0 = left + listWidth + GAP;
         previewX1 = left + total;
         for (String style : RailStyles.pickable()) {
             list.add(style, RailItem.styleName(style),
                     Component.literal(style.isEmpty() ? RailStyles.STANDARD : style));
         }
-        list.select(current);
         addRenderableWidget(list);
 
         // the bed picker under the turntable: a caption, then rows of block icons
@@ -93,6 +95,7 @@ public final class RailStyleScreen extends Screen {
                 .bounds(width / 2 - 104, height - 30, 100, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("gui.cancel"), b -> onClose())
                 .bounds(width / 2 + 4, height - 30, 100, 20).build());
+        list.select(chosenStyle);
         updateButtons();
     }
 

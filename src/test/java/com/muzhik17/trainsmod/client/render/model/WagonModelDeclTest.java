@@ -44,6 +44,30 @@ class WagonModelDeclTest {
         assertEquals(Map.of("mvp_rzd", "l_mvp_rzd"), decl.liveries());
     }
 
+    /**
+     * The animations and liveries come in the order the file writes them:
+     * what the pack check says of them, and which of two animations moving
+     * one object wins, followed {@code Map.copyOf}'s order, which is none
+     * (it changes from one start of the JVM to the next).
+     */
+    @Test
+    void animationsAndLiveriesKeepTheFilesOrder() {
+        WagonModelDecl decl = parse("""
+                { "obj": "car/car.obj",
+                  "animations": { "zeta": "a/z.anim", "Alpha": "a/a.anim", "mid": "a/m.anim", "door9": "a/9.anim",
+                                  "beta": "a/b.anim", "kappa": "a/k.anim", "Door1": "a/1.anim", "omega": "a/o.anim",
+                                  "door1": "a/one.anim" },
+                  "liveries": { "zz_blue": "blue", "aa_green": "green", "red": "red", "mm_black": "black",
+                                "b2": "b2", "a1": "a1", "c3": "c3", "yy": "yy" } }""");
+        assertEquals(List.of("zeta", "alpha", "mid", "door9", "beta", "kappa", "door1", "omega"),
+                List.copyOf(decl.animations().keySet()));
+        // a key written twice (in either case) keeps its first place and its last file
+        assertEquals("mvp:a/one.anim", decl.animations().get("door1"));
+        assertEquals(List.of("zz_blue", "aa_green", "red", "mm_black", "b2", "a1", "c3", "yy"),
+                List.copyOf(decl.liveries().keySet()));
+        assertThrows(UnsupportedOperationException.class, () -> decl.liveries().put("x", "x"));
+    }
+
     @Test
     void onlyTheObjIsRequired() {
         WagonModelDecl decl = parse("""
@@ -116,5 +140,38 @@ class WagonModelDeclTest {
                 .handbrake());
         assertTrue(parse("""
                 { "obj": "mvp:stock/up4/mvp_ir_up4.obj" }""").handbrake().isEmpty());
+    }
+
+    /** Fix list D4: a typo in a model key warns with the key it missed, down into the sounds. */
+    @Test
+    void unknownKeys_warnWithTheNearestKnownOne() {
+        List<String> warnings = new java.util.ArrayList<>();
+        WagonModelDecl decl = WagonModelDecl.parse("mvp", JsonParser.parseString("""
+                { "obj": "a.obj", "livery": { "x": "y" }, "swya": 2,
+                  "sounds": { "horns": "h.ogg", "idle": { "main": "i.ogg", "pich": [1, 2] } } }""")
+                .getAsJsonObject(), warnings::add);
+        assertEquals(List.of(
+                "unknown key 'livery' (ignored) — did you mean 'liveries'?",
+                "unknown key 'swya' (ignored) — did you mean 'sway'?",
+                "unknown key 'sounds.horns' (ignored) — did you mean 'sounds.horn'?",
+                "unknown key 'sounds.idle.pich' (ignored) — did you mean 'sounds.idle.pitch'?"), warnings);
+        assertEquals(1.0, decl.sway(), "the typo's field keeps its default");
+    }
+
+    /** A null or a wrongly typed value is an error naming the field, not a bare exception. */
+    @Test
+    void nullsAndWrongTypes_nameTheField() {
+        assertEquals("'obj' must be a string, got null", assertThrows(JsonSyntaxException.class,
+                () -> parse("{ \"obj\": null }")).getMessage());
+        assertEquals("'skip[1]' must be a string, got the number 3", assertThrows(JsonSyntaxException.class,
+                () -> parse("{ \"obj\": \"a.obj\", \"skip\": [\"A\", 3] }")).getMessage());
+        assertEquals("'liveries.red' must be a string, got null", assertThrows(JsonSyntaxException.class,
+                () -> parse("{ \"obj\": \"a.obj\", \"liveries\": { \"red\": null } }")).getMessage());
+        assertEquals("'animations' must be an object, got an array", assertThrows(JsonSyntaxException.class,
+                () -> parse("{ \"obj\": \"a.obj\", \"animations\": [] }")).getMessage());
+        assertEquals("'sounds' must be an object, got null", assertThrows(JsonSyntaxException.class,
+                () -> parse("{ \"obj\": \"a.obj\", \"sounds\": null }")).getMessage());
+        assertEquals("'bogies[0]' must be a finite number, got null", assertThrows(JsonSyntaxException.class,
+                () -> parse("{ \"obj\": \"a.obj\", \"bogies\": [null] }")).getMessage());
     }
 }

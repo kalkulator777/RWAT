@@ -1,6 +1,7 @@
 ### Gradle ###
 .gradle
-build/
+# Gradle's own output sits at the root only: editor/ and other folders may have a build/ of theirs.
+/build/
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/**/build/
 
@@ -9,7 +10,7 @@ build/
 *.iws
 *.iml
 *.ipr
-out/
+/out/
 !**/src/**/out/
 
 .run/
@@ -23,7 +24,7 @@ out/
 .settings
 .springBeans
 .sts4-cache
-bin/
+/bin/
 !**/src/**/bin/
 
 ### VS Code ###
@@ -34,8 +35,15 @@ bin/
 
 ### Minecraft Modding ###
 /run/*
-# the generated MVP pack is in the repository for now (see below)
+# Of run/rwat_packs/ only these packs are in the repository: the example pack
+# (CC0, tools/gen_example_pack.py) for good, the generated MVP pack for now (see
+# below). When MVP is taken out of the repository (roadmap R12) its line goes and
+# the example pack stays: !/run/rwat_packs/RwatExamplePack/. Other packs dropped
+# into run/rwat_packs/ for testing stay local.
 !/run/rwat_packs/
+/run/rwat_packs/*
+!/run/rwat_packs/RwatExamplePack/
+!/run/rwat_packs/MatoiVanillaPack/
 !**/src/**/run/
 **/src/generated/**/.cache/
 repo/
@@ -50,9 +58,10 @@ __pycache__/
 
 ### RWAT local files ###
 # Source IR packs for tools/ir2rwat.py (MVP-IR-*.zip) and the pack generated from them
-# (run/rwat_packs/): third-party, CC BY-NC-ND 4.0. In the repository FOR NOW, so cloud
-# agents can measure and regenerate the stock (docs/agents/walkable-stock.md); to be
-# taken out again — then ignore /MVP-IR-*.zip and all of /run/ here again.
+# (run/rwat_packs/MatoiVanillaPack/): third-party, CC BY-NC-ND 4.0. In the repository
+# FOR NOW, so cloud agents can measure and regenerate the stock
+# (docs/agents/walkable-stock.md); to be taken out again (R12) — then ignore
+# /MVP-IR-*.zip here and drop the MatoiVanillaPack line above.
 # Reference models/textures unpacked from those packs
 /DevAssets/
 # Third-party mod jars for local testing
@@ -62,3 +71,6 @@ __pycache__/
 # Debug screenshots and profiler dumps
 /*.png
 *.sparkprofile
+
+### Claude Code agent worktrees ###
+.claude/worktrees/

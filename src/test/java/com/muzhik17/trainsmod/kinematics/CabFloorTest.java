@@ -13,7 +13,8 @@ import com.muzhik17.trainsmod.stock.WagonType;
 /**
  * Walking a locomotive (SPEC §9.1): a floor of several zones — cab, hood
  * walkways, end platforms — joined by doors between zones, left by the corner
- * steps. The numbers are the ChME3 of the MVP recipe (model space).
+ * steps. The numbers are the ChME3 of the MVP recipe in the engine's model
+ * space (the recipe writes them in the OBJ frame, {@code stock.ObjFrame}).
  */
 class CabFloorTest {
 

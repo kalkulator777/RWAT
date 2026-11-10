@@ -13,6 +13,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.FormattedCharSequence;
 
 /**
  * The driver's instruments (SPEC §9.7), drawn alike on the HUD and in the
@@ -84,10 +85,16 @@ public final class DriverPanel {
     }
 
     /** The panel's height for this readout. */
-    public static int height(DriverReadout readout) {
+    public static int height(Font font, DriverReadout readout) {
         int rows = rows(readout).size();
-        int footer = (readout.inControl() ? 0 : ROW) + (readout.handbrakesSet() > 0 ? ROW : 0);
+        int footer = (readout.inControl() ? 0 : ROW + (otherCab(font).size() - 1) * (font.lineHeight + 1))
+                + (readout.handbrakesSet() > 0 ? ROW : 0);
         return PAD + SPEED_ROW + BAR_H + TICK_H + 4 + (rows - 1) * ROW + LAMP_H + footer + PAD;
+    }
+
+    /** "Another cab is in control", wrapped to the panel (in Russian it is wider than the panel). */
+    private static List<FormattedCharSequence> otherCab(Font font) {
+        return font.split(Component.translatable("hud.railswheelsandtrains.other_cab"), WIDTH - 2 * PAD);
     }
 
     /**
@@ -97,7 +104,7 @@ public final class DriverPanel {
      */
     public static void draw(GuiGraphics graphics, Font font, int x, int y, DriverReadout readout,
             boolean interactive, int mouseX, int mouseY) {
-        int height = height(readout);
+        int height = height(font, readout);
         graphics.fill(x, y, x + WIDTH, y + height, BACKGROUND);
         graphics.renderOutline(x, y, WIDTH, height, FRAME);
         Target hovered = interactive ? targetAt(font, x, y, readout, mouseX, mouseY) : null;
@@ -112,16 +119,19 @@ public final class DriverPanel {
         for (int i = 0; i < rows.size(); i++) {
             drawHandle(graphics, font, x, rowTop(y, i), columns, rows.get(i), readout, hovered);
         }
-        int footerRow = rows.size();
+        int footerY = rowTop(y, rows.size()) + 1;
         if (!readout.inControl()) {
-            graphics.drawString(font, Component.translatable("hud.railswheelsandtrains.other_cab"),
-                    x + PAD, rowTop(y, footerRow++) + 1, DIM, false);
+            for (FormattedCharSequence line : otherCab(font)) {
+                graphics.drawString(font, line, x + PAD, footerY, DIM, false);
+                footerY += font.lineHeight + 1;
+            }
+            footerY += ROW - (font.lineHeight + 1);
         }
         if (readout.handbrakesSet() > 0) {
             // a train that won't move: the handbrakes are on (SPEC §5.3)
             graphics.drawString(font, Component.translatable("hud.railswheelsandtrains.handbrakes",
                     readout.handbrakesSet(), readout.wagons()),
-                    x + PAD, rowTop(y, footerRow) + 1, BAR_NEAR, false);
+                    x + PAD, footerY, BAR_NEAR, false);
         }
     }
 

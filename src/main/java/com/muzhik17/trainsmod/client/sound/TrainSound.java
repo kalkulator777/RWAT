@@ -19,13 +19,22 @@ import net.minecraft.world.phys.Vec3;
  * at a point in the world, its volume, pitch and position set by
  * {@link TrainSounds} every tick. A file plays straight from its path — no
  * {@code sounds.json} entry needed, the declaration is the registration —
- * with its own hearing distance (a horn carries further than the wheels).
+ * with its own hearing distance (a horn carries further than the wheels); a
+ * sound event plays its own file, but carries as far as a file would.
  * OpenAL places only mono sounds in the world: a stereo file would sound as
  * loud at the far end of the hearing distance as next to it, so its volume
  * falls off with distance here instead (MVP's wheels, joints and doors are
  * stereo; its files stay byte for byte — CC BY-NC-ND).
+ *
+ * <p>A volume above 1 (the {@code trainVolume} setting) lifts the quiet
+ * sounds to the sound engine's ceiling and does not carry any sound further:
+ * the engine would stretch the hearing distance by it, so the distance handed
+ * to the engine is made shorter by as much ({@link SoundLevels}).
  */
 final class TrainSound extends AbstractTickableSoundInstance {
+
+    /** The volume slider train sounds go by: Friendly Creatures (SPEC §10.3). */
+    static final SoundSource SOURCE = SoundSource.NEUTRAL;
 
     private final boolean file;
     private final int distance;
@@ -33,7 +42,7 @@ final class TrainSound extends AbstractTickableSoundInstance {
 
     private TrainSound(ResourceLocation location, boolean file, boolean looping, int distance,
             boolean stereo) {
-        super(SoundEvent.createVariableRangeEvent(location), SoundSource.NEUTRAL,
+        super(SoundEvent.createVariableRangeEvent(location), SOURCE,
                 SoundInstance.createUnseededRandom());
         this.file = file;
         this.distance = distance;
@@ -61,24 +70,48 @@ final class TrainSound extends AbstractTickableSoundInstance {
     @Override
     public WeighedSoundEvents resolve(SoundManager manager) {
         if (!file) {
-            return super.resolve(manager); // a registered sound event
+            WeighedSoundEvents events = super.resolve(manager); // a registered sound event
+            if (sound != SoundManager.EMPTY_SOUND && sound != SoundManager.INTENTIONALLY_EMPTY_SOUND) {
+                // its own file and levels, our distance (sounds.json's default is 16 blocks)
+                sound = new Sound(sound.getLocation(), sound.getVolume(), sound.getPitch(), sound.getWeight(),
+                        sound.getType(), sound.shouldStream(), sound.shouldPreload(),
+                        reach(sound.getVolume().sample(random)));
+            }
+            return events;
         }
-        this.sound = new FileSound(location, distance);
+        this.sound = new FileSound(location, reach(1.0F));
         WeighedSoundEvents events = new WeighedSoundEvents(location, null);
         events.addSound(this.sound);
         return events;
     }
 
-    /** A stereo file's volume falls off linearly to nothing at the hearing distance, as OpenAL does a mono one's. */
+    /**
+     * The hearing distance to give the sound engine, which stretches it by the
+     * volume it reads as it starts the sound: {@link #getVolume()} with
+     * {@code soundVolume}, the sound's own volume factor (a file's is 1), in it
+     * ({@link SoundLevels#engineDistance}).
+     */
+    private int reach(float soundVolume) {
+        return SoundLevels.engineDistance(distance, heard(this.volume * soundVolume));
+    }
+
+    /**
+     * The volume the sound engine plays at (before the category slider and its
+     * ceiling). A stereo file's falls off linearly to nothing at the hearing
+     * distance, as OpenAL does a mono one's.
+     */
     @Override
     public float getVolume() {
-        float volume = super.getVolume();
+        return heard(super.getVolume());
+    }
+
+    private float heard(float volume) {
         if (!stereo) {
             return volume;
         }
-        double away = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition()
-                .distanceTo(new Vec3(x, y, z));
-        return volume * (float) Math.max(0.0, 1.0 - away / (distance * Math.max(this.volume, 1.0F)));
+        Minecraft mc = Minecraft.getInstance();
+        double away = mc.gameRenderer.getMainCamera().getPosition().distanceTo(new Vec3(x, y, z));
+        return SoundLevels.stereoVolume(volume, mc.options.getSoundSourceVolume(SOURCE), away, distance);
     }
 
     /** Loops start silent and fade in, so the engine must not skip them at volume 0. */

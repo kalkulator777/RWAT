@@ -68,6 +68,35 @@ class TileFootprintTest {
         assertEquals(0.5, tile.extent(), 1.0e-6);
     }
 
+    /**
+     * An object's name is the whole rest of its o/g line, as the client's
+     * model loader reads it ({@code ObjectRole.objectName}): a hand-written
+     * {@code o Sign HIDE} is hidden there, so the bed must not lay it either.
+     */
+    @Test
+    void objectNameIsTheWholeLineAsTheClientReadsIt() throws IOException {
+        TileFootprint tile = TileFootprint.fromObj(obj("""
+                o RAIL_BASE
+                v -0.1 0 -1.2
+                v 0.1 0 -1.2
+                v 0.1 0 1.2
+                f 1 2 3
+                o Sign HIDE
+                v -3 0 -3
+                v 3 0 -3
+                v 3 0 3
+                f 4 5 6
+                g\tRAIL_BASE ballast
+                v -0.2 -0.5 -1.5
+                v 0.2 -0.5 -1.5
+                v 0.2 -0.5 1.5
+                f 7 8 9
+                """), 1.0);
+
+        assertEquals(2, tile.triangleCount(), "the sign is hidden, the tab-named ballast is drawn");
+        assertEquals(Math.hypot(0.5, 1.5), tile.reach(), 1.0e-6);
+    }
+
     @Test
     void longerTileKeepsTheBaseSizeAndStretchesTheRails() throws IOException {
         TileFootprint tile = TileFootprint.fromObj(obj("""

@@ -1,0 +1,555 @@
+{
+  "description": "An OBJ's text -> its parts as the model loader splits it (client.render.model.ObjLoader.loadModel): a part per run of faces of one o/g object and one usemtl material, in file order; a quad face is a quad, a triangle a quad with its last corner twice, a polygon fanned from its first corner; each corner [x, y, z, u, v, nx, ny, nz] as floats, v turned over (1 - v of the file; 0 with no vt), the normal 0 1 0 with no vn; the mtllib files as written. input.text; expected: {libraries, parts: [{object, material, quads}]}, or {error: true} if the loader refuses the file.",
+  "frame": "obj",
+  "tolerance": 1e-06,
+  "cases": [
+    {
+      "id": "parse-a-quad",
+      "note": "a quad",
+      "input": {"text": "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nf 1 2 3 4\n"},
+      "expected": {
+        "libraries": [],
+        "parts": [
+          {
+            "object": "default",
+            "material": "",
+            "quads": [
+              [
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "parse-a-triangle-is-a-quad-with-its-last-corner-twice",
+      "note": "a triangle is a quad with its last corner twice",
+      "input": {"text": "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nf 1 2 3\n"},
+      "expected": {
+        "libraries": [],
+        "parts": [
+          {
+            "object": "default",
+            "material": "",
+            "quads": [
+              [
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "parse-a-pentagon-is-fanned-from-its-first-corner",
+      "note": "a pentagon is fanned from its first corner",
+      "input": {"text": "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nv 0.5 1.5 0\nf 1 2 3 5 4\n"},
+      "expected": {
+        "libraries": [],
+        "parts": [
+          {
+            "object": "default",
+            "material": "",
+            "quads": [
+              [
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+              ],
+              [
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [0.5, 1.5, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [0.5, 1.5, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+              ],
+              [
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [0.5, 1.5, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "parse-texture-and-normal-indices-v-is-turned-over",
+      "note": "texture and normal indices; v is turned over",
+      "input": {
+        "text": "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\nvt 1 0\nvt 1 1\nvt 0 0.25\nvn 0 0 1\nf 1/1/1 2/2/1 3/3/1 4/4/1\n"
+      },
+      "expected": {
+        "libraries": [],
+        "parts": [
+          {
+            "object": "default",
+            "material": "",
+            "quads": [
+              [
+                [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0],
+                [1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0],
+                [1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+                [0.0, 1.0, 0.0, 0.0, 0.75, 0.0, 0.0, 1.0]
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "parse-no-vt-u-0-v-0-no-vn-the-normal-0-1-0",
+      "note": "no vt: u 0, v 0; no vn: the normal 0 1 0",
+      "input": {"text": "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvn 0 0 -1\nf 1//1 2//1 3//1 4//1\nf 1 2 3\n"},
+      "expected": {
+        "libraries": [],
+        "parts": [
+          {
+            "object": "default",
+            "material": "",
+            "quads": [
+              [
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0],
+                [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0],
+                [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0]
+              ],
+              [
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "parse-objects-part-the-faces",
+      "note": "objects part the faces",
+      "input": {"text": "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\no A\nf 1 2 3\no B\nf 1 3 4\ng C\nf 2 3 4\n"},
+      "expected": {
+        "libraries": [],
+        "parts": [
+          {
+            "object": "A",
+            "material": "",
+            "quads": [
+              [
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+              ]
+            ]
+          },
+          {
+            "object": "B",
+            "material": "",
+            "quads": [
+              [
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+              ]
+            ]
+          },
+          {
+            "object": "C",
+            "material": "",
+            "quads": [
+              [
+                [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "parse-usemtl-parts-an-object",
+      "note": "usemtl parts an object",
+      "input": {"text": "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\no A\nusemtl red\nf 1 2 3\nusemtl blue\nf 1 3 4\n"},
+      "expected": {
+        "libraries": [],
+        "parts": [
+          {
+            "object": "A",
+            "material": "red",
+            "quads": [
+              [
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+              ]
+            ]
+          },
+          {
+            "object": "A",
+            "material": "blue",
+            "quads": [
+              [
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "parse-an-object-with-no-faces-makes-no-part",
+      "note": "an object with no faces makes no part",
+      "input": {"text": "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\no EMPTY\no B\nf 1 2 3\n"},
+      "expected": {
+        "libraries": [],
+        "parts": [
+          {
+            "object": "B",
+            "material": "",
+            "quads": [
+              [
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "parse-faces-before-any-o-line-and-after-one-naming-nothing-are-the",
+      "note": "faces before any o line, and after one naming nothing, are the default object's",
+      "input": {"text": "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nf 1 2 3\no A\nf 1 3 4\no\nf 2 3 4\n"},
+      "expected": {
+        "libraries": [],
+        "parts": [
+          {
+            "object": "default",
+            "material": "",
+            "quads": [
+              [
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+              ]
+            ]
+          },
+          {
+            "object": "A",
+            "material": "",
+            "quads": [
+              [
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+              ]
+            ]
+          },
+          {
+            "object": "default",
+            "material": "",
+            "quads": [
+              [
+                [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "parse-the-same-object-again-is-another-part",
+      "note": "the same object again is another part",
+      "input": {"text": "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\no A\nf 1 2 3\no B\nf 1 3 4\no A\nf 2 3 4\n"},
+      "expected": {
+        "libraries": [],
+        "parts": [
+          {
+            "object": "A",
+            "material": "",
+            "quads": [
+              [
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+              ]
+            ]
+          },
+          {
+            "object": "B",
+            "material": "",
+            "quads": [
+              [
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+              ]
+            ]
+          },
+          {
+            "object": "A",
+            "material": "",
+            "quads": [
+              [
+                [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "parse-comments-blank-lines-indents-and-crlf",
+      "note": "comments, blank lines, indents and CRLF",
+      "input": {"text": "# a comment\r\n\r\n  v 0 0 0\r\nv 1 0 0\r\n\tv 1 1 0\r\n  o A  \r\n f 1 2 3 \r\n"},
+      "expected": {
+        "libraries": [],
+        "parts": [
+          {
+            "object": "A",
+            "material": "",
+            "quads": [
+              [
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "parse-mtllib-keeps-blanks-in-the-file-name-each-is-listed",
+      "note": "mtllib keeps blanks in the file name; each is listed",
+      "input": {"text": "mtllib my body.mtl\nmtllib  second.mtl \nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nf 1 2 3\n"},
+      "expected": {
+        "libraries": ["my body.mtl", "second.mtl"],
+        "parts": [
+          {
+            "object": "default",
+            "material": "",
+            "quads": [
+              [
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "parse-a-material-name-with-a-blank-usemtl-naming-nothing",
+      "note": "a material name with a blank; usemtl naming nothing",
+      "input": {"text": "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nusemtl Dark Wood\nf 1 2 3\nusemtl\nf 1 3 4\n"},
+      "expected": {
+        "libraries": [],
+        "parts": [
+          {
+            "object": "default",
+            "material": "Dark Wood",
+            "quads": [
+              [
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+              ]
+            ]
+          },
+          {
+            "object": "default",
+            "material": "",
+            "quads": [
+              [
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "parse-a-face-naming-a-vertex-not-read-yet-is-refused",
+      "note": "a face naming a vertex not read yet is refused",
+      "input": {"text": "v 0 0 0\nv 1 0 0\nf 1 2 3\nv 1 1 0\n"},
+      "expected": {"error": true}
+    },
+    {
+      "id": "parse-a-negative-index-is-refused",
+      "note": "a negative index is refused",
+      "input": {"text": "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nf -1 -2 -3\n"},
+      "expected": {"error": true}
+    },
+    {
+      "id": "parse-a-coordinate-that-isnt-a-number-is-refused",
+      "note": "a coordinate that isn't a number is refused",
+      "input": {"text": "v 0 x 0\n"},
+      "expected": {"error": true}
+    },
+    {
+      "id": "parse-coordinates-are-read-as-floats",
+      "note": "coordinates are read as floats",
+      "input": {"text": "v 0.1 0.2 0.3\nv 1.1 0 0\nv 0 1.1 0\nf 1 2 3\n"},
+      "expected": {
+        "libraries": [],
+        "parts": [
+          {
+            "object": "default",
+            "material": "",
+            "quads": [
+              [
+                [0.1, 0.2, 0.3, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.1, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [0.0, 1.1, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [0.0, 1.1, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "parse-numbers-as-java-reads-them-hexadecimal-suffixes",
+      "note": "numbers as Java reads them: hexadecimal, suffixes",
+      "input": {"text": "v 0x1p1 1f 2d\nv 0 0 0\nv 1 0 0\nf 1 2 3\n"},
+      "expected": {
+        "libraries": [],
+        "parts": [
+          {
+            "object": "default",
+            "material": "",
+            "quads": [
+              [
+                [2.0, 1.0, 2.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "parse-a-face-of-two-corners-draws-nothing",
+      "note": "a face of two corners draws nothing",
+      "input": {"text": "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nf 1 2\n"},
+      "expected": {"libraries": [], "parts": []}
+    },
+    {
+      "id": "parse-s-l-and-unknown-lines-are-skipped",
+      "note": "s, l and unknown lines are skipped",
+      "input": {"text": "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\ns 1\nl 1 2\ncstype bezier\nf 1 2 3\n"},
+      "expected": {
+        "libraries": [],
+        "parts": [
+          {
+            "object": "default",
+            "material": "",
+            "quads": [
+              [
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "parse-g-with-several-names-is-one-name",
+      "note": "g with several names is one name",
+      "input": {"text": "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\ng a b\nf 1 2 3\n"},
+      "expected": {
+        "libraries": [],
+        "parts": [
+          {
+            "object": "a b",
+            "material": "",
+            "quads": [
+              [
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "parse-an-object-name-keeps-its-blanks-inside",
+      "note": "an object name keeps its blanks inside",
+      "input": {"text": "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\no Door Leaf\nf 1 2 3\n"},
+      "expected": {
+        "libraries": [],
+        "parts": [
+          {
+            "object": "Door Leaf",
+            "material": "",
+            "quads": [
+              [
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "parse-an-index-past-the-vt-list-is-refused",
+      "note": "an index past the vt list is refused",
+      "input": {"text": "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\nf 1/2 2/2 3/2\n"},
+      "expected": {"error": true}
+    },
+    {
+      "id": "parse-a-vertex-of-two-coordinates-is-refused",
+      "note": "a vertex of two coordinates is refused",
+      "input": {"text": "v 0 0\n"},
+      "expected": {"error": true}
+    }
+  ]
+}

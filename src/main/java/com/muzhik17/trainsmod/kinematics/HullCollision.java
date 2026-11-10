@@ -5,6 +5,8 @@ import java.util.List;
 import org.joml.Quaterniond;
 import org.joml.Vector3d;
 
+import com.muzhik17.trainsmod.stock.WagonType;
+
 /**
  * Pure-math hard collision against a wagon's solid hull (SPEC v1.5-а): a moving
  * <b>OBB</b> (the body box carried by the pose) versus an entity that may walk
@@ -25,18 +27,49 @@ public final class HullCollision {
      * An open doorway through the hull wall (SPEC v1.5, doors), in the
      * wagon's local frame. The hull stays solid everywhere else; an entity
      * whose <b>centre</b> lies inside the opening's cross-section — along the
-     * wall ({@code spanMin..spanMax}) and below the door top ({@code maxY}) —
-     * is not stopped by the wall the doorway pierces ({@code axis}: 0 = an
-     * X wall / side door, 2 = a Z wall / end door). There is no lower bound:
-     * stepping into the doorway from the ground walks into the step well, the
-     * way a real vestibule is boarded.
+     * wall ({@code spanMin..spanMax}), below the door top ({@code maxY}) and
+     * on the door's own side: outside the wall face, or no more than {@link
+     * #DEPTH} in through it — is not stopped by the wall the doorway pierces
+     * ({@code axis}: 0 = an X wall / side door, 2 = a Z wall / end door; the
+     * face at {@code face} on that axis, {@code outward} ±1 the way the door
+     * faces). The opposite wall stays solid over the same span. There is no
+     * lower bound: stepping into the doorway from the ground walks into the
+     * step well, the way a real vestibule is boarded.
      */
-    public record Portal(int axis, double spanMin, double spanMax, double maxY) {
+    public record Portal(int axis, int outward, double face, double spanMin, double spanMax,
+            double maxY) {
 
-        /** Whether a local point is inside this opening's cross-section. */
+        /**
+         * How far in through the wall face the opening still counts: the step
+         * well — a body's width, and the steps the server may take in at once
+         * before it boards the player (or the hull shove would throw them out).
+         */
+        public static final double DEPTH = 1.0;
+
+        /**
+         * The opening open door {@code door} (pose frame) cuts in {@code hull}:
+         * in the hull face on the door's side, along the door's span less
+         * {@link RiderWalk#DOOR_SPAN_INSET} at each jamb, up to the door's top.
+         */
+        public static Portal of(WagonType.Door door, WagonType.Hull hull) {
+            int axis = door.axis();
+            int outward = door.outward();
+            double face = axis == 0
+                    ? (outward > 0 ? hull.maxX() : hull.minX())
+                    : (outward > 0 ? hull.maxZ() : hull.minZ());
+            return new Portal(axis, outward, face, door.spanMin() + RiderWalk.DOOR_SPAN_INSET,
+                    door.spanMax() - RiderWalk.DOOR_SPAN_INSET, door.maxY());
+        }
+
+        /** Whether a local point is inside this opening's cross-section, on its side of the car. */
         public boolean contains(double x, double y, double z) {
             double along = axis == 0 ? z : x;
-            return along >= spanMin && along <= spanMax && y <= maxY;
+            return along >= spanMin && along <= spanMax && y <= maxY && outside(x, z) >= -DEPTH;
+        }
+
+        /** How far a local point lies out from the wall face, the way the door faces (negative: in). */
+        public double outside(double x, double z) {
+            return ((axis == 0 ? x : z) - face) * outward;
         }
     }
 
@@ -84,7 +117,8 @@ public final class HullCollision {
      * {@link #clampMove} with open doorways: the X (Z) wall doesn't stop an
      * entity whose centre is inside an open {@link Portal} on that axis at
      * the moment that axis is resolved — it walks into the opening, and the
-     * server then boards it.
+     * server then boards it. Only the door's own wall opens: one coming at
+     * the opposite wall over the same span still meets it.
      */
     public static Vector3d clampMove(Vector3d hullMin, Vector3d hullMax,
             Vector3d body, float yawDeg, float pitchDeg,
@@ -189,9 +223,10 @@ public final class HullCollision {
     }
 
     /**
-     * The open doorway an entity centre (world) stands in, or null. The
+     * The open doorway an entity centre (world) stands in, or null: on the
+     * door's side, at most {@link Portal#DEPTH} in through its wall. The
      * server uses it to leave a player stepping through a door alone (no
-     * shove back out mid-step) and to board them.
+     * shove back out mid-step).
      */
     public static Portal portalAt(List<Portal> portals, Vector3d body, float yawDeg,
             float pitchDeg, Vector3d entityCenter) {

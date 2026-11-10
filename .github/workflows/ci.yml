@@ -1,0 +1,154 @@
+# The checks of "ready" (CLAUDE.md, roadmap R4) on every push and pull request:
+# the mod builds and its tests pass; the pack tools' tests pass; the schema in
+# schema/ agrees with itself, with the parsers' and the converter's key lists
+# and with the generated author reference; the MVP recipe and the generated
+# MVP pack follow the schema; the example pack follows it with nothing to warn
+# about either; the pack editor in editor/ passes its lint, unit and browser
+# tests and builds.
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mod:
+    name: Mod — build and tests (JDK 21)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      # Caches the Gradle distribution, dependencies and the NeoForge/Minecraft artifacts.
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # No build cache: CI runs every test afresh. build.gradle declares the files the
+      # tests read from disk (packs/, run/rwat_packs/, schema/) as test inputs, but a test
+      # that starts reading another file would be answered by a cached result until it
+      # is declared too. A fresh runner has no build/ either.
+      - name: Build with tests
+        run: ./gradlew build --no-build-cache --stacktrace
+
+      - name: Keep the test report of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: build/reports/tests/test/
+          if-no-files-found: ignore
+
+  pack-format:
+    name: Pack format and tools (Python 3.11)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Tool tests
+        run: python -I -m unittest discover tools/tests
+
+      - name: Schema self-check (keys = the parsers' and the converter's)
+        run: python -I tools/validate_pack.py --self-check
+
+      - name: Author reference is up to date with the schema
+        run: python -I tools/gen_pack_docs.py --check
+
+      - name: MVP recipe and its overrides follow the schema
+        run: python -I tools/validate_pack.py packs/mvp.json
+
+      # Our own pack, the format's reference (roadmap R11): validate_pack fails the step
+      # on an error itself; a warning fails it here, as the pack has to load without one.
+      - name: Example pack follows the schema without an error or a warning
+        run: |
+          out=$(python -I tools/validate_pack.py run/rwat_packs/RwatExamplePack)
+          echo "$out"
+          if [[ "$out" != *" 0 error(s), 0 warning(s)" ]]; then
+            echo "::error title=Example pack::validate_pack reports a warning in run/rwat_packs/RwatExamplePack"
+            exit 1
+          fi
+
+      # The generated pack leaves the repository after phase 2 (R12): then this
+      # step says it was skipped instead of passing silently (E9).
+      - name: Generated MVP pack follows the schema
+        run: |
+          pack=run/rwat_packs/MatoiVanillaPack
+          if [ -d "$pack" ]; then
+            python -I tools/validate_pack.py --group "$pack"
+          else
+            echo "::warning title=MVP pack skipped::$pack is not in the repository, the generated pack was not checked"
+          fi
+
+  # The pack editor (docs/proposals/editor.md §5.3): types and lint, unit tests, the site's
+  # build, the browser tests on it. Independent of the jobs above. The built site of every
+  # branch is kept as an artifact; only main is published to GitHub Pages (pages.yml).
+  editor:
+    name: Editor — lint, tests, build, e2e (Node 22)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: editor
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: editor/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Types and lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build the site
+        run: npm run build
+
+      - name: Keep the built site
+        uses: actions/upload-artifact@v4
+        with:
+          name: editor-site
+          path: editor/dist/
+          retention-days: 14
+
+      - name: Install Playwright's Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser tests
+        run: npm run e2e
+
+      - name: Keep the browser test report of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: editor-e2e-report
+          path: |
+            editor/playwright-report/
+            editor/test-results/
+          if-no-files-found: ignore

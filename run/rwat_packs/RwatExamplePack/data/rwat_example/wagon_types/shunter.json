@@ -1,0 +1,66 @@
+{
+  "length": 14.0,
+  "bogies": [4.0, -4.0],
+  "mass_t": 68.0,
+  "max_speed_kmh": 60,
+  "resistance": {
+    "a": 780.0,
+    "b": 18.0,
+    "c": 1.6,
+    "c_front": 7.0
+  },
+  "traction": {
+    "power_kw": 750.0,
+    "max_tractive_effort_kn": 210.0,
+    "adhesion": 1.15,
+    "ramp_s": 6.0
+  },
+  "brakes": {
+    "system": "passenger",
+    "train_kn": 68.0,
+    "independent_kn": 52.0,
+    "parking_kn": 30.0,
+    "apply_s": 5.0,
+    "release_s": 9.0
+  },
+  "cab": {
+    "seats": [
+      {
+        "at": [1.65, 2.1, -0.8],
+        "yaw": 0
+      },
+      {
+        "at": [2.95, 2.1, 0.8],
+        "yaw": 180
+      }
+    ]
+  },
+  "interior": [
+    {
+      "min": [1.25, 1.6, -1.42],
+      "max": [3.35, 3.9, 1.42]
+    },
+    {
+      "min": [3.35, 1.6, -1.42],
+      "max": [3.92, 3.9, 0.0]
+    }
+  ],
+  "doors": [
+    {
+      "id": "steps_left",
+      "min": [2.0, 1.6, 1.42],
+      "max": [2.6, 3.6, 1.5],
+      "fixed": true
+    },
+    {
+      "id": "steps_right",
+      "min": [2.0, 1.6, -1.5],
+      "max": [2.6, 3.6, -1.42],
+      "fixed": true
+    }
+  ],
+  "couplers": {
+    "front": 0.05,
+    "rear": 0.05
+  }
+}
