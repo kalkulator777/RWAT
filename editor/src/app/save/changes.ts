@@ -22,8 +22,14 @@ export interface ChangeItem {
 
 const decoder = new TextDecoder();
 
+/**
+ * What the list of changes reads of the files a save writes: the open pack (core/pack
+ * `Pack`), or anything of its shape — an IR recipe's files (ir/recipe `RecipeWorkspace`).
+ */
+export type ChangeSource = Pick<Pack, 'dirtyPaths' | 'status' | 'originalBytes' | 'has' | 'text'>;
+
 /** The texts before and after the save: null for a side with no file. */
-export async function changeTexts(pack: Pack, path: string): Promise<{ before: string | null; after: string | null }> {
+export async function changeTexts(pack: ChangeSource, path: string): Promise<{ before: string | null; after: string | null }> {
   const original = await pack.originalBytes(path);
   return {
     before: original === null ? null : decoder.decode(original),
@@ -32,14 +38,14 @@ export async function changeTexts(pack: Pack, path: string): Promise<{ before: s
 }
 
 /** The difference of a text file's lines (an absent side is empty); null for a binary file. */
-export async function changeDiff(pack: Pack, path: string): Promise<LineDiff | null> {
+export async function changeDiff(pack: ChangeSource, path: string): Promise<LineDiff | null> {
   if (fileKind(path) === 'binary') return null;
   const { before, after } = await changeTexts(pack, path);
   return diffLines(before ?? '', after ?? '');
 }
 
 /** The files the save writes or deletes, in path order. */
-export async function listChanges(pack: Pack): Promise<ChangeItem[]> {
+export async function listChanges(pack: ChangeSource): Promise<ChangeItem[]> {
   const items: ChangeItem[] = [];
   for (const path of pack.dirtyPaths()) {
     const status = pack.status(path) as ChangeStatus;

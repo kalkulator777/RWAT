@@ -5,7 +5,7 @@ import { FsAccessSource, isFsAccessSupported } from '../../io';
 import { homeOf } from '../../core/session';
 import { savePack, downloadZip, type DeliverZip } from '../session';
 import { failure, findings, pack, revision } from '../store';
-import { changeDiff, listChanges, type ChangeItem } from './changes';
+import { changeDiff, listChanges, type ChangeItem, type ChangeSource } from './changes';
 import { hunks, type LineDiff } from './diff';
 import { Modal } from './Modal';
 import { folderOf, saveTarget, zipNameOf } from './save';
@@ -22,7 +22,7 @@ function whereText(open: Pack): string {
   return t('save.where.zip', { file });
 }
 
-function Diff({ open, path }: { open: Pack; path: string }) {
+function Diff({ open, path }: { open: ChangeSource; path: string }) {
   const [diff, setDiff] = useState<LineDiff | null | undefined>(undefined);
   useEffect(() => {
     let live = true;
@@ -51,7 +51,8 @@ function Diff({ open, path }: { open: Pack; path: string }) {
   );
 }
 
-function ChangeRow({ open, item }: { open: Pack; item: ChangeItem }) {
+/** One file of the list of changes: its status, path and lines, and its difference on demand (the IR mode's save dialog lists a recipe's files with it too). */
+export function ChangeRow({ open, item }: { open: ChangeSource; item: ChangeItem }) {
   const [shown, setShown] = useState(false);
   const lines =
     item.added === null || item.removed === null
