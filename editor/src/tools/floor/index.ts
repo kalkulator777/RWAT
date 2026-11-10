@@ -2,7 +2,9 @@
  * The floor tool, «Зоны» (docs/proposals/editor.md §2.3, §3.9): the wagon type's floor
  * zones drawn, moved, stretched and removed on the view from the top, their numbers and
  * order in the inspector, and over them where a player stands, walks out and drives —
- * the engine's floor logic, by its ports, after every edit.
+ * the engine's floor logic, by its ports, after every edit. For a type with no floor, or a
+ * poor one, «Предложить пол» asks the converter's floor generator for a draft from the model
+ * (tools/suggest/floor.ts), taken or left in one step.
  */
 
 import { h } from 'preact';

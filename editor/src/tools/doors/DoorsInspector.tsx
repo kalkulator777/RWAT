@@ -1,11 +1,12 @@
 /**
  * The doors tool's section of the inspector (docs/proposals/editor.md §2.3, §6.3): all the
- * view's gestures by keyboard — a door made of the objects selected; the doors in their
- * order (the order is the door's index) to select, move up and down, remove and add; the
- * selected door's id, flags, group and six numbers; what the engine makes of it (its wall
- * and way out, its size, an inner door's bridge, the leaves it moves) and what the floor
- * check finds of it, in the interface's words; what edges snap to; the legend of the
- * layers.
+ * view's gestures by keyboard — a door made of the objects selected, the doors the converter
+ * finds by the model's object names (tools/suggest: «Двери по именам», a draft to accept or
+ * reject); the doors in their order (the order is the door's index) to select, move up and
+ * down, remove and add; the selected door's id, flags, group and six numbers; what the
+ * engine makes of it (its wall and way out, its size, an inner door's bridge, the leaves it
+ * moves) and what the floor check finds of it, in the interface's words; what edges snap
+ * to; the legend of the layers.
  *
  * The section has the tools' common look (../common/section.css) and fields
  * (../common/inputs.tsx), as the zones tool's has.
@@ -19,6 +20,7 @@ import { formatNumber, t } from '../../i18n';
 import { overlayStyle } from '../../view3d/overlays';
 import { NumberInput, TextInput } from '../common/inputs';
 import type { Snapping } from '../common/snap';
+import { SuggestDoorsSection } from '../suggest/SuggestDoors';
 import { moversOfDoor, type DoorInfo, type DoorMover, type DoorsPicture } from './analysis';
 import { DOOR_FLAGS, idTaken, selectedDoors, type DoorBox, type DoorEntry } from './doors';
 import type { DoorsTool } from './session';
@@ -314,6 +316,7 @@ export function DoorsInspector({ tool }: { tool: DoorsTool }) {
       {subject.type === null && <p class="tool-note tool-warning">{t('tools.doors.noType')}</p>}
       {subject.model === null && <p class="tool-note">{t('tools.doors.noModel')}</p>}
       <FromSelection tool={tool} readOnly={subject.readOnly} />
+      <SuggestDoorsSection by={tool.byNames} subject={subject} />
       <DoorList tool={tool} picture={picture} chosen={chosen} readOnly={subject.readOnly} findings={findings} />
       {info !== undefined && (
         <DoorEditor tool={tool} info={info} picture={picture} readOnly={subject.readOnly} findings={findings.get(info.index) ?? []} typeLoads={subject.type !== null} />
