@@ -12,6 +12,9 @@
  *   its required fields, the model `assets/<ns>/wagon_models/<id>.json` naming the OBJ,
  *   and its names if given. A file name Minecraft would not load (capitals, spaces) is
  *   refused with the list of such files, as is anything that is there already.
+ * - **A new rail style** is one command the same way: its OBJ and textures under
+ *   `assets/<ns>/<folder>/`, the style `assets/<ns>/rail_models/<id>.json` naming the OBJ
+ *   (and `tile_length` when given), its names if given.
  * - **Files added** to a folder of the pack — textures shared by several models
  *   (`assets/<ns>/stock/common/`), a livery's folder beside an OBJ, the pack's `README.md`,
  *   `LICENSE.txt` and `pack.png` at its root — are one command too, refused the same way.
@@ -20,7 +23,7 @@
 import { isBadResourcePath } from '../../checks/loader';
 import type { Command, FileEntry, Op, PackSource } from '../../core/contracts';
 import { dumpBytes } from '../../core/json';
-import { MCMETA, SUPPORTED_FORMAT, modelPath, putJson, typePath, wagonNameKey, type Pack } from '../../core/pack';
+import { MCMETA, SUPPORTED_FORMAT, modelPath, putJson, railNameKey, railPath, typePath, wagonNameKey, type Pack } from '../../core/pack';
 import { packPathProblem } from '../../core/paths';
 import type { Schema } from '../../core/schema';
 import { parseNumber } from '../../forms/values';
@@ -223,4 +226,54 @@ export function addFilesCommand(pack: Pack, input: AddFilesInput): { command: Co
   if (errors.length > 0) return { errors };
   const ops: Op[] = input.files.map((file, i) => ({ op: 'putFile', file: paths[i] as string, bytes: file.bytes }));
   return { command: { label: 'newpack.command.addFiles', labelParams: { count: ops.length, folder: folder === '' ? '/' : folder }, ops } };
+}
+
+export interface AddRailInput {
+  namespace: string;
+  /** The id's path: `wooden_track`. */
+  id: string;
+  /** The tile's folder under `assets/<ns>/`; empty: `track/<id>`. */
+  folder: string;
+  /** The tile's OBJ and, beside it, its MTL and textures. */
+  files: readonly PickedFile[];
+  /** `tile_length`, blocks; empty: left out (the engine's default). */
+  tileLength: string;
+  /** Names by Minecraft language code; empty ones are left out. */
+  names: Readonly<Record<string, string>>;
+}
+
+/** The tile folder the input names, without slashes at its ends. */
+export function railFolder(input: Pick<AddRailInput, 'folder' | 'id'>): string {
+  const folder = input.folder.trim().replace(/^\/+|\/+$/g, '');
+  return folder === '' ? `track/${input.id.trim()}` : folder;
+}
+
+/** The command that adds the rail style, or why it cannot be added. */
+export function addRailCommand(pack: Pack, input: AddRailInput, schema: Schema): { command: Command } | { errors: WizardError[] } {
+  const errors: WizardError[] = [];
+  const namespace = input.namespace.trim();
+  const id = `${namespace}:${input.id.trim()}`;
+  if (!commonPattern(schema, 'type_id').test(id)) errors.push({ key: 'newpack.error.id', params: { id } });
+  else if (pack.has(railPath(id))) errors.push({ key: 'newpack.error.railTaken', params: { id } });
+  const folder = railFolder(input);
+  if (folder.split('/').some((part) => part === '' || part === '.' || part === '..')) errors.push({ key: 'newpack.error.folder', params: { folder } });
+  const objs = input.files.filter((file) => file.name.toLowerCase().endsWith('.obj'));
+  if (objs.length !== 1) errors.push({ key: 'newpack.error.obj', params: { count: objs.length } });
+  const paths = placedPaths(pack, `assets/${namespace}/${folder}`, input.files, errors);
+  let tileLength: number | undefined;
+  if (input.tileLength.trim() !== '') {
+    const parsed = parseNumber(input.tileLength);
+    if ('error' in parsed || !(parsed.value > 0)) errors.push({ key: 'newpack.error.tileLength' });
+    else tileLength = parsed.value;
+  }
+  if (errors.length > 0) return { errors };
+
+  const ops: Op[] = input.files.map((file, i) => ({ op: 'putFile', file: paths[i] as string, bytes: file.bytes }));
+  const obj = `${folder}/${(objs[0] as PickedFile).name}`;
+  ops.push(putJson(railPath(id), tileLength === undefined ? { obj } : { obj, tile_length: tileLength }));
+  const key = railNameKey(id);
+  for (const [lang, text] of Object.entries(input.names)) {
+    if (text.trim() !== '') ops.push(...nameOps(pack, key, namespace, lang, text.trim()));
+  }
+  return { command: { label: 'newpack.command.addRail', labelParams: { id }, ops } };
 }

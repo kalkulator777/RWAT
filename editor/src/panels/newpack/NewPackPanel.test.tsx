@@ -153,4 +153,31 @@ describe('the wizard', () => {
     expect(pack.value?.paths()).toEqual(['README.md', 'assets/p/stock/common/steel.png', 'assets/p/stock/common/wheel.png', 'pack.mcmeta']);
     expect(await pack.value?.text('README.md')).toBe('# P\n');
   });
+
+  it('adds a rail style with its tile and names in one command; the tree lists it', async () => {
+    expect(screen.getByTestId('add-rail').hasAttribute('disabled')).toBe(true);
+    fireEvent.click(screen.getByTestId('new-pack'));
+    const dialog = await screen.findByTestId('new-pack-dialog');
+    fill(dialog, 'name', 'P');
+    fill(dialog, 'namespace', 'p');
+    fireEvent.submit(dialog.querySelector('form') as HTMLFormElement);
+    await waitFor(() => expect(pack.value).not.toBeNull());
+    fireEvent.click(screen.getByTestId('add-rail'));
+    const rail = await screen.findByTestId('add-rail-dialog');
+    expect((rail.querySelector('input[name="namespace"]') as HTMLInputElement).value).toBe('p');
+    fill(rail, 'id', 'wooden');
+    fill(rail, 'folder', 'track');
+    const picker = rail.querySelector('input[type="file"]') as HTMLInputElement;
+    Object.defineProperty(picker, 'files', { value: [new File(['o RAIL_L\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n'], 'wooden.obj'), new File(['newmtl a\n'], 'wooden.mtl')], configurable: true });
+    fireEvent.change(picker);
+    fill(rail, 'tile_length', '0.75');
+    fill(rail, 'name_en_us', 'Wooden');
+    fireEvent.submit(rail.querySelector('form') as HTMLFormElement);
+    await waitFor(() => expect(screen.queryByTestId('add-rail-dialog')).toBeNull());
+    expect(selection.value).toEqual([{ kind: 'file', file: 'assets/p/rail_models/wooden.json' }]);
+    expect(pack.value?.json('assets/p/rail_models/wooden.json')).toEqual({ obj: 'track/wooden.obj', tile_length: 0.75 });
+    expect(pack.value?.json('assets/p/lang/en_us.json')).toEqual({ 'rail.p.wooden': 'Wooden' });
+    expect(journal.value?.state().done.map((command) => command.label)).toEqual(['newpack.command.addRail']);
+    expect(screen.getByTestId('tree').querySelector('[data-file="assets/p/rail_models/wooden.json"]')).not.toBeNull();
+  });
 });

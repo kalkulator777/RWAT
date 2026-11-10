@@ -3,10 +3,10 @@ import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { openSource, run } from '../../app/session';
 import { dirtyCount, pack, schema, selection } from '../../app/store';
-import { MCMETA, typePath } from '../../core/pack';
+import { MCMETA, railPath, typePath } from '../../core/pack';
 import { t } from '../../i18n';
 import { NAME_LANGS } from '../names/model';
-import { addFilesCommand, addWagonCommand, checkNewPack, modelFolder, newPackSource, packNamespaces, type NewPackInput, type PickedFile, type WizardError } from './model';
+import { addFilesCommand, addRailCommand, addWagonCommand, checkNewPack, modelFolder, newPackSource, railFolder, packNamespaces, type NewPackInput, type PickedFile, type WizardError } from './model';
 
 /** The namespace the last new pack was made with: the wagon dialog offers it while the pack has no files under it yet. */
 const lastNamespace = signal('');
@@ -227,6 +227,56 @@ function FilesInput(props: { label: string; hint: string; accept?: string; onPic
   );
 }
 
+function AddRailDialog({ onClose }: { onClose: () => void }) {
+  const open = pack.value;
+  const namespaces = open === null ? [] : packNamespaces(open);
+  const [namespace, setNamespace] = useState(namespaces[0] ?? lastNamespace.value);
+  const [id, setId] = useState('');
+  const [folder, setFolder] = useState('');
+  const [files, setFiles] = useState<File[]>([]);
+  const [tileLength, setTileLength] = useState('');
+  const [names, setNames] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<WizardError[]>([]);
+  const [busy, setBusy] = useState(false);
+  const loaded = schema.value;
+  const add = async (): Promise<void> => {
+    if (open === null) return;
+    if (loaded === null) return setErrors([{ key: 'newpack.error.schema' }]);
+    setBusy(true);
+    const result = addRailCommand(open, { namespace, id, folder, files: await readPicked(files), tileLength, names }, loaded);
+    if ('errors' in result) {
+      setBusy(false);
+      return setErrors(result.errors);
+    }
+    const done = await run(result.command);
+    setBusy(false);
+    if (!done) return;
+    selection.value = [{ kind: 'file', file: railPath(`${namespace.trim()}:${id.trim()}`) }];
+    onClose();
+  };
+  return (
+    <Dialog title={t('newpack.rail.title')} testId="add-rail-dialog" onClose={onClose} onSubmit={() => void add()} submit={t('newpack.rail.add')} busy={busy}>
+      <Input name="namespace" label={t('newpack.pack.namespace')} value={namespace} onInput={setNamespace} list="newpack-namespaces" mono />
+      <datalist id="newpack-namespaces">
+        {namespaces.map((ns) => (
+          <option key={ns} value={ns} />
+        ))}
+      </datalist>
+      <Input name="id" label={t('newpack.rail.id')} hint={t('newpack.rail.idHint')} value={id} onInput={setId} mono />
+      <Input name="folder" label={t('newpack.rail.folder')} hint={t('newpack.wagon.folderHint', { folder: railFolder({ folder: '', id: id || '<id>' }) })} value={folder} onInput={setFolder} mono />
+      <FilesInput label={t('newpack.rail.files')} hint={t('newpack.rail.filesHint')} accept=".obj,.mtl,.png" onPick={setFiles} />
+      <Input name="tile_length" label={t('newpack.rail.tileLength')} hint={t('newpack.rail.tileLengthHint')} value={tileLength} onInput={setTileLength} mono />
+      <fieldset class="dialog-group">
+        <legend>{t('newpack.wagon.names')}</legend>
+        {NAME_LANGS.map((code) => (
+          <Input key={code} name={`name_${code}`} label={code} value={names[code] ?? ''} onInput={(value) => setNames({ ...names, [code]: value })} />
+        ))}
+      </fieldset>
+      <Errors list={errors} />
+    </Dialog>
+  );
+}
+
 function AddFilesDialog({ onClose }: { onClose: () => void }) {
   const open = pack.value;
   const namespaces = open === null ? [] : packNamespaces(open);
@@ -257,12 +307,13 @@ function AddFilesDialog({ onClose }: { onClose: () => void }) {
 }
 
 /**
- * "New pack", "Add wagon" and "Add files" in the top bar (editor.md §2.1, steps 1–2): a
- * dialog each. A new pack replaces the open one (unsaved changes are warned about); a
- * wagon and files are added to the open pack as one command each, so undo takes it back.
+ * "New pack", "Add wagon", "Add rail style" and "Add files" in the top bar (editor.md
+ * §2.1, steps 1–2): a dialog each. A new pack replaces the open one (unsaved changes are
+ * warned about); a wagon, a rail style and files are added to the open pack as one
+ * command each, so undo takes it back.
  */
 export function NewPackPanel() {
-  const [dialog, setDialog] = useState<'pack' | 'wagon' | 'files' | null>(null);
+  const [dialog, setDialog] = useState<'pack' | 'wagon' | 'rail' | 'files' | null>(null);
   const open = pack.value;
   const closed = open === null || open.readOnly;
   return (
@@ -273,11 +324,15 @@ export function NewPackPanel() {
       <button type="button" data-testid="add-wagon" disabled={closed} onClick={() => setDialog('wagon')}>
         {t('newpack.addWagon')}
       </button>
+      <button type="button" data-testid="add-rail" disabled={closed} onClick={() => setDialog('rail')}>
+        {t('newpack.addRail')}
+      </button>
       <button type="button" data-testid="add-files" disabled={closed} onClick={() => setDialog('files')}>
         {t('newpack.addFiles')}
       </button>
       {dialog === 'pack' && <NewPackDialog onClose={() => setDialog(null)} />}
       {dialog === 'wagon' && <AddWagonDialog onClose={() => setDialog(null)} />}
+      {dialog === 'rail' && <AddRailDialog onClose={() => setDialog(null)} />}
       {dialog === 'files' && <AddFilesDialog onClose={() => setDialog(null)} />}
     </div>
   );

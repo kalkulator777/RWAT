@@ -4,7 +4,7 @@ import { Journal } from '../../core/journal';
 import { Pack } from '../../core/pack';
 import { createSchema } from '../../core/schema';
 import { readSchemaFiles } from '../../core/schema/files.node';
-import { addFilesCommand, addWagonCommand, checkNewPack, newPackMeta, newPackSource, type AddWagonInput, type NewPackInput } from './model';
+import { addFilesCommand, addRailCommand, addWagonCommand, checkNewPack, newPackMeta, newPackSource, type AddWagonInput, type NewPackInput } from './model';
 
 const schema = createSchema(readSchemaFiles());
 const encoder = new TextEncoder();
@@ -146,6 +146,50 @@ describe('files added', () => {
     });
     expect(addFilesCommand(pack, { folder: '', files: [{ name: 'pack.mcmeta', bytes: new Uint8Array() }] })).toEqual({
       errors: [{ key: 'newpack.error.filesTaken', params: { files: 'pack.mcmeta' } }],
+    });
+  });
+});
+
+describe('a new rail style', () => {
+  const TILE = 'o RAIL_L\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n';
+
+  it('is one command: the tile files, the style naming its OBJ with the tile step, its names; undo takes it back', async () => {
+    const pack = await Pack.open(newPackSource(PACK));
+    const result = addRailCommand(
+      pack,
+      { namespace: 'my_trains', id: 'wooden', folder: 'track', files: [{ name: 'wooden.obj', bytes: encoder.encode(TILE) }], tileLength: '0.75', names: { en_us: 'Wooden', ru_ru: 'Деревянный' } },
+      schema,
+    );
+    if (!('command' in result)) throw new Error(JSON.stringify(result.errors));
+    expect(result.command).toMatchObject({ label: 'newpack.command.addRail', labelParams: { id: 'my_trains:wooden' } });
+    const journal = new Journal(pack);
+    await journal.run(result.command);
+    expect(pack.json('assets/my_trains/rail_models/wooden.json')).toEqual({ obj: 'track/wooden.obj', tile_length: 0.75 });
+    expect(pack.railStyles()).toEqual([{ id: 'my_trains:wooden', file: 'assets/my_trains/rail_models/wooden.json' }]);
+    expect(pack.json('assets/my_trains/lang/ru_ru.json')).toEqual({ 'rail.my_trains.wooden': 'Деревянный' });
+    expect(checkPack(pack, schema)).toEqual([]);
+    expect(addRailCommand(pack, { namespace: 'my_trains', id: 'wooden', folder: 'other', files: [{ name: 'w.obj', bytes: new Uint8Array() }], tileLength: '', names: {} }, schema)).toEqual({
+      errors: [{ key: 'newpack.error.railTaken', params: { id: 'my_trains:wooden' } }],
+    });
+    journal.undo();
+    expect(pack.paths()).toEqual(['pack.mcmeta']);
+
+    // no tile step typed: the key is left out, the engine's default holds; the folder is track/<id>
+    const plain = addRailCommand(pack, { namespace: 'my_trains', id: 'plain', folder: '', files: [{ name: 'plain.obj', bytes: encoder.encode(TILE) }], tileLength: ' ', names: {} }, schema);
+    if (!('command' in plain)) throw new Error(JSON.stringify(plain.errors));
+    await journal.run(plain.command);
+    expect(pack.json('assets/my_trains/rail_models/plain.json')).toEqual({ obj: 'track/plain/plain.obj' });
+  });
+
+  it('refuses a bad id, no OBJ, names Minecraft will not load, a tile step that is no positive number', async () => {
+    const pack = await Pack.open(newPackSource(PACK));
+    expect(addRailCommand(pack, { namespace: 'my_trains', id: 'Wood', folder: '', files: [{ name: 'Wood.png', bytes: new Uint8Array() }], tileLength: '0', names: {} }, schema)).toEqual({
+      errors: [
+        { key: 'newpack.error.id', params: { id: 'my_trains:Wood' } },
+        { key: 'newpack.error.obj', params: { count: 0 } },
+        { key: 'newpack.error.fileNames', params: { files: 'assets/my_trains/track/Wood/Wood.png' } },
+        { key: 'newpack.error.tileLength' },
+      ],
     });
   });
 });
