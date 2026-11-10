@@ -68,11 +68,8 @@ describe('the findings about a model’s sounds', () => {
       expect(await found({ idle: { main: 'x.ogg', pitch: [0.8, 1.4], volume: [1, 1] } })).toEqual([]);
     });
 
-    it('that runs backwards in a signal is no finding: only its second number is read', async () => {
-      expect(await found({ horn: { main: 'minecraft:a', pitch: [1.2, 0.9], volume: [1, 0.9] } })).toEqual([
-        ['sound.signal-first-ignored', '/sounds/horn/pitch'],
-        ['sound.signal-first-ignored', '/sounds/horn/volume'],
-      ]);
+    it('that runs backwards or differs in its first number in a signal is no finding: only its second number is read', async () => {
+      expect(await found({ horn: { main: 'minecraft:a', pitch: [1.2, 0.9], volume: [1, 0.9] } })).toEqual([]);
     });
 
     it('with a pitch the game bends is a warning, for the numbers the engine reads', async () => {
@@ -80,7 +77,6 @@ describe('the findings about a model’s sounds', () => {
       expect(soundProblems(pack).map((p) => [p.code, p.params.key, p.params.value])).toEqual([
         ['sound.pitch-clamped', 'idle', 0.3],
         ['sound.pitch-clamped', 'wheels', 2.5],
-        ['sound.signal-first-ignored', 'bell', undefined],
       ]);
       // the bell's first number is not read, so 0.1 is no pitch the engine would bend
     });
@@ -203,7 +199,6 @@ describe('the findings about a model’s sounds', () => {
       'sound.not-ogg',
       'sound.pitch-clamped',
       'sound.range-reversed',
-      'sound.signal-first-ignored',
       'sound.volume-negative',
     ]);
     for (const code of codes) {

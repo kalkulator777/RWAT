@@ -13,8 +13,6 @@ export default defineStrings({
       '«sounds.{key}.{name}» идёт задом наперёд: [{from}, {to}] — {from} в покое и {to} на полной (звук не растёт, а убывает; так и задумано?)',
     'problem.sound.pitch-clamped': '«sounds.{key}.pitch» = {value}: игра ограничивает высоту звука от {min} до {max}, остальное срезает',
     'problem.sound.volume-negative': '«sounds.{key}.volume» = {value}: отрицательная громкость — тишина',
-    'problem.sound.signal-first-ignored':
-      '«sounds.{key}.{name}»: зажатый сигнал звучит на втором числе ({to}), первое ({from}) не используется — чтобы задать один уровень, пишите его дважды',
     'problem.sound.control-unknown': 'ключ «{key}» в sounds.controls не называет орган кабины: он никогда не звучит',
     'problem.sound.control-shadowed':
       'ключ «{key}» в sounds.controls — тот же вид органа ({kind}), что и «{first}» выше: звучит только первый объявленный ключ вида',
@@ -27,8 +25,6 @@ export default defineStrings({
       '“sounds.{key}.{name}” runs backwards: [{from}, {to}] is {from} at rest and {to} at full (the sound falls instead of rising; is that meant?)',
     'problem.sound.pitch-clamped': '“sounds.{key}.pitch” = {value}: the game limits pitch to {min}–{max} and cuts the rest off',
     'problem.sound.volume-negative': '“sounds.{key}.volume” = {value}: a negative volume is silence',
-    'problem.sound.signal-first-ignored':
-      '“sounds.{key}.{name}”: a held signal sounds at the second number ({to}), the first ({from}) is not used — write one level twice to set it',
     'problem.sound.control-unknown': 'the sounds.controls key “{key}” names no cab control: it never sounds',
     'problem.sound.control-shadowed':
       'the sounds.controls key “{key}” is the same kind of control ({kind}) as “{first}” before it: only the first declared key of a kind sounds',

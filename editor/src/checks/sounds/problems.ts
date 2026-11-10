@@ -1,8 +1,7 @@
 /**
  * The findings about the `sounds` of a wagon model (docs/proposals/editor.md §2.4 item 4,
  * §3.10): what the mod's loader keeps quiet about but the engine then does not do as the
- * author meant — a range the game bends or that runs backwards, a signal's number that is
- * never used, a `controls` key that never sounds, a reference that is read as a sound
+ * author meant — a range the game bends or that runs backwards, a `controls` key that never sounds, a reference that is read as a sound
  * event no pack defines. Source `loader`, codes `sound.*` (translated in ./i18n.ts),
  * each pointing at the field.
  *
@@ -41,7 +40,7 @@ function rangeOf(value: unknown): [number, number] | null {
 /** The extensions of sound files the engine does not read: a reference ending so is read as a sound event id. */
 const OTHER_AUDIO = /\.(?:wav|mp3|flac|m4a|aac|opus|oga|wma|aiff?|ogg)$/i;
 
-/** The ranges of the loops: the game bends pitch, a negative volume is silence, a range may run backwards, a signal reads one number. */
+/** The ranges of the loops: the game bends pitch, a negative volume is silence, a range may run backwards. A signal's first number, which the engine does not read, is no finding: the tab says so. */
 function ranges(file: string, sounds: Record<string, unknown>, out: Problem[]): void {
   for (const [key, loop] of Object.entries(sounds)) {
     if (!isLoopKey(key) || !isJsonObject(loop)) continue;
@@ -51,18 +50,7 @@ function ranges(file: string, sounds: Record<string, unknown>, out: Problem[]): 
       if (range === null) continue;
       const at = childPointer(childPointer('/sounds', key), name);
       const [from, to] = range;
-      if (signal) {
-        if (from !== to) {
-          out.push({
-            severity: 'info',
-            source: 'loader',
-            code: 'sound.signal-first-ignored',
-            params: { key, name, from, to },
-            text: `sounds.${key}.${name}: a held ${key} sounds at the second number (${to}); the first (${from}) is not used`,
-            at: field(file, at),
-          });
-        }
-      } else if (from > to) {
+      if (!signal && from > to) {
         out.push({
           severity: 'warning',
           source: 'loader',
