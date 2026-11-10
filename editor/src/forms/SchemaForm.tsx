@@ -63,6 +63,27 @@ function frameNameOf(schema: Schema, id: string): string {
   return (frame && schemaText(frame, lang.value, 'name')) ?? id;
 }
 
+/**
+ * What the fields of a form need for a file (./context.ts): its value, its findings by
+ * field, how an edit is committed. `SchemaForm` builds its own; a panel that lays out some
+ * of a file's fields itself (the sounds tab) builds one here and draws them with `Field`.
+ */
+export function formContext(props: SchemaFormProps): FormContext {
+  const { file, kind, value, schema } = props;
+  const { byField } = problemsByField(file, props.problems);
+  return {
+    file,
+    kind,
+    root: value,
+    readOnly: props.readOnly === true,
+    problems: byField,
+    messages: { pack: props.pack ?? null, schema },
+    spatialNote: props.spatialNote === true,
+    frameName: (id) => frameNameOf(schema, id),
+    commit: (ops: Op[], label: string, field: string) => props.onCommand({ label, labelParams: { field }, ops }),
+  };
+}
+
 export function SchemaForm(props: SchemaFormProps) {
   const { file, kind, value, schema } = props;
   void lang.value; // the whole form follows the language
@@ -75,17 +96,7 @@ export function SchemaForm(props: SchemaFormProps) {
     const shown = at !== '' && (descriptorAt(root, value, at) !== undefined || (parent !== undefined && list.every((p) => p.code === 'schema.unknown-key') && descriptorAt(root, value, parent) !== undefined));
     if (!shown) loose.push(...list);
   }
-  const ctx: FormContext = {
-    file,
-    kind,
-    root: value,
-    readOnly: props.readOnly === true,
-    problems: byField,
-    messages: { pack: props.pack ?? null, schema },
-    spatialNote: props.spatialNote === true,
-    frameName: (id) => frameNameOf(schema, id),
-    commit: (ops: Op[], label: string, field: string) => props.onCommand({ label, labelParams: { field }, ops }),
-  };
+  const ctx = formContext(props);
   const about = pairText(root.description, lang.value);
   return (
     <div class="schema-form" data-file={file} data-kind={kind}>

@@ -7,5 +7,5 @@
 export type { FormContext } from './context';
 export { engineDefault, FIGURED_DEFAULTS } from './engineDefaults';
 export { Field, fieldId } from './Field';
-export { problemsByField, SchemaForm, type SchemaFormProps } from './SchemaForm';
+export { formContext, problemsByField, SchemaForm, type SchemaFormProps } from './SchemaForm';
 export { blankOf, looseText, numberText, parseLoose, parseNumber, removeOps, renameKeyOps, setOps, type ParsedNumber } from './values';

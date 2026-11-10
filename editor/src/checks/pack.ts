@@ -1,6 +1,7 @@
 /**
  * The findings of a whole pack (docs/proposals/editor.md §3.10): what opening it found and
- * the loader's rules beyond the schema (./loader.ts), what the schema says of each file
+ * the loader's rules beyond the schema (./loader.ts) and what the models' `sounds` come to
+ * in the engine (./sounds/problems.ts), what the schema says of each file
  * that has a schema, and what the floor check says of each wagon type (./floor/problems.ts).
  * The models' findings come from the model worker (./model/): the open model's join the
  * panels' findings in app/store, the others' "Check all models" brings; the converter's
@@ -19,6 +20,7 @@ import type { Pack } from '../core/pack';
 import { schemaKindOf, type Schema } from '../core/schema';
 import { floorProblems } from './floor/problems';
 import { loaderProblems } from './loader';
+import { soundProblems } from './sounds/problems';
 
 interface Checked {
   value: unknown;
@@ -43,13 +45,13 @@ function schemaProblems(schema: Schema, path: string, value: unknown): Problem[]
 }
 
 /**
- * All findings of `pack`: what opening found and the loader's rules first, then each
+ * All findings of `pack`: what opening found, the loader's rules and the sounds' first, then each
  * schema-described file's in path order, then the floor check's of each wagon type in id
  * order. Without a `schema` (not loaded yet) the schema's are left out. A file whose text
  * is not JSON has the loader's `pack.broken-json` and no schema or floor findings.
  */
 export function checkPack(pack: Pack, schema: Schema | null): Problem[] {
-  const problems = [...pack.problems(), ...loaderProblems(pack)];
+  const problems = [...pack.problems(), ...loaderProblems(pack), ...soundProblems(pack)];
   if (schema !== null) {
     for (const path of pack.paths()) {
       if (schemaKindOf(path) === undefined || pack.kind(path) !== 'json' || pack.jsonError(path) !== null) continue;
