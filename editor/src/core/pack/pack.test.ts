@@ -298,4 +298,42 @@ describe('the pack model, case by case', () => {
     expect(pack.has('d.png')).toBe(false);
     await pack.load(['a.png', 'nothing']);
   });
+
+  it('gives the bytes a file was opened or last saved with', async () => {
+    const pack = await Pack.open(new MemorySource(filesOf({ 'pack.mcmeta': mcmeta({ format: 1 }), 'a.png': new Uint8Array([1, 2]) })));
+    const journal = new Journal(pack);
+    await journal.run({ label: 'edit', ops: [{ op: 'putFile', file: 'a.png', bytes: new Uint8Array([9]) }, putJson('n.json', {})] });
+    expect(await pack.originalBytes('a.png')).toEqual(new Uint8Array([1, 2]));
+    expect(await pack.originalBytes('n.json')).toBeNull();
+    expect(await pack.originalBytes('nothing')).toBeNull();
+    await pack.save(new MemorySink());
+    expect(await pack.originalBytes('a.png')).toEqual(new Uint8Array([9]));
+  });
+
+  it('rebases a file onto what its folder holds, keeping what the file holds now', async () => {
+    const meta = mcmeta({ format: 1 });
+    const pack = await Pack.open(new MemorySource(filesOf({ 'pack.mcmeta': meta, 'a.png': new Uint8Array([1, 2]), 'b.png': new Uint8Array([5]), 'gone.png': new Uint8Array([7]) })));
+    const journal = new Journal(pack);
+    await journal.run({ label: 'edit', ops: [{ op: 'set', file: 'pack.mcmeta', at: '/rwat/name', value: 'X' }, { op: 'renameFile', file: 'a.png', to: 'c.png' }] });
+    // the folder already holds the edited mcmeta in another layout and the renamed file
+    const saved = '{"pack": {"pack_format": 34}, "rwat": {"format": 1, "name": "X"}}\n';
+    await pack.rebase('pack.mcmeta', new TextEncoder().encode(saved));
+    await pack.rebase('c.png', new Uint8Array([1, 2]));
+    await pack.rebase('a.png', null);
+    expect(pack.dirtyPaths()).toEqual([]);
+    expect(await pack.text('pack.mcmeta')).toBe(saved);
+    // what differs from the folder stays to be saved: a value, other bytes, a file the folder lacks or has
+    await pack.rebase('b.png', new Uint8Array([6]));
+    await pack.rebase('d.png', new Uint8Array([8]));
+    await pack.rebase('gone.png', null);
+    expect(pack.dirtyPaths()).toEqual(['b.png', 'd.png', 'gone.png']);
+    expect(pack.status('gone.png')).toBe('new');
+    expect(pack.status('d.png')).toBe('deleted');
+    await journal.run({ label: 'name', ops: [{ op: 'set', file: 'pack.mcmeta', at: '/rwat/name', value: 'Y' }] });
+    expect(await pack.text('pack.mcmeta')).toBe(saved.replace('"X"', '"Y"'));
+    await pack.rebase('pack.mcmeta', new TextEncoder().encode('{'));
+    expect(pack.status('pack.mcmeta')).toBe('changed');
+    journal.undo();
+    expect(await pack.text('pack.mcmeta')).toBe(saved);
+  });
 });
