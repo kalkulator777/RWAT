@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks';
+import { run as runCommand } from '../../app/session';
 import { pack, revision, schema, schemaError, selection } from '../../app/store';
 import { problemMessage } from '../../checks/messages';
 import { isStale, modelsOf, type SweepState } from '../../checks/model/all';
@@ -6,6 +7,7 @@ import type { Link, Problem, Severity } from '../../core/contracts';
 import type { Pack } from '../../core/pack';
 import { t } from '../../i18n';
 import { toolHost } from '../../tools';
+import { PathRepair } from '../../tools/suggest/PathRepair';
 import { modelSweep, shownFindings } from './findings';
 import './checks.css';
 
@@ -76,7 +78,9 @@ function ModelsBar({ open }: { open: Pack }) {
  * door or chair with it selected (tools/registry `ToolHost.reveal`). The findings are the
  * pack's, the floor check's and the models' (./findings.ts), checked again a moment after
  * the last edit; "Check all models" reads every model of the pack in the model worker and
- * adds what the pack check says of each.
+ * adds what the pack check says of each. While the pack has files with paths Minecraft
+ * refuses (`loader.resource-path`), «Переименовать и переписать ссылки» (tools/suggest
+ * `PathRepair`) lists the renaming and does it, one command of the journal.
  */
 export function ChecksPanel() {
   const [hidden, setHidden] = useState<ReadonlySet<Severity>>(new Set());
@@ -112,6 +116,7 @@ export function ChecksPanel() {
     <div class="checks" data-testid="checks" data-count={list.length} data-schema={schemaState}>
       {notes}
       <ModelsBar open={open} />
+      <PathRepair pack={open} files={list.filter((problem) => problem.code === 'loader.resource-path').length} readOnly={open.readOnly} run={runCommand} />
       <div class="checks-bar">
         <p class="checks-summary" role="status" data-testid="checks-summary">
           {list.length === 0 ? t('checks.none') : t('checks.summary', { errors: found.error, warnings: found.warning, infos: found.info })}

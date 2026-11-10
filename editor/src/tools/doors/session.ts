@@ -34,6 +34,7 @@ import {
   type DoorFlag,
 } from './doors';
 import { DoorsDragger } from './gesture';
+import { startDoorsByNames, type DoorsByNames } from '../suggest/doors';
 
 /** What the doors tool holds while it is on; its section of the inspector reads and drives it. */
 export interface DoorsTool {
@@ -63,6 +64,8 @@ export interface DoorsTool {
   setId(index: number, id: string): boolean;
   setFlag(index: number, flag: DoorFlag, on: boolean): void;
   setGroup(index: number, group: string): void;
+  /** «Двери по именам»: the doors the converter finds in the model by the object names, a draft to accept or reject (tools/suggest). */
+  readonly byNames: DoorsByNames;
 }
 
 /** The leaf a door added from the keyboard has: a block wide, two high, a sixteenth thick. */
@@ -73,6 +76,7 @@ export function startDoors(context: ToolContext): Pick<ToolSession, 'dispose'> &
   const subject = (): ToolSubject => context.subject.peek() as ToolSubject;
   const snapping = signal<Snapping>(ALL_SNAPPING);
   const picture = signal<DoorsPicture | null>(null);
+  const byNames = startDoorsByNames(context);
 
   const selected = (): number | null => {
     const now = context.subject.peek();
@@ -162,6 +166,7 @@ export function startDoors(context: ToolContext): Pick<ToolSession, 'dispose'> &
       const now = subject();
       dispatch(setDoorGroup(now.typeFile, now.typeJson, index, group));
     },
+    byNames,
   };
 
   // the layers: drawn again after each edit and once the model is read
@@ -195,6 +200,7 @@ export function startDoors(context: ToolContext): Pick<ToolSession, 'dispose'> &
     dispose() {
       stopDrawing();
       stopPicking();
+      byNames.dispose();
       dragger.dispose();
       context.view.setDragger(null);
       for (const layer of DOORS_LAYERS) context.view.overlay(layer, []);

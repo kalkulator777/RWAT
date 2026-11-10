@@ -18,6 +18,7 @@ import { FLOOR_LAYERS, floorPicture, type DoorState, type FloorPicture } from '.
 import { FloorDragger } from './gesture';
 import { floorUnder, vertexYNear } from './height';
 import { ALL_SNAPPING, type Snapping } from '../common/snap';
+import { startFloorSuggest, type FloorSuggest } from '../suggest/floor';
 import { addZone, moveZoneTo, removeZone, selectedZones, setZoneHeight, setZoneNumber, zoneLink, zoneOver, zonesOf, type ZoneBox } from './zones';
 
 /**
@@ -51,6 +52,8 @@ export interface FloorTool {
   reorder(index: number, to: number): void;
   setNumber(index: number, corner: 'min' | 'max', axis: 0 | 1 | 2, value: number): void;
   setHeight(index: number, y: number): void;
+  /** «Предложить пол»: the floor generator's draft for this wagon (tools/suggest). */
+  readonly suggest: FloorSuggest;
 }
 
 /** The floor of a new zone drawn from (x, z): the zone under it or the nearest zone's, else the model's floor around it, else 0. */
@@ -79,6 +82,7 @@ export function startFloor(context: ToolContext, options: { settleMs?: number; s
   const snapping = signal<Snapping>(ALL_SNAPPING);
   const pickingHeight = signal<number | null>(null);
   const picture = signal<FloorPicture | null>(null);
+  const suggest = startFloorSuggest(context);
 
   const selected = (): number | null => {
     const now = context.subject.peek();
@@ -147,6 +151,7 @@ export function startFloor(context: ToolContext, options: { settleMs?: number; s
       const now = subject();
       dispatch(setZoneHeight(now.typeFile, now.typeJson, index, y));
     },
+    suggest,
   };
 
   // the layers: drawn again after each edit, at once while that is quick
@@ -192,7 +197,7 @@ export function startFloor(context: ToolContext, options: { settleMs?: number; s
     dispatch,
     snapping: () => snapping.peek(),
     heightFor: (x, z) => heightFor(subject(), x, z),
-    picking: () => pickingHeight.peek() !== null,
+    picking: () => pickingHeight.peek() !== null || suggest.picking.peek(),
   });
   context.view.setDragger(dragger);
   context.view.setCamera('top');
@@ -202,6 +207,7 @@ export function startFloor(context: ToolContext, options: { settleMs?: number; s
     dispose() {
       stopDrawing();
       stopPicking();
+      suggest.dispose();
       clearTimeout(timer);
       dragger.dispose();
       context.view.setDragger(null);
