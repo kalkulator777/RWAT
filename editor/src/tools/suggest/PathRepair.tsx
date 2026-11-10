@@ -43,7 +43,17 @@ function Plan({ plan, changed, repair, pack, busy, readOnly }: { plan: RenamePla
           {t('tools.suggest.rename.changed')}
         </p>
       )}
-      <p class="tool-note">{t('tools.suggest.rename.summary', { files: plan.renames.length, refs })}</p>
+      <p class="tool-note">
+        {t('tools.suggest.rename.summary', { files: plan.renames.length, refs })} {t('tools.suggest.rename.undo')}
+      </p>
+      <div class="tool-row">
+        <button type="button" class="tool-button" data-action="repair-apply" disabled={busy || readOnly || isEmptyPlan(plan)} onClick={() => void repair.apply(pack)}>
+          {t('tools.suggest.rename.apply')}
+        </button>
+        <button type="button" class="tool-button" data-action="repair-dismiss" disabled={busy} onClick={() => repair.dismiss()}>
+          {t('tools.suggest.rename.dismiss')}
+        </button>
+      </div>
       <List items={plan.renames} label={t('tools.suggest.rename.files', { count: plan.renames.length })}>
         {({ from, to }) => (
           <>
@@ -79,15 +89,6 @@ function Plan({ plan, changed, repair, pack, busy, readOnly }: { plan: RenamePla
         {(note) => (note.kind === 'shared' ? t('tools.suggest.rename.note.shared', { file: note.file }) : t('tools.suggest.rename.note.sounds', { file: note.file, sound: note.sound }))}
       </List>
       {isEmptyPlan(plan) && <p class="tool-note">{t('tools.suggest.rename.nothing')}</p>}
-      <p class="tool-note">{t('tools.suggest.rename.undo')}</p>
-      <div class="tool-row">
-        <button type="button" class="tool-button" data-action="repair-apply" disabled={busy || readOnly || isEmptyPlan(plan)} onClick={() => void repair.apply(pack)}>
-          {t('tools.suggest.rename.apply')}
-        </button>
-        <button type="button" class="tool-button" data-action="repair-dismiss" disabled={busy} onClick={() => repair.dismiss()}>
-          {t('tools.suggest.rename.dismiss')}
-        </button>
-      </div>
     </div>
   );
 }
