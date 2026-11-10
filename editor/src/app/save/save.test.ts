@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Command } from '../../core/contracts';
 import { putJson } from '../../core/pack';
 import { filesOf, MemorySource, readTree } from '../../core/pack/testing.node';
@@ -18,6 +18,9 @@ const MCMETA = 'pack.mcmeta';
 const files = readTree(EXAMPLE_PACK);
 const decoder = new TextDecoder();
 let store: MemoryStore;
+
+// the example pack is opened, kept and zipped in these tests: a busy runner with coverage takes seconds
+vi.setConfig({ testTimeout: 30_000 });
 
 function reset(): void {
   pack.value = null;

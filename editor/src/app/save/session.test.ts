@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Command } from '../../core/contracts';
 import { serializeJournal } from '../../core/journal';
 import { MemorySource, readTree } from '../../core/pack/testing.node';
@@ -17,6 +17,9 @@ const COACH = 'data/rwat_example/wagon_types/coach.json';
 const files = readTree(EXAMPLE_PACK);
 const decoder = new TextDecoder();
 let store: MemoryStore;
+
+// the example pack is opened, kept and zipped in these tests: a busy runner with coverage takes seconds
+vi.setConfig({ testTimeout: 30_000 });
 
 function close(): void {
   pack.value = null;

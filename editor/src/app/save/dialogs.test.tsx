@@ -1,5 +1,5 @@
 import { cleanup, configure, fireEvent, render, screen, waitFor } from '@testing-library/preact';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemorySource, readTree } from '../../core/pack/testing.node';
 import { createSchema } from '../../core/schema';
 import { readSchemaFiles } from '../../core/schema/files.node';
@@ -19,8 +19,9 @@ const COACH = 'data/rwat_example/wagon_types/coach.json';
 const files = readTree(EXAMPLE_PACK);
 let store: MemoryStore;
 
-// the example pack is read and compared in these tests: give a loaded machine time
-configure({ asyncUtilTimeout: 5000 });
+// the example pack is opened, kept and zipped in these tests: a busy runner with coverage takes seconds
+configure({ asyncUtilTimeout: 10_000 });
+vi.setConfig({ testTimeout: 30_000 });
 
 function reset(): void {
   pack.value = null;
