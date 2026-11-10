@@ -2,8 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kalkulator777.github.io/RWAT/schema/recipe_override.schema.json",
   "title": "Conversion override of one stock type",
-  "description": "packs/<name>/<id>.json (the recipe's overrides_dir) or an entry of the recipe's overrides: corrections for stock type <id> on top of what tools/ir2rwat.py derives from the IR pack. type and model are deep-merged into the generated declarations: an object merges key by key, anything else (a list, a number) replaces, null removes the key. The generated pack is never edited by hand: corrections live here. A key starting with _ is a comment, at any level: so a door or a light group whose id starts with _ can't be named by a key here (doors as an object, lights).",
-  "x-description-ru": "packs/<имя>/<id>.json (папка overrides_dir рецепта) или запись overrides рецепта: поправки к типу <id> поверх того, что tools/ir2rwat.py выводит из пака IR. type и model глубоко сливаются со сгенерированными декларациями: объект сливается по ключам, всё остальное (список, число) заменяет, null удаляет ключ. Сгенерированный пак руками не правят: поправки живут здесь. Ключ, начинающийся с _, — комментарий на любом уровне: поэтому дверь или группу света с id на _ ключом здесь не задать (doors объектом, lights).",
+  "description": "packs/<name>/<id>.json (the recipe's overrides_dir) or an entry of the recipe's overrides: corrections for stock type <id> on top of what tools/ir2rwat.py derives from the IR pack. type and model are deep-merged into the generated declarations: an object merges key by key, anything else (a list, a number) replaces, null removes the key. That null is for a field inside type or model; in place of a whole section (type, model, name, lights, floor, sway) or of type.doors and type.interior it means \"not given\" and the derived value stays (in a per-type file it also cancels the recipe's inline entry for that section, the file's null being laid over it). The generated pack is never edited by hand: corrections live here. A key starting with _ is a comment, at any level: so a door or a light group whose id starts with _ can't be named by a key here (doors as an object, lights).",
+  "x-description-ru": "packs/<имя>/<id>.json (папка overrides_dir рецепта) или запись overrides рецепта: поправки к типу <id> поверх того, что tools/ir2rwat.py выводит из пака IR. type и model глубоко сливаются со сгенерированными декларациями: объект сливается по ключам, всё остальное (список, число) заменяет, null удаляет ключ. Это про поле внутри type или model; null вместо целой секции (type, model, name, lights, floor, sway), а также у type.doors и type.interior значит «не задано», и выведенное остаётся (в файле типа такой null ещё и отменяет запись самого рецепта для этой секции: файл кладётся поверх неё, и его null побеждает). Сгенерированный пак руками не правят: поправки живут здесь. Ключ, начинающийся с _, — комментарий на любом уровне: поэтому дверь или группу света с id на _ ключом здесь не задать (doors объектом, lights).",
   "x-file": "packs/<name>/<id>.json",
   "x-code": ["tools/ir2rwat.py", "tools/floorgen.py"],
   "x-keys": "tools/ir2rwat.py#OVERRIDE_KEYS",
@@ -12,8 +12,8 @@
   "properties": {
     "name": {
       "anyOf": [{"$ref": "#/$defs/lang_texts"}, {"type": "null"}],
-      "description": "The type's display name per language, written to the lang files as wagon.<namespace>.<id>; en_us replaces the IR name.",
-      "x-description-ru": "Название типа на каждом языке, пишется в lang-файлы как wagon.<namespace>.<id>; en_us заменяет имя из IR."
+      "description": "The type's display name per language, written to the lang files as wagon.<namespace>.<id>; en_us replaces the IR name. null instead of the object is as if not given.",
+      "x-description-ru": "Название типа на каждом языке, пишется в lang-файлы как wagon.<namespace>.<id>; en_us заменяет имя из IR. null вместо объекта — как «не задано»."
     },
     "lights": {
       "anyOf": [
@@ -25,18 +25,18 @@
         },
         {"type": "null"}
       ],
-      "description": "Light group (as the OBJ names it in _LCG_<group>, case matters) → its name per language, written as light.<namespace>.<id>.<group>: the driver's light menu and the cab switch's caption. A group the model doesn't have is warned about.",
-      "x-description-ru": "Группа света (как в OBJ в _LCG_<группа>, регистр важен) → её название на каждом языке, пишется как light.<namespace>.<id>.<группа>: меню света машиниста и подпись тумблера. Про группу, которой нет в модели, конвертер предупреждает."
+      "description": "Light group (as the OBJ names it in _LCG_<group>, case matters) → its name per language, written as light.<namespace>.<id>.<group>: the driver's light menu and the cab switch's caption. A group the model doesn't have is warned about, but its name is written to the lang files all the same. null instead of the object is as if not given.",
+      "x-description-ru": "Группа света (как в OBJ в _LCG_<группа>, регистр важен) → её название на каждом языке, пишется как light.<namespace>.<id>.<группа>: меню света машиниста и подпись тумблера. Про группу, которой нет в модели, конвертер предупреждает, но название в lang всё равно пишет. null вместо объекта — как «не задано»."
     },
     "type": {
       "anyOf": [{"$ref": "#/$defs/type_patch"}, {"type": "null"}],
-      "description": "Wagon type fields over the generated ones — any of them, partially. interior given here replaces the generated floor. doors as a list replaces the derived doors ([] turns them off); as an object it edits them by id: {\"<id>\": {…}} edits a derived door key by key or adds a new one at the end, {\"<id>\": null} removes it, the other doors keep their order.",
-      "x-description-ru": "Поля типа вагона поверх сгенерированных — любые и частично. interior здесь заменяет сгенерированный пол. doors списком заменяет выведенные двери ([] выключает их); объектом правит их по id: {\"<id>\": {…}} правит выведенную дверь по ключам или добавляет новую в конец, {\"<id>\": null} удаляет её, остальные двери сохраняют порядок."
+      "description": "Wagon type fields over the generated ones — any of them, partially. interior given here replaces the generated floor. doors as a list replaces the derived doors ([] turns them off); as an object it edits them by id: {\"<id>\": {…}} edits a derived door key by key or adds a new one at the end, {\"<id>\": null} removes it, the other doors keep their order. null instead of a field removes it from the generated type, but not doors and interior: there null is \"not given\", the derived doors and the generated floor stay (to turn the doors off write []). null instead of the whole object is as if not given. Without an interior (generated, written here, or IR's passenger area) the type gets no doors from the derived ones or from an edit by id, and their animations and sounds drop out of the model with them, without a warning; a doors list is written anyway.",
+      "x-description-ru": "Поля типа вагона поверх сгенерированных — любые и частично. interior здесь заменяет сгенерированный пол. doors списком заменяет выведенные двери ([] выключает их); объектом правит их по id: {\"<id>\": {…}} правит выведенную дверь по ключам или добавляет новую в конец, {\"<id>\": null} удаляет её, остальные двери сохраняют порядок. null вместо поля удаляет его из сгенерированного типа, но не у doors и interior: там null — «не задано», выведенные двери и сгенерированный пол остаются (чтобы выключить двери, пишите []). null вместо всего объекта — как «не задано». Без interior (сгенерированного, своего здесь или области пассажиров IR) в тип не попадают ни выведенные двери, ни правка по id, а их анимации и звуки пропадают из модели вместе с ними — без предупреждения; doors списком записываются всё равно."
     },
     "model": {
       "anyOf": [{"$ref": "#/$defs/model_patch"}, {"type": "null"}],
-      "description": "Wagon model fields over the generated ones — any of them, partially, applied after sway. animations, liveries and the maps of sounds merge by key, a loop object by its keys.",
-      "x-description-ru": "Поля модели вагона поверх сгенерированных — любые и частично, после sway. animations, liveries и словари sounds сливаются по ключам, объект петли — по своим ключам."
+      "description": "Wagon model fields over the generated ones — any of them, partially, applied after sway. animations, liveries and the maps of sounds merge by key, a loop object by its keys. null instead of a field removes it from the generated model (model.sway too, which wins over the sway key); null instead of the whole object is as if not given.",
+      "x-description-ru": "Поля модели вагона поверх сгенерированных — любые и частично, после sway. animations, liveries и словари sounds сливаются по ключам, объект петли — по своим ключам. null вместо поля удаляет его из сгенерированной модели (и model.sway, который побеждает ключ sway); null вместо всего объекта — как «не задано»."
     },
     "floor": {
       "anyOf": [
@@ -44,13 +44,13 @@
         {"$ref": "#/$defs/floor"},
         {"type": "null"}
       ],
-      "description": "Floor generator (tools/floorgen.py) input. It runs for every passenger car and for any type with this key, unless type.interior is given; false turns it off, {} turns it on with the defaults.",
-      "x-description-ru": "Вход генератора пола (tools/floorgen.py). Он работает для каждого пассажирского вагона и для любого типа с этим ключом, если не задан type.interior; false выключает, {} включает с умолчаниями."
+      "description": "Floor generator (tools/floorgen.py) input. It runs for every passenger car and for any type with this key, unless type.interior is given; false turns it off, {} turns it on with the defaults. null is as if the key were absent (a passenger car still gets the generator).",
+      "x-description-ru": "Вход генератора пола (tools/floorgen.py). Он работает для каждого пассажирского вагона и для любого типа с этим ключом, если не задан type.interior; false выключает, {} включает с умолчаниями. null — как отсутствие ключа (пассажирскому вагону генератор всё равно включится)."
     },
     "sway": {
       "anyOf": [{"$ref": "wagon_model.schema.json#/properties/sway"}, {"type": "null"}],
-      "description": "The model's sway (0…3). A value out of range is left out with a warning.",
-      "x-description-ru": "sway модели (0…3). Значение вне диапазона пропускается с предупреждением."
+      "description": "The model's sway (0…3). A value out of range is left out with a warning. model.sway, if given, wins over this key. null is as if not given.",
+      "x-description-ru": "sway модели (0…3). Значение вне диапазона пропускается с предупреждением. model.sway, если задан, побеждает этот ключ. null — как «не задано»."
     }
   },
   "additionalProperties": false,
@@ -75,8 +75,8 @@
             {"$ref": "#/$defs/zone", "deprecated": true},
             {"type": "null"}
           ],
-          "description": "The walkable floor as the wagon type writes it (a list of floor zones); replaces the generated floor.",
-          "x-description-ru": "Пол для ходьбы, как его пишет тип вагона (список зон пола); заменяет сгенерированный пол."
+          "description": "The walkable floor as the wagon type writes it (a list of floor zones); replaces the generated floor. null is not \"remove\": it is as if not given, the generated floor stays.",
+          "x-description-ru": "Пол для ходьбы, как его пишет тип вагона (список зон пола); заменяет сгенерированный пол. null — не «удалить», а «не задано»: сгенерированный пол остаётся."
         },
         "doors": {
           "anyOf": [
@@ -84,8 +84,8 @@
             {"$ref": "#/$defs/door_edits"},
             {"type": "null"}
           ],
-          "description": "A list replaces the derived doors ([] turns them off); an object edits them by id.",
-          "x-description-ru": "Список заменяет выведенные двери ([] выключает их); объект правит их по id."
+          "description": "A list replaces the derived doors ([] turns them off); an object edits them by id. null is as if not given: the derived doors stay.",
+          "x-description-ru": "Список заменяет выведенные двери ([] выключает их); объект правит их по id. null — «не задано»: выведенные двери остаются."
         },
         "couplers": {"anyOf": [{"$ref": "#/$defs/couplers_patch"}, {"type": "null"}]},
         "aliases": {"anyOf": [{"$ref": "wagon_type.schema.json#/properties/aliases"}, {"type": "null"}]}
