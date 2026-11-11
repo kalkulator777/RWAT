@@ -6,6 +6,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/preact';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { installKeys } from '../../app/keys';
 import { connectModel } from '../../app/openModel';
 import { panels } from '../../app/panels';
 import { openSource } from '../../app/session';
@@ -236,5 +237,33 @@ describe('the objects tab', () => {
     render(<ObjectsPanel />);
     selection.value = [{ kind: 'file', file: 'data/rwat_example/wagon_types/shunter.json' }];
     expect((await screen.findByTestId('objects-failure')).textContent).toContain('no model declaration');
+  });
+});
+
+describe('the table of objects from the keyboard', () => {
+  it('is one stop of the Tab key, and the arrows move along the names', async () => {
+    const off = installKeys(document, { platform: 'pc' });
+    try {
+      await openShunter();
+      const picks = [...document.querySelectorAll<HTMLButtonElement>('.objects-pick')];
+      expect(picks.length).toBeGreaterThan(5);
+      expect(picks.filter((pick) => pick.getAttribute('tabindex') === '0')).toHaveLength(1);
+      expect(picks[0]?.getAttribute('tabindex')).toBe('0');
+      const [first, second] = [picks[0], picks[1]] as [HTMLElement, HTMLElement];
+      first.focus();
+      expect(fireEvent.keyDown(first, { key: 'ArrowDown' })).toBe(false);
+      expect(document.activeElement).toBe(second);
+      await waitFor(() => expect(second.getAttribute('tabindex')).toBe('0'));
+      expect(first.getAttribute('tabindex')).toBe('-1');
+      fireEvent.keyDown(second, { key: 'End' });
+      expect(document.activeElement).toBe(picks.at(-1));
+      fireEvent.keyDown(document.activeElement as Element, { key: 'ArrowUp' });
+      expect(document.activeElement).toBe(picks.at(-2));
+      // Enter is the button's own: it selects the object
+      fireEvent.click(second);
+      expect(selection.value).toEqual([{ kind: 'object', model: 'rwat_example:shunter', name: second.textContent }]);
+    } finally {
+      off();
+    }
   });
 });

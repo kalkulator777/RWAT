@@ -41,7 +41,7 @@ function Flags({ view }: { view: PlaceView }) {
   return (
     <>
       {place !== null && view.ref.kind.drives && (
-        <span class="seats-flag" data-flag={view.backward ? 'back' : 'forward'} style={{ color: overlayStyle(view.backward ? BACK_STYLE : FORWARD_STYLE).color }}>
+        <span class="seats-flag" data-flag={view.backward ? 'back' : 'forward'} style={{ borderColor: overlayStyle(view.backward ? BACK_STYLE : FORWARD_STYLE).color }}>
           {t(view.backward ? 'tools.seats.back' : 'tools.seats.forward')}
         </span>
       )}
@@ -70,7 +70,7 @@ function PlaceList({ tool, kind, views, chosen, readOnly }: { tool: SeatsTool; k
       {views.length === 0 ? (
         <p class="seats-note">{t('tools.seats.none')}</p>
       ) : (
-        <ol class="seats-list" data-testid={`seats-${kind.id}`} start={0}>
+        <ol class="seats-list" data-testid={`seats-${kind.id}`} data-roving="list" start={0}>
           {views.map((view) => {
             const i = view.ref.index;
             const on = chosen.some((ref) => samePlace(ref, view.ref));
@@ -79,6 +79,7 @@ function PlaceList({ tool, kind, views, chosen, readOnly }: { tool: SeatsTool; k
                 <button
                   type="button"
                   class="seats-name"
+                  data-roving-item={String(i)}
                   aria-pressed={on}
                   onClick={(event) => tool.select(view.ref, event.shiftKey)}
                   onKeyDown={(event) => {

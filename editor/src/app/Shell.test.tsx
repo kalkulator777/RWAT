@@ -40,10 +40,11 @@ describe('Shell without panels', () => {
     expect(screen.getByRole('main', { name: 'Вид' }).textContent).toBe('Модель не открыта.');
     expect(screen.getByRole('complementary', { name: 'Инспектор' }).textContent).toBe('Ничего не выделено.');
     expect(screen.getByRole('region', { name: 'Нижние вкладки' }).textContent).toBe('Вкладок пока нет.');
+    // in the order of the Tab key: the tree, the bottom tabs under the view, the inspector
     expect(screen.getAllByRole('separator').map((s) => s.getAttribute('aria-label'))).toEqual([
       'Ширина дерева пака',
-      'Ширина инспектора',
       'Высота нижних вкладок',
+      'Ширина инспектора',
     ]);
   });
 
@@ -96,7 +97,7 @@ describe('Shell with panels', () => {
 describe('splitters', () => {
   it('resize their area from the keyboard, within its limits', () => {
     render(<Shell panels={[]} />);
-    const [tree, inspector, bottom] = screen.getAllByRole('separator') as [HTMLElement, HTMLElement, HTMLElement];
+    const [tree, bottom, inspector] = screen.getAllByRole('separator') as [HTMLElement, HTMLElement, HTMLElement];
     fireEvent.keyDown(tree, { key: 'ArrowRight' });
     expect(layout.value.tree).toBe(DEFAULT_LAYOUT.tree + 16);
     fireEvent.keyDown(inspector, { key: 'ArrowLeft', shiftKey: true });

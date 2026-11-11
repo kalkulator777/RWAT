@@ -97,12 +97,13 @@ function ZoneList({ tool, zones, chosen, readOnly }: { tool: FloorTool; zones: r
       {zones.length === 0 ? (
         <p class="tool-note">{t('tools.floor.zones.none')}</p>
       ) : (
-        <ol class="tool-list" data-testid="floor-zones" start={0}>
+        <ol class="tool-list" data-testid="floor-zones" data-roving="list" start={0}>
           {zones.map((zone, i) => (
             <li key={i} class="tool-item" data-zone={i} data-selected={chosen.includes(i) ? 'true' : undefined}>
               <button
                 type="button"
                 class="tool-item-name"
+                data-roving-item={String(i)}
                 aria-pressed={chosen.includes(i)}
                 onClick={(event) => tool.select(i, event.shiftKey)}
                 onKeyDown={(event) => {

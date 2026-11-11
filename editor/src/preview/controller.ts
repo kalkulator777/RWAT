@@ -49,6 +49,11 @@ export const intervalTicker: Ticker = {
   },
 };
 
+/** True when the user asked the system for less motion (`prefers-reduced-motion: reduce`, editor.md §6.3). */
+export function prefersReducedMotion(): boolean {
+  return globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+}
+
 /** What the view has been told, to tell it only what changes. */
 interface Told {
   view: ViewApi;
@@ -89,7 +94,15 @@ export class PreviewController {
   private stopTicking: (() => void) | null = null;
   private readonly stopTelling: () => void;
 
-  constructor(private readonly ticker: Ticker = intervalTicker) {
+  /**
+   * @param ticker runs the doors' swing, a game tick at a time
+   * @param reducedMotion whether to skip the swing: with less motion asked for a door goes
+   *   to where it is heading at once, where it would swing for two seconds
+   */
+  constructor(
+    private readonly ticker: Ticker = intervalTicker,
+    private readonly reducedMotion: () => boolean = prefersReducedMotion,
+  ) {
     this.stopTelling = effect(() => {
       const view = this.view.value;
       const subject = this.subject.value;
@@ -170,6 +183,20 @@ export class PreviewController {
     const target = this.isOpening(index) ? 0 : 1;
     const moved = doorsMovedWith(type, index);
     if (moved.length === 0) return;
+    if (this.reducedMotion()) {
+      this.update((state) => {
+        const doors = [...state.doors];
+        const heading = [...state.heading];
+        for (const door of moved) {
+          if (door >= doors.length) continue;
+          doors[door] = target;
+          heading[door] = null;
+        }
+        return { ...state, doors, heading };
+      });
+      if (!swinging(this.state.value?.heading ?? [])) this.stopSwing();
+      return;
+    }
     this.update((state) => {
       const heading = [...state.heading];
       for (const door of moved) if (door < heading.length) heading[door] = state.doors[door] === target ? null : target;

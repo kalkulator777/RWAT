@@ -95,7 +95,8 @@
   font-size: 11px;
   padding: 0 4px;
   border-radius: 3px;
-  border: 1px solid currentColor;
+  /* the colour of the arrow in the view is the edge; the words are in the text colour (contrast: the view's colours are made for the drawing, not for text) */
+  border: 1px solid var(--text-muted);
 }
 
 .seats-flag-warning {

@@ -1,8 +1,11 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/preact';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { installKeys } from '../../app/keys';
 import { openSource } from '../../app/session';
 import { failure, findings, journal, pack, revision, schema, schemaError, selection } from '../../app/store';
 import { MemorySource, readTree } from '../../core/pack/testing.node';
+import { createSchema } from '../../core/schema';
+import { readSchemaFiles } from '../../core/schema/files.node';
 import { setLang } from '../../i18n';
 import { EXAMPLE_PACK } from '../../testing/repo.node';
 import { ChecksPanel } from './ChecksPanel';
@@ -109,5 +112,40 @@ describe('the checks tab', () => {
     await openSource(new MemorySource(readTree(EXAMPLE_PACK), 'Again'));
     await waitFor(() => expect(screen.getByTestId('check-models-bar').getAttribute('data-status')).toBe('idle'));
     expect(screen.queryByTestId('check-models-status')).toBeNull();
+  });
+});
+
+describe('the list of findings from the keyboard', () => {
+  it('is one stop of the Tab key, and the arrows, Home and End move along it', async () => {
+    const off = installKeys(document, { platform: 'pc' });
+    try {
+      schema.value = createSchema(readSchemaFiles());
+      await openExample();
+      await journal.value?.run({
+        label: 'edit.field',
+        ops: [
+          { op: 'set', file: COACH, at: '/mass_t', value: 'heavy' },
+          { op: 'set', file: COACH, at: '/length', value: 'long' },
+        ],
+      });
+      await waitFor(() => expect(screen.getByTestId('checks').querySelectorAll('.finding').length).toBeGreaterThanOrEqual(2));
+      const list = [...screen.getByTestId('checks').querySelectorAll<HTMLButtonElement>('.finding')];
+      expect(list.filter((item) => item.getAttribute('tabindex') === '0')).toHaveLength(1);
+      expect(list[0]?.getAttribute('tabindex')).toBe('0');
+      const [first, second] = [list[0], list[1]] as [HTMLElement, HTMLElement];
+      first.focus();
+      expect(fireEvent.keyDown(first, { key: 'ArrowDown' })).toBe(false);
+      expect(document.activeElement).toBe(second);
+      await waitFor(() => expect(second.getAttribute('tabindex')).toBe('0'));
+      expect(first.getAttribute('tabindex')).toBe('-1');
+      fireEvent.keyDown(second, { key: 'End' });
+      expect(document.activeElement).toBe(list.at(-1));
+      fireEvent.keyDown(document.activeElement as Element, { key: 'Home' });
+      expect(document.activeElement).toBe(first);
+      // Enter is the button's own: it goes to the finding's place
+      expect(fireEvent.keyDown(first, { key: 'Enter' })).toBe(true);
+    } finally {
+      off();
+    }
   });
 });

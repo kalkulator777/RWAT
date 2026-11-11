@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useRoving } from '../../app/keys/roving';
 import { modelLoading, modelProblems, openModel, openWagon, pack, revision, selection } from '../../app/store';
 import { problemMessage } from '../../checks/messages';
 import type { Link, LoadedModel, Problem } from '../../core/contracts';
@@ -71,7 +72,7 @@ function Detail(props: { name: string | null; row: ObjectRow | undefined; skip: 
       )}
       {why.marks.length > 0 && (
         <>
-          <h4 class="objects-subhead">{t('objects.detail.marks')}</h4>
+          <h3 class="objects-subhead">{t('objects.detail.marks')}</h3>
           <ul class="objects-marks" data-testid="objects-marks">
             {why.marks.map((mark) => (
               <li key={`${mark.group}:${mark.id}`} data-mark={mark.id}>
@@ -149,6 +150,11 @@ export function ObjectsPanel() {
   const chosenSet = new Set(names);
   const tableRef = useRef<HTMLDivElement>(null);
   const firstName = names[0] ?? null;
+  // one stop of the Tab key for the whole table; the arrows move along its names (app/keys)
+  const roving = useRoving(
+    drawn.map((row) => row.name),
+    firstName,
+  );
   useEffect(() => {
     if (firstName === null) return;
     const row = [...(tableRef.current?.querySelectorAll<HTMLElement>('tr[data-object]') ?? [])].find((tr) => tr.dataset.object === firstName);
@@ -284,7 +290,7 @@ export function ObjectsPanel() {
               {rows.length === 0 ? (
                 <p class="objects-hint">{t('objects.empty')}</p>
               ) : (
-                <table class="objects-table" aria-label={t('objects.table')} data-testid="objects-table">
+                <table class="objects-table" aria-label={t('objects.table')} data-testid="objects-table" data-roving="list">
                   <thead>
                     <tr>
                       {columns.map((column) => (
@@ -311,6 +317,7 @@ export function ObjectsPanel() {
                           <button
                             type="button"
                             class="objects-pick"
+                            {...roving.props(row.name)}
                             onClick={(event) => pick(row, event.shiftKey || event.ctrlKey || event.metaKey)}
                           >
                             {row.name}
@@ -343,8 +350,8 @@ export function ObjectsPanel() {
                 </p>
               )}
             </div>
-            <aside class="objects-detail" aria-label={t('objects.detail')}>
-              <h3 class="objects-subhead">{t('objects.detail')}</h3>
+            <aside class="objects-detail" aria-label={t('objects.detail')} tabIndex={0}>
+              <h2 class="objects-subhead">{t('objects.detail')}</h2>
               <Detail name={firstName} row={detailRow} skip={built.skip} extra={Math.max(0, names.length - 1)} />
             </aside>
           </div>

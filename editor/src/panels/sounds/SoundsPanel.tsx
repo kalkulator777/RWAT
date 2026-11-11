@@ -197,9 +197,9 @@ function Section({ env, id, state, children }: SectionProps) {
   const pointer = childPointer('/sounds', id);
   return (
     <section class="sounds-section" data-testid={`sounds-section-${id}`} data-sound={id} data-state={state} aria-label={t(`sounds.section.${id}`)}>
-      <h3 class="sounds-heading">
+      <h2 class="sounds-heading">
         {t(`sounds.section.${id}`)} <code>{id}</code> <span class="sounds-state">{t(`sounds.state.${state}`)}</span>
-      </h3>
+      </h2>
       <p class="sounds-what">{t(`sounds.what.${id}`)}</p>
       <p class="sounds-carry">{t('sounds.carry', { distance: BEHAVIOUR[id].distance })}</p>
       {children}

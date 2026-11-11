@@ -17,7 +17,7 @@ import { rowMajor } from '../ports/controlPose';
 import { parseRole } from '../ports/objectRole';
 import { of as hingeOf } from '../ports/pivotAxis';
 import { EXAMPLE_PACK } from '../testing/repo.node';
-import { PreviewController, type PreviewSubject, type Ticker } from './controller';
+import { PreviewController, prefersReducedMotion, type PreviewSubject, type Ticker } from './controller';
 import { DOOR_ANIM_TICKS, TICK_MS } from './doors';
 import { HEADLIGHT_STYLE, LAMP_STYLE, LIGHTS_LAYER } from './scene';
 import { parseWagonType } from '../ports/wagonType';
@@ -163,6 +163,44 @@ describe('the salon_door slider', () => {
     expect(preview.isOpening(SALON_DOOR)).toBe(false);
     while (preview.tick());
     expect(preview.state.value!.doors[SALON_DOOR]).toBe(0);
+  });
+
+  it('jumps to open and to shut at once when less motion is asked for, with no tick running', () => {
+    const ticker = handTicker();
+    const preview = new PreviewController(ticker, () => true);
+    controllers.push(preview);
+    const view = recordingView();
+    view.show(subjects.coach.model);
+    preview.view.value = view;
+    preview.load(subjects.coach);
+    preview.toggleDoor(SALON_DOOR);
+    expect(preview.state.value!.doors[SALON_DOOR]).toBe(1);
+    expect(preview.state.value!.heading[SALON_DOOR]).toBeNull();
+    expect(preview.isOpening(SALON_DOOR)).toBe(true);
+    expect(ticker.running).toBe(0);
+    expect(list(view.transforms.get('SALON_DOOR_KNOB'))).toEqual(transposed(framesAt(salonTracks, 1).get('SALON_DOOR_KNOB')!));
+    preview.toggleDoor(SALON_DOOR);
+    expect(preview.state.value!.doors[SALON_DOOR]).toBe(0);
+    expect(preview.isOpening(SALON_DOOR)).toBe(false);
+    // a door's group goes together, as in the game
+    preview.toggleDoor(0);
+    expect(preview.state.value!.doors.slice(0, 4)).toEqual([1, 0, 1, 0]);
+    expect(ticker.running).toBe(0);
+  });
+
+  it('reads the system’s wish for less motion when none is given', () => {
+    const real = globalThis.matchMedia;
+    try {
+      globalThis.matchMedia = ((query: string) => ({ matches: query.includes('reduce') })) as typeof matchMedia;
+      expect(prefersReducedMotion()).toBe(true);
+      globalThis.matchMedia = ((query: string) => ({ matches: !query.includes('reduce') })) as typeof matchMedia;
+      expect(prefersReducedMotion()).toBe(false);
+      // the shell has none: motion as usual
+      (globalThis as { matchMedia?: unknown }).matchMedia = undefined;
+      expect(prefersReducedMotion()).toBe(false);
+    } finally {
+      globalThis.matchMedia = real;
+    }
   });
 
   it('swings in real time, a game tick every 50 ms: 2 s open it', () => {

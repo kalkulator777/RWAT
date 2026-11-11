@@ -60,6 +60,9 @@
   --surface: #ffffff;
   --surface-sunken: #eceef2;
   --border: #c9ced6;
+  /* A control's own edge and face: buttons draw them rather than the browser's, which in the dark scheme is a grey the text has too little contrast on (WCAG 1.4.3). */
+  --control-bg: #f1f2f5;
+  --control-border: #6b7280;
   --text: #1b1f24;
   --text-muted: #4b5563;
   --accent: #1d5bbf;
@@ -80,6 +83,8 @@
     --surface: #1f2227;
     --surface-sunken: #13151a;
     --border: #3a3f48;
+    --control-bg: #2b2f36;
+    --control-border: #7d8694;
     --text: #e6e8eb;
     --text-muted: #a9b0bb;
     --accent: #6ea2ff;
@@ -118,6 +123,13 @@ body {
 button {
   font: inherit;
   color: inherit;
+  background: var(--control-bg);
+  border: 1px solid var(--control-border);
+  border-radius: 4px;
+}
+
+button:disabled {
+  border-color: var(--border);
 }
 
 :focus-visible {
@@ -127,6 +139,22 @@ button {
 
 [hidden] {
   display: none !important;
+}
+
+/*
+ * Less motion where the system asks for it (docs/proposals/editor.md §6.3). The editor moves
+ * little: the 3D view jumps between views and framings, and the preview's doors jump too
+ * (preview/controller.ts). This is the net under whatever a style adds later.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* ------------------------------------------------------------ layout */
@@ -248,6 +276,8 @@ button {
 }
 
 .brand-name {
+  margin: 0;
+  font-size: inherit;
   font-weight: 700;
   letter-spacing: 0.02em;
 }
@@ -295,6 +325,11 @@ button {
 
 .toggle-button:focus-visible {
   outline-offset: -2px;
+}
+
+/* The pressed button is filled with the focus colour itself: its ring takes the text colour of the fill, inside the edge. */
+.toggle-button[aria-pressed='true']:focus-visible {
+  outline-color: var(--accent-text);
 }
 
 /* ------------------------------------------------------------ new version notice */
@@ -430,15 +465,7 @@ button {
   padding: 6px 8px;
 }
 
-.tree-heading {
-  margin: 8px 0 2px;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
-}
-
+.tree-root,
 .tree-list {
   list-style: none;
   margin: 0;
@@ -447,6 +474,38 @@ button {
 
 .tree-list li {
   margin: 2px 0;
+}
+
+/* A branch of the tree: a click or Left and Right open and close it. */
+.tree-branch {
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.tree-branch::before {
+  content: '▾' / '';
+  display: inline-block;
+  width: 1.1em;
+  color: var(--text-muted);
+}
+
+.tree-branch[aria-expanded='false']::before {
+  content: '▸' / '';
+}
+
+.tree-branch:hover {
+  background: var(--surface-sunken);
+}
+
+.tree-heading {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
 }
 
 .tree-id {
@@ -480,11 +539,11 @@ button {
 }
 
 .tree-file:hover,
-.tree-file[aria-current='true'] {
+.tree-file[aria-selected='true'] {
   background: var(--surface-sunken);
 }
 
-.tree-file[aria-current='true'] {
+.tree-file[aria-selected='true'] {
   font-weight: 600;
 }
 

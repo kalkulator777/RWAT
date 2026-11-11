@@ -56,7 +56,7 @@ function TopBar({ toolbar }: { toolbar: readonly PanelDef[] }) {
     <header class="topbar">
       <div class="brand">
         <img class="brand-icon" src={`${import.meta.env.BASE_URL}icons/icon.svg`} alt="" width={24} height={24} />
-        <span class="brand-name">RWAT</span>
+        <h1 class="brand-name">RWAT</h1>
         <PackStatus />
       </div>
       <div class="toolbar" role="group" aria-label={t('shell.region.actions')}>
@@ -139,7 +139,9 @@ function UpdateBanner() {
  * The screen of docs/proposals/editor.md §6.1: the top bar; the pack tree on the left,
  * the 3D view in the centre, the inspector on the right, the tabs under the view; bars
  * between them resize the areas. What fills the areas is whatever panels registered
- * themselves for the current mode (./registry.ts).
+ * themselves for the current mode (./registry.ts). The areas stand in the page in the order
+ * of the Tab key, which is also the screen reader's — top bar, tree, view, bottom tabs,
+ * inspector (§6.3); the grid areas of ./styles.css put them where they are drawn.
  */
 export function Shell({ panels }: { panels: readonly PanelDef[] }) {
   const current = mode.value;
@@ -176,15 +178,6 @@ export function Shell({ panels }: { panels: readonly PanelDef[] }) {
           <p class="slot-empty">{t('shell.empty.view')}</p>
         )}
       </main>
-      <Splitter area="inspector" axis="x" sign={-1} label="shell.splitter.inspector" class="splitter-inspector" />
-      <aside class="area area-inspector" aria-label={t('shell.region.inspector')}>
-        <SlotTabs
-          slot="inspector"
-          panels={panelsIn(panels, 'inspector', current)}
-          empty="shell.empty.inspector"
-          label="shell.region.inspector"
-        />
-      </aside>
       <Splitter area="bottom" axis="y" sign={-1} label="shell.splitter.bottom" class="splitter-bottom" />
       <section class="area area-bottom" aria-label={t('shell.region.bottom')}>
         <SlotTabs
@@ -195,6 +188,15 @@ export function Shell({ panels }: { panels: readonly PanelDef[] }) {
           alwaysTabs
         />
       </section>
+      <Splitter area="inspector" axis="x" sign={-1} label="shell.splitter.inspector" class="splitter-inspector" />
+      <aside class="area area-inspector" aria-label={t('shell.region.inspector')}>
+        <SlotTabs
+          slot="inspector"
+          panels={panelsIn(panels, 'inspector', current)}
+          empty="shell.empty.inspector"
+          label="shell.region.inspector"
+        />
+      </aside>
     </div>
   );
 }

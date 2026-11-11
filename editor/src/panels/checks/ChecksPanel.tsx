@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks';
+import { useRoving } from '../../app/keys/roving';
 import { pack, revision, schema, schemaError, selection } from '../../app/store';
 import { problemMessage } from '../../checks/messages';
 import { isStale, modelsOf, type SweepState } from '../../checks/model/all';
@@ -82,6 +83,10 @@ export function ChecksPanel() {
   const [hidden, setHidden] = useState<ReadonlySet<Severity>>(new Set());
   const open = pack.value;
   const list = shownFindings.value;
+  const shown = list.filter((problem) => !hidden.has(problem.severity));
+  const keyOf = (problem: Problem, index: number): string => `${problem.code}:${whereText(problem.at)}:${index}`;
+  // one stop of the Tab key for the whole list; the arrows move along it (app/keys). A finding with no place is not a button to go to.
+  const roving = useRoving(shown.flatMap((problem, index) => (problem.at.length > 0 ? [keyOf(problem, index)] : [])));
   const schemaState = schemaError.value !== null ? 'failed' : schema.value === null ? 'loading' : 'loaded';
   const notes = (
     <>
@@ -106,7 +111,6 @@ export function ChecksPanel() {
     );
   }
   const found = counts(list);
-  const shown = list.filter((problem) => !hidden.has(problem.severity));
   const context = { pack: open, schema: schema.value };
   return (
     <div class="checks" data-testid="checks" data-count={list.length} data-schema={schemaState}>
@@ -138,12 +142,13 @@ export function ChecksPanel() {
           </div>
         )}
       </div>
-      <ul class="checks-list">
+      <ul class="checks-list" data-roving="list">
         {shown.map((problem, index) => (
-          <li key={`${problem.code}:${whereText(problem.at)}:${index}`}>
+          <li key={keyOf(problem, index)}>
             <button
               type="button"
               class={`finding finding-${problem.severity}`}
+              {...roving.props(keyOf(problem, index))}
               data-code={problem.code}
               data-source={problem.source}
               title={problem.text}

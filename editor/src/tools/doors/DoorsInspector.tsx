@@ -78,7 +78,7 @@ function DoorList(props: { tool: DoorsTool; picture: DoorsPicture; chosen: reado
       {doors.length === 0 ? (
         <p class="tool-note">{t('tools.doors.none')}</p>
       ) : (
-        <ol class="tool-list" data-testid="doors-list" start={0}>
+        <ol class="tool-list" data-testid="doors-list" data-roving="list" start={0}>
           {doors.map(({ index: i, entry }) => {
             const found = findings.get(i)?.length ?? 0;
             return (
@@ -86,6 +86,7 @@ function DoorList(props: { tool: DoorsTool; picture: DoorsPicture; chosen: reado
                 <button
                   type="button"
                   class="tool-item-name"
+                  data-roving-item={String(i)}
                   aria-pressed={chosen.includes(i)}
                   onClick={(event) => tool.select(i, event.shiftKey)}
                   onKeyDown={(event) => {
