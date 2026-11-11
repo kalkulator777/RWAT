@@ -30,6 +30,12 @@ export default defineTool({
   fields: ['/cab/seats/*', '/cab/seat'],
   activate(context): SeatsSession {
     const { tool, dispose } = startSeats(context);
-    return { tool, Inspector: () => h(SeatsInspector, { tool }), dispose };
+    const removeSelected = (): boolean => {
+      const place = tool.selected();
+      if (place === null || tool.subject.value?.readOnly !== false) return false;
+      tool.remove(place);
+      return true;
+    };
+    return { tool, Inspector: () => h(SeatsInspector, { tool }), removeSelected, dispose };
   },
 });

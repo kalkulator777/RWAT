@@ -30,8 +30,8 @@ function TurnArrow(props: { forward?: boolean }) {
  * The file buttons of the top bar (editor.md §6.1): open a zip or a folder, save with
  * the count of changed files (the save dialog and the session's restore question are
  * app/save's, drawn here), undo and redo. Keyboard: Ctrl+Z, Ctrl+Shift+Z, Ctrl+S
- * (app/session.ts `installShortcuts`). Undo and redo are arrows named by their label and
- * shortcut, so the bar keeps to one line at 1280 px in either language.
+ * (the key map of app/keys). Undo and redo are arrows named by their label and shortcut,
+ * so the bar keeps to one line at 1280 px in either language.
  */
 export function FilePanel() {
   const open = pack.value;

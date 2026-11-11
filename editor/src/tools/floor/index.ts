@@ -23,6 +23,12 @@ export default defineTool({
   fields: ['/interior', '/interior/*'],
   activate(context): FloorSession {
     const { tool, dispose } = startFloor(context);
-    return { tool, Inspector: () => h(FloorInspector, { tool }), dispose };
+    const removeSelected = (): boolean => {
+      const zone = tool.selected();
+      if (zone === null || tool.subject.value?.readOnly !== false) return false;
+      tool.remove(zone);
+      return true;
+    };
+    return { tool, Inspector: () => h(FloorInspector, { tool }), removeSelected, dispose };
   },
 });

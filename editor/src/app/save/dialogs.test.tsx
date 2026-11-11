@@ -8,7 +8,8 @@ import { setLang } from '../../i18n';
 import { FsAccessSource, openZipSource } from '../../io';
 import { FakeDirectory } from '../../io/testPack.node';
 import { EXAMPLE_PACK } from '../../testing/repo.node';
-import { installShortcuts, openSource } from '../session';
+import { installKeys } from '../keys';
+import { openSource } from '../session';
 import { failure, journal, pack, revision, schema, selection } from '../store';
 import { RenameTypeButton, SaveDialogs, startSave, windowTitle } from '.';
 import { sessionSettled, useSessionStore } from './keep';
@@ -106,7 +107,7 @@ describe('the save dialog', () => {
   });
 
   it('says there is nothing to save, and opens on Ctrl+S with a pack open', async () => {
-    const remove = installShortcuts();
+    const remove = installKeys(document, { platform: 'pc' });
     try {
       render(<SaveDialogs />);
       const press = () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true, cancelable: true }));

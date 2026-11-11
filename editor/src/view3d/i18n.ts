@@ -51,7 +51,7 @@ export default defineStrings({
     'view3d.describe.selected': 'Выделено: {names}.',
     'view3d.describe.nothing': 'Ничего не выделено.',
     'view3d.describe.keys':
-      'Клавиши: 1 — сбоку, 3 — спереди, 7 — сверху, 5 — перспектива, Home — всё, точка — выделенное, стрелки — сдвиг. Щелчок выделяет объект, Shift — добавляет.',
+      'Клавиши: 1 — сбоку, 3 — спереди, 7 — сверху, 5 — перспектива, Home — всё, точка — выделенное, стрелки — сдвиг; S, Z, D, C, L, P — инструменты Выбор, Зоны, Двери, Кресла, Свет, Шарниры; Escape — снять выделение; все клавиши — по знаку вопроса. Щелчок выделяет объект, Shift — добавляет; то же делают таблица «Объекты» и инспектор.',
   },
   en: {
     'view3d.title': 'View',
@@ -102,6 +102,6 @@ export default defineStrings({
     'view3d.describe.selected': 'Selected: {names}.',
     'view3d.describe.nothing': 'Nothing selected.',
     'view3d.describe.keys':
-      'Keys: 1 side, 3 front, 7 top, 5 perspective, Home all, period the selection, arrows pan. A click selects an object, Shift adds it.',
+      'Keys: 1 side, 3 front, 7 top, 5 perspective, Home all, period the selection, arrows pan; S, Z, D, C, L, P the tools Select, Zones, Doors, Chairs, Lights, Hinges; Escape clears the selection; all the keys are under the question mark. A click selects an object, Shift adds it; the Objects table and the inspector do the same.',
   },
 });

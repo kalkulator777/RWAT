@@ -12,8 +12,10 @@
  *   press, before the orbit controls; a press it takes moves no camera, its moves past the
  *   click's slop are the tool's drag, and its click is the tool's unless the tool gives it
  *   back to be picked as usual. While the pointer hovers, the tool may set the cursor.
- * - Keys, with the view focused: 1 side, 3 front, 7 top (Blender's keypad), 5 the orbit
- *   from three quarters, Home frames everything, `.` frames the selection; the arrows pan.
+ * - Keys, with the view focused: the arrows pan (the orbit controls'); the other keys of
+ *   the view — 1 side, 3 front, 7 top (Blender's keypad), 5 the orbit from three quarters,
+ *   Home frames everything, `.` frames the selection — are the key map's (app/keys), which
+ *   has one handler for all the editor's shortcuts.
  * - No animation: views and framing jump, so `prefers-reduced-motion` has nothing to stop.
  *
  * Without WebGL 2 (a browser that lacks it, the DOM of the unit tests) there is no
@@ -24,7 +26,7 @@ import type { Signal } from '@preact/signals';
 import { MOUSE, WebGLRenderer, type OrthographicCamera, type PerspectiveCamera } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { Link, ViewDragger, ViewPointer } from '../core/contracts';
-import { pixelsPerBlock, VIEW_PRESETS, type CameraView } from './cameras';
+import { pixelsPerBlock, VIEW_PRESETS } from './cameras';
 import { MINOR_GRID_MIN_PX } from './guides';
 import type { ViewState } from './state';
 import { ViewScene, type ClickKeys } from './viewScene';
@@ -36,9 +38,6 @@ export interface ViewportOptions {
 
 /** How far the pointer may move between press and release and the press still be a click, CSS pixels. */
 const CLICK_SLOP = 4;
-
-/** The view keys: Blender's keypad for the fixed views, 5 for the orbit. */
-const VIEW_KEYS: Readonly<Record<string, CameraView>> = { '1': 'side', '3': 'front', '7': 'top', '5': 'orbit' };
 
 /** The modifier keys of a mouse event; ⌘ counts as Ctrl. */
 function keysOf(event: MouseEvent): ClickKeys {
@@ -174,16 +173,6 @@ export class Viewport {
       const at = this.toDevice(event.clientX, event.clientY);
       this.scene.doubleClickAt(at.x, at.y, keysOf(event));
     });
-    this.on(this.host, 'keydown', (event) => {
-      if (event.ctrlKey || event.metaKey || event.altKey) return;
-      const view = VIEW_KEYS[event.key];
-      if (view !== undefined) this.scene.state.setCamera(view);
-      else if (event.key === 'Home') this.scene.state.requestFraming('all');
-      else if (event.key === '.' || event.code === 'NumpadDecimal') this.scene.state.requestFraming('selected');
-      else return;
-      event.preventDefault();
-    });
-
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => this.resize());
     observer?.observe(this.host);
     this.cleanups.push(() => observer?.disconnect());

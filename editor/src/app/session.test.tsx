@@ -5,7 +5,8 @@ import { readSchemaFiles } from '../core/schema/files.node';
 import { FsAccessSource, openZipSource } from '../io';
 import { FakeDirectory } from '../io/testPack.node';
 import { EXAMPLE_PACK } from '../testing/repo.node';
-import { installShortcuts, loadSchema, openPicked, openSource, redo, savePack, undo } from './session';
+import { installKeys } from './keys';
+import { loadSchema, openPicked, openSource, redo, savePack, undo } from './session';
 import { canRedo, canUndo, dirtyCount, failure, journal, pack, problems, revision, schema, schemaError, selection } from './store';
 
 const COACH = 'data/rwat_example/wagon_types/coach.json';
@@ -169,7 +170,7 @@ describe('keyboard', () => {
   }
 
   it('undoes with Ctrl+Z and redoes with Ctrl+Shift+Z or Ctrl+Y', async () => {
-    const remove = installShortcuts();
+    const remove = installKeys(document, { platform: 'pc' });
     try {
       await openExample();
       await edit();
@@ -186,13 +187,21 @@ describe('keyboard', () => {
     }
   });
 
-  it('leaves the keys to a text field and stops after it is removed', async () => {
-    const remove = installShortcuts();
+  it('leaves the keys to a text field while its typing is not accepted, and stops after it is removed', async () => {
+    const remove = installKeys(document, { platform: 'pc' });
     await openExample();
     await edit();
     const input = document.createElement('input');
     document.body.append(input);
+    // typed and not accepted: Ctrl+Z is the field's own undo of the text
+    input.dispatchEvent(new Event('input', { bubbles: true }));
     expect(press('z', {}, input).defaultPrevented).toBe(false);
+    expect(dirtyCount.value).toBe(1);
+    // accepted (Enter, or leaving the field): Ctrl+Z is the pack's undo again
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(press('z', {}, input).defaultPrevented).toBe(true);
+    expect(dirtyCount.value).toBe(0);
+    redo();
     expect(dirtyCount.value).toBe(1);
     input.remove();
     remove();

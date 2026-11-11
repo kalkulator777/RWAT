@@ -13,7 +13,7 @@ import { createSchema, fetchSchemaFiles } from '../core/schema';
 import { describeIoError, downloadBytes, PackIoError, type PackSource } from '../io';
 import { sessionOpened } from './save/keep';
 import { FolderSaveError, saveTarget, saveToFolder, saveToZip, type DeliverZip } from './save/save';
-import { openSaveDialog, saveReport } from './save/state';
+import { saveReport } from './save/state';
 import { failure, journal, pack, revision, schema, schemaError, selection } from './store';
 
 export type { DeliverZip };
@@ -161,32 +161,4 @@ export async function loadSchema(base: string | URL = new URL('schema/', documen
   } catch (error) {
     schemaError.value = error instanceof Error ? error.message : String(error);
   }
-}
-
-/** True for a place where the keys are the user's text editing, not the editor's commands. */
-function isTyping(target: EventTarget | null): boolean {
-  const element = target as { tagName?: string; isContentEditable?: boolean } | null;
-  return element?.isContentEditable === true || ['INPUT', 'TEXTAREA', 'SELECT'].includes(element?.tagName ?? '');
-}
-
-/** Ctrl+Z undoes, Ctrl+Shift+Z and Ctrl+Y redo, Ctrl+S opens the save dialog (⌘ on a Mac); text fields keep their own undo. Returns the function that removes the listener. */
-export function installShortcuts(target: EventTarget = document): () => void {
-  const onKey = (event: Event): void => {
-    const key = event as KeyboardEvent;
-    if (!(key.ctrlKey || key.metaKey) || key.altKey || isTyping(key.target)) return;
-    const name = key.key.toLowerCase();
-    if (name === 'z') {
-      if (key.shiftKey) redo();
-      else undo();
-    } else if (name === 'y' && !key.shiftKey) {
-      redo();
-    } else if (name === 's' && !key.shiftKey) {
-      if (pack.value !== null) openSaveDialog();
-    } else {
-      return;
-    }
-    key.preventDefault();
-  };
-  target.addEventListener('keydown', onKey);
-  return () => target.removeEventListener('keydown', onKey);
 }

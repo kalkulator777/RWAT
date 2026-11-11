@@ -253,6 +253,7 @@ export function ViewPanel({ tools }: { tools?: ComponentChildren } = {}) {
   return (
     <div
       class="view3d"
+      data-keys-scope="view tool"
       data-testid="view3d"
       data-webgl={webgl}
       data-camera={view.camera.value}

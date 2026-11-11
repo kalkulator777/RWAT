@@ -73,7 +73,7 @@ export function SlotTabs({ slot, panels, empty, label, alwaysTabs = false }: Slo
 
   return (
     <div class="slot-tabs">
-      <div class="tablist" role="tablist" aria-label={t(label)} onKeyDown={onKeyDown}>
+      <div class="tablist" role="tablist" aria-label={t(label)} data-slot={slot} onKeyDown={onKeyDown}>
         {panels.map((p) => (
           <button
             key={p.id}

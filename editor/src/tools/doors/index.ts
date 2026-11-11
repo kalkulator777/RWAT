@@ -25,6 +25,12 @@ export default defineTool({
   fields: ['/doors/*'],
   activate(context): DoorsSession {
     const { tool, dispose } = startDoors(context);
-    return { tool, Inspector: () => h(DoorsInspector, { tool }), dispose };
+    const removeSelected = (): boolean => {
+      const door = tool.selected();
+      if (door === null || tool.subject.value?.readOnly !== false) return false;
+      tool.remove(door);
+      return true;
+    };
+    return { tool, Inspector: () => h(DoorsInspector, { tool }), removeSelected, dispose };
   },
 });

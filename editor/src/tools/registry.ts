@@ -97,6 +97,12 @@ export interface ToolSession {
    * tool is on: its numbers, choices and buttons — all a gesture does, by keyboard.
    */
   readonly Inspector: ComponentType;
+  /**
+   * Deletes what the tool has selected (the Delete key, app/keys): the selected zone, door
+   * or chair, by the same command as its remove button. Returns whether anything went; a
+   * read-only pack, nothing selected or a tool that only shows leaves it out or says false.
+   */
+  removeSelected?(): boolean;
   /** Turns the tool off: its overlay layers emptied, its pick listeners and dragger given back. */
   dispose(): void;
 }

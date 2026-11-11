@@ -52,7 +52,7 @@ export function ToolSection({ host }: { host: ToolHost }) {
   if (on === null) return null;
   const Section = on.session.Inspector;
   return (
-    <section class="tool-section" aria-label={t(on.tool.title)} data-testid="tool-section" data-tool={on.tool.id}>
+    <section class="tool-section" aria-label={t(on.tool.title)} data-keys-scope="tool" data-testid="tool-section" data-tool={on.tool.id}>
       <h2 class="inspector-title">{t(on.tool.title)}</h2>
       <Section />
     </section>
