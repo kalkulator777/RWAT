@@ -1,6 +1,7 @@
 import { signal } from '@preact/signals';
 import type { ComponentChildren } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useRef, useState } from 'preact/hooks';
+import { useModalDialog } from '../../app/keys/modal';
 import { openSource, run } from '../../app/session';
 import { dirtyCount, pack, schema, selection } from '../../app/store';
 import { MCMETA, typePath } from '../../core/pack';
@@ -11,16 +12,10 @@ import { addWagonCommand, checkNewPack, modelFolder, newPackSource, packNamespac
 /** The namespace the last new pack was made with: the wagon dialog offers it while the pack has no files under it yet. */
 const lastNamespace = signal('');
 
-/** A modal dialog (the browser's own `<dialog>`: focus stays inside, Escape closes it). */
+/** A modal dialog (the browser's own `<dialog>`: Tab stays inside, Escape closes it, the focus goes back: app/keys/modal.ts). */
 function Dialog(props: { title: string; testId: string; onClose: () => void; onSubmit: () => void; submit: string; busy?: boolean; children: ComponentChildren }) {
   const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const dialog = ref.current;
-    if (dialog !== null && !dialog.open) {
-      if (typeof dialog.showModal === 'function') dialog.showModal();
-      else dialog.setAttribute('open', '');
-    }
-  }, []);
+  useModalDialog(ref);
   const titleId = `${props.testId}-title`;
   return (
     <dialog

@@ -1,19 +1,15 @@
 import type { ComponentChildren } from 'preact';
-import { useEffect, useRef } from 'preact/hooks';
+import { useRef } from 'preact/hooks';
+import { useModalDialog } from '../keys/modal';
 
 /**
- * A modal dialog of this module (the browser's own `<dialog>`: focus stays inside, Escape
- * calls `onClose` when given). The buttons are the caller's.
+ * A modal dialog of this module (the browser's own `<dialog>`: Tab stays inside, Escape
+ * calls `onClose` when given, the focus goes back to where it was when the dialog closes:
+ * app/keys/modal.ts). The buttons are the caller's.
  */
 export function Modal(props: { title: string; testId: string; onClose?: () => void; children: ComponentChildren; wide?: boolean }) {
   const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const dialog = ref.current;
-    if (dialog !== null && !dialog.open) {
-      if (typeof dialog.showModal === 'function') dialog.showModal();
-      else dialog.setAttribute('open', '');
-    }
-  }, []);
+  useModalDialog(ref);
   const titleId = `${props.testId}-title`;
   return (
     <dialog
