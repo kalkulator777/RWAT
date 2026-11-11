@@ -1,0 +1,123 @@
+/* The help (src/help): a wide dialog, the topics on the left, the topic's text on the right. */
+
+.help-dialog {
+  width: min(64em, calc(100vw - 32px));
+  height: min(44em, calc(100vh - 32px));
+}
+
+.help-body {
+  display: grid;
+  grid-template-columns: 17em 1fr;
+  grid-template-rows: auto 1fr;
+  height: 100%;
+}
+
+.help-head {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.help-head h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.help-nav {
+  overflow: auto;
+  padding: 8px;
+  border-right: 1px solid var(--border);
+  background: var(--surface-sunken);
+}
+
+.help-nav h3 {
+  margin: 8px 6px 4px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.help-nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.help-nav button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  padding: 4px 6px;
+  color: var(--text);
+  /* the top bar's buttons keep to one line; a topic's title wraps */
+  white-space: normal;
+}
+
+.help-nav button[aria-current='page'] {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.help-topic {
+  overflow: auto;
+  padding: 4px 20px 16px;
+  line-height: 1.5;
+}
+
+.help-topic h3 {
+  margin: 12px 0 4px;
+  font-size: 15px;
+}
+
+.help-topic h4 {
+  margin: 14px 0 2px;
+  font-size: 14px;
+}
+
+.help-topic p,
+.help-topic ul,
+.help-topic ol {
+  margin: 6px 0;
+}
+
+.help-topic li {
+  margin: 2px 0;
+}
+
+.help-topic code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  background: var(--surface-sunken);
+  border-radius: 3px;
+  padding: 0 3px;
+}
+
+.help-topic kbd {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 0 4px;
+  background: var(--surface);
+}
+
+.help-topic a {
+  color: var(--accent);
+}
+
+.help-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
